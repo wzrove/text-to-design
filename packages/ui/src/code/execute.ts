@@ -5,18 +5,29 @@ import { toSpecs } from './types';
 
 export async function executeOps(
   ops: unknown,
+  placement?: {
+    mode?: 'center' | 'manual' | 'absolute';
+    x?: number;
+    y?: number;
+  },
 ): Promise<{ created: SerializedNode[] }> {
   const specs = toSpecs(ops);
   const page = jsDesign.currentPage;
-  const center = jsDesign.viewport.center;
+  const mode = placement?.mode ?? 'center';
   const created: SceneNode[] = [];
   try {
     for (const spec of specs) {
       const node = await buildNode(spec, page);
-      const dx = center.x - node.x - node.width / 2;
-      const dy = center.y - node.y - node.height / 2;
-      node.x += dx;
-      node.y += dy;
+      if (mode === 'center') {
+        const center = jsDesign.viewport.center;
+        const dx = center.x - node.x - node.width / 2;
+        const dy = center.y - node.y - node.height / 2;
+        node.x += dx;
+        node.y += dy;
+      } else if (mode === 'absolute') {
+        if (placement?.x != null) node.x = placement.x;
+        if (placement?.y != null) node.y = placement.y;
+      }
       created.push(node);
     }
   } catch (e) {

@@ -15,6 +15,25 @@ function isMixed(v: unknown): boolean {
   return typeof v === 'string' && (v as string) === 'figma.mixed';
 }
 
+function rgba2hex(c: { r: number; g: number; b: number; a: number }): string {
+  const hex = (n: number) =>
+    Math.round(n * 255)
+      .toString(16)
+      .padStart(2, '0');
+  return `#${hex(c.r)}${hex(c.g)}${hex(c.b)}${hex(c.a)}`;
+}
+
+export function trySerialize(
+  node: SceneNode,
+  depth: number = MAX_SERIALIZE_DEPTH,
+): SerializedNode | null {
+  try {
+    return serializeNode(node, depth);
+  } catch {
+    return null;
+  }
+}
+
 export function serializeNode(
   node: SceneNode,
   depth: number = MAX_SERIALIZE_DEPTH,
@@ -38,6 +57,7 @@ export function serializeNode(
     node.opacity !== 1
   )
     base.opacity = node.opacity;
+  if ('locked' in node && node.locked) base.locked = true;
   if ('fills' in node && Array.isArray(node.fills) && node.fills.length > 0) {
     const fill = node.fills[0];
     if (fill.type === 'SOLID') {
@@ -73,6 +93,55 @@ export function serializeNode(
       node.strokeWeight > 0
     ) {
       base.strokeWeight = node.strokeWeight;
+    }
+  }
+  if ('strokeAlign' in node && node.type !== 'FRAME' && node.type !== 'TEXT') {
+    const sa = (node as SceneNode & { strokeAlign: string }).strokeAlign;
+    if (sa != null && sa !== 'CENTER')
+      base.strokeAlign = sa as SerializedNode['strokeAlign'];
+  }
+  if ('strokeCap' in node && node.strokeCap != null && !isMixed(node.strokeCap))
+    base.strokeCap = node.strokeCap as SerializedNode['strokeCap'];
+  if (
+    'strokeJoin' in node &&
+    node.strokeJoin != null &&
+    !isMixed(node.strokeJoin)
+  )
+    base.strokeJoin = node.strokeJoin as SerializedNode['strokeJoin'];
+  if (
+    'dashPattern' in node &&
+    (node as { dashPattern?: readonly number[] }).dashPattern?.length
+  )
+    base.dashPattern = [
+      ...(node as unknown as { dashPattern: readonly number[] }).dashPattern,
+    ];
+  if (
+    'blendMode' in node &&
+    node.blendMode !== 'PASS_THROUGH' &&
+    node.blendMode !== 'NORMAL'
+  )
+    base.blendMode = node.blendMode;
+  if (
+    'cornerSmoothing' in node &&
+    typeof node.cornerSmoothing === 'number' &&
+    node.cornerSmoothing !== 0
+  )
+    base.cornerSmoothing = node.cornerSmoothing;
+  if ('constraints' in node) {
+    const c = node.constraints;
+    if (c.horizontal !== 'MIN' || c.vertical !== 'MIN')
+      base.constraints = { horizontal: c.horizontal, vertical: c.vertical };
+  }
+  if ('clipsContent' in node && node.type === 'FRAME' && node.clipsContent)
+    base.clipsContent = true;
+  if (node.type === 'ELLIPSE' && 'arcData' in node) {
+    const arc = (node as EllipseNode).arcData;
+    if (arc.startingAngle !== 0 || arc.endingAngle !== 2 * Math.PI) {
+      base.arcData = {
+        startingAngle: arc.startingAngle,
+        endingAngle: arc.endingAngle,
+        innerRadius: arc.innerRadius,
+      };
     }
   }
   if ('effects' in node && Array.isArray(node.effects)) {
@@ -136,21 +205,99 @@ export function serializeNode(
     const f = node.fontName as FontName | undefined;
     if (f?.family) base.fontFamily = f.family;
     if (f?.style && f.style !== 'Regular') base.fontWeight = f.style;
+    if (node.textAlignVertical !== 'TOP' && !isMixed(node.textAlignVertical))
+      base.textAlignVertical = node.textAlignVertical;
+    if (node.textAutoResize !== 'NONE')
+      base.textAutoResize = node.textAutoResize;
+    if (node.textCase !== 'ORIGINAL' && !isMixed(node.textCase))
+      base.textCase = node.textCase as SerializedNode['textCase'];
+    if (node.textDecoration !== 'NONE' && !isMixed(node.textDecoration))
+      base.textDecoration =
+        node.textDecoration as SerializedNode['textDecoration'];
   }
   if ('layoutMode' in node && node.layoutMode !== 'NONE') {
+    const frame = node as FrameNode;
+    const pTop = isMixed(frame.paddingTop) ? undefined : frame.paddingTop;
+    const pRight = isMixed(frame.paddingRight) ? undefined : frame.paddingRight;
+    const pBottom = isMixed(frame.paddingBottom)
+      ? undefined
+      : frame.paddingBottom;
+    const pLeft = isMixed(frame.paddingLeft) ? undefined : frame.paddingLeft;
     base.layout = {
       mode: node.layoutMode,
       itemSpacing: isMixed(node.itemSpacing) ? undefined : node.itemSpacing,
-      padding: isMixed(node.paddingTop) ? undefined : node.paddingTop,
+      padding: pTop,
     };
-  }
-  if ('children' in node && node.children.length > 0) {
-    if (depth > 0) {
-      base.children = node.children.map((c) =>
-        serializeNode(c as SceneNode, depth - 1),
-      );
+    if (pTop != null && pTop === pRight && pTop === pBottom && pTop === pLeft) {
+      base.layout.padding = pTop;
     } else {
-      base.childCount = node.children.length;
+      base.layout.paddingTop = pTop;
+      base.layout.paddingRight = pRight;
+      base.layout.paddingBottom = pBottom;
+      base.layout.paddingLeft = pLeft;
+    }
+    if (frame.primaryAxisSizingMode != null)
+      base.layout.primaryAxisSizingMode = frame.primaryAxisSizingMode;
+    if (frame.counterAxisSizingMode != null)
+      base.layout.counterAxisSizingMode = frame.counterAxisSizingMode;
+    if (frame.primaryAxisAlignItems != null)
+      base.layout.primaryAxisAlignItems = frame.primaryAxisAlignItems;
+    if (frame.counterAxisAlignItems != null)
+      base.layout.counterAxisAlignItems = frame.counterAxisAlignItems;
+  }
+  if (
+    'layoutGrids' in node &&
+    node.layoutGrids != null &&
+    node.layoutGrids.length > 0
+  ) {
+    base.layoutGrids = node.layoutGrids.map((raw) => {
+      const g = raw as {
+        pattern: 'ROWS' | 'COLUMNS' | 'GRID';
+        alignment?: 'MIN' | 'MAX' | 'STRETCH' | 'CENTER';
+        gutterSize?: number;
+        count?: number;
+        sectionSize?: number;
+        offset?: number;
+        visible?: boolean;
+        color?: RGBA;
+      };
+      const out: NonNullable<SerializedNode['layoutGrids']>[number] = {
+        pattern: g.pattern,
+      };
+      if (g.alignment != null) out.alignment = g.alignment;
+      if (g.gutterSize != null) out.gutterSize = g.gutterSize;
+      if (g.count != null && Number.isFinite(g.count)) out.count = g.count;
+      if (g.sectionSize != null) out.sectionSize = g.sectionSize;
+      if (g.offset != null) out.offset = g.offset;
+      if (g.visible != null) out.visible = g.visible;
+      if (g.color != null) out.color = rgba2hex(g.color);
+      return out;
+    });
+  }
+  if (
+    'layoutGrow' in node &&
+    node.layoutGrow != null &&
+    node.layoutGrow !== 0
+  ) {
+    base.layoutGrow = node.layoutGrow;
+  }
+  if (
+    'layoutAlign' in node &&
+    node.layoutAlign != null &&
+    node.layoutAlign !== 'INHERIT'
+  ) {
+    base.layoutAlign = node.layoutAlign;
+  }
+  if ('children' in node) {
+    const kids = node.children ?? [];
+    if (kids.length > 0) {
+      if (depth > 0) {
+        base.children = kids.map((c) =>
+          serializeNode(c as SceneNode, depth - 1),
+        );
+      } else {
+        base.childCount = kids.length;
+      }
     }
   }
   return base;

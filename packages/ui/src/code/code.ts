@@ -2,6 +2,7 @@ import type {
   GetSelectionParams,
   GetSelectionResult,
   PluginRequest,
+  SerializedNode,
 } from 'text-to-design-shared';
 import { makeResponse } from 'text-to-design-shared';
 import {
@@ -21,13 +22,14 @@ import {
   listFonts,
   outlineStrokeNodes,
   removeNodes,
+  repairNodes,
   reparentNodes,
   setInstanceProperties,
   setSelection,
   swapComponents,
   updateSelection,
 } from './build';
-import { serializeNode } from './serialize';
+import { trySerialize } from './serialize';
 
 const UI_OPTIONS = { width: 360, height: 520 };
 
@@ -60,7 +62,19 @@ function getSelection(params: GetSelectionParams = {}): GetSelectionResult {
   const selection = jsDesign.currentPage.selection;
   const depth = params.depth ?? 2;
   return {
-    selection: selection.map((n) => serializeNode(n, depth)),
+    selection: selection.map((n) => {
+      const s = trySerialize(n, depth);
+      if (s) return s;
+      // 单个节点读取失败(如含 dangling 子节点)时代为最小壳,不整体扑灭 selection
+      const fallback: SerializedNode = {
+        id: n.id,
+        name: n.name,
+        type: n.type,
+        x: Math.round(n.x) || 0,
+        y: Math.round(n.y) || 0,
+      };
+      return fallback;
+    }),
     pageName: jsDesign.currentPage.name,
   };
 }
@@ -91,7 +105,7 @@ jsDesign.ui.onmessage = async (msg: PluginRequest) => {
         send(id, true, getSelection(msg.params));
         break;
       case 'execute': {
-        const r = await executeOps(msg.params.ops);
+        const r = await executeOps(msg.params.ops, msg.params.placement);
         send(id, true, r);
         break;
       }
@@ -144,6 +158,9 @@ jsDesign.ui.onmessage = async (msg: PluginRequest) => {
                 index: p.index,
               }),
             );
+            break;
+          case 'repair':
+            send(id, true, repairNodes());
             break;
           default:
             send(

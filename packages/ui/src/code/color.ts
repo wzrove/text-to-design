@@ -19,3 +19,7 @@ export function rgb(hex: string): RGB {
 export function paint(hex: string): Paint[] {
   return [{ type: 'SOLID', color: rgb(hex) }];
 }
+
+export function hex2rgba(hex: string, opacity?: number): RGBA {
+  return { ...rgb(hex), a: opacity ?? 1 };
+}

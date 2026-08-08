@@ -2,7 +2,7 @@ import type {
   SerializedNode,
   UpdateSelectionProps,
 } from 'text-to-design-shared';
-import { paint } from './color';
+import { hex2rgba, paint } from './color';
 import { serializeNode } from './serialize';
 import { makeShadowEffect } from './style';
 import { collectTargets, findNode, loadFont } from './utils';
@@ -25,6 +25,7 @@ async function applyProps(
   if (props.visible != null) node.visible = props.visible;
   if (props.rotation != null) node.rotation = props.rotation;
   if (props.opacity != null && 'opacity' in node) node.opacity = props.opacity;
+  if (props.locked != null) node.locked = props.locked;
   if (props.w != null || props.h != null) {
     const w = props.w ?? node.width;
     const h = props.h ?? node.height;
@@ -37,6 +38,39 @@ async function applyProps(
     node.strokeWeight = props.strokeWeight;
   if (props.strokeAlign != null && 'strokeAlign' in node)
     node.strokeAlign = props.strokeAlign;
+  if (props.strokeCap != null && 'strokeCap' in node)
+    node.strokeCap = props.strokeCap;
+  if (props.strokeJoin != null && 'strokeJoin' in node)
+    node.strokeJoin = props.strokeJoin;
+  if (props.dashPattern != null && 'dashPattern' in node)
+    node.dashPattern = props.dashPattern;
+  if (props.blendMode != null && 'blendMode' in node)
+    node.blendMode = props.blendMode as BlendMode;
+  if (props.cornerSmoothing != null && 'cornerSmoothing' in node)
+    node.cornerSmoothing = props.cornerSmoothing;
+  if (props.clipsContent != null && 'clipsContent' in node)
+    node.clipsContent = props.clipsContent;
+  if (props.constraints != null && 'constraints' in node)
+    node.constraints = props.constraints;
+  if (props.layoutGrids != null && 'layoutGrids' in node)
+    node.layoutGrids = props.layoutGrids.map((g) => ({
+      pattern: g.pattern,
+      alignment: g.alignment,
+      gutterSize: g.gutterSize,
+      count: g.count,
+      sectionSize: g.sectionSize,
+      offset: g.offset,
+      visible: g.visible,
+      color: g.color != null ? hex2rgba(g.color, g.colorOpacity) : undefined,
+    })) as LayoutGrid[];
+  if (node.type === 'ELLIPSE' && props.arcData != null && 'arcData' in node) {
+    const arc = props.arcData;
+    (node as EllipseNode).arcData = {
+      startingAngle: arc.startingAngle,
+      endingAngle: arc.endingAngle,
+      innerRadius: arc.innerRadius,
+    };
+  }
   if (props.cornerRadius != null && 'cornerRadius' in node)
     node.cornerRadius = props.cornerRadius;
   if ('topLeftRadius' in node) {
@@ -77,6 +111,13 @@ async function applyProps(
     if (props.characters != null) text.characters = props.characters;
     if (props.fontSize != null) text.fontSize = props.fontSize;
     if (props.textAlign != null) text.textAlignHorizontal = props.textAlign;
+    if (props.textAlignVertical != null)
+      text.textAlignVertical = props.textAlignVertical;
+    if (props.textAutoResize != null)
+      text.textAutoResize = props.textAutoResize;
+    if (props.textCase != null) text.textCase = props.textCase;
+    if (props.textDecoration != null)
+      text.textDecoration = props.textDecoration;
     if (props.lineHeight != null)
       text.lineHeight = { value: props.lineHeight, unit: 'PIXELS' };
     if (props.letterSpacing != null)
@@ -105,6 +146,48 @@ async function applyProps(
       frame.paddingBottom =
       frame.paddingLeft =
         props.padding;
+  }
+  if (node.type === 'FRAME' && props.paddingTop != null)
+    (node as FrameNode).paddingTop = props.paddingTop;
+  if (node.type === 'FRAME' && props.paddingRight != null)
+    (node as FrameNode).paddingRight = props.paddingRight;
+  if (node.type === 'FRAME' && props.paddingBottom != null)
+    (node as FrameNode).paddingBottom = props.paddingBottom;
+  if (node.type === 'FRAME' && props.paddingLeft != null)
+    (node as FrameNode).paddingLeft = props.paddingLeft;
+  if (
+    node.type === 'FRAME' &&
+    props.primaryAxisSizingMode != null &&
+    'primaryAxisSizingMode' in node
+  ) {
+    (node as FrameNode).primaryAxisSizingMode = props.primaryAxisSizingMode;
+  }
+  if (
+    node.type === 'FRAME' &&
+    props.counterAxisSizingMode != null &&
+    'counterAxisSizingMode' in node
+  ) {
+    (node as FrameNode).counterAxisSizingMode = props.counterAxisSizingMode;
+  }
+  if (
+    node.type === 'FRAME' &&
+    props.primaryAxisAlignItems != null &&
+    'primaryAxisAlignItems' in node
+  ) {
+    (node as FrameNode).primaryAxisAlignItems = props.primaryAxisAlignItems;
+  }
+  if (
+    node.type === 'FRAME' &&
+    props.counterAxisAlignItems != null &&
+    'counterAxisAlignItems' in node
+  ) {
+    (node as FrameNode).counterAxisAlignItems = props.counterAxisAlignItems;
+  }
+  if (props.layoutGrow != null && 'layoutGrow' in node) {
+    (node as SceneNode).layoutGrow = props.layoutGrow;
+  }
+  if (props.layoutAlign != null && 'layoutAlign' in node) {
+    (node as SceneNode).layoutAlign = props.layoutAlign;
   }
 }
 

@@ -3,7 +3,7 @@ import type {
   FindResult,
   SerializedNode,
 } from 'text-to-design-shared';
-import { serializeNode } from './serialize';
+import { serializeNode, trySerialize } from './serialize';
 import { findNode } from './utils';
 
 export function findNodes(params: FindParams): FindResult {
@@ -149,4 +149,32 @@ export function reparentNodes(params: {
     else container.appendChild(n);
   }
   return { moved: nodes.map((n) => serializeNode(n)) };
+}
+
+function collectAll(node: SceneNode, out: SceneNode[]): void {
+  out.push(node);
+  if ('children' in node) {
+    for (const c of node.children as SceneNode[]) {
+      collectAll(c, out);
+    }
+  }
+}
+
+export function repairNodes(): { cleaned: string[] } {
+  const cleaned: string[] = [];
+  const todo: SceneNode[] = [];
+  for (const child of jsDesign.currentPage.children as SceneNode[]) {
+    collectAll(child, todo);
+  }
+  for (const node of todo) {
+    if (trySerialize(node, 0) === null) {
+      try {
+        node.remove();
+        cleaned.push(node.id);
+      } catch {
+        // 引擎级损坏,跳过
+      }
+    }
+  }
+  return { cleaned };
 }

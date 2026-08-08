@@ -23,8 +23,11 @@ export class BridgeSocket {
     this.router.onSelection = (data) =>
       this.events.emit({ type: 'selection', data });
     this.router.onServerStatus = (msg) => {
+      // daemon 每 30s 心跳重复下发 status;只有从非 connected 首次确认才打日志,
+      // 避免每次心跳都刷「服务已确认连接」的 log
+      const alreadyConnected = this.connection.status === 'connected';
       this.connection.markConfirmed();
-      if (msg.version) {
+      if (msg.version && !alreadyConnected) {
         this.events.emit({
           type: 'log',
           line: `服务已确认连接(版本 ${msg.version})`,

@@ -10,10 +10,10 @@ export function createComponentNodes(params: {
   if (nodes.length === 0) {
     throw new Error('没有找到要固化为组件的节点');
   }
+  // 只建空壳组件:不要 appendChild 已有节点(会触发引擎卷进 wrapper,
+  // 后续删 wrapper 连坐删子树并残留 dangling,影响整图序列化)。
+  // 子节点由调用方用 reparent 归组进来。
   const component = jsDesign.createComponent();
-  for (const n of nodes) {
-    component.appendChild(n);
-  }
   component.name = params.name ?? 'component';
   jsDesign.viewport.scrollAndZoomIntoView([component]);
   return { created: serializeNode(component) };
@@ -102,7 +102,9 @@ export function combineAsVariantsNodes(params: {
   if (components.length < 2) {
     throw new Error('combine_as_variants 至少需要 2 个组件节点');
   }
-  const set = jsDesign.combineAsVariants(components, jsDesign.currentPage);
+  // 用 clone 副本合并,保留原组件:原组件不被卷进 SET,删 SET 只删副本,免残留。
+  const clones = components.map((c) => c.clone() as ComponentNode);
+  const set = jsDesign.combineAsVariants(clones, jsDesign.currentPage);
   if (params.name != null) set.name = params.name;
   jsDesign.viewport.scrollAndZoomIntoView([set]);
   return { created: serializeNode(set) };

@@ -1,3 +1,4 @@
+import { CLIENT } from './config';
 import { log } from './logger';
 import type { PluginMethod } from './pending';
 import { PendingManager } from './pending';
@@ -45,7 +46,9 @@ export class Bridge {
     if (!this.transport.isConnected) {
       log(`请求被拒(插件未连接): ${method}`);
       return Promise.reject(
-        new Error('jsDesign 插件未连接。请先在即时设计客户端中运行该插件。'),
+        new Error(
+          `${CLIENT.runtime} 插件未连接。请先在${CLIENT.label}客户端中运行该插件。`,
+        ),
       );
     }
     return this.pending.request(method, params, timeout);

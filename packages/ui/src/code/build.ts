@@ -16,6 +16,7 @@ export {
   groupNodes,
   outlineStrokeNodes,
   removeNodes,
+  repairNodes,
   reparentNodes,
   setSelection,
 } from './nodes';

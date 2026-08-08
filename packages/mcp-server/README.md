@@ -102,8 +102,8 @@ pkill -f text-to-design-mcp
 | `jsd_html_to_design` | 把 HTML 转成设计节点 |
 | `jsd_update_selection` | 修改选中节点的属性(位置/颜色/文字/圆角等) |
 | `jsd_find` | 按名称/类型查找节点 |
-| `jsd_manage_nodes` | 节点结构操作,op 含 select/remove/clone/group/ungroup/flatten/outline_stroke/reparent |
-| `jsd_manage_components` | 组件/实例操作,op 含 create_component/create_instance/detach_instance/import_component/swap_component/set_instance_properties/combine_as_variants |
+| `jsd_manage_nodes` | 节点结构操作,op 含 select/remove/clone/group/ungroup/flatten/outline_stroke/reparent/repair(清理引擎残留失效节点) |
+| `jsd_manage_components` | 组件/实例操作,op 含 create_component(建空壳,子节点用 reparent 归入)/create_instance/detach_instance/import_component/swap_component/set_instance_properties/combine_as_variants |
 | `jsd_export` | 导出节点为 PNG/JPG/SVG/PDF |
 | `jsd_list_fonts` | 列出可用字体 |
 | `jsd_fill_image` | 用本地图片填充节点 |

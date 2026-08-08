@@ -2,6 +2,14 @@ export interface SpecLayout {
   mode?: 'HORIZONTAL' | 'VERTICAL';
   itemSpacing?: number;
   padding?: number;
+  paddingTop?: number;
+  paddingRight?: number;
+  paddingBottom?: number;
+  paddingLeft?: number;
+  primaryAxisSizingMode?: 'FIXED' | 'AUTO';
+  counterAxisSizingMode?: 'FIXED' | 'AUTO';
+  primaryAxisAlignItems?: 'MIN' | 'MAX' | 'CENTER' | 'SPACE_BETWEEN';
+  counterAxisAlignItems?: 'MIN' | 'MAX' | 'CENTER';
 }
 
 export interface SpecShadow {
@@ -10,6 +18,20 @@ export interface SpecShadow {
   y?: number;
   radius?: number;
   spread?: number;
+}
+
+export type ConstraintType = 'MIN' | 'MAX' | 'STRETCH' | 'CENTER' | 'SCALE';
+
+export interface SpecLayoutGrid {
+  pattern: 'ROWS' | 'COLUMNS' | 'GRID';
+  alignment?: 'MIN' | 'MAX' | 'STRETCH' | 'CENTER';
+  gutterSize?: number;
+  count?: number;
+  sectionSize?: number;
+  offset?: number;
+  visible?: boolean;
+  color?: string;
+  colorOpacity?: number;
 }
 
 export interface SpecGradient {
@@ -45,8 +67,19 @@ export interface Spec {
   radiusBottomRight?: number;
   rotation?: number;
   opacity?: number;
+  locked?: boolean;
   stroke?: string;
   strokeWeight?: number;
+  strokeAlign?: 'CENTER' | 'INSIDE' | 'OUTSIDE';
+  strokeCap?: 'NONE' | 'ROUND' | 'SQUARE' | 'ARROW_LINES' | 'ARROW_EQUILATERAL';
+  strokeJoin?: 'MITER' | 'BEVEL' | 'ROUND';
+  dashPattern?: number[];
+  cornerSmoothing?: number;
+  blendMode?: string;
+  constraints?: { horizontal: ConstraintType; vertical: ConstraintType };
+  layoutGrids?: SpecLayoutGrid[];
+  clipsContent?: boolean;
+  arcData?: { startingAngle: number; endingAngle: number; innerRadius: number };
   shadow?: SpecShadow;
   gradient?: SpecGradient;
   pointCount?: number;
@@ -60,9 +93,15 @@ export interface Spec {
   fontFamily?: string;
   characters?: string;
   textAlign?: 'left' | 'center' | 'right';
+  textAlignVertical?: 'top' | 'center' | 'bottom';
+  textAutoResize?: 'NONE' | 'WIDTH_AND_HEIGHT' | 'HEIGHT' | 'TRUNCATE';
+  textCase?: 'ORIGINAL' | 'UPPER' | 'LOWER' | 'TITLE';
+  textDecoration?: 'NONE' | 'UNDERLINE' | 'STRIKETHROUGH';
   lineHeight?: number;
   letterSpacing?: number;
   layout?: SpecLayout;
+  layoutGrow?: number;
+  layoutAlign?: 'MIN' | 'CENTER' | 'MAX' | 'STRETCH' | 'INHERIT';
   children?: Spec[];
 }
 
