@@ -1,5 +1,11 @@
 # text-to-design-mcp
 
+## 0.3.1
+
+### Patch Changes
+
+- [`6a56d6c`](https://github.com/wzrove/text-to-design/commit/6a56d6cfbde373e6018d43e3b0f8991a9c071e8a) Thanks [@wzrove](https://github.com/wzrove)! - fix: 去掉发布包中的 workspace:\* 依赖
+
 ## 0.3.0
 
 ### Minor Changes
