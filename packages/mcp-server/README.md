@@ -18,19 +18,29 @@
 
 **第一步:告诉 AI 工具**
 
-后台服务不用手动安装,注册命令统一为 `npx -y text-to-design-mcp@latest`,任意 AI 工具都会自动化拉取运行。把下面需求丢给 AI,它会按自己工具的格式注册 MCP 服务:
+后台服务不用手动安装,注册命令统一为 `npx -y text-to-design-mcp@latest`,任意 AI 工具都会自动化拉取运行。把下面需求丢给 AI,它会自动注册并验证:
 
 ```
-请为你在当前 AI 工具里注册 text-to-design MCP 服务:
+请帮我完成 text-to-design 安装,并按步骤汇报进度:
 
-1. 后台服务无需手动安装,调用时你会通过 npx 自动拉取运行。
-2. 用你工具原生的方式注册一个 stdio MCP server:
-   命令: npx -y text-to-design-mcp@latest
-   (按你自己的配置文件格式写入即可)
-3. 验证服务能启动:
+1. 注册 MCP 服务:用你工具原生的方式注册一个 stdio MCP server,
+   命令 npx -y text-to-design-mcp@latest(无需手动安装,npx 会自动拉取运行)。
+
+2. 验证后台服务能启动:
    timeout 5 npx -y text-to-design-mcp@latest
-   预期输出含 "[text-to-design-mcp] shim 模式" 或 "daemon 就绪"(首次会自动拉起常驻服务)
-4. 完成注册后告诉我「已就绪」。
+   预期输出含 "[text-to-design-mcp] shim 模式" 或 "daemon 就绪"(首次会自动拉起常驻服务)。
+
+3. 安装设计软件插件,下载并解压到用户目录:
+   cd ~ && npm pack text-to-design-ui
+   mkdir -p text-to-design-plugin
+   tar -xzf text-to-design-ui-*.tgz -C text-to-design-plugin --strip-components=1
+
+4. 上述三步完成后,告知用户剩下两步需手动:
+   - 在即时设计里「插件 → 导入」,选择 ~/text-to-design-plugin/dist/manifest.json,
+     运行插件,面板显示「已连接」即就绪
+   - 重启 AI 会话,调用 jsd_ping 验证连通
+
+5. 汇报完成情况。
 ```
 
 若希望全局安装(装一次、不依赖联网拉取),可 `npm i -g text-to-design-mcp`,注册命令可简化为 `text-to-design-mcp`。
