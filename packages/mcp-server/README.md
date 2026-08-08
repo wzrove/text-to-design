@@ -18,29 +18,22 @@
 
 **第一步:告诉 AI 工具**
 
-后台服务不用手动安装,AI 工具需时会通过 `npx` 自动拉取运行。在项目根目录的 `opencode.json`(没有就新建)里加:
+后台服务不用手动安装,注册命令统一为 `npx -y text-to-design-mcp@latest`,任意 AI 工具都会自动化拉取运行。把下面需求丢给 AI,它会按自己工具的格式注册 MCP 服务:
 
-```json
-{
-  "mcp": {
-    "text-to-design": {
-      "type": "local",
-      "command": ["npx", "-y", "text-to-design-mcp@latest"],
-      "enabled": true
-    }
-  }
-}
+```
+请为你在当前 AI 工具里注册 text-to-design MCP 服务:
+
+1. 后台服务无需手动安装,调用时你会通过 npx 自动拉取运行。
+2. 用你工具原生的方式注册一个 stdio MCP server:
+   命令: npx -y text-to-design-mcp@latest
+   (按你自己的配置文件格式写入即可)
+3. 验证服务能启动:
+   timeout 5 npx -y text-to-design-mcp@latest
+   预期输出含 "[text-to-design-mcp] shim 模式" 或 "daemon 就绪"(首次会自动拉起常驻服务)
+4. 完成注册后告诉我「已就绪」。
 ```
 
-如果想全局安装(装一次、不依赖联网拉取),也可以用任意包管理器:
-
-| 管理器 | 命令 |
-| --- | --- |
-| npm | `npm i -g text-to-design-mcp` |
-| pnpm | `pnpm add -g text-to-design-mcp` |
-| yarn | `yarn global add text-to-design-mcp` |
-
-全局安装后,上面的 `command` 可简化成 `["text-to-design-mcp"]`。
+若希望全局安装(装一次、不依赖联网拉取),可 `npm i -g text-to-design-mcp`,注册命令可简化为 `text-to-design-mcp`。
 
 **第二步:安装设计软件插件**
 

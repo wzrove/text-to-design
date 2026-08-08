@@ -21,46 +21,37 @@ text-to-design 能让 AI 助手(比如 opencode、Claude)直接在你的设计�
 - 一个**后台小服务**:负责在 AI 和设计软件之间传话,装一次即可
 - 一个**设计软件插件**:负责在画布上实际动手
 
-**第一步:安装后台服务**
+**第一步:让 AI 自己注册后台服务**
 
-复制下面整段,丢给任意 AI 助手执行。它做完后,只剩第二步需要你手动操作:
+复制下面整段,丢给任意 AI 助手(opencode / Claude Code / VS Code 等)。它会按自己工具的格式注册 MCP 服务,不用你手动写配置:
 
 ```
-目标:为用户安装 text-to-design 的即时设计(jsDesign)插件服务。请依次执行:
+请为你在当前 AI 工具里注册 text-to-design MCP 服务:
 
-1. 告知用户:后台服务无需手动安装,AI 工具需要时会通过 npx 自动拉取运行。
-
-2. 下载并解压插件包到用户目录:
-   cd ~ && npm pack text-to-design-ui
-   mkdir -p text-to-design-plugin
-   tar -xzf text-to-design-ui-*.tgz -C text-to-design-plugin --strip-components=1
-
-   (若 npm 包尚未发布,改用仓库内产物:把仓库 packages/ui/dist/ 整个目录拷到
-    ~/text-to-design-plugin,后续路径同样指向其 manifest.json)
-
-3. 配置 AI 工具(项目根 opencode.json,不存在则创建;若项目里找不到,写
-   ~/.config/opencode/opencode.json):
-   {
-     "mcp": {
-       "text-to-design": {
-         "type": "local",
-         "command": ["npx", "-y", "text-to-design-mcp@latest"],
-         "enabled": true
-       }
-     }
-   }
-
-4. 验证服务能启动:
+1. 后台服务无需手动安装,调用时你会通过 npx 自动拉取运行。
+2. 用你工具原生的方式注册一个 stdio MCP server:
+   命令: npx -y text-to-design-mcp@latest
+   (按你自己的配置文件格式写入即可)
+3. 验证服务能启动:
    timeout 5 npx -y text-to-design-mcp@latest
    预期输出含 "[text-to-design-mcp] shim 模式" 或 "daemon 就绪"(首次会自动拉起常驻服务)
-
-5. 告诉用户完成情况,并提醒:
-   - 在即时设计里「插件 → 导入」~/text-to-design-plugin/dist/manifest.json,运行插件,
-     面板显示「已连接」即就绪
-   - 重启 AI 工具会话,用 jsd_ping 验证
+4. 完成注册后告诉我「已就绪」。
 ```
 
-**第二步:在即时设计里导入插件**
+不同 AI 工具只是注册方式不同,底层都是同一个 `npx` 命令,无需你手动区分配置格式。
+
+**第二步:安装并导入设计软件插件**
+
+先在命令行下载并解压插件包:
+
+```bash
+cd ~ && npm pack text-to-design-ui
+mkdir -p text-to-design-plugin
+tar -xzf text-to-design-ui-*.tgz -C text-to-design-plugin --strip-components=1
+```
+
+(若 npm 包尚未发布,改用仓库内产物:把 `packages/ui/dist/` 整个目录拷到
+`~/text-to-design-plugin`,后续同样指向其 `manifest.json`。)
 
 打开即时设计客户端,点「插件」→「导入」,选择 `~/text-to-design-plugin/dist/manifest.json`,然后回到画布运行这个插件。面板上显示「已连接」,就说明准备好了。
 
