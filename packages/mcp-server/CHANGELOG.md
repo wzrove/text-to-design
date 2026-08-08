@@ -1,5 +1,11 @@
 # text-to-design-mcp
 
+## 0.3.0
+
+### Minor Changes
+
+- [`7bb67e4`](https://github.com/wzrove/text-to-design/commit/7bb67e4f6394920aeed3bd0c3ef53f3a23679035) Thanks [@wzrove](https://github.com/wzrove)! - feat: icon 别名 + npx 安装指南
+
 ## 0.2.0
 
 ### Minor Changes
