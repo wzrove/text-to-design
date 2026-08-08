@@ -580,6 +580,18 @@ export const htmlToDesignSchema = z.object({
   name: z.string().optional().describe('生成的图层名,默认 html-design'),
 });
 
+export const createIconSchema = z.object({
+  icon: z
+    .string()
+    .describe(
+      '图标名/别名/语义描述,如 home、arrow-right、magnifier(搜索)、refresh;支持模糊匹配与别名联想,查无返回候选提示',
+    ),
+  size: z.number().optional().describe('图标边长 px,默认 24'),
+  color: z.string().optional().describe('描边颜色(十六进制),默认 #000000'),
+  strokeWidth: z.number().optional().describe('描边宽度,默认 2'),
+  name: z.string().optional().describe('生成的图层名,默认 icon-<图标名>'),
+});
+
 export const updateSelectionPropsSchema = z.object({
   name: z.string().optional().describe('图层名称'),
   fill: z

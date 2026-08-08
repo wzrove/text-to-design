@@ -16,13 +16,31 @@
 
 ## 安装(三步)
 
-**第一步:安装后台服务**(任选一种包管理器)
+**第一步:告诉 AI 工具**
+
+后台服务不用手动安装,AI 工具需时会通过 `npx` 自动拉取运行。在项目根目录的 `opencode.json`(没有就新建)里加:
+
+```json
+{
+  "mcp": {
+    "text-to-design": {
+      "type": "local",
+      "command": ["npx", "-y", "text-to-design-mcp@latest"],
+      "enabled": true
+    }
+  }
+}
+```
+
+如果想全局安装(装一次、不依赖联网拉取),也可以用任意包管理器:
 
 | 管理器 | 命令 |
 | --- | --- |
 | npm | `npm i -g text-to-design-mcp` |
 | pnpm | `pnpm add -g text-to-design-mcp` |
 | yarn | `yarn global add text-to-design-mcp` |
+
+全局安装后,上面的 `command` 可简化成 `["text-to-design-mcp"]`。
 
 **第二步:安装设计软件插件**
 
@@ -36,25 +54,9 @@
 
 解压得到的安装包里有个 `dist` 文件夹。在即时设计里点「插件 → 导入」,选择里面的 `manifest.json`,然后回到画布运行插件。面板显示「已连接」就是准备好了。
 
-**第三步:告诉 AI 工具**
+**第三步:重启 AI 工具**
 
-在项目根目录的 `opencode.json`(没有就新建)里加:
-
-```json
-{
-  "mcp": {
-    "text-to-design": {
-      "type": "local",
-      "command": ["text-to-design-mcp"],
-      "enabled": true
-    }
-  }
-}
-```
-
-(没做全局安装的话,把 command 换成 `["npx", "text-to-design-mcp"]` 也可以)
-
-改完重启 AI 工具会话。
+改完重启 AI 工具会话(首次使用会自动拉取后台服务并常驻运行)。
 
 ## 怎么用
 

@@ -28,8 +28,7 @@ text-to-design 能让 AI 助手(比如 opencode、Claude)直接在你的设计�
 ```
 目标:为用户安装 text-to-design 的即时设计(jsDesign)插件服务。请依次执行:
 
-1. 安装后台服务:
-   npm i -g text-to-design-mcp
+1. 告知用户:后台服务无需手动安装,AI 工具需要时会通过 npx 自动拉取运行。
 
 2. 下载并解压插件包到用户目录:
    cd ~ && npm pack text-to-design-ui
@@ -45,14 +44,14 @@ text-to-design 能让 AI 助手(比如 opencode、Claude)直接在你的设计�
      "mcp": {
        "text-to-design": {
          "type": "local",
-         "command": ["text-to-design-mcp"],
+         "command": ["npx", "-y", "text-to-design-mcp@latest"],
          "enabled": true
        }
      }
    }
 
 4. 验证服务能启动:
-   timeout 5 text-to-design-mcp
+   timeout 5 npx -y text-to-design-mcp@latest
    预期输出含 "[text-to-design-mcp] shim 模式" 或 "daemon 就绪"(首次会自动拉起常驻服务)
 
 5. 告诉用户完成情况,并提醒:

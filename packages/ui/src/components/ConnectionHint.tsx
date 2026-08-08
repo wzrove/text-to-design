@@ -2,7 +2,7 @@ import { createMemo, createSignal } from 'solid-js';
 import { useBridge } from '../bridge/useBridge';
 import { copyText } from '../utils/clipboard';
 
-const INSTALL_CMD = 'npm i -g text-to-design-mcp';
+const INSTALL_CMD = 'npx -y text-to-design-mcp@latest';
 const GITHUB_URL = 'https://github.com/wzrove/text-to-design';
 
 /** 连接引导:未连接时给安装/启动指引;连接中时轻提示;已连接给使用引导 */

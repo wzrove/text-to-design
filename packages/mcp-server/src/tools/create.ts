@@ -1,6 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/server';
 import {
   createdResultSchema,
+  createIconSchema,
   createSvgSchema,
   executeSchema,
   htmlToDesignSchema,
@@ -9,6 +10,7 @@ import type { Bridge } from '../bridge';
 import { CLIENT } from '../config';
 import { err, structured } from '../core/response';
 import { htmlToSvg } from '../htmlToDesign';
+import { findIcon, iconToSvg, suggestIcons } from '../icons';
 
 /** 创建类:声明式节点 / SVG 导入 / HTML 转设计 */
 export function registerCreateTools(server: McpServer, bridge: Bridge): void {
@@ -43,6 +45,41 @@ export function registerCreateTools(server: McpServer, bridge: Bridge): void {
         const data = await bridge.request('create_svg', {
           svg,
           name: name ?? 'svg-design',
+        });
+        return structured(data, createdResultSchema);
+      } catch (e) {
+        return err(e, createdResultSchema);
+      }
+    },
+  );
+
+  server.registerTool(
+    'jsd_create_icon',
+    {
+      description:
+        '插入内置图标(Lucide 1764 个,服务端本地生成 SVG,不占模型上下文)。icon 填图标名/别名/语义(如 home、arrow-right、search、magnifier),支持模糊匹配与别名联想;找不到时错误信息会列候选名,可按提示重试。color 填描边色、size 填边长、strokeWidth 填描边宽,默认 24px 纯黑 2px。',
+      inputSchema: createIconSchema,
+      outputSchema: createdResultSchema,
+    },
+    async ({ icon, size, color, strokeWidth, name }) => {
+      try {
+        const def = findIcon(icon);
+        if (!def) {
+          const suggests = suggestIcons(icon, 8);
+          const hint = suggests.length
+            ? `,可尝试:${suggests.map((s) => s.name).join(', ')}`
+            : '';
+          return err(new Error(`未知图标:${icon}${hint}`), createdResultSchema);
+        }
+        const svg = iconToSvg(
+          def,
+          size ?? 24,
+          color ?? '#000000',
+          strokeWidth ?? 2,
+        );
+        const data = await bridge.request('create_svg', {
+          svg,
+          name: name ?? `icon-${def.name}`,
         });
         return structured(data, createdResultSchema);
       } catch (e) {

@@ -47,6 +47,13 @@
      「没找到 X 节点」。若目标 id 报「没找到」，说明已失效，先 `repair` 再 `jsd_find`
      复核。注意 `isUsable` 只过滤，不删节点（删职归一 `repair`）。
 
+8. **插入图标用 `jsd_create_icon`，别手写 SVG**
+   - 基于 Lucide（1764 图标），服务端本地 `src/icons.ts` 生成 SVG，走 `create_svg`
+     通道，**数据不占模型上下文**（Fuse 索引 + 图标库全在服务端）。
+   - `icon` 支持精确名（`house`）/ 别名（`home`）/ 模糊与语义联想（`magnifier`→
+     `search`）。查无时错误信息里带候选名，按提示重试即可；图标名以 Lucide 官方案
+     名为准（如家是 `house` 非 `home`）。
+
 ## 二、服务端实现要点
 
 - 「structured / err 空形状来自于 zod outputSchema 自动推导」：
