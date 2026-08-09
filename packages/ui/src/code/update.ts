@@ -1,23 +1,13 @@
 import type {
   SerializedNode,
-  UpdateSelectionProps,
+  UpdateNodeProps,
 } from 'text-to-design-shared';
-import { hex2rgba, paint } from './color';
 import { serializeNode } from './serialize';
-import { makeShadowEffect } from './style';
 import { collectTargets, findNode, loadFont } from './utils';
-
-function textStyleName(weight: number | undefined): string {
-  if (weight == null) return 'Regular';
-  if (weight >= 700) return 'Bold';
-  if (weight >= 600) return 'SemiBold';
-  if (weight >= 500) return 'Medium';
-  return 'Regular';
-}
 
 async function applyProps(
   node: SceneNode,
-  props: UpdateSelectionProps,
+  props: UpdateNodeProps,
 ): Promise<void> {
   if (props.name != null) node.name = props.name;
   if (props.x != null) node.x = props.x;
@@ -26,16 +16,25 @@ async function applyProps(
   if (props.rotation != null) node.rotation = props.rotation;
   if (props.opacity != null && 'opacity' in node) node.opacity = props.opacity;
   if (props.locked != null) node.locked = props.locked;
-  if (props.w != null || props.h != null) {
-    const w = props.w ?? node.width;
-    const h = props.h ?? node.height;
+  if (props.width != null || props.height != null) {
+    const w = props.width ?? node.width;
+    const h = props.height ?? node.height;
     if ('resize' in node) node.resize(w, h);
   }
-  if (props.fill != null && 'fills' in node) node.fills = paint(props.fill);
-  if (props.stroke != null && 'strokes' in node)
-    node.strokes = paint(props.stroke);
+  if (props.fills != null && 'fills' in node)
+    node.fills = props.fills as Paint[];
   if (props.strokeWeight != null && 'strokeWeight' in node)
     node.strokeWeight = props.strokeWeight;
+  if (props.strokeTopWeight != null && 'strokeTopWeight' in node)
+    node.strokeTopWeight = props.strokeTopWeight;
+  if (props.strokeBottomWeight != null && 'strokeBottomWeight' in node)
+    node.strokeBottomWeight = props.strokeBottomWeight;
+  if (props.strokeLeftWeight != null && 'strokeLeftWeight' in node)
+    node.strokeLeftWeight = props.strokeLeftWeight;
+  if (props.strokeRightWeight != null && 'strokeRightWeight' in node)
+    node.strokeRightWeight = props.strokeRightWeight;
+  if (props.strokes != null && 'strokes' in node)
+    node.strokes = props.strokes as Paint[];
   if (props.strokeAlign != null && 'strokeAlign' in node)
     node.strokeAlign = props.strokeAlign;
   if (props.strokeCap != null && 'strokeCap' in node)
@@ -53,16 +52,7 @@ async function applyProps(
   if (props.constraints != null && 'constraints' in node)
     node.constraints = props.constraints;
   if (props.layoutGrids != null && 'layoutGrids' in node)
-    node.layoutGrids = props.layoutGrids.map((g) => ({
-      pattern: g.pattern,
-      alignment: g.alignment,
-      gutterSize: g.gutterSize,
-      count: g.count,
-      sectionSize: g.sectionSize,
-      offset: g.offset,
-      visible: g.visible,
-      color: g.color != null ? hex2rgba(g.color, g.colorOpacity) : undefined,
-    })) as LayoutGrid[];
+    node.layoutGrids = props.layoutGrids as LayoutGrid[];
   if (node.type === 'ELLIPSE' && props.arcData != null && 'arcData' in node) {
     const arc = props.arcData;
     (node as EllipseNode).arcData = {
@@ -71,25 +61,29 @@ async function applyProps(
       innerRadius: arc.innerRadius,
     };
   }
+  if (props.effects != null && 'effects' in node)
+    node.effects = props.effects as Effect[];
+
   if (props.cornerRadius != null && 'cornerRadius' in node)
     node.cornerRadius = props.cornerRadius;
   if ('topLeftRadius' in node) {
     const r = node as RectangleNode;
-    if (props.radiusTopLeft != null) r.topLeftRadius = props.radiusTopLeft;
-    if (props.radiusTopRight != null) r.topRightRadius = props.radiusTopRight;
-    if (props.radiusBottomLeft != null)
-      r.bottomLeftRadius = props.radiusBottomLeft;
-    if (props.radiusBottomRight != null)
-      r.bottomRightRadius = props.radiusBottomRight;
+    if (props.topLeftRadius != null) r.topLeftRadius = props.topLeftRadius;
+    if (props.topRightRadius != null) r.topRightRadius = props.topRightRadius;
+    if (props.bottomLeftRadius != null)
+      r.bottomLeftRadius = props.bottomLeftRadius;
+    if (props.bottomRightRadius != null)
+      r.bottomRightRadius = props.bottomRightRadius;
   }
+
   if (
     props.pointCount != null &&
     (node.type === 'POLYGON' || node.type === 'STAR')
   ) {
     (node as PolygonNode).pointCount = props.pointCount;
   }
-  if (props.shadow != null && 'effects' in node) {
-    node.effects = makeShadowEffect(props.shadow);
+  if (node.type === 'STAR' && props.innerRadius != null) {
+    (node as StarNode).innerRadius = props.innerRadius;
   }
 
   if (node.type === 'TEXT') {
@@ -97,12 +91,11 @@ async function applyProps(
     const needLoad =
       props.characters != null ||
       props.fontSize != null ||
-      props.fontFamily != null ||
-      props.fontWeight != null;
+      props.fontName != null;
     if (needLoad) {
       const family =
-        props.fontFamily ?? (text.fontName as FontName).family ?? 'PingFang SC';
-      const style = textStyleName(props.fontWeight);
+        props.fontName?.family ?? (text.fontName as FontName).family ?? 'PingFang SC';
+      const style = props.fontName?.style ?? (text.fontName as FontName).style ?? 'Regular';
       if (text.fontName !== jsDesign.mixed) {
         await loadFont(family, style);
         text.fontName = { family, style };
@@ -110,7 +103,8 @@ async function applyProps(
     }
     if (props.characters != null) text.characters = props.characters;
     if (props.fontSize != null) text.fontSize = props.fontSize;
-    if (props.textAlign != null) text.textAlignHorizontal = props.textAlign;
+    if (props.textAlignHorizontal != null)
+      text.textAlignHorizontal = props.textAlignHorizontal;
     if (props.textAlignVertical != null)
       text.textAlignVertical = props.textAlignVertical;
     if (props.textAutoResize != null)
@@ -119,9 +113,9 @@ async function applyProps(
     if (props.textDecoration != null)
       text.textDecoration = props.textDecoration;
     if (props.lineHeight != null)
-      text.lineHeight = { value: props.lineHeight, unit: 'PIXELS' };
+      text.lineHeight = props.lineHeight as unknown as LineHeight;
     if (props.letterSpacing != null)
-      text.letterSpacing = { value: props.letterSpacing, unit: 'PIXELS' };
+      text.letterSpacing = props.letterSpacing as unknown as LetterSpacing;
   }
 
   if (
@@ -138,14 +132,6 @@ async function applyProps(
     'itemSpacing' in node
   ) {
     (node as FrameNode).itemSpacing = props.itemSpacing;
-  }
-  if (node.type === 'FRAME' && props.padding != null) {
-    const frame = node as FrameNode;
-    frame.paddingTop =
-      frame.paddingRight =
-      frame.paddingBottom =
-      frame.paddingLeft =
-        props.padding;
   }
   if (node.type === 'FRAME' && props.paddingTop != null)
     (node as FrameNode).paddingTop = props.paddingTop;
@@ -195,7 +181,7 @@ export async function updateSelection(params: {
   ids?: string[];
   matchName?: string;
   recursive?: boolean;
-  props: UpdateSelectionProps;
+  props: UpdateNodeProps;
 }): Promise<{ updated: SerializedNode[] }> {
   const props = params.props ?? {};
   let base: readonly SceneNode[];

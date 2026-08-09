@@ -1,26 +1,9 @@
-import type { SerializedNode, SerializedNodeType } from 'text-to-design-shared';
+import type { LetterSpacing as WireLetterSpacing, Paint, SerializedNode, SerializedNodeType, VectorPath as WireVectorPath } from 'text-to-design-shared';
 
 export const MAX_SERIALIZE_DEPTH = 2;
 
-function rgbToHex(c: { r: number; g: number; b: number }): string {
-  return `#${[c.r, c.g, c.b]
-    .map((v) => {
-      const s = Math.round(v * 255).toString(16);
-      return s.length < 2 ? `0${s}` : s;
-    })
-    .join('')}`;
-}
-
 function isMixed(v: unknown): boolean {
   return typeof v === 'string' && (v as string) === 'figma.mixed';
-}
-
-function rgba2hex(c: { r: number; g: number; b: number; a: number }): string {
-  const hex = (n: number) =>
-    Math.round(n * 255)
-      .toString(16)
-      .padStart(2, '0');
-  return `#${hex(c.r)}${hex(c.g)}${hex(c.b)}${hex(c.a)}`;
 }
 
 export function trySerialize(
@@ -57,36 +40,72 @@ export function serializeNode(
     node.opacity !== 1
   )
     base.opacity = node.opacity;
+  if ('visible' in node && typeof node.visible === 'boolean' && !node.visible)
+    base.visible = false;
   if ('locked' in node && node.locked) base.locked = true;
-  if ('fills' in node && Array.isArray(node.fills) && node.fills.length > 0) {
-    const fill = node.fills[0];
-    if (fill.type === 'SOLID') {
-      base.fill = rgbToHex(fill.color);
-    } else if (fill.type === 'GRADIENT_LINEAR') {
-      const stops = fill.gradientStops;
-      base.gradient = {
-        type: 'GRADIENT_LINEAR',
-        stops: stops.map(
-          (s: {
-            color: { r: number; g: number; b: number };
-            position: number;
-          }) => ({
-            color: rgbToHex(s.color),
-            position: s.position,
-          }),
-        ),
-      };
-    }
+  if ('parent' in node && node.parent) {
+    const p = node.parent as SceneNode;
+    if ('id' in p) base.parentId = p.id;
   }
+
+  if ('fills' in node && Array.isArray(node.fills) && node.fills.length > 0) {
+    base.fills = (node.fills as Paint[]).map((f) => {
+      if (f.type === 'SOLID') {
+        return {
+          type: 'SOLID',
+          color: { r: f.color.r, g: f.color.g, b: f.color.b },
+          ...(f.opacity != null && f.opacity < 1 ? { opacity: f.opacity } : {}),
+          ...(f.visible != null ? { visible: f.visible } : {}),
+          ...(f.blendMode != null && f.blendMode !== 'NORMAL' ? { blendMode: f.blendMode } : {}),
+        };
+      }
+      if (f.type === 'GRADIENT_LINEAR' || f.type === 'GRADIENT_RADIAL' || f.type === 'GRADIENT_ANGULAR') {
+        return {
+          type: f.type,
+          gradientStops: f.gradientStops.map((s) => ({
+            color: { r: s.color.r, g: s.color.g, b: s.color.b, a: s.color.a ?? 1 },
+            position: s.position,
+          })),
+          gradientTransform: f.gradientTransform as [[number, number, number], [number, number, number]],
+        };
+      }
+      if (f.type === 'IMAGE') {
+        return {
+          type: 'IMAGE',
+          imageHash: f.imageHash,
+          ...(f.scaleMode != null ? { scaleMode: f.scaleMode } : {}),
+        };
+      }
+      return f;
+    }) as Paint[];
+  }
+
   if (
     'strokes' in node &&
     Array.isArray(node.strokes) &&
     node.strokes.length > 0
   ) {
-    const stroke = node.strokes[0];
-    if (stroke.type === 'SOLID') {
-      base.stroke = rgbToHex(stroke.color);
-    }
+    base.strokes = (node.strokes as Paint[]).map((s) => {
+      if (s.type === 'SOLID') {
+        return {
+          type: 'SOLID',
+          color: { r: s.color.r, g: s.color.g, b: s.color.b },
+          ...(s.opacity != null && s.opacity < 1 ? { opacity: s.opacity } : {}),
+        };
+      }
+      if (s.type === 'GRADIENT_LINEAR' || s.type === 'GRADIENT_RADIAL' || s.type === 'GRADIENT_ANGULAR') {
+        return {
+          type: s.type,
+          gradientStops: s.gradientStops.map((st) => ({
+            color: { r: st.color.r, g: st.color.g, b: st.color.b, a: st.color.a ?? 1 },
+            position: st.position,
+          })),
+          gradientTransform: s.gradientTransform as [[number, number, number], [number, number, number]],
+        };
+      }
+      return s;
+    }) as Paint[];
+
     if (
       'strokeWeight' in node &&
       typeof node.strokeWeight === 'number' &&
@@ -95,6 +114,7 @@ export function serializeNode(
       base.strokeWeight = node.strokeWeight;
     }
   }
+
   if ('strokeAlign' in node && node.type !== 'FRAME' && node.type !== 'TEXT') {
     const sa = (node as SceneNode & { strokeAlign: string }).strokeAlign;
     if (sa != null && sa !== 'CENTER')
@@ -120,7 +140,7 @@ export function serializeNode(
     node.blendMode !== 'PASS_THROUGH' &&
     node.blendMode !== 'NORMAL'
   )
-    base.blendMode = node.blendMode;
+    base.blendMode = node.blendMode as SerializedNode['blendMode'];
   if (
     'cornerSmoothing' in node &&
     typeof node.cornerSmoothing === 'number' &&
@@ -144,17 +164,78 @@ export function serializeNode(
       };
     }
   }
+  if (
+    'strokeTopWeight' in node &&
+    typeof node.strokeTopWeight === 'number' &&
+    node.strokeTopWeight > 0
+  ) {
+    base.strokeTopWeight = node.strokeTopWeight;
+  }
+  if (
+    'strokeBottomWeight' in node &&
+    typeof node.strokeBottomWeight === 'number' &&
+    node.strokeBottomWeight > 0
+  ) {
+    base.strokeBottomWeight = node.strokeBottomWeight;
+  }
+  if (
+    'strokeLeftWeight' in node &&
+    typeof node.strokeLeftWeight === 'number' &&
+    node.strokeLeftWeight > 0
+  ) {
+    base.strokeLeftWeight = node.strokeLeftWeight;
+  }
+  if (
+    'strokeRightWeight' in node &&
+    typeof node.strokeRightWeight === 'number' &&
+    node.strokeRightWeight > 0
+  ) {
+    base.strokeRightWeight = node.strokeRightWeight;
+  }
   if ('effects' in node && Array.isArray(node.effects)) {
-    const shadow = node.effects.find(
-      (e) => e.type === 'DROP_SHADOW' && e.visible,
-    );
-    if (shadow && shadow.type === 'DROP_SHADOW') {
-      base.shadow = {
-        x: shadow.offset.x,
-        y: shadow.offset.y,
-        radius: shadow.radius,
-        color: rgbToHex(shadow.color),
-      };
+    const effects = node.effects.filter((e) => e.visible);
+    if (effects.length > 0) {
+      const list: NonNullable<SerializedNode['effects']> = [];
+      for (const e of effects) {
+        switch (e.type) {
+          case 'LAYER_BLUR':
+          case 'BACKGROUND_BLUR':
+            list.push({ type: e.type, radius: e.radius, visible: e.visible });
+            break;
+          case 'DROP_SHADOW': {
+            const item: NonNullable<SerializedNode['effects']>[number] = {
+              type: 'DROP_SHADOW',
+              offset: e.offset,
+              radius: e.radius,
+              color: e.color,
+              visible: e.visible,
+              blendMode: e.blendMode ?? 'NORMAL',
+            };
+            if (e.spread != null) item.spread = e.spread;
+            if (e.showShadowBehindNode != null)
+              item.showShadowBehindNode = e.showShadowBehindNode;
+            list.push(item);
+            break;
+          }
+          case 'INNER_SHADOW': {
+            const item: NonNullable<SerializedNode['effects']>[number] = {
+              type: 'INNER_SHADOW',
+              offset: e.offset,
+              radius: e.radius,
+              color: e.color,
+              visible: e.visible,
+              blendMode: e.blendMode ?? 'NORMAL',
+            };
+            if (e.spread != null) item.spread = e.spread;
+            list.push(item);
+            break;
+          }
+          default: {
+            throw new Error(`未处理的效果类型: ${JSON.stringify(e)}`);
+          }
+        }
+      }
+      if (list.length > 0) base.effects = list;
     }
   }
   if (
@@ -166,23 +247,26 @@ export function serializeNode(
   }
   if ('topLeftRadius' in node) {
     const r = node as RectangleNode;
-    base.radiusTopLeft =
+    base.topLeftRadius =
       typeof r.topLeftRadius === 'number' ? r.topLeftRadius : undefined;
-    base.radiusTopRight =
+    base.topRightRadius =
       typeof r.topRightRadius === 'number' ? r.topRightRadius : undefined;
-    base.radiusBottomLeft =
+    base.bottomLeftRadius =
       typeof r.bottomLeftRadius === 'number' ? r.bottomLeftRadius : undefined;
-    base.radiusBottomRight =
+    base.bottomRightRadius =
       typeof r.bottomRightRadius === 'number' ? r.bottomRightRadius : undefined;
   }
   if ('pointCount' in node) {
     base.pointCount = (node as PolygonNode).pointCount;
   }
+  if (node.type === 'STAR' && 'innerRadius' in node) {
+    base.innerRadius = (node as StarNode).innerRadius;
+  }
   if (node.type === 'VECTOR') {
-    base.vectorPaths = (node as VectorNode).vectorPaths.map((p) => ({
+    base.vectorPaths = ((node as VectorNode).vectorPaths.map((p) => ({
       data: p.data,
-      windingRule: p.windingRule,
-    }));
+      windingRule: p.windingRule === 'NONE' ? undefined : p.windingRule,
+    })) as unknown) as WireVectorPath[];
   }
   if ('variantProperties' in node && node.variantProperties != null) {
     base.variantProperties = { ...(node as InstanceNode).variantProperties };
@@ -199,12 +283,19 @@ export function serializeNode(
       ]),
     );
   }
+  if (node.type === 'BOOLEAN_OPERATION') {
+    base.booleanOperation = (node as BooleanOperationNode).booleanOperation;
+  }
+  if ('isMask' in node && (node as SceneNode & { isMask?: boolean }).isMask) {
+    base.isMask = true;
+  }
   if (node.type === 'TEXT') {
     base.characters = node.characters;
     if (!isMixed(node.fontSize)) base.fontSize = node.fontSize as number;
     const f = node.fontName as FontName | undefined;
-    if (f?.family) base.fontFamily = f.family;
-    if (f?.style && f.style !== 'Regular') base.fontWeight = f.style;
+    if (f?.family) base.fontName = { family: f.family, style: f.style };
+    if (node.textAlignHorizontal !== 'LEFT' && !isMixed(node.textAlignHorizontal))
+      base.textAlignHorizontal = node.textAlignHorizontal;
     if (node.textAlignVertical !== 'TOP' && !isMixed(node.textAlignVertical))
       base.textAlignVertical = node.textAlignVertical;
     if (node.textAutoResize !== 'NONE')
@@ -214,36 +305,34 @@ export function serializeNode(
     if (node.textDecoration !== 'NONE' && !isMixed(node.textDecoration))
       base.textDecoration =
         node.textDecoration as SerializedNode['textDecoration'];
+    if (!isMixed(node.lineHeight))
+      base.lineHeight = node.lineHeight as LineHeight;
+    if (!isMixed(node.letterSpacing)) {
+      const ls = node.letterSpacing as LetterSpacing;
+      if (ls.unit === 'PIXELS')
+        base.letterSpacing = ls as unknown as WireLetterSpacing;
+    }
   }
   if ('layoutMode' in node && node.layoutMode !== 'NONE') {
     const frame = node as FrameNode;
+    base.layoutMode = node.layoutMode;
+    base.itemSpacing = isMixed(frame.itemSpacing) ? undefined : frame.itemSpacing;
     const pTop = isMixed(frame.paddingTop) ? undefined : frame.paddingTop;
     const pRight = isMixed(frame.paddingRight) ? undefined : frame.paddingRight;
-    const pBottom = isMixed(frame.paddingBottom)
-      ? undefined
-      : frame.paddingBottom;
+    const pBottom = isMixed(frame.paddingBottom) ? undefined : frame.paddingBottom;
     const pLeft = isMixed(frame.paddingLeft) ? undefined : frame.paddingLeft;
-    base.layout = {
-      mode: node.layoutMode,
-      itemSpacing: isMixed(node.itemSpacing) ? undefined : node.itemSpacing,
-      padding: pTop,
-    };
-    if (pTop != null && pTop === pRight && pTop === pBottom && pTop === pLeft) {
-      base.layout.padding = pTop;
-    } else {
-      base.layout.paddingTop = pTop;
-      base.layout.paddingRight = pRight;
-      base.layout.paddingBottom = pBottom;
-      base.layout.paddingLeft = pLeft;
-    }
+    base.paddingTop = pTop;
+    base.paddingRight = pRight;
+    base.paddingBottom = pBottom;
+    base.paddingLeft = pLeft;
     if (frame.primaryAxisSizingMode != null)
-      base.layout.primaryAxisSizingMode = frame.primaryAxisSizingMode;
+      base.primaryAxisSizingMode = frame.primaryAxisSizingMode;
     if (frame.counterAxisSizingMode != null)
-      base.layout.counterAxisSizingMode = frame.counterAxisSizingMode;
+      base.counterAxisSizingMode = frame.counterAxisSizingMode;
     if (frame.primaryAxisAlignItems != null)
-      base.layout.primaryAxisAlignItems = frame.primaryAxisAlignItems;
+      base.primaryAxisAlignItems = frame.primaryAxisAlignItems;
     if (frame.counterAxisAlignItems != null)
-      base.layout.counterAxisAlignItems = frame.counterAxisAlignItems;
+      base.counterAxisAlignItems = frame.counterAxisAlignItems;
   }
   if (
     'layoutGrids' in node &&
@@ -264,13 +353,14 @@ export function serializeNode(
       const out: NonNullable<SerializedNode['layoutGrids']>[number] = {
         pattern: g.pattern,
       };
-      if (g.alignment != null) out.alignment = g.alignment;
+      if (g.alignment != null && g.alignment !== 'STRETCH')
+        out.alignment = g.alignment;
       if (g.gutterSize != null) out.gutterSize = g.gutterSize;
       if (g.count != null && Number.isFinite(g.count)) out.count = g.count;
       if (g.sectionSize != null) out.sectionSize = g.sectionSize;
       if (g.offset != null) out.offset = g.offset;
       if (g.visible != null) out.visible = g.visible;
-      if (g.color != null) out.color = rgba2hex(g.color);
+      if (g.color != null) out.color = g.color;
       return out;
     });
   }

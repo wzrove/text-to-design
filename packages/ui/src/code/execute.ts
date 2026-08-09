@@ -1,7 +1,42 @@
-import type { SerializedNode } from 'text-to-design-shared';
+import type { ExecuteOp, SerializedNode } from 'text-to-design-shared';
 import buildNode from './buildNode';
 import { serializeNode } from './serialize';
-import { toSpecs } from './types';
+
+const TYPES = [
+  'FRAME',
+  'RECTANGLE',
+  'ELLIPSE',
+  'LINE',
+  'POLYGON',
+  'STAR',
+  'VECTOR',
+  'BOOLEAN_OPERATION',
+  'TEXT',
+  'GROUP',
+] as const;
+
+function coerceSpec(raw: unknown): ExecuteOp {
+  if (typeof raw !== 'object' || raw === null) {
+    throw new Error(
+      `无效的节点指令: 期望对象,收到 ${raw === null ? 'null' : typeof raw}`,
+    );
+  }
+  const type = (raw as { type?: string }).type;
+  if (type !== undefined && !TYPES.includes(type as (typeof TYPES)[number])) {
+    throw new Error(
+      `无效的 type: "${type}"(支持 ${TYPES.join('|')})`,
+    );
+  }
+  return raw as ExecuteOp;
+}
+
+function coerceSpecs(ops: unknown): ExecuteOp[] {
+  if (Array.isArray(ops)) {
+    if (ops.length === 0) throw new Error('ops 为空数组,无可执行指令');
+    return ops.map(coerceSpec);
+  }
+  return [coerceSpec(ops)];
+}
 
 export async function executeOps(
   ops: unknown,
@@ -11,7 +46,7 @@ export async function executeOps(
     y?: number;
   },
 ): Promise<{ created: SerializedNode[] }> {
-  const specs = toSpecs(ops);
+  const specs = coerceSpecs(ops);
   const page = jsDesign.currentPage;
   const mode = placement?.mode ?? 'center';
   const created: SceneNode[] = [];

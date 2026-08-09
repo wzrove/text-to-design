@@ -1,40 +1,38 @@
-import { hex2rgba, paint } from './color';
-import { gradientPaint, makeShadowEffect } from './style';
-import type { Spec } from './types';
+import type { ExecuteOp } from 'text-to-design-shared';
 import { loadFont } from './utils';
 
 async function buildNode(
-  spec: Spec,
+  spec: ExecuteOp,
   parent: BaseNode & ChildrenMixin,
 ): Promise<SceneNode> {
-  const op = spec.op ?? 'frame';
+  const type = spec.type;
   let node: SceneNode;
-  switch (op) {
-    case 'text':
+  switch (type) {
+    case 'TEXT':
       node = jsDesign.createText();
       break;
-    case 'rect':
+    case 'RECTANGLE':
       node = jsDesign.createRectangle();
       break;
-    case 'ellipse':
+    case 'ELLIPSE':
       node = jsDesign.createEllipse();
       break;
-    case 'line':
+    case 'LINE':
       node = jsDesign.createLine();
       break;
-    case 'polygon':
+    case 'POLYGON':
       node = jsDesign.createPolygon();
       break;
-    case 'star':
+    case 'STAR':
       node = jsDesign.createStar();
       break;
-    case 'vector':
+    case 'VECTOR':
       node = jsDesign.createVector();
       break;
-    case 'boolean': {
+    case 'BOOLEAN_OPERATION': {
       const children = spec.children ?? [];
       if (children.length < 2) {
-        throw new Error('boolean op 至少需要 2 个子节点');
+        throw new Error('BOOLEAN_OPERATION 至少需要 2 个子节点');
       }
       const tmp = jsDesign.createFrame();
       parent.appendChild(tmp);
@@ -53,10 +51,24 @@ async function buildNode(
         INTERSECT: jsDesign.intersect,
         EXCLUDE: jsDesign.exclude,
       };
-      node = combine[spec.booleanType ?? 'UNION']([...tmp.children], parent);
+      node = combine[spec.booleanOperation ?? 'UNION']([...tmp.children], parent);
       tmp.remove();
       break;
     }
+    case 'GROUP': {
+      const children = spec.children ?? [];
+      if (children.length < 2) {
+        throw new Error('GROUP 至少需要 2 个子节点');
+      }
+      const tmp = jsDesign.createFrame();
+      parent.appendChild(tmp);
+      for (const child of children) {
+        await buildNode(child, tmp);
+      }
+      node = tmp;
+      break;
+    }
+    case 'FRAME':
     default:
       node = jsDesign.createFrame();
   }
@@ -65,18 +77,27 @@ async function buildNode(
   node.x = spec.x ?? 0;
   node.y = spec.y ?? 0;
 
-  if (spec.w != null && 'resize' in node)
-    node.resize(spec.w, spec.h ?? node.height);
+  if (spec.width != null && 'resize' in node)
+    node.resize(spec.width, spec.height ?? node.height);
   if (spec.rotation != null) node.rotation = spec.rotation;
   if (spec.opacity != null && 'opacity' in node) node.opacity = spec.opacity;
   if (spec.locked != null) node.locked = spec.locked;
+  if (spec.visible != null && 'visible' in node) node.visible = spec.visible;
 
-  if (spec.fill && 'fills' in node) node.fills = gradientPaint(spec);
-  else if (spec.gradient && 'fills' in node) node.fills = gradientPaint(spec);
+  if (spec.fills && 'fills' in node) node.fills = spec.fills as Paint[];
+  if (spec.strokes && 'strokes' in node)
+    node.strokes = spec.strokes as Paint[];
 
-  if (spec.stroke && 'strokes' in node) node.strokes = paint(spec.stroke);
   if (spec.strokeWeight != null && 'strokeWeight' in node)
     node.strokeWeight = spec.strokeWeight;
+  if (spec.strokeTopWeight != null && 'strokeTopWeight' in node)
+    node.strokeTopWeight = spec.strokeTopWeight;
+  if (spec.strokeBottomWeight != null && 'strokeBottomWeight' in node)
+    node.strokeBottomWeight = spec.strokeBottomWeight;
+  if (spec.strokeLeftWeight != null && 'strokeLeftWeight' in node)
+    node.strokeLeftWeight = spec.strokeLeftWeight;
+  if (spec.strokeRightWeight != null && 'strokeRightWeight' in node)
+    node.strokeRightWeight = spec.strokeRightWeight;
   if (spec.strokeAlign != null && 'strokeAlign' in node)
     node.strokeAlign = spec.strokeAlign;
   if (spec.strokeCap != null && 'strokeCap' in node)
@@ -94,31 +115,20 @@ async function buildNode(
   if (spec.clipsContent != null && 'clipsContent' in node)
     node.clipsContent = spec.clipsContent;
   if (spec.layoutGrids != null && 'layoutGrids' in node)
-    node.layoutGrids = spec.layoutGrids.map((g) => ({
-      pattern: g.pattern,
-      alignment: g.alignment,
-      gutterSize: g.gutterSize,
-      count: g.count,
-      sectionSize: g.sectionSize,
-      offset: g.offset,
-      visible: g.visible,
-      color: g.color != null ? hex2rgba(g.color, g.colorOpacity) : undefined,
-    })) as LayoutGrid[];
+    node.layoutGrids = spec.layoutGrids as LayoutGrid[];
 
-  if (spec.shadow && 'effects' in node)
-    node.effects = makeShadowEffect(spec.shadow);
+  if (spec.effects && 'effects' in node) node.effects = spec.effects as Effect[];
 
   if ('cornerRadius' in node) {
-    if (spec.radius != null) node.cornerRadius = spec.radius;
-    if (spec.radiusTopLeft != null) node.cornerRadius = spec.radiusTopLeft;
+    if (spec.cornerRadius != null) node.cornerRadius = spec.cornerRadius;
     if ('topLeftRadius' in node) {
       const r = node as RectangleNode;
-      if (spec.radiusTopLeft != null) r.topLeftRadius = spec.radiusTopLeft;
-      if (spec.radiusTopRight != null) r.topRightRadius = spec.radiusTopRight;
-      if (spec.radiusBottomLeft != null)
-        r.bottomLeftRadius = spec.radiusBottomLeft;
-      if (spec.radiusBottomRight != null)
-        r.bottomRightRadius = spec.radiusBottomRight;
+      if (spec.topLeftRadius != null) r.topLeftRadius = spec.topLeftRadius;
+      if (spec.topRightRadius != null) r.topRightRadius = spec.topRightRadius;
+      if (spec.bottomLeftRadius != null)
+        r.bottomLeftRadius = spec.bottomLeftRadius;
+      if (spec.bottomRightRadius != null)
+        r.bottomRightRadius = spec.bottomRightRadius;
     }
   }
 
@@ -142,73 +152,54 @@ async function buildNode(
 
   if (node.type === 'TEXT') {
     const textNode = node as TextNode;
-    const family = spec.fontFamily ?? 'PingFang SC';
-    const style =
-      spec.fontWeight != null && spec.fontWeight >= 600 ? 'Bold' : 'Regular';
-    if (textNode.fontName !== jsDesign.mixed) {
-      await loadFont(family, style);
-      textNode.fontName = { family, style };
+    if (spec.fontName && textNode.fontName !== jsDesign.mixed) {
+      await loadFont(spec.fontName.family, spec.fontName.style);
+      textNode.fontName = spec.fontName;
     }
     textNode.characters = spec.characters ?? 'text';
     textNode.fontSize = spec.fontSize ?? 16;
-    if (spec.textAlign != null) {
-      textNode.textAlignHorizontal =
-        spec.textAlign.toUpperCase() as TextNode['textAlignHorizontal'];
-    }
+    if (spec.textAlignHorizontal != null)
+      textNode.textAlignHorizontal = spec.textAlignHorizontal;
     if (spec.textAlignVertical != null)
-      textNode.textAlignVertical =
-        spec.textAlignVertical.toUpperCase() as TextNode['textAlignVertical'];
+      textNode.textAlignVertical = spec.textAlignVertical;
     if (spec.textAutoResize != null)
       textNode.textAutoResize = spec.textAutoResize;
     if (spec.textCase != null) textNode.textCase = spec.textCase;
     if (spec.textDecoration != null)
       textNode.textDecoration = spec.textDecoration;
-    if (spec.lineHeight != null)
-      textNode.lineHeight = { value: spec.lineHeight, unit: 'PIXELS' };
-    if (spec.letterSpacing != null)
-      textNode.letterSpacing = { value: spec.letterSpacing, unit: 'PIXELS' };
+  if (spec.lineHeight != null)
+    textNode.lineHeight = spec.lineHeight as unknown as LineHeight;
+  if (spec.letterSpacing != null)
+    textNode.letterSpacing = spec.letterSpacing as unknown as LetterSpacing;
   }
 
   parent.appendChild(node);
-  if (spec.op === 'boolean') {
+  if (spec.type === 'BOOLEAN_OPERATION') {
     return node;
   }
-  if (node.type === 'VECTOR' && spec.paths != null) {
-    const list = Array.isArray(spec.paths) ? spec.paths : [spec.paths];
-    (node as VectorNode).vectorPaths = list.map((p) =>
-      typeof p === 'string'
-        ? { windingRule: 'NONZERO', data: p }
-        : { windingRule: p.windingRule ?? 'NONZERO', data: p.data },
-    );
+  if (node.type === 'VECTOR' && spec.vectorPaths != null) {
+    (node as VectorNode).vectorPaths = spec.vectorPaths as VectorPath[];
   }
   for (const child of spec.children ?? []) {
     await buildNode(child, node as unknown as BaseNode & ChildrenMixin);
   }
 
-  if (node.type === 'FRAME' && spec.layout && 'layoutMode' in node) {
+  if (node.type === 'FRAME' && spec.layoutMode != null && 'layoutMode' in node) {
     const frame = node as FrameNode;
-    const lay = spec.layout;
-    frame.layoutMode = lay.mode === 'HORIZONTAL' ? 'HORIZONTAL' : 'VERTICAL';
-    frame.itemSpacing = lay.itemSpacing ?? 0;
-    if (lay.primaryAxisSizingMode != null)
-      frame.primaryAxisSizingMode = lay.primaryAxisSizingMode;
-    if (lay.counterAxisSizingMode != null)
-      frame.counterAxisSizingMode = lay.counterAxisSizingMode;
-    if (lay.primaryAxisAlignItems != null)
-      frame.primaryAxisAlignItems = lay.primaryAxisAlignItems;
-    if (lay.counterAxisAlignItems != null)
-      frame.counterAxisAlignItems = lay.counterAxisAlignItems;
-    if (lay.padding != null) {
-      frame.paddingTop =
-        frame.paddingRight =
-        frame.paddingBottom =
-        frame.paddingLeft =
-          lay.padding;
-    }
-    if (lay.paddingTop != null) frame.paddingTop = lay.paddingTop;
-    if (lay.paddingRight != null) frame.paddingRight = lay.paddingRight;
-    if (lay.paddingBottom != null) frame.paddingBottom = lay.paddingBottom;
-    if (lay.paddingLeft != null) frame.paddingLeft = lay.paddingLeft;
+    frame.layoutMode = spec.layoutMode;
+    frame.itemSpacing = spec.itemSpacing ?? 0;
+    if (spec.primaryAxisSizingMode != null)
+      frame.primaryAxisSizingMode = spec.primaryAxisSizingMode;
+    if (spec.counterAxisSizingMode != null)
+      frame.counterAxisSizingMode = spec.counterAxisSizingMode;
+    if (spec.primaryAxisAlignItems != null)
+      frame.primaryAxisAlignItems = spec.primaryAxisAlignItems;
+    if (spec.counterAxisAlignItems != null)
+      frame.counterAxisAlignItems = spec.counterAxisAlignItems;
+    if (spec.paddingTop != null) frame.paddingTop = spec.paddingTop;
+    if (spec.paddingRight != null) frame.paddingRight = spec.paddingRight;
+    if (spec.paddingBottom != null) frame.paddingBottom = spec.paddingBottom;
+    if (spec.paddingLeft != null) frame.paddingLeft = spec.paddingLeft;
   }
   if (spec.layoutGrow != null && 'layoutGrow' in node) {
     (node as FrameNode & SceneNode).layoutGrow = spec.layoutGrow;

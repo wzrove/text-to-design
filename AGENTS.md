@@ -47,7 +47,17 @@
      「没找到 X 节点」。若目标 id 报「没找到」，说明已失效，先 `repair` 再 `jsd_find`
      复核。注意 `isUsable` 只过滤，不删节点（删职归一 `repair`）。
 
-8. **插入图标用 `jsd_create_icon`，别手写 SVG**
+8. **`jsd_execute` / `jsd_manage_nodes` 的 GROUP**
+   - `jsd_execute type=GROUP`: 将子节点归为一组, 内部用 Frame 实现, **支持 auto-layout**
+     (`layoutMode`/`itemSpacing`/`padding*` 等)。序列化返回 `type: 'FRAME'` 是正常的。
+   - `jsd_manage_nodes op=group`: 将已有节点 (按 id) 归组, 同样用 Frame 实现, 支持 auto-layout 参数
+     (`layoutMode`/`itemSpacing`/`padding*`/`primaryAxis*`/`counterAxis*`)。
+   - 运行时 `GroupNode` **无** auto-layout 能力, 故 group 统一用 Frame 替代。
+   - 需要自动布局的分组 → `layoutMode: 'HORIZONTAL'|'VERTICAL'` + 可选 padding/itemSpacing
+   - 纯视觉归组(无布局) → 不加 `layoutMode` 即可
+   - `op=ungroup`: 有 auto-layout 的 Frame → 取消 layoutMode; 纯 GroupNode → ungroup()
+
+9. **插入图标用 `jsd_create_icon`，别手写 SVG**
    - 基于 Lucide（1764 图标），服务端本地 `src/icons.ts` 生成 SVG，走 `create_svg`
      通道，**数据不占模型上下文**（Fuse 索引 + 图标库全在服务端）。
    - `icon` 支持精确名（`house`）/ 别名（`home`）/ 模糊与语义联想（`magnifier`→

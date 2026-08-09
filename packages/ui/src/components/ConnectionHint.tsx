@@ -2,7 +2,14 @@ import { createMemo, createSignal } from 'solid-js';
 import { useBridge } from '../bridge/useBridge';
 import { copyText } from '../utils/clipboard';
 
-const INSTALL_CMD = 'npx -y text-to-design-mcp@latest';
+const INSTALL_CMD = [
+  '请帮我完成 text-to-design 安装:',
+  '',
+  '1. 注册 MCP 服务:用你工具原生的方式注册一个 stdio MCP server,',
+  '   命令 npx -y text-to-design-mcp@latest(无需手动安装,npx 会自动拉取运行)。',
+  '',
+  '2. 注册完成后告知我即可。',
+].join('\n');
 const GITHUB_URL = 'https://github.com/wzrove/text-to-design';
 
 /** 连接引导:未连接时给安装/启动指引;连接中时轻提示;已连接给使用引导 */
@@ -31,9 +38,9 @@ export default function ConnectionHint() {
           <div class="hint-enter rounded-lg border border-warning/40 bg-warning/10 p-2.5 text-xs">
             <div class="font-bold text-warning-content">尚未连接 AI 服务</div>
             <p class="mt-1 text-warning-content/80">
-              插件已经准备好。当你让 AI
-              助手操作画布时,服务会自动启动;也可以先手动安装,装好后重启 AI
-              会话就能用。
+              打开你的 AI 助手,点下方「复制给 AI
+              助手」把安装步骤复制过去,直接粘贴给它并发送。它会自动完成注册;完成后重启
+              AI 会话即可连接。
             </p>
             <div class="mt-2 flex flex-wrap items-center gap-1.5">
               <button
@@ -41,7 +48,7 @@ export default function ConnectionHint() {
                 class={`btn btn-xs btn-outline ${copied() ? 'text-success' : ''}`}
                 onClick={copyCmd}
               >
-                {copied() ? '✓ 已复制' : '复制安装命令'}
+                {copied() ? '✓ 已复制' : '复制给 AI 助手'}
               </button>
               <a
                 href={GITHUB_URL}

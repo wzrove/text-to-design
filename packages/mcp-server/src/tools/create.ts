@@ -18,7 +18,7 @@ export function registerCreateTools(server: McpServer, bridge: Bridge): void {
     'jsd_execute',
     {
       description:
-        '在画布执行声明式设计指令:ops 为节点数组(每项含 op 与尺寸/位置/填充/文本/布局等属性,字段与枚举以 inputSchema 为准,枚举大小写不敏感);placement 控制放置,缺省 center 居中。op 支持 frame|rect|ellipse|line|polygon|star|vector|boolean|text,缺省 frame;op=vector 用 paths 传 SVG path data;op=ellipse 可用 arcData 画环形。',
+        '在画布执行声明式设计指令:ops 为节点数组(每项含 type 与尺寸/位置/填充/文本/布局等属性,字段与枚举以 inputSchema 为准,枚举大写);placement 控制放置,缺省 center 居中。type 支持 FRAME|RECTANGLE|ELLIPSE|LINE|POLYGON|STAR|VECTOR|BOOLEAN_OPERATION|TEXT|GROUP,缺省 FRAME;type=VECTOR 用 vectorPaths 传 SVG path data;type=ELLIPSE 可用 arcData 画环形;type=GROUP 将子节点归为一组(内部用 Frame 实现,支持 auto-layout);type=FRAME 创建容器;type=BOOLEAN_OPERATION 用 booleanOperation 指定 UNION|SUBTRACT|INTERSECT|EXCLUDE 合并子节点。两者(GROUP/FRAME)均支持 auto-layout (layoutMode/itemSpacing/padding* 等)。',
       inputSchema: executeSchema,
       outputSchema: createdResultSchema,
     },

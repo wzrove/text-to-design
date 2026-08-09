@@ -1,14 +1,19 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import type { McpServer } from '@modelcontextprotocol/server';
+import { z } from 'zod';
 import {
   exportResultSchema,
   exportSchema,
-  fillImageSchema,
   listFontsResultSchema,
   updatedResultSchema,
 } from 'text-to-design-shared';
 import type { Bridge } from '../bridge';
 import { err, structured } from '../core/response';
+
+const fillImageSchema = z.object({
+  ids: z.array(z.string()).describe('要填充图片的节点 id 列表'),
+  sourcePath: z.string().describe('本地图片文件绝对路径,如 /tmp/poster.png'),
+});
 
 /** 原始数据类:导出/填充图片/字体列表 */
 export function registerRawTools(server: McpServer, bridge: Bridge): void {

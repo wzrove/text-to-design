@@ -1,6 +1,5 @@
 import type { z } from 'zod';
 import type * as s from './schemas';
-import type { SerializedNode } from './schemas';
 
 export const WS_PORT = 47812;
 
@@ -9,19 +8,13 @@ export * from './schemas';
 
 // 由 schema 推导的领域类型
 export type SerializedNodeType = z.infer<typeof s.nodeTypeSchema>;
-export type SerializedGradient = NonNullable<SerializedNode['gradient']>;
-export type SerializedShadow = NonNullable<SerializedNode['shadow']>;
-export type SerializedLayout = NonNullable<SerializedNode['layout']>;
-export type SerializedVectorPath = NonNullable<
-  SerializedNode['vectorPaths']
->[number];
 
 export type PingParams = z.infer<typeof s.pingSchema>;
 export type GetSelectionParams = z.infer<typeof s.getSelectionSchema>;
 export type ExecuteParams = z.infer<typeof s.executeSchema>;
 export type CreateSvgParams = z.infer<typeof s.createSvgSchema>;
-export type UpdateSelectionProps = z.infer<typeof s.updateSelectionPropsSchema>;
-export type UpdateSelectionParams = z.infer<typeof s.updateSelectionSchema>;
+export type UpdateNodeProps = z.infer<typeof s.updateNodePropsSchema>;
+export type UpdateNodeParams = z.infer<typeof s.updateNodeSchema>;
 export type FindParams = z.infer<typeof s.findSchema>;
 export type NodeOpParams = z.infer<typeof s.manageNodesSchema>;
 export type ComponentOpParams = z.infer<typeof s.manageComponentsSchema>;
@@ -50,7 +43,7 @@ export type PluginMethod =
   | 'get_selection'
   | 'execute'
   | 'create_svg'
-  | 'update_selection'
+  | 'update_node'
   | 'find'
   | 'export'
   | 'list_fonts'
@@ -66,8 +59,8 @@ export type RequestParams<M extends PluginMethod> = M extends 'ping'
       ? ExecuteParams
       : M extends 'create_svg'
         ? CreateSvgParams
-        : M extends 'update_selection'
-          ? UpdateSelectionParams
+        : M extends 'update_node'
+          ? UpdateNodeParams
           : M extends 'find'
             ? FindParams
             : M extends 'export'
@@ -98,8 +91,8 @@ export type PluginRequest = (
   | {
       type: 'request';
       id: string;
-      method: 'update_selection';
-      params: UpdateSelectionParams;
+      method: 'update_node';
+      params: UpdateNodeParams;
     }
   | { type: 'request'; id: string; method: 'find'; params: FindParams }
   | { type: 'request'; id: string; method: 'export'; params: ExportParams }

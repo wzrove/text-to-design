@@ -14,7 +14,7 @@ export function registerManageTools(server: McpServer, bridge: Bridge): void {
     'jsd_manage_nodes',
     {
       description:
-        '对节点执行结构操作。按 op 分发:select 设置选中 / remove 删除 / clone 复制(右下偏移24px) / group 编组 / ungroup 取消编组 / flatten 合并为单个矢量 / outline_stroke 描边转矢量轮廓 / reparent 移动到目标父节点下 / repair 清理引擎残留的失效节点(wrapper 移除后遗留 dangling,读 layoutGrow 等属性报 jsGet undefined 时先跑这个)',
+        '对节点执行结构操作。按 op 分发:select 设置选中 / remove 删除 / clone 复制(右下偏移24px) / group 编组(支持 auto-layout) / ungroup 取消编组 / flatten 合并为单个矢量 / outline_stroke 描边转矢量轮廓 / reparent 移动到目标父节点下 / repair 清理引擎残留失效节点。修改节点属性(位置/尺寸/填充/文本等)请用 jsd_update_node。',
       inputSchema: manageNodesSchema,
       outputSchema: manageNodesResultSchema,
     },

@@ -9,7 +9,10 @@ import { findNode } from './utils';
 export function findNodes(params: FindParams): FindResult {
   const page = jsDesign.currentPage;
   let nodes: SceneNode[];
-  if (params.type != null) {
+
+  if (params.ids != null && params.ids.length > 0) {
+    nodes = findNode(params.ids);
+  } else if (params.type != null) {
     nodes = page.findAllWithCriteria({
       types: [params.type as NodeType],
     }) as SceneNode[];
@@ -79,12 +82,26 @@ export function groupNodes(params: {
   ids: string[];
   name?: string;
   ungroup?: boolean;
+  layoutMode?: 'NONE' | 'HORIZONTAL' | 'VERTICAL';
+  itemSpacing?: number;
+  paddingTop?: number;
+  paddingRight?: number;
+  paddingBottom?: number;
+  paddingLeft?: number;
+  primaryAxisSizingMode?: 'FIXED' | 'AUTO';
+  counterAxisSizingMode?: 'FIXED' | 'AUTO';
+  primaryAxisAlignItems?: 'MIN' | 'MAX' | 'CENTER' | 'SPACE_BETWEEN';
+  counterAxisAlignItems?: 'MIN' | 'MAX' | 'CENTER';
 }): { created: SerializedNode } | { ungrouped: string[] } {
   if (params.ungroup) {
     const nodes = findNode(params.ids);
-    const grouped = nodes.filter((n) => n.type === 'GROUP');
+    const grouped = nodes.filter((n) => n.type === 'GROUP' || n.type === 'FRAME');
     for (const g of grouped) {
-      (g as unknown as { ungroup: () => void }).ungroup();
+      if (g.type === 'FRAME' && 'layoutMode' in g && (g as FrameNode).layoutMode !== 'NONE') {
+        (g as FrameNode).layoutMode = 'NONE';
+      } else {
+        (g as unknown as { ungroup: () => void }).ungroup();
+      }
     }
     return { ungrouped: grouped.map((n) => n.id) };
   }
@@ -93,9 +110,29 @@ export function groupNodes(params: {
     throw new Error('分组至少需要 2 个节点');
   }
   const page = jsDesign.currentPage;
-  const group = jsDesign.group(nodes, page);
-  if (params.name != null) group.name = params.name;
-  return { created: serializeNode(group) };
+  const frame = jsDesign.createFrame();
+  frame.name = params.name ?? 'group';
+  page.appendChild(frame);
+  for (const n of nodes) {
+    frame.appendChild(n);
+  }
+  if (params.layoutMode != null && params.layoutMode !== 'NONE') {
+    frame.layoutMode = params.layoutMode;
+    frame.itemSpacing = params.itemSpacing ?? 0;
+    if (params.primaryAxisSizingMode != null)
+      frame.primaryAxisSizingMode = params.primaryAxisSizingMode;
+    if (params.counterAxisSizingMode != null)
+      frame.counterAxisSizingMode = params.counterAxisSizingMode;
+    if (params.primaryAxisAlignItems != null)
+      frame.primaryAxisAlignItems = params.primaryAxisAlignItems;
+    if (params.counterAxisAlignItems != null)
+      frame.counterAxisAlignItems = params.counterAxisAlignItems;
+    if (params.paddingTop != null) frame.paddingTop = params.paddingTop;
+    if (params.paddingRight != null) frame.paddingRight = params.paddingRight;
+    if (params.paddingBottom != null) frame.paddingBottom = params.paddingBottom;
+    if (params.paddingLeft != null) frame.paddingLeft = params.paddingLeft;
+  }
+  return { created: serializeNode(frame) };
 }
 
 export function flattenNodes(ids: string[]): { created: SerializedNode } {

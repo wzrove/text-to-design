@@ -114,7 +114,7 @@ jsDesign.ui.onmessage = async (msg: PluginRequest) => {
         send(id, true, r);
         break;
       }
-      case 'update_selection': {
+      case 'update_node': {
         const r = await updateSelection(msg.params);
         send(id, true, r);
         break;
