@@ -1,12 +1,12 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import type { McpServer } from '@modelcontextprotocol/server';
-import { z } from 'zod';
 import {
   exportResultSchema,
   exportSchema,
   listFontsResultSchema,
   updatedResultSchema,
 } from 'text-to-design-shared';
+import { z } from 'zod';
 import type { Bridge } from '../bridge';
 import { err, structured } from '../core/response';
 

@@ -1,7 +1,4 @@
-import type {
-  SerializedNode,
-  UpdateNodeProps,
-} from 'text-to-design-shared';
+import type { SerializedNode, UpdateNodeProps } from 'text-to-design-shared';
 import { serializeNode } from './serialize';
 import { collectTargets, findNode, loadFont } from './utils';
 
@@ -94,8 +91,11 @@ async function applyProps(
       props.fontName != null;
     if (needLoad) {
       const family =
-        props.fontName?.family ?? (text.fontName as FontName).family ?? 'PingFang SC';
-      const style = props.fontName?.style ?? (text.fontName as FontName).style ?? 'Regular';
+        props.fontName?.family ??
+        (text.fontName as FontName).family ??
+        'PingFang SC';
+      const style =
+        props.fontName?.style ?? (text.fontName as FontName).style ?? 'Regular';
       if (text.fontName !== jsDesign.mixed) {
         await loadFont(family, style);
         text.fontName = { family, style };

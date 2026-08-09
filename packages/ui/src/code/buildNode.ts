@@ -51,7 +51,10 @@ async function buildNode(
         INTERSECT: jsDesign.intersect,
         EXCLUDE: jsDesign.exclude,
       };
-      node = combine[spec.booleanOperation ?? 'UNION']([...tmp.children], parent);
+      node = combine[spec.booleanOperation ?? 'UNION'](
+        [...tmp.children],
+        parent,
+      );
       tmp.remove();
       break;
     }
@@ -68,7 +71,6 @@ async function buildNode(
       node = tmp;
       break;
     }
-    case 'FRAME':
     default:
       node = jsDesign.createFrame();
   }
@@ -85,8 +87,7 @@ async function buildNode(
   if (spec.visible != null && 'visible' in node) node.visible = spec.visible;
 
   if (spec.fills && 'fills' in node) node.fills = spec.fills as Paint[];
-  if (spec.strokes && 'strokes' in node)
-    node.strokes = spec.strokes as Paint[];
+  if (spec.strokes && 'strokes' in node) node.strokes = spec.strokes as Paint[];
 
   if (spec.strokeWeight != null && 'strokeWeight' in node)
     node.strokeWeight = spec.strokeWeight;
@@ -117,7 +118,8 @@ async function buildNode(
   if (spec.layoutGrids != null && 'layoutGrids' in node)
     node.layoutGrids = spec.layoutGrids as LayoutGrid[];
 
-  if (spec.effects && 'effects' in node) node.effects = spec.effects as Effect[];
+  if (spec.effects && 'effects' in node)
+    node.effects = spec.effects as Effect[];
 
   if ('cornerRadius' in node) {
     if (spec.cornerRadius != null) node.cornerRadius = spec.cornerRadius;
@@ -167,10 +169,10 @@ async function buildNode(
     if (spec.textCase != null) textNode.textCase = spec.textCase;
     if (spec.textDecoration != null)
       textNode.textDecoration = spec.textDecoration;
-  if (spec.lineHeight != null)
-    textNode.lineHeight = spec.lineHeight as unknown as LineHeight;
-  if (spec.letterSpacing != null)
-    textNode.letterSpacing = spec.letterSpacing as unknown as LetterSpacing;
+    if (spec.lineHeight != null)
+      textNode.lineHeight = spec.lineHeight as unknown as LineHeight;
+    if (spec.letterSpacing != null)
+      textNode.letterSpacing = spec.letterSpacing as unknown as LetterSpacing;
   }
 
   parent.appendChild(node);
@@ -184,7 +186,11 @@ async function buildNode(
     await buildNode(child, node as unknown as BaseNode & ChildrenMixin);
   }
 
-  if (node.type === 'FRAME' && spec.layoutMode != null && 'layoutMode' in node) {
+  if (
+    node.type === 'FRAME' &&
+    spec.layoutMode != null &&
+    'layoutMode' in node
+  ) {
     const frame = node as FrameNode;
     frame.layoutMode = spec.layoutMode;
     frame.itemSpacing = spec.itemSpacing ?? 0;

@@ -23,9 +23,7 @@ function coerceSpec(raw: unknown): ExecuteOp {
   }
   const type = (raw as { type?: string }).type;
   if (type !== undefined && !TYPES.includes(type as (typeof TYPES)[number])) {
-    throw new Error(
-      `无效的 type: "${type}"(支持 ${TYPES.join('|')})`,
-    );
+    throw new Error(`无效的 type: "${type}"(支持 ${TYPES.join('|')})`);
   }
   return raw as ExecuteOp;
 }

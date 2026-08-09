@@ -95,9 +95,15 @@ export function groupNodes(params: {
 }): { created: SerializedNode } | { ungrouped: string[] } {
   if (params.ungroup) {
     const nodes = findNode(params.ids);
-    const grouped = nodes.filter((n) => n.type === 'GROUP' || n.type === 'FRAME');
+    const grouped = nodes.filter(
+      (n) => n.type === 'GROUP' || n.type === 'FRAME',
+    );
     for (const g of grouped) {
-      if (g.type === 'FRAME' && 'layoutMode' in g && (g as FrameNode).layoutMode !== 'NONE') {
+      if (
+        g.type === 'FRAME' &&
+        'layoutMode' in g &&
+        (g as FrameNode).layoutMode !== 'NONE'
+      ) {
         (g as FrameNode).layoutMode = 'NONE';
       } else {
         (g as unknown as { ungroup: () => void }).ungroup();
@@ -129,7 +135,8 @@ export function groupNodes(params: {
       frame.counterAxisAlignItems = params.counterAxisAlignItems;
     if (params.paddingTop != null) frame.paddingTop = params.paddingTop;
     if (params.paddingRight != null) frame.paddingRight = params.paddingRight;
-    if (params.paddingBottom != null) frame.paddingBottom = params.paddingBottom;
+    if (params.paddingBottom != null)
+      frame.paddingBottom = params.paddingBottom;
     if (params.paddingLeft != null) frame.paddingLeft = params.paddingLeft;
   }
   return { created: serializeNode(frame) };

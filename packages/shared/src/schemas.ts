@@ -142,8 +142,13 @@ export interface LayoutGrid {
 }
 
 export const layoutGridSchema: z.ZodType<LayoutGrid> = z.object({
-  pattern: z.enum(['ROWS', 'COLUMNS', 'GRID']).describe('网格类型:ROWS|COLUMNS|GRID'),
-  alignment: z.enum(['MIN', 'MAX', 'CENTER', 'STRETCH']).optional().describe('对齐:MIN|MAX|CENTER|STRETCH'),
+  pattern: z
+    .enum(['ROWS', 'COLUMNS', 'GRID'])
+    .describe('网格类型:ROWS|COLUMNS|GRID'),
+  alignment: z
+    .enum(['MIN', 'MAX', 'CENTER', 'STRETCH'])
+    .optional()
+    .describe('对齐:MIN|MAX|CENTER|STRETCH'),
   sectionSize: z.number().optional().describe('分节尺寸(px)'),
   count: z.number().int().positive().optional().describe('网格数'),
   gutterSize: z.number().optional().describe('沟槽尺寸(px)'),
@@ -160,7 +165,10 @@ export interface VectorPath {
 
 export const vectorPathSchema: z.ZodType<VectorPath> = z.object({
   data: z.string().describe('SVG path data'),
-  windingRule: z.enum(['NONZERO', 'EVENODD']).optional().describe('环绕规则:NONZERO|EVENODD'),
+  windingRule: z
+    .enum(['NONZERO', 'EVENODD'])
+    .optional()
+    .describe('环绕规则:NONZERO|EVENODD'),
 });
 
 // 字体 (对齐 runtime FontName)
@@ -232,9 +240,18 @@ export const strokePropsSchema = z.object({
   strokeBottomWeight: z.number().optional().describe('描边底部宽(px)'),
   strokeLeftWeight: z.number().optional().describe('描边左侧宽(px)'),
   strokeRightWeight: z.number().optional().describe('描边右侧宽(px)'),
-  strokeAlign: z.enum(['CENTER', 'INSIDE', 'OUTSIDE']).optional().describe('描边对齐:CENTER|INSIDE|OUTSIDE'),
-  strokeCap: z.enum(['NONE', 'ROUND', 'SQUARE', 'ARROW_LINES', 'ARROW_EQUILATERAL']).optional().describe('描边端点:NONE|ROUND|SQUARE|ARROW_LINES|ARROW_EQUILATERAL'),
-  strokeJoin: z.enum(['MITER', 'BEVEL', 'ROUND']).optional().describe('描边连接:MITER|BEVEL|ROUND'),
+  strokeAlign: z
+    .enum(['CENTER', 'INSIDE', 'OUTSIDE'])
+    .optional()
+    .describe('描边对齐:CENTER|INSIDE|OUTSIDE'),
+  strokeCap: z
+    .enum(['NONE', 'ROUND', 'SQUARE', 'ARROW_LINES', 'ARROW_EQUILATERAL'])
+    .optional()
+    .describe('描边端点:NONE|ROUND|SQUARE|ARROW_LINES|ARROW_EQUILATERAL'),
+  strokeJoin: z
+    .enum(['MITER', 'BEVEL', 'ROUND'])
+    .optional()
+    .describe('描边连接:MITER|BEVEL|ROUND'),
   dashPattern: z.array(z.number()).optional().describe('虚线段数组,如 [4,4]'),
 });
 
@@ -250,46 +267,95 @@ export const textPropsSchema = z.object({
   characters: z.string().optional().describe('文本内容'),
   fontSize: z.number().optional().describe('字号(px)'),
   fontName: fontNameSchema.optional().describe('字体:{family,style}'),
-  textAlignHorizontal: z.enum(['LEFT', 'CENTER', 'RIGHT', 'JUSTIFIED']).optional().describe('水平对齐:LEFT|CENTER|RIGHT|JUSTIFIED'),
-  textAlignVertical: z.enum(['TOP', 'CENTER', 'BOTTOM']).optional().describe('垂直对齐:TOP|CENTER|BOTTOM'),
-  textAutoResize: z.enum(['NONE', 'WIDTH_AND_HEIGHT', 'HEIGHT', 'TRUNCATE']).optional().describe('文本自适应:NONE|WIDTH_AND_HEIGHT|HEIGHT|TRUNCATE'),
-  textCase: z.enum(['ORIGINAL', 'UPPER', 'LOWER', 'TITLE']).optional().describe('文本大小写:ORIGINAL|UPPER|LOWER|TITLE'),
-  textDecoration: z.enum(['NONE', 'UNDERLINE', 'STRIKETHROUGH']).optional().describe('文本装饰:NONE|UNDERLINE|STRIKETHROUGH'),
+  textAlignHorizontal: z
+    .enum(['LEFT', 'CENTER', 'RIGHT', 'JUSTIFIED'])
+    .optional()
+    .describe('水平对齐:LEFT|CENTER|RIGHT|JUSTIFIED'),
+  textAlignVertical: z
+    .enum(['TOP', 'CENTER', 'BOTTOM'])
+    .optional()
+    .describe('垂直对齐:TOP|CENTER|BOTTOM'),
+  textAutoResize: z
+    .enum(['NONE', 'WIDTH_AND_HEIGHT', 'HEIGHT', 'TRUNCATE'])
+    .optional()
+    .describe('文本自适应:NONE|WIDTH_AND_HEIGHT|HEIGHT|TRUNCATE'),
+  textCase: z
+    .enum(['ORIGINAL', 'UPPER', 'LOWER', 'TITLE'])
+    .optional()
+    .describe('文本大小写:ORIGINAL|UPPER|LOWER|TITLE'),
+  textDecoration: z
+    .enum(['NONE', 'UNDERLINE', 'STRIKETHROUGH'])
+    .optional()
+    .describe('文本装饰:NONE|UNDERLINE|STRIKETHROUGH'),
   lineHeight: lineHeightSchema.optional().describe('行高:{value,unit}'),
   letterSpacing: letterSpacingSchema.optional().describe('字距:{value,unit}'),
 });
 
 export const autoLayoutPropsSchema = z.object({
-  layoutMode: z.enum(['NONE', 'HORIZONTAL', 'VERTICAL']).optional().describe('自动布局方向:NONE|HORIZONTAL|VERTICAL'),
+  layoutMode: z
+    .enum(['NONE', 'HORIZONTAL', 'VERTICAL'])
+    .optional()
+    .describe('自动布局方向:NONE|HORIZONTAL|VERTICAL'),
   itemSpacing: z.number().optional().describe('自动布局项间距(px)'),
   paddingTop: z.number().optional().describe('上内边距(px)'),
   paddingRight: z.number().optional().describe('右内边距(px)'),
   paddingBottom: z.number().optional().describe('下内边距(px)'),
   paddingLeft: z.number().optional().describe('左内边距(px)'),
-  primaryAxisSizingMode: z.enum(['FIXED', 'AUTO']).optional().describe('主轴尺寸模式:FIXED|AUTO'),
-  counterAxisSizingMode: z.enum(['FIXED', 'AUTO']).optional().describe('交叉轴尺寸模式:FIXED|AUTO'),
-  primaryAxisAlignItems: z.enum(['MIN', 'MAX', 'CENTER', 'SPACE_BETWEEN']).optional().describe('主轴对齐:MIN|MAX|CENTER|SPACE_BETWEEN'),
-  counterAxisAlignItems: z.enum(['MIN', 'MAX', 'CENTER']).optional().describe('交叉轴对齐:MIN|MAX|CENTER'),
+  primaryAxisSizingMode: z
+    .enum(['FIXED', 'AUTO'])
+    .optional()
+    .describe('主轴尺寸模式:FIXED|AUTO'),
+  counterAxisSizingMode: z
+    .enum(['FIXED', 'AUTO'])
+    .optional()
+    .describe('交叉轴尺寸模式:FIXED|AUTO'),
+  primaryAxisAlignItems: z
+    .enum(['MIN', 'MAX', 'CENTER', 'SPACE_BETWEEN'])
+    .optional()
+    .describe('主轴对齐:MIN|MAX|CENTER|SPACE_BETWEEN'),
+  counterAxisAlignItems: z
+    .enum(['MIN', 'MAX', 'CENTER'])
+    .optional()
+    .describe('交叉轴对齐:MIN|MAX|CENTER'),
   layoutGrow: z.number().optional().describe('自动布局内伸缩系数'),
-  layoutAlign: z.enum(['MIN', 'CENTER', 'MAX', 'STRETCH', 'INHERIT']).optional().describe('自动布局内对齐:MIN|CENTER|MAX|STRETCH|INHERIT'),
+  layoutAlign: z
+    .enum(['MIN', 'CENTER', 'MAX', 'STRETCH', 'INHERIT'])
+    .optional()
+    .describe('自动布局内对齐:MIN|CENTER|MAX|STRETCH|INHERIT'),
 });
 
 export const visualPropsSchema = z.object({
   fills: z.array(paintSchema).optional().describe('填充列表(Paint 数组)'),
   blendMode: blendModeSchema.optional().describe('混合模式'),
-  effects: z.array(effectSchema).optional().describe('效果列表(阴影/模糊,可多层叠加)'),
-  constraints: z.object({
-    horizontal: constraintTypeSchema.describe('水平约束:MIN|MAX|STRETCH|CENTER|SCALE'),
-    vertical: constraintTypeSchema.describe('垂直约束:MIN|MAX|STRETCH|CENTER|SCALE'),
-  }).optional().describe('自动布局中的约束'),
+  effects: z
+    .array(effectSchema)
+    .optional()
+    .describe('效果列表(阴影/模糊,可多层叠加)'),
+  constraints: z
+    .object({
+      horizontal: constraintTypeSchema.describe(
+        '水平约束:MIN|MAX|STRETCH|CENTER|SCALE',
+      ),
+      vertical: constraintTypeSchema.describe(
+        '垂直约束:MIN|MAX|STRETCH|CENTER|SCALE',
+      ),
+    })
+    .optional()
+    .describe('自动布局中的约束'),
   clipsContent: z.boolean().optional().describe('是否裁剪溢出内容'),
   cornerSmoothing: z.number().optional().describe('圆角平滑度 0-1'),
-  layoutGrids: z.array(layoutGridSchema).optional().describe('布局网格(参考线)'),
-  arcData: z.object({
-    startingAngle: z.number().describe('起始角度(radians)'),
-    endingAngle: z.number().describe('结束角度(radians)'),
-    innerRadius: z.number().describe('内半径(0-1 ratio)'),
-  }).optional().describe('环形路径参数(弧线)'),
+  layoutGrids: z
+    .array(layoutGridSchema)
+    .optional()
+    .describe('布局网格(参考线)'),
+  arcData: z
+    .object({
+      startingAngle: z.number().describe('起始角度(radians)'),
+      endingAngle: z.number().describe('结束角度(radians)'),
+      innerRadius: z.number().describe('内半径(0-1 ratio)'),
+    })
+    .optional()
+    .describe('环形路径参数(弧线)'),
 });
 
 // ---- 序列化节点 (read 侧) ----
@@ -444,9 +510,7 @@ export const serializedNodeSchema: z.ZodType<SerializedNode> = z.lazy(() =>
       .enum(['NONE', 'WIDTH_AND_HEIGHT', 'HEIGHT', 'TRUNCATE'])
       .optional(),
     textCase: z.enum(['ORIGINAL', 'UPPER', 'LOWER', 'TITLE']).optional(),
-    textDecoration: z
-      .enum(['NONE', 'UNDERLINE', 'STRIKETHROUGH'])
-      .optional(),
+    textDecoration: z.enum(['NONE', 'UNDERLINE', 'STRIKETHROUGH']).optional(),
     lineHeight: lineHeightSchema.optional(),
     letterSpacing: letterSpacingSchema.optional(),
     vectorPaths: z.array(vectorPathSchema).optional(),
@@ -593,16 +657,28 @@ export interface ExecuteOp {
 }
 
 export const executeNodeSchema: z.ZodType<ExecuteOp> = z.lazy(() =>
-  z.object({
-    type: nodeTypeSchema.describe('节点类型:FRAME|RECTANGLE|ELLIPSE|LINE|POLYGON|STAR|VECTOR|BOOLEAN_OPERATION|TEXT'),
-    name: z.string().optional().describe('图层名'),
-    pointCount: z.number().optional().describe('多边形/星形角点数'),
-    innerRadius: z.number().optional().describe('星形内半径(px)'),
-    children: z.array(z.lazy(() => executeNodeSchema)).optional().describe('子节点数组(递归)'),
-    vectorPaths: z.array(vectorPathSchema).optional().describe('矢量路径数组'),
-    booleanOperation: z.enum(['UNION', 'SUBTRACT', 'INTERSECT', 'EXCLUDE']).optional().describe('布尔运算:UNION|SUBTRACT|INTERSECT|EXCLUDE'),
-    isMask: z.boolean().optional().describe('是否为蒙版'),
-  })
+  z
+    .object({
+      type: nodeTypeSchema.describe(
+        '节点类型:FRAME|RECTANGLE|ELLIPSE|LINE|POLYGON|STAR|VECTOR|BOOLEAN_OPERATION|TEXT',
+      ),
+      name: z.string().optional().describe('图层名'),
+      pointCount: z.number().optional().describe('多边形/星形角点数'),
+      innerRadius: z.number().optional().describe('星形内半径(px)'),
+      children: z
+        .array(z.lazy(() => executeNodeSchema))
+        .optional()
+        .describe('子节点数组(递归)'),
+      vectorPaths: z
+        .array(vectorPathSchema)
+        .optional()
+        .describe('矢量路径数组'),
+      booleanOperation: z
+        .enum(['UNION', 'SUBTRACT', 'INTERSECT', 'EXCLUDE'])
+        .optional()
+        .describe('布尔运算:UNION|SUBTRACT|INTERSECT|EXCLUDE'),
+      isMask: z.boolean().optional().describe('是否为蒙版'),
+    })
     .and(transformPropsSchema)
     .and(strokePropsSchema)
     .and(cornerPropsSchema)
@@ -652,11 +728,12 @@ export const createIconSchema = z.object({
 });
 
 // update_node props (字段对齐 runtime, 复用共享 schema)
-export const updateNodePropsSchema = z.object({
-  name: z.string().optional().describe('图层名称'),
-  pointCount: z.number().optional().describe('多边形/星形角点数'),
-  innerRadius: z.number().optional().describe('星形内半径(px)'),
-})
+export const updateNodePropsSchema = z
+  .object({
+    name: z.string().optional().describe('图层名称'),
+    pointCount: z.number().optional().describe('多边形/星形角点数'),
+    innerRadius: z.number().optional().describe('星形内半径(px)'),
+  })
   .and(transformPropsSchema)
   .and(strokePropsSchema)
   .and(cornerPropsSchema)
@@ -708,16 +785,31 @@ export const manageNodesSchema = z.discriminatedUnion('op', [
     op: z.literal('group'),
     ids: z.array(z.string()).describe('要编组的节点 id 列表'),
     name: z.string().optional().describe('组名'),
-    layoutMode: z.enum(['NONE', 'HORIZONTAL', 'VERTICAL']).optional().describe('自动布局方向:NONE|HORIZONTAL|VERTICAL'),
+    layoutMode: z
+      .enum(['NONE', 'HORIZONTAL', 'VERTICAL'])
+      .optional()
+      .describe('自动布局方向:NONE|HORIZONTAL|VERTICAL'),
     itemSpacing: z.number().optional().describe('自动布局项间距(px)'),
     paddingTop: z.number().optional().describe('上内边距(px)'),
     paddingRight: z.number().optional().describe('右内边距(px)'),
     paddingBottom: z.number().optional().describe('下内边距(px)'),
     paddingLeft: z.number().optional().describe('左内边距(px)'),
-    primaryAxisSizingMode: z.enum(['FIXED', 'AUTO']).optional().describe('主轴尺寸模式:FIXED|AUTO'),
-    counterAxisSizingMode: z.enum(['FIXED', 'AUTO']).optional().describe('交叉轴尺寸模式:FIXED|AUTO'),
-    primaryAxisAlignItems: z.enum(['MIN', 'MAX', 'CENTER', 'SPACE_BETWEEN']).optional().describe('主轴对齐:MIN|MAX|CENTER|SPACE_BETWEEN'),
-    counterAxisAlignItems: z.enum(['MIN', 'MAX', 'CENTER']).optional().describe('交叉轴对齐:MIN|MAX|CENTER'),
+    primaryAxisSizingMode: z
+      .enum(['FIXED', 'AUTO'])
+      .optional()
+      .describe('主轴尺寸模式:FIXED|AUTO'),
+    counterAxisSizingMode: z
+      .enum(['FIXED', 'AUTO'])
+      .optional()
+      .describe('交叉轴尺寸模式:FIXED|AUTO'),
+    primaryAxisAlignItems: z
+      .enum(['MIN', 'MAX', 'CENTER', 'SPACE_BETWEEN'])
+      .optional()
+      .describe('主轴对齐:MIN|MAX|CENTER|SPACE_BETWEEN'),
+    counterAxisAlignItems: z
+      .enum(['MIN', 'MAX', 'CENTER'])
+      .optional()
+      .describe('交叉轴对齐:MIN|MAX|CENTER'),
   }),
   z.object({
     op: z.literal('ungroup'),

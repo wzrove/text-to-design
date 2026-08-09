@@ -23,4 +23,6 @@ export const _paintCheck: Paint extends RuntimePaint ? true : false = true;
 export const _effectCheck: Effect extends RuntimeEffect ? true : false = true;
 
 // BlendMode:线格式 BlendMode 必须可赋值给运行时 BlendMode(子集约束)
-export const _blendModeCheck: BlendMode extends RuntimeBlendMode ? true : false = true;
+export const _blendModeCheck: BlendMode extends RuntimeBlendMode
+  ? true
+  : false = true;

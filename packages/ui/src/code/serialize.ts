@@ -1,4 +1,10 @@
-import type { LetterSpacing as WireLetterSpacing, Paint, SerializedNode, SerializedNodeType, VectorPath as WireVectorPath } from 'text-to-design-shared';
+import type {
+  Paint,
+  SerializedNode,
+  SerializedNodeType,
+  LetterSpacing as WireLetterSpacing,
+  VectorPath as WireVectorPath,
+} from 'text-to-design-shared';
 
 export const MAX_SERIALIZE_DEPTH = 2;
 
@@ -56,17 +62,31 @@ export function serializeNode(
           color: { r: f.color.r, g: f.color.g, b: f.color.b },
           ...(f.opacity != null && f.opacity < 1 ? { opacity: f.opacity } : {}),
           ...(f.visible != null ? { visible: f.visible } : {}),
-          ...(f.blendMode != null && f.blendMode !== 'NORMAL' ? { blendMode: f.blendMode } : {}),
+          ...(f.blendMode != null && f.blendMode !== 'NORMAL'
+            ? { blendMode: f.blendMode }
+            : {}),
         };
       }
-      if (f.type === 'GRADIENT_LINEAR' || f.type === 'GRADIENT_RADIAL' || f.type === 'GRADIENT_ANGULAR') {
+      if (
+        f.type === 'GRADIENT_LINEAR' ||
+        f.type === 'GRADIENT_RADIAL' ||
+        f.type === 'GRADIENT_ANGULAR'
+      ) {
         return {
           type: f.type,
           gradientStops: f.gradientStops.map((s) => ({
-            color: { r: s.color.r, g: s.color.g, b: s.color.b, a: s.color.a ?? 1 },
+            color: {
+              r: s.color.r,
+              g: s.color.g,
+              b: s.color.b,
+              a: s.color.a ?? 1,
+            },
             position: s.position,
           })),
-          gradientTransform: f.gradientTransform as [[number, number, number], [number, number, number]],
+          gradientTransform: f.gradientTransform as [
+            [number, number, number],
+            [number, number, number],
+          ],
         };
       }
       if (f.type === 'IMAGE') {
@@ -93,14 +113,26 @@ export function serializeNode(
           ...(s.opacity != null && s.opacity < 1 ? { opacity: s.opacity } : {}),
         };
       }
-      if (s.type === 'GRADIENT_LINEAR' || s.type === 'GRADIENT_RADIAL' || s.type === 'GRADIENT_ANGULAR') {
+      if (
+        s.type === 'GRADIENT_LINEAR' ||
+        s.type === 'GRADIENT_RADIAL' ||
+        s.type === 'GRADIENT_ANGULAR'
+      ) {
         return {
           type: s.type,
           gradientStops: s.gradientStops.map((st) => ({
-            color: { r: st.color.r, g: st.color.g, b: st.color.b, a: st.color.a ?? 1 },
+            color: {
+              r: st.color.r,
+              g: st.color.g,
+              b: st.color.b,
+              a: st.color.a ?? 1,
+            },
             position: st.position,
           })),
-          gradientTransform: s.gradientTransform as [[number, number, number], [number, number, number]],
+          gradientTransform: s.gradientTransform as [
+            [number, number, number],
+            [number, number, number],
+          ],
         };
       }
       return s;
@@ -263,10 +295,10 @@ export function serializeNode(
     base.innerRadius = (node as StarNode).innerRadius;
   }
   if (node.type === 'VECTOR') {
-    base.vectorPaths = ((node as VectorNode).vectorPaths.map((p) => ({
+    base.vectorPaths = (node as VectorNode).vectorPaths.map((p) => ({
       data: p.data,
       windingRule: p.windingRule === 'NONE' ? undefined : p.windingRule,
-    })) as unknown) as WireVectorPath[];
+    })) as unknown as WireVectorPath[];
   }
   if ('variantProperties' in node && node.variantProperties != null) {
     base.variantProperties = { ...(node as InstanceNode).variantProperties };
@@ -294,7 +326,10 @@ export function serializeNode(
     if (!isMixed(node.fontSize)) base.fontSize = node.fontSize as number;
     const f = node.fontName as FontName | undefined;
     if (f?.family) base.fontName = { family: f.family, style: f.style };
-    if (node.textAlignHorizontal !== 'LEFT' && !isMixed(node.textAlignHorizontal))
+    if (
+      node.textAlignHorizontal !== 'LEFT' &&
+      !isMixed(node.textAlignHorizontal)
+    )
       base.textAlignHorizontal = node.textAlignHorizontal;
     if (node.textAlignVertical !== 'TOP' && !isMixed(node.textAlignVertical))
       base.textAlignVertical = node.textAlignVertical;
@@ -316,10 +351,14 @@ export function serializeNode(
   if ('layoutMode' in node && node.layoutMode !== 'NONE') {
     const frame = node as FrameNode;
     base.layoutMode = node.layoutMode;
-    base.itemSpacing = isMixed(frame.itemSpacing) ? undefined : frame.itemSpacing;
+    base.itemSpacing = isMixed(frame.itemSpacing)
+      ? undefined
+      : frame.itemSpacing;
     const pTop = isMixed(frame.paddingTop) ? undefined : frame.paddingTop;
     const pRight = isMixed(frame.paddingRight) ? undefined : frame.paddingRight;
-    const pBottom = isMixed(frame.paddingBottom) ? undefined : frame.paddingBottom;
+    const pBottom = isMixed(frame.paddingBottom)
+      ? undefined
+      : frame.paddingBottom;
     const pLeft = isMixed(frame.paddingLeft) ? undefined : frame.paddingLeft;
     base.paddingTop = pTop;
     base.paddingRight = pRight;
