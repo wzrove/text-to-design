@@ -171,8 +171,7 @@ async function buildNode(
       textNode.textDecoration = spec.textDecoration;
     if (spec.lineHeight != null)
       textNode.lineHeight = spec.lineHeight as unknown as LineHeight;
-    if (spec.letterSpacing != null)
-      textNode.letterSpacing = spec.letterSpacing;
+    if (spec.letterSpacing != null) textNode.letterSpacing = spec.letterSpacing;
   }
 
   parent.appendChild(node);
