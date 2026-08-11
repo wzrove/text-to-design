@@ -71,7 +71,19 @@ export function setInstanceProperties(params: {
   if (instances.length === 0) {
     throw new Error('没有找到要设置的实例节点');
   }
+  // 运行时校验:属性名必须属于实例的合法变体属性
   for (const inst of instances) {
+    const compSet = inst.mainComponent?.parent?.type === 'COMPONENT_SET'
+      ? inst.mainComponent.parent as ComponentSetNode
+      : null;
+    const variantProps = compSet?.variantGroupProperties;
+    if (variantProps) {
+      const validKeys = Object.keys(variantProps);
+      const invalidKeys = Object.keys(params.properties).filter(k => !validKeys.includes(k));
+      if (invalidKeys.length > 0) {
+        throw new Error(`非法变体属性:${invalidKeys.join(',')}。合法属性:${validKeys.join(',')}`);
+      }
+    }
     inst.setProperties(params.properties);
   }
   return { updated: instances.map((n) => serializeNode(n)) };

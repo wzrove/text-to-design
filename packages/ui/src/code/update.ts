@@ -115,7 +115,7 @@ async function applyProps(
     if (props.lineHeight != null)
       text.lineHeight = props.lineHeight as unknown as LineHeight;
     if (props.letterSpacing != null)
-      text.letterSpacing = props.letterSpacing as unknown as LetterSpacing;
+      text.letterSpacing = props.letterSpacing;
   }
 
   if (

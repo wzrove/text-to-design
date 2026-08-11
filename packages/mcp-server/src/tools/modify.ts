@@ -13,8 +13,15 @@ export function registerModifyTools(server: McpServer, bridge: Bridge): void {
   server.registerTool(
     'jsd_update_node',
     {
-      description:
-        '按 id 修改节点属性(位置/尺寸/填充/文本/效果等)。ids 指定节点、matchName 按名过滤、recursive 递归子节点。props 为要修改的属性对象,字段/枚举以 inputSchema 为准。结构操作(分组/删除/移动等)请用 jsd_manage_nodes。',
+      description: `按 id 修改节点属性(位置/尺寸/填充/文本/效果等)。
+
+参数说明:
+- ids:指定要修改的节点 id 列表(优先级高于当前选中)
+- matchName:在 ids 范围内进一步过滤,仅修改 name 精确匹配的节点
+- recursive:是否递归应用到子节点
+- props:要修改的属性对象,字段与枚举以 inputSchema 为准
+
+注意:结构操作(分组/删除/移动)请用 jsd_manage_nodes。`,
       inputSchema: updateNodeSchema,
       outputSchema: updatedResultSchema,
     },

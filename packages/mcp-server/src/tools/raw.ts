@@ -20,8 +20,15 @@ export function registerRawTools(server: McpServer, bridge: Bridge): void {
   server.registerTool(
     'jsd_export',
     {
-      description:
-        '导出节点为图片/文件,返回二进制字节。可传 savePath 落盘本地文件(推荐,配合不支持图像的模型),或 includeDataUrl 生成 base64 dataURL(供支持图像的模型查看)',
+      description: `导出节点为图片/文件。
+
+参数说明:
+- format:导出格式 PNG/JPG/SVG/PDF,默认 PNG
+- scale:缩放倍率(PNG/JPG),默认 1
+- savePath:落盘到本地文件路径(如 /tmp/icon.png),推荐在不支持图像的模型时使用
+- includeDataUrl:是否同时返回 base64 dataURL(供支持图像的模型直接查看)
+
+两种输出方式可并存:传 savePath 落盘 + 不传 includeDataUrl 则仅落盘;传 includeDataUrl 则返回 base64。`,
       inputSchema: exportSchema,
       outputSchema: exportResultSchema,
     },

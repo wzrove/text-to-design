@@ -3,9 +3,9 @@ import { z } from 'zod';
 // ---- 基础类型 (对齐 plugin-typings runtime) ----
 
 export const rgbSchema = z.object({
-  r: z.number().min(0).max(1),
-  g: z.number().min(0).max(1),
-  b: z.number().min(0).max(1),
+  r: z.number().min(0).max(1).describe('红色通道,范围 0-1(0=无,1=满),如纯红为 1'),
+  g: z.number().min(0).max(1).describe('绿色通道,范围 0-1'),
+  b: z.number().min(0).max(1).describe('蓝色通道,范围 0-1'),
 });
 export type RGB = z.infer<typeof rgbSchema>;
 
@@ -20,13 +20,13 @@ export type RGBA = z.infer<typeof rgbaSchema>;
 export const gradientStopSchema = z.object({
   color: rgbaSchema,
   position: z.number().min(0).max(1),
-});
+}).describe('渐变停止点,如 {color:{r:1,g:0,b:0,a:1}, position:0}(起点红色)和 {color:{r:0,g:0,b:1,a:1}, position:1}(终点蓝色)');
 export type GradientStop = z.infer<typeof gradientStopSchema>;
 
 export const transformSchema = z.tuple([
   z.tuple([z.number(), z.number(), z.number()]),
   z.tuple([z.number(), z.number(), z.number()]),
-]);
+]).describe('变换矩阵,如 [[1,0,0],[0,1,0]] 表示无变换(Identity)');
 export type Transform = z.infer<typeof transformSchema>;
 
 // Paint: 填充/描边的统一表示 (对齐 runtime Paint union)
@@ -67,11 +67,9 @@ export const blendModeSchema = z.enum([
   'NORMAL',
   'DARKEN',
   'MULTIPLY',
-  'LINEAR_BURN',
   'COLOR_BURN',
   'LIGHTEN',
   'SCREEN',
-  'LINEAR_DODGE',
   'COLOR_DODGE',
   'OVERLAY',
   'SOFT_LIGHT',
@@ -155,7 +153,16 @@ export const layoutGridSchema: z.ZodType<LayoutGrid> = z.object({
   offset: z.number().optional().describe('偏移(px)'),
   visible: z.boolean().optional().describe('是否可见'),
   color: rgbaSchema.optional().describe('网格颜色'),
-});
+})
+  .superRefine((val, ctx) => {
+    if (val.pattern === 'GRID' && val.sectionSize == null) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'pattern 为 GRID 时,sectionSize 为必填项',
+        path: ['sectionSize'],
+      });
+    }
+  });
 
 // 矢量路径 (对齐 runtime VectorPath)
 export interface VectorPath {
@@ -164,7 +171,7 @@ export interface VectorPath {
 }
 
 export const vectorPathSchema: z.ZodType<VectorPath> = z.object({
-  data: z.string().describe('SVG path data'),
+  data: z.string().describe('SVG path data,如 "M0 0 L100 0 L100 100 Z"(M=移动到,L=画线到,Z=闭合)'),
   windingRule: z
     .enum(['NONZERO', 'EVENODD'])
     .optional()
@@ -185,20 +192,20 @@ export type LineHeight =
   | { unit: 'AUTO' };
 
 export const lineHeightSchema: z.ZodType<LineHeight> = z.union([
-  z.object({ value: z.number(), unit: z.literal('PIXELS') }),
-  z.object({ value: z.number(), unit: z.literal('PERCENT') }),
-  z.object({ unit: z.literal('AUTO') }),
+  z.object({ value: z.number(), unit: z.literal('PIXELS') }).describe('固定行高:{value: 数值, unit: "PIXELS"},如 {value: 24, unit: "PIXELS"}'),
+  z.object({ value: z.number(), unit: z.literal('PERCENT') }).describe('百分比行高:{value: 数值, unit: "PERCENT"},如 {value: 150, unit: "PERCENT"}'),
+  z.object({ unit: z.literal('AUTO') }).describe('自动行高:{unit: "AUTO"},无需传 value'),
 ]);
 
 // 字距 (对齐 runtime LetterSpacing)
 export interface LetterSpacing {
   value: number;
-  unit: 'PIXELS';
+  unit: 'PIXELS' | 'PERCENT';
 }
 
 export const letterSpacingSchema: z.ZodType<LetterSpacing> = z.object({
   value: z.number(),
-  unit: z.literal('PIXELS'),
+  unit: z.enum(['PIXELS', 'PERCENT']),
 });
 
 // ---- 节点类型枚举 (对齐 runtime NodeType) ----
@@ -588,10 +595,11 @@ export const getSelectionSchema = z.object({
   depth: z
     .number()
     .optional()
-    .describe('序列化深度,0 表示只含节点自身属性;缺省 2'),
+    .describe('序列化深度:0=仅自身,1=含直接子节点,2=含孙节点;缺省 2'),
 });
 
 // ExecuteOp: 创建指令 (字段对齐 runtime SceneNode 属性)
+// 扁平接口供 UI 侧使用(duck-typing 访问)
 export interface ExecuteOp {
   type: NodeType;
   name?: string;
@@ -656,49 +664,258 @@ export interface ExecuteOp {
   arcData?: { startingAngle: number; endingAngle: number; innerRadius: number };
 }
 
-export const executeNodeSchema: z.ZodType<ExecuteOp> = z.lazy(() =>
-  z
-    .object({
-      type: nodeTypeSchema.describe(
-        '节点类型:FRAME|RECTANGLE|ELLIPSE|LINE|POLYGON|STAR|VECTOR|BOOLEAN_OPERATION|TEXT',
-      ),
-      name: z.string().optional().describe('图层名'),
-      pointCount: z.number().optional().describe('多边形/星形角点数'),
-      innerRadius: z.number().optional().describe('星形内半径(px)'),
-      children: z
-        .array(z.lazy(() => executeNodeSchema))
-        .optional()
-        .describe('子节点数组(递归)'),
-      vectorPaths: z
-        .array(vectorPathSchema)
-        .optional()
-        .describe('矢量路径数组'),
-      booleanOperation: z
-        .enum(['UNION', 'SUBTRACT', 'INTERSECT', 'EXCLUDE'])
-        .optional()
-        .describe('布尔运算:UNION|SUBTRACT|INTERSECT|EXCLUDE'),
-      isMask: z.boolean().optional().describe('是否为蒙版'),
-    })
-    .and(transformPropsSchema)
-    .and(strokePropsSchema)
-    .and(cornerPropsSchema)
-    .and(textPropsSchema)
-    .and(autoLayoutPropsSchema)
-    .and(visualPropsSchema),
-);
+// 从 discriminated union 派生的平面类型(所有字段 optional,与 ExecuteOp 兼容)
+type MergeUnion<T> = T extends any ? { [K in keyof T]?: T[K] } : never;
+export type ExecuteOpFromSchema = MergeUnion<
+  | z.infer<typeof frameNodeSchema>
+  | z.infer<typeof rectangleNodeSchema>
+  | z.infer<typeof ellipseNodeSchema>
+  | z.infer<typeof lineNodeSchema>
+  | z.infer<typeof polygonNodeSchema>
+  | z.infer<typeof starNodeSchema>
+  | z.infer<typeof vectorNodeSchema>
+  | z.infer<typeof textNodeSchema>
+  | z.infer<typeof groupNodeSchema>
+  | z.infer<typeof booleanOperationNodeSchema>
+>;
+
+// ---- 基础字段(所有节点共享) ----
+const baseNodeFields = {
+  name: z.string().optional().describe('图层名'),
+  x: z.number().optional().describe('X 坐标(px)'),
+  y: z.number().optional().describe('Y 坐标(px)'),
+  width: z.number().optional().describe('宽度(px)'),
+  height: z.number().optional().describe('高度(px)'),
+  rotation: z.number().optional().describe('旋转角度(deg)'),
+  opacity: z.number().optional().describe('不透明度 0-1'),
+  visible: z.boolean().optional().describe('是否可见'),
+  locked: z.boolean().optional().describe('锁定图层'),
+  isMask: z.boolean().optional().describe('是否为蒙版'),
+  children: z.array(z.any()).max(10).optional().describe('子节点数组(GROUP/BOOLEAN_OPERATION 使用,递归嵌套,最多 10 个直接子节点)'),
+};
+
+// 视觉字段(填充/描边/效果等,所有节点共享)
+const visualFields = {
+  fills: z.array(paintSchema).optional().describe('填充列表(Paint 数组)'),
+  strokes: z.array(paintSchema).optional().describe('描边列表(Paint 数组)'),
+  strokeWeight: z.number().optional().describe('描边宽度(px)'),
+  strokeTopWeight: z.number().optional().describe('描边顶部宽(px)'),
+  strokeBottomWeight: z.number().optional().describe('描边底部宽(px)'),
+  strokeLeftWeight: z.number().optional().describe('描边左侧宽(px)'),
+  strokeRightWeight: z.number().optional().describe('描边右侧宽(px)'),
+  strokeAlign: z.enum(['CENTER', 'INSIDE', 'OUTSIDE']).optional().describe('描边对齐:CENTER|INSIDE|OUTSIDE'),
+  strokeCap: z.enum(['NONE', 'ROUND', 'SQUARE', 'ARROW_LINES', 'ARROW_EQUILATERAL']).optional().describe('描边端点:NONE|ROUND|SQUARE|ARROW_LINES|ARROW_EQUILATERAL'),
+  strokeJoin: z.enum(['MITER', 'BEVEL', 'ROUND']).optional().describe('描边连接:MITER|BEVEL|ROUND'),
+  dashPattern: z.array(z.number()).optional().describe('虚线段数组,如 [4,4]'),
+  blendMode: blendModeSchema.optional().describe('混合模式'),
+  effects: z.array(effectSchema).optional().describe('效果列表(阴影/模糊,可多层叠加)'),
+  constraints: z.object({
+    horizontal: constraintTypeSchema.describe('水平约束:MIN|MAX|STRETCH|CENTER|SCALE'),
+    vertical: constraintTypeSchema.describe('垂直约束:MIN|MAX|STRETCH|CENTER|SCALE'),
+  }).optional().describe('自动布局中的约束'),
+  clipsContent: z.boolean().optional().describe('是否裁剪溢出内容'),
+  cornerSmoothing: z.number().optional().describe('圆角平滑度 0-1'),
+  layoutGrids: z.array(layoutGridSchema).optional().describe('布局网格(参考线)'),
+};
+
+// ---- 各类型 schema ----
+
+const frameNodeSchema = z.object({
+  type: z.literal('FRAME'),
+  ...baseNodeFields,
+  layoutMode: z.enum(['NONE', 'HORIZONTAL', 'VERTICAL']).optional().describe('自动布局方向:NONE=无布局,HORIZONTAL=水平排列,VERTICAL=垂直排列。传 itemSpacing/padding*/primaryAxis* 等布局属性前必须先设为 HORIZONTAL 或 VERTICAL'),
+  itemSpacing: z.number().optional().describe('自动布局项间距(px),需先设 layoutMode'),
+  paddingTop: z.number().optional().describe('上内边距(px)'),
+  paddingRight: z.number().optional().describe('右内边距(px)'),
+  paddingBottom: z.number().optional().describe('下内边距(px)'),
+  paddingLeft: z.number().optional().describe('左内边距(px)'),
+  primaryAxisSizingMode: z.enum(['FIXED', 'AUTO']).optional().describe('主轴尺寸模式:FIXED|AUTO'),
+  counterAxisSizingMode: z.enum(['FIXED', 'AUTO']).optional().describe('交叉轴尺寸模式:FIXED|AUTO'),
+  primaryAxisAlignItems: z.enum(['MIN', 'MAX', 'CENTER', 'SPACE_BETWEEN']).optional().describe('主轴对齐:MIN|MAX|CENTER|SPACE_BETWEEN'),
+  counterAxisAlignItems: z.enum(['MIN', 'MAX', 'CENTER']).optional().describe('交叉轴对齐:MIN|MAX|CENTER'),
+  layoutGrow: z.number().optional().describe('自动布局内伸缩系数'),
+  layoutAlign: z.enum(['MIN', 'CENTER', 'MAX', 'STRETCH', 'INHERIT']).optional().describe('自动布局内对齐:MIN|CENTER|MAX|STRETCH|INHERIT'),
+  ...visualFields,
+})
+  .superRefine((val, ctx) => {
+    // itemSpacing/padding*/primaryAxis*/counterAxis* 需要 layoutMode != NONE
+    const hasLayoutFields = val.itemSpacing != null || val.paddingTop != null
+      || val.paddingRight != null || val.paddingBottom != null || val.paddingLeft != null
+      || val.primaryAxisSizingMode != null || val.counterAxisSizingMode != null
+      || val.primaryAxisAlignItems != null || val.counterAxisAlignItems != null;
+    if (hasLayoutFields && (val.layoutMode == null || val.layoutMode === 'NONE')) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: '传 itemSpacing/padding*/primaryAxis*/counterAxis* 等布局属性前,layoutMode 必须设为 HORIZONTAL 或 VERTICAL',
+        path: ['layoutMode'],
+      });
+    }
+  })
+  .describe('FRAME=容器(可 auto-layout)');
+
+const rectangleNodeSchema = z.object({
+  type: z.literal('RECTANGLE'),
+  ...baseNodeFields,
+  cornerRadius: z.number().optional().describe('圆角半径(px),四角统一'),
+  topLeftRadius: z.number().optional().describe('左上圆角(px)'),
+  topRightRadius: z.number().optional().describe('右上圆角(px)'),
+  bottomLeftRadius: z.number().optional().describe('左下圆角(px)'),
+  bottomRightRadius: z.number().optional().describe('右下圆角(px)'),
+  ...visualFields,
+}).describe('RECTANGLE=矩形');
+
+const ellipseNodeSchema = z.object({
+  type: z.literal('ELLIPSE'),
+  ...baseNodeFields,
+  cornerRadius: z.number().optional().describe('圆角半径(px)'),
+  arcData: z.object({
+    startingAngle: z.number().describe('起始角度(radians)'),
+    endingAngle: z.number().describe('结束角度(radians)'),
+    innerRadius: z.number().describe('内半径(0-1 ratio)'),
+  }).optional().describe('环形路径参数(弧线),可画圆环'),
+  ...visualFields,
+}).describe('ELLIPSE=椭圆(配合 arcData 可画环)');
+
+const lineNodeSchema = z.object({
+  type: z.literal('LINE'),
+  ...baseNodeFields,
+  ...visualFields,
+}).describe('LINE=线段');
+
+const polygonNodeSchema = z.object({
+  type: z.literal('POLYGON'),
+  ...baseNodeFields,
+  pointCount: z.number().describe('多边形角点数,如 6=六边形'),
+  cornerRadius: z.number().optional().describe('圆角半径(px)'),
+  topLeftRadius: z.number().optional().describe('左上圆角(px)'),
+  topRightRadius: z.number().optional().describe('右上圆角(px)'),
+  bottomLeftRadius: z.number().optional().describe('左下圆角(px)'),
+  bottomRightRadius: z.number().optional().describe('右下圆角(px)'),
+  ...visualFields,
+}).describe('POLYGON=多边形(配合 pointCount)');
+
+const starNodeSchema = z.object({
+  type: z.literal('STAR'),
+  ...baseNodeFields,
+  pointCount: z.number().describe('星形角点数,如 5=五角星'),
+  innerRadius: z.number().describe('星形内半径(px),值越小角越尖锐'),
+  cornerRadius: z.number().optional().describe('圆角半径(px)'),
+  topLeftRadius: z.number().optional().describe('左上圆角(px)'),
+  topRightRadius: z.number().optional().describe('右上圆角(px)'),
+  bottomLeftRadius: z.number().optional().describe('左下圆角(px)'),
+  bottomRightRadius: z.number().optional().describe('右下圆角(px)'),
+  ...visualFields,
+}).describe('STAR=星形(配合 pointCount + innerRadius)');
+
+const vectorNodeSchema = z.object({
+  type: z.literal('VECTOR'),
+  ...baseNodeFields,
+  vectorPaths: z.array(vectorPathSchema).describe('矢量路径数组,每项含 SVG path data(如 "M0 0 L100 100")'),
+  ...visualFields,
+}).describe('VECTOR=矢量(配合 vectorPaths 传 SVG path data)');
+
+const textNodeSchema = z.object({
+  type: z.literal('TEXT'),
+  ...baseNodeFields,
+  characters: z.string().describe('文本内容,如 "Hello World"'),
+  fontSize: z.number().optional().describe('字号(px),默认 16'),
+  fontName: fontNameSchema.optional().describe('字体:{family,style},如 {family:"PingFang SC",style:"Regular"}'),
+  textAlignHorizontal: z.enum(['LEFT', 'CENTER', 'RIGHT', 'JUSTIFIED']).optional().describe('水平对齐:LEFT|CENTER|RIGHT|JUSTIFIED'),
+  textAlignVertical: z.enum(['TOP', 'CENTER', 'BOTTOM']).optional().describe('垂直对齐:TOP|CENTER|BOTTOM'),
+  textAutoResize: z.enum(['NONE', 'WIDTH_AND_HEIGHT', 'HEIGHT', 'TRUNCATE']).optional().describe('文本自适应:NONE|WIDTH_AND_HEIGHT|HEIGHT|TRUNCATE'),
+  textCase: z.enum(['ORIGINAL', 'UPPER', 'LOWER', 'TITLE']).optional().describe('文本大小写:ORIGINAL|UPPER|LOWER|TITLE'),
+  textDecoration: z.enum(['NONE', 'UNDERLINE', 'STRIKETHROUGH']).optional().describe('文本装饰:NONE|UNDERLINE|STRIKETHROUGH'),
+  lineHeight: lineHeightSchema.optional().describe('行高:{value,unit},unit 为 PIXELS|PERCENT;或 {unit:"AUTO"}'),
+  letterSpacing: letterSpacingSchema.optional().describe('字距:{value,unit},unit 为 PIXELS|PERCENT'),
+  ...visualFields,
+}).describe('TEXT=文本(配合 characters/fontSize/fontName 等)');
+
+const groupNodeSchema = z.object({
+  type: z.literal('GROUP'),
+  ...baseNodeFields,
+  layoutMode: z.enum(['NONE', 'HORIZONTAL', 'VERTICAL']).optional().describe('自动布局方向:NONE=纯归组,HORIZONTAL=水平,VERTICAL=垂直。传 itemSpacing/padding* 等布局属性前必须先设为 HORIZONTAL 或 VERTICAL'),
+  itemSpacing: z.number().optional().describe('项间距(px),需先设 layoutMode'),
+  paddingTop: z.number().optional().describe('上内边距(px)'),
+  paddingRight: z.number().optional().describe('右内边距(px)'),
+  paddingBottom: z.number().optional().describe('下内边距(px)'),
+  paddingLeft: z.number().optional().describe('左内边距(px)'),
+  primaryAxisSizingMode: z.enum(['FIXED', 'AUTO']).optional().describe('主轴尺寸模式:FIXED|AUTO'),
+  counterAxisSizingMode: z.enum(['FIXED', 'AUTO']).optional().describe('交叉轴尺寸模式:FIXED|AUTO'),
+  primaryAxisAlignItems: z.enum(['MIN', 'MAX', 'CENTER', 'SPACE_BETWEEN']).optional().describe('主轴对齐'),
+  counterAxisAlignItems: z.enum(['MIN', 'MAX', 'CENTER']).optional().describe('交叉轴对齐'),
+  ...visualFields,
+})
+  .superRefine((val, ctx) => {
+    const hasLayoutFields = val.itemSpacing != null || val.paddingTop != null
+      || val.paddingRight != null || val.paddingBottom != null || val.paddingLeft != null
+      || val.primaryAxisSizingMode != null || val.counterAxisSizingMode != null
+      || val.primaryAxisAlignItems != null || val.counterAxisAlignItems != null;
+    if (hasLayoutFields && (val.layoutMode == null || val.layoutMode === 'NONE')) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: '传 itemSpacing/padding*/primaryAxis*/counterAxis* 等布局属性前,layoutMode 必须设为 HORIZONTAL 或 VERTICAL',
+        path: ['layoutMode'],
+      });
+    }
+  })
+  .describe('GROUP=分组(内部用 Frame 实现)');
+
+const booleanOperationNodeSchema = z.object({
+  type: z.literal('BOOLEAN_OPERATION'),
+  ...baseNodeFields,
+  booleanOperation: z.enum(['UNION', 'SUBTRACT', 'INTERSECT', 'EXCLUDE']).describe('布尔运算:UNION=合并,SUBTRACT=减去,INTERSECT=相交,EXCLUDE=排除'),
+  children: z.array(z.any()).min(2).describe('要合并的子节点数组(至少 2 个)'),
+  ...visualFields,
+}).describe('BOOLEAN_OPERATION=布尔运算(合并子节点)');
+
+// 导出: discriminated union on `type`(用于 JSON Schema 生成,LLM 看到按 type 分组的字段)
+// 运行时校验使用,TypeScript 类型保持为扁平 ExecuteOp 以兼容 UI 侧 duck-typing
+export const executeNodeSchema: z.ZodType<ExecuteOp> = z.discriminatedUnion('type', [
+  frameNodeSchema,
+  rectangleNodeSchema,
+  ellipseNodeSchema,
+  lineNodeSchema,
+  polygonNodeSchema,
+  starNodeSchema,
+  vectorNodeSchema,
+  textNodeSchema,
+  groupNodeSchema,
+  booleanOperationNodeSchema,
+]);
+
+// 导出各子类型(供 UI 侧类型断言使用)
+export type FrameNodeOp = z.infer<typeof frameNodeSchema>;
+export type RectangleNodeOp = z.infer<typeof rectangleNodeSchema>;
+export type EllipseNodeOp = z.infer<typeof ellipseNodeSchema>;
+export type LineNodeOp = z.infer<typeof lineNodeSchema>;
+export type PolygonNodeOp = z.infer<typeof polygonNodeSchema>;
+export type StarNodeOp = z.infer<typeof starNodeSchema>;
+export type VectorNodeOp = z.infer<typeof vectorNodeSchema>;
+export type TextNodeOp = z.infer<typeof textNodeSchema>;
+export type GroupNodeOp = z.infer<typeof groupNodeSchema>;
+export type BooleanOperationNodeOp = z.infer<typeof booleanOperationNodeSchema>;
 
 export const placementSchema = z.object({
   mode: z
     .enum(['center', 'manual', 'absolute'])
     .optional()
-    .describe('放置模式,默认 center'),
-  x: z.number().optional().describe('absolute 模式下的绝对 X 坐标'),
-  y: z.number().optional().describe('absolute 模式下的绝对 Y 坐标'),
-});
+    .describe('放置模式:center=居中画布/manual=保持节点原始坐标/absolute=使用 x/y 指定坐标(选 absolute 必须传 x 和 y)'),
+  x: z.number().optional().describe('absolute 模式下的绝对 X 坐标,与 mode="absolute" 配合使用'),
+  y: z.number().optional().describe('absolute 模式下的绝对 Y 坐标,与 mode="absolute" 配合使用'),
+})
+  .superRefine((val, ctx) => {
+    if (val.mode === 'absolute' && (val.x == null || val.y == null)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'placement.mode 为 absolute 时,x 和 y 均为必填项',
+        path: val.x == null ? ['x'] : ['y'],
+      });
+    }
+  });
 
 export const executeSchema = z.object({
   ops: z.array(executeNodeSchema).describe('设计指令节点树'),
-  placement: placementSchema.optional().describe('放置方式,缺省 center 居中'),
+  placement: placementSchema.optional().describe('放置方式,缺省 center 居中。选 absolute 模式必须传 x 和 y 坐标'),
 });
 
 export const createSvgSchema = z.object({
@@ -758,10 +975,10 @@ export const findSchema = z.object({
     .string()
     .optional()
     .describe(
-      '节点类型,如 FRAME/RECTANGLE/TEXT/ELLIPSE/LINE/POLYGON/STAR/VECTOR',
+      '节点类型过滤,支持:SLICE/FRAME/GROUP/COMPONENT_SET/COMPONENT/INSTANCE/BOOLEAN_OPERATION/VECTOR/STAR/LINE/ELLIPSE/POLYGON/RECTANGLE/TEXT',
     ),
   recursive: z.boolean().optional().describe('是否递归查找(默认 true)'),
-  depth: z.number().optional().describe('序列化深度,缺省 1'),
+  depth: z.number().optional().describe('序列化深度:0=仅自身,1=含直接子节点;缺省 1'),
 });
 
 export const manageNodesSchema = z.discriminatedUnion('op', [
@@ -775,7 +992,7 @@ export const manageNodesSchema = z.discriminatedUnion('op', [
       .array(z.string())
       .optional()
       .describe('要删除的节点 id 列表,缺省用当前选中'),
-    matchName: z.string().optional().describe('按名称精确匹配过滤'),
+    matchName: z.string().optional().describe('在 ids(或当前选中)范围内,仅删除 name 精确匹配的节点'),
   }),
   z.object({
     op: z.literal('clone'),
@@ -788,7 +1005,7 @@ export const manageNodesSchema = z.discriminatedUnion('op', [
     layoutMode: z
       .enum(['NONE', 'HORIZONTAL', 'VERTICAL'])
       .optional()
-      .describe('自动布局方向:NONE|HORIZONTAL|VERTICAL'),
+      .describe('自动布局方向:NONE=纯归组,子节点仅叠加,HORIZONTAL=水平排列,VERTICAL=垂直排列'),
     itemSpacing: z.number().optional().describe('自动布局项间距(px)'),
     paddingTop: z.number().optional().describe('上内边距(px)'),
     paddingRight: z.number().optional().describe('右内边距(px)'),
@@ -838,7 +1055,7 @@ export const manageNodesSchema = z.discriminatedUnion('op', [
     op: z
       .literal('repair')
       .describe(
-        '清理引擎残留的失效节点(wrapper 移除后遗留的 dangling 引用)。遍历当前页,读取失败/损坏的节点直接删除',
+        '清理画布中已损坏/失效的节点(读取失败的节点直接删除)',
       ),
   }),
 ]);
@@ -861,7 +1078,7 @@ export const manageComponentsSchema = z.discriminatedUnion('op', [
   }),
   z.object({
     op: z.literal('import_component'),
-    key: z.string().describe('组件 Key'),
+    key: z.string().describe('团队库组件的唯一标识 Key(从设计稿/团队库获取)'),
     name: z.string().optional().describe('导入后的组件名'),
   }),
   z.object({
@@ -874,7 +1091,7 @@ export const manageComponentsSchema = z.discriminatedUnion('op', [
     ids: z.array(z.string()).describe('实例(INSTANCE)节点 id 列表'),
     properties: z
       .record(z.string(), z.string())
-      .describe('变体属性名→值,如 {"状态":"禁用"}'),
+      .describe('变体属性名→值,如 {"状态":"禁用"}。可调属性列表需从 jsd_find/jsd_get_selection 返回的 variantGroupProperties 获取,属性名必须完全匹配'),
   }),
   z.object({
     op: z.literal('combine_as_variants'),

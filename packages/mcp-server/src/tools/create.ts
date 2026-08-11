@@ -17,8 +17,22 @@ export function registerCreateTools(server: McpServer, bridge: Bridge): void {
   server.registerTool(
     'jsd_execute',
     {
-      description:
-        '在画布执行声明式设计指令:ops 为节点数组(每项含 type 与尺寸/位置/填充/文本/布局等属性,字段与枚举以 inputSchema 为准,枚举大写);placement 控制放置,缺省 center 居中。type 支持 FRAME|RECTANGLE|ELLIPSE|LINE|POLYGON|STAR|VECTOR|BOOLEAN_OPERATION|TEXT|GROUP,缺省 FRAME;type=VECTOR 用 vectorPaths 传 SVG path data;type=ELLIPSE 可用 arcData 画环形;type=GROUP 将子节点归为一组(内部用 Frame 实现,支持 auto-layout);type=FRAME 创建容器;type=BOOLEAN_OPERATION 用 booleanOperation 指定 UNION|SUBTRACT|INTERSECT|EXCLUDE 合并子节点。两者(GROUP/FRAME)均支持 auto-layout (layoutMode/itemSpacing/padding* 等)。',
+      description: `在画布创建节点(可递归嵌套子节点)。
+
+节点类型 type:
+- FRAME=容器(可 auto-layout)
+- RECTANGLE=矩形
+- ELLIPSE=椭圆(配合 arcData 可画环)
+- LINE=线段
+- POLYGON=多边形(配合 pointCount)
+- STAR=星形(配合 pointCount + innerRadius)
+- VECTOR=矢量(配合 vectorPaths 传 SVG path data)
+- TEXT=文本(配合 characters/fontSize/fontName 等)
+- GROUP=分组(内部用 Frame 实现)
+- BOOLEAN_OPERATION=布尔运算(配合 booleanOperation:UNION|SUBTRACT|INTERSECT|EXCLUDE)
+
+填充 fills/描边 strokes:每项为 {type:"SOLID", color:{r,g,b}} 或 {type:"GRADIENT_LINEAR",...},color 的 r/g/b 范围 0-1。
+放置 placement:mode=center 居中画布,manual=保持原始坐标,absolute=使用 x/y 坐标。`,
       inputSchema: executeSchema,
       outputSchema: createdResultSchema,
     },

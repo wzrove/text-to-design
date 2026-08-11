@@ -31,7 +31,9 @@ export function registerSessionTools(server: McpServer, bridge: Bridge): void {
   server.registerTool(
     'jsd_get_selection',
     {
-      description: `获取${CLIENT.label}画布当前选中的节点信息(名称/类型/尺寸/位置/填充/文本/子树结构)`,
+      description: `获取画布当前选中的节点信息(名称/类型/尺寸/位置/填充/文本/子树结构)。
+
+可选 depth 参数控制序列化深度:0=仅自身,1=含直接子节点,2=含孙节点,默认 2。`,
       outputSchema: getSelectionResultSchema,
     },
     async () => {

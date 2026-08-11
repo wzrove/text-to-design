@@ -343,9 +343,7 @@ export function serializeNode(
     if (!isMixed(node.lineHeight))
       base.lineHeight = node.lineHeight as LineHeight;
     if (!isMixed(node.letterSpacing)) {
-      const ls = node.letterSpacing as LetterSpacing;
-      if (ls.unit === 'PIXELS')
-        base.letterSpacing = ls as unknown as WireLetterSpacing;
+      base.letterSpacing = node.letterSpacing as unknown as WireLetterSpacing;
     }
   }
   if ('layoutMode' in node && node.layoutMode !== 'NONE') {
