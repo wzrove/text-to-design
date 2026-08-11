@@ -84,7 +84,7 @@ text-to-design 能让 AI 助手(比如 opencode、Claude)直接在你的设计�
 | --- | --- |
 | `jsd_ping` | 检查插件是否在线 |
 | `jsd_get_selection` | 获取画布当前选中节点 |
-| `jsd_execute` | 执行声明式设计指令(frame/rect/text/... 节点树) |
+| `jsd_create_nodes` | 执行声明式设计指令(frame/rect/text/... 节点树) |
 | `jsd_create_svg` | 直接导入 SVG 字符串(保留 path 矢量数据) |
 | `jsd_html_to_design` | HTML 转设计节点 |
 | `jsd_update_selection` | 修改选中节点的属性(位置/颜色/文字/圆角等) |

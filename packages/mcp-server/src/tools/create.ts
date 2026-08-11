@@ -15,7 +15,7 @@ import { findIcon, iconToSvg, suggestIcons } from '../icons';
 /** 创建类:声明式节点 / SVG 导入 / HTML 转设计 */
 export function registerCreateTools(server: McpServer, bridge: Bridge): void {
   server.registerTool(
-    'jsd_execute',
+    'jsd_create_nodes',
     {
       description: `在画布创建节点(可递归嵌套子节点)。
 
