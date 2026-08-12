@@ -1,4 +1,4 @@
-import type { PluginRequest } from 'text-to-design-shared';
+import type { PluginPlatform, PluginRequest } from 'text-to-design-shared';
 
 export type BridgeStatus =
   | 'disconnected'
@@ -9,7 +9,8 @@ export type BridgeStatus =
 export type BridgeEvent =
   | { type: 'status'; status: BridgeStatus }
   | { type: 'log'; line: string }
-  | { type: 'selection'; data: unknown };
+  | { type: 'selection'; data: unknown }
+  | { type: 'platform'; platform: PluginPlatform };
 
 export type Conn = {
   port: number;

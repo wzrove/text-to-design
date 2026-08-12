@@ -22,6 +22,8 @@ export class BridgeSocket {
     );
     this.router.onSelection = (data) =>
       this.events.emit({ type: 'selection', data });
+    this.router.onPlatform = (platform) =>
+      this.events.emit({ type: 'platform', platform });
     this.router.onServerStatus = (msg) => {
       // daemon 每 30s 心跳重复下发 status;只有从非 connected 首次确认才打日志,
       // 避免每次心跳都刷「服务已确认连接」的 log

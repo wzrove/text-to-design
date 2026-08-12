@@ -3,6 +3,7 @@ import type { Bridge } from '../bridge';
 import { registerCreateTools } from './create';
 import { registerManageTools } from './manage';
 import { registerModifyTools } from './modify';
+import { registerPlatformTools } from './platform';
 import { registerRawTools } from './raw';
 import { registerSessionTools } from './session';
 
@@ -15,4 +16,5 @@ export const toolRegistrars: RegisterTool[] = [
   registerModifyTools,
   registerManageTools,
   registerRawTools,
+  registerPlatformTools,
 ];

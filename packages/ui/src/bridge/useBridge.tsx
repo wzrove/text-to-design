@@ -1,5 +1,6 @@
 import type { Accessor, ParentProps } from 'solid-js';
 import { createContext, createSignal, onMount, useContext } from 'solid-js';
+import type { PluginPlatform } from 'text-to-design-shared';
 import { WS_PORT } from 'text-to-design-shared';
 import type { BridgeStatus } from './BridgeSocket';
 import { BridgeSocket } from './BridgeSocket';
@@ -16,6 +17,7 @@ export interface BridgeStore {
   port: Accessor<number>;
   log: Accessor<LogEntry[]>;
   selection: Accessor<unknown>;
+  platform: Accessor<PluginPlatform | null>;
   connect: () => void;
   disconnect: () => void;
   rescan: () => void;
@@ -28,6 +30,7 @@ export function BridgeProvider(props: ParentProps) {
   const [status, setStatus] = createSignal<BridgeStatus>('disconnected');
   const [log, setLog] = createSignal<LogEntry[]>([]);
   const [selection, setSelection] = createSignal<unknown>(null);
+  const [platform, setPlatform] = createSignal<PluginPlatform | null>(null);
 
   let bridge: BridgeSocket | undefined;
   let subscribed = false;
@@ -57,9 +60,9 @@ export function BridgeProvider(props: ParentProps) {
     const b = getBridge();
     b.connect();
     b.subscribe((e) => {
-      console.log('bridge event', e);
       if (e.type === 'status') setStatus(() => e.status);
       else if (e.type === 'selection') setSelection(() => e.data);
+      else if (e.type === 'platform') setPlatform(() => e.platform);
       else pushLog(e.line);
     });
   });
@@ -69,6 +72,7 @@ export function BridgeProvider(props: ParentProps) {
     port: createSignal(WS_PORT)[0],
     log,
     selection,
+    platform,
     connect: () => getBridge().connect(),
     disconnect: () => getBridge().disconnect(),
     rescan: () => getBridge().rescan(),

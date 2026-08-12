@@ -3,6 +3,7 @@
   "private": true,
   "version": "0.0.1",
   "type": "module",
+  "description": "text-to-design 平台无关共享包:zod 线格式 schema + DesignHost 接口 + 核心逻辑(序列化/建节点/组件/更新),无平台 typings 依赖",
   "main": "./src/index.ts",
   "exports": {
     ".": {

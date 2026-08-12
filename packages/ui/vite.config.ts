@@ -1,8 +1,9 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { defineConfig, type Plugin } from 'vite';
+import { defineConfig, type Plugin, type UserConfig } from 'vite';
 import { viteSingleFile } from 'vite-plugin-singlefile';
 import solid from 'vite-plugin-solid';
+import manifestPlugin from './scripts/vite-plugin-manifest.js';
 
 function reorderCss(): Plugin {
   const out = resolve(import.meta.dirname, 'dist/ui.html');
@@ -27,16 +28,49 @@ function reorderCss(): Plugin {
   };
 }
 
-export default defineConfig({
-  plugins: [solid(), viteSingleFile(), reorderCss()],
-  build: {
-    outDir: 'dist',
-    emptyOutDir: false,
-    target: 'es6',
-    sourcemap: false,
-    assetsInlineLimit: 100000000,
-    rolldownOptions: {
-      input: resolve(import.meta.dirname, 'ui.html'),
+export default defineConfig(({ mode }): UserConfig => {
+  if (mode === 'jsdesign' || mode === 'figma') {
+    const platform = mode;
+    return {
+      plugins: [manifestPlugin(platform)],
+      define: {
+        global: '{}',
+      },
+      build: {
+        outDir: `dist/${platform}`,
+        emptyOutDir: false,
+        sourcemap: false,
+        target: 'es6',
+        minify: false,
+        rolldownOptions: {
+          input: {
+            code: resolve(
+              import.meta.dirname,
+              platform === 'figma'
+                ? 'src/code/figma/entry.ts'
+                : 'src/code/jsdesign/entry.ts',
+            ),
+          },
+          output: {
+            entryFileNames: 'code.js',
+          },
+        },
+      },
+    };
+  }
+
+  // 默认(development/production) → UI 面板构建
+  return {
+    plugins: [solid(), viteSingleFile(), reorderCss()],
+    build: {
+      outDir: 'dist',
+      emptyOutDir: false,
+      target: 'es6',
+      sourcemap: false,
+      assetsInlineLimit: 100000000,
+      rolldownOptions: {
+        input: resolve(import.meta.dirname, 'ui.html'),
+      },
     },
-  },
+  };
 });

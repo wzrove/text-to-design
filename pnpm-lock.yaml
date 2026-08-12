@@ -97,6 +97,9 @@ importers:
 
   packages/ui:
     devDependencies:
+      '@figma/plugin-typings':
+        specifier: ^1.133.0
+        version: 1.133.0
       '@jsdesigndeveloper/plugin-typings':
         specifier: ^1.0.12
         version: 1.0.12
@@ -598,6 +601,9 @@ packages:
     engines: {node: '>=18'}
     cpu: [x64]
     os: [win32]
+
+  '@figma/plugin-typings@1.133.0':
+    resolution: {integrity: sha512-MAM1zACY7JB18gO6B0ZaMquCk/xPhbk4Dkug3KGTN7H/M3fO2tZ0h/05b1umDiKA/P1ZEXbLraNyffaVFkFpXw==}
 
   '@hono/node-server@1.19.17':
     resolution: {integrity: sha512-dSneS5qhiauZWGDCeK4o695Xd9nUNjviSZCMQrj10eetr8Uln1ucn6bbphOM6UynAMMtNIzZNSpL9vnASJwrPQ==}
@@ -2595,6 +2601,8 @@ snapshots:
 
   '@esbuild/win32-x64@0.28.1':
     optional: true
+
+  '@figma/plugin-typings@1.133.0': {}
 
   '@hono/node-server@1.19.17(hono@4.12.32)':
     dependencies:

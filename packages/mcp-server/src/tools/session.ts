@@ -17,8 +17,16 @@ export function registerSessionTools(server: McpServer, bridge: Bridge): void {
     },
     async () => {
       try {
-        await bridge.request('ping', {});
-        return structured({ connected: true });
+        const data = (await bridge.request('ping', {})) as {
+          pong?: boolean;
+          platform?: unknown;
+          capabilities?: unknown;
+        };
+        return structured({
+          connected: true,
+          platform: data?.platform,
+          capabilities: data?.capabilities,
+        });
       } catch (e) {
         return structured({
           connected: false,

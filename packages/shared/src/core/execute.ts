@@ -1,5 +1,6 @@
-import type { ExecuteOp, SerializedNode } from 'text-to-design-shared';
+import type { ExecuteOp, SerializedNode } from '../schemas';
 import buildNode from './buildNode';
+import type { DesignHost, NodeSkeleton } from './host';
 import { serializeNode } from './serialize';
 
 const TYPES = [
@@ -37,6 +38,7 @@ function coerceSpecs(ops: unknown): ExecuteOp[] {
 }
 
 export async function executeOps(
+  host: DesignHost,
   ops: unknown,
   placement?: {
     mode?: 'center' | 'manual' | 'absolute';
@@ -45,14 +47,14 @@ export async function executeOps(
   },
 ): Promise<{ created: SerializedNode[] }> {
   const specs = coerceSpecs(ops);
-  const page = jsDesign.currentPage;
+  const page = host.currentPage;
   const mode = placement?.mode ?? 'center';
-  const created: SceneNode[] = [];
+  const created: NodeSkeleton[] = [];
   try {
     for (const spec of specs) {
-      const node = await buildNode(spec, page);
+      const node = await buildNode(host, spec, page);
       if (mode === 'center') {
-        const center = jsDesign.viewport.center;
+        const center = host.viewport.center;
         const dx = center.x - node.x - node.width / 2;
         const dy = center.y - node.y - node.height / 2;
         node.x += dx;
@@ -73,24 +75,25 @@ export async function executeOps(
     }
     throw e;
   }
-  jsDesign.viewport.scrollAndZoomIntoView(created);
+  host.viewport.scrollAndZoomIntoView(created);
   return { created: created.map((n) => serializeNode(n)) };
 }
 
 export function createSvgNode(
+  host: DesignHost,
   svg: string,
   name?: string,
 ): { created: SerializedNode } {
   if (typeof svg !== 'string' || svg.trim() === '') {
     throw new Error('无效的 svg: 必须是非空字符串');
   }
-  const node = jsDesign.createNodeFromSvg(svg);
+  const node = host.createNodeFromSvg(svg);
   node.name = name ?? 'html-design';
-  const page = jsDesign.currentPage;
+  const page = host.currentPage;
   page.appendChild(node);
-  const center = jsDesign.viewport.center;
+  const center = host.viewport.center;
   node.x = center.x - node.width / 2;
   node.y = center.y - node.height / 2;
-  jsDesign.viewport.scrollAndZoomIntoView([node]);
+  host.viewport.scrollAndZoomIntoView([node]);
   return { created: serializeNode(node) };
 }

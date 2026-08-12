@@ -2,22 +2,26 @@ import type {
   ListFontsResult,
   RawExportFile,
   SerializedNode,
-} from 'text-to-design-shared';
+} from '../schemas';
+import type { DesignHost } from './host';
 import { serializeNode } from './serialize';
 import { findNode } from './utils';
 
-export async function exportNodes(params: {
-  ids: string[];
-  format?: 'PNG' | 'JPG' | 'SVG' | 'PDF';
-  scale?: number;
-}): Promise<{ exports: Record<string, RawExportFile> }> {
+export async function exportNodes(
+  host: DesignHost,
+  params: {
+    ids: string[];
+    format?: 'PNG' | 'JPG' | 'SVG' | 'PDF';
+    scale?: number;
+  },
+): Promise<{ exports: Record<string, RawExportFile> }> {
   const format = params.format ?? 'PNG';
   const scale = params.scale ?? 1;
-  const nodes = findNode(params.ids);
+  const nodes = findNode(host, params.ids);
   if (nodes.length === 0) {
     throw new Error('没有找到要导出的节点');
   }
-  const settings: ExportSettings =
+  const settings =
     format === 'PNG' || format === 'JPG'
       ? { format, constraint: { type: 'SCALE', value: scale } }
       : { format };
@@ -41,15 +45,15 @@ export async function exportNodes(params: {
   return { exports: out };
 }
 
-export async function fillImageNode(params: {
-  ids: string[];
-  bytes: Uint8Array;
-}): Promise<{ updated: SerializedNode[] }> {
+export async function fillImageNode(
+  host: DesignHost,
+  params: { ids: string[]; bytes: Uint8Array },
+): Promise<{ updated: SerializedNode[] }> {
   if (!params.bytes || params.bytes.byteLength === 0) {
     throw new Error('无效的图片字节数据');
   }
-  const image = jsDesign.createImage(params.bytes);
-  const nodes = findNode(params.ids);
+  const image = host.createImage(params.bytes);
+  const nodes = findNode(host, params.ids);
   if (nodes.length === 0) {
     throw new Error('没有找到要填充图片的节点');
   }
@@ -61,8 +65,8 @@ export async function fillImageNode(params: {
   return { updated: nodes.map((n) => serializeNode(n)) };
 }
 
-export async function listFonts(): Promise<ListFontsResult> {
-  const fonts = await jsDesign.listAvailableFontsAsync();
+export async function listFonts(host: DesignHost): Promise<ListFontsResult> {
+  const fonts = await host.listAvailableFontsAsync();
   const families = [...new Set(fonts.map((f) => f.fontName.family))].sort();
   return { families, count: families.length };
 }

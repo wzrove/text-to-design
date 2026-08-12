@@ -14,7 +14,12 @@ type RuntimePaint = Paint;
 type RuntimeEffect = Effect;
 type RuntimeBlendMode = BlendMode;
 
-import type { BlendMode, Effect, Paint } from 'text-to-design-shared';
+import type {
+  BlendMode,
+  DesignHost,
+  Effect,
+  Paint,
+} from 'text-to-design-shared';
 
 // Paint:线格式 Paint 必须可赋值给运行时 Paint(子集约束)
 export const _paintCheck: Paint extends RuntimePaint ? true : false = true;
@@ -24,5 +29,10 @@ export const _effectCheck: Effect extends RuntimeEffect ? true : false = true;
 
 // BlendMode:线格式 BlendMode 必须可赋值给运行时 BlendMode(子集约束)
 export const _blendModeCheck: BlendMode extends RuntimeBlendMode
+  ? true
+  : false = true;
+
+// DesignHost:host 接口的全部顶层符号必须存在于 jsDesign PluginAPI
+export const _hostKeysCheck: keyof DesignHost extends keyof PluginAPI
   ? true
   : false = true;

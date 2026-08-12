@@ -1,4 +1,8 @@
-import type { PluginRequest, PluginResponse } from 'text-to-design-shared';
+import type {
+  PluginPlatform,
+  PluginRequest,
+  PluginResponse,
+} from 'text-to-design-shared';
 import { extractBytes, stripBytes } from './binary';
 import type { Conn, Pending } from './types';
 import { TIMEOUT } from './types';
@@ -12,6 +16,9 @@ export class Router {
 
   /** 插件主动推送的选中状态(selectionchange) */
   onSelection: ((data: unknown) => void) | null = null;
+
+  /** 插件主动推送的当前平台(jsdesign/figma) */
+  onPlatform: ((platform: PluginPlatform) => void) | null = null;
 
   /** daemon 主动下发的连接状态确认 */
   onServerStatus: ((msg: { state: string; version?: string }) => void) | null =
@@ -157,10 +164,15 @@ export class Router {
         | PluginRequest
         | PluginResponse
         | { type: 'selection'; data: unknown }
+        | { type: 'platform'; platform: PluginPlatform }
         | undefined;
       if (!pm) return;
       if (pm.type === 'selection') {
         this.onSelection?.(pm.data);
+        return;
+      }
+      if (pm.type === 'platform') {
+        this.onPlatform?.(pm.platform);
         return;
       }
       if (!pm.id) return;

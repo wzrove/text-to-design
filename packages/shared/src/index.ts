@@ -3,19 +3,17 @@ import type * as s from './schemas';
 
 export const WS_PORT = 47812;
 
+/* 平台无关核心逻辑(DesignHost 接口 + 序列化/建节点/组件/更新,无平台 typings 依赖) */
+export * from './core';
 /* 重新导出 zod schemas(唯一真源,供 MCP 运行时校验复用) */
 export * from './schemas';
 
 // 由 schema 推导的领域类型
-export type SerializedNodeType = z.infer<typeof s.nodeTypeSchema>;
-
 export type PingParams = z.infer<typeof s.pingSchema>;
 export type GetSelectionParams = z.infer<typeof s.getSelectionSchema>;
 export type ExecuteParams = z.infer<typeof s.executeSchema>;
 export type CreateSvgParams = z.infer<typeof s.createSvgSchema>;
-export type UpdateNodeProps = z.infer<typeof s.updateNodePropsSchema>;
 export type UpdateNodeParams = z.infer<typeof s.updateNodeSchema>;
-export type FindParams = z.infer<typeof s.findSchema>;
 export type NodeOpParams = z.infer<typeof s.manageNodesSchema>;
 export type ComponentOpParams = z.infer<typeof s.manageComponentsSchema>;
 export type ExportParams = z.infer<typeof s.exportSchema>;
@@ -30,13 +28,11 @@ export type PingResult = z.infer<typeof s.pingResultSchema>;
 export type GetSelectionResult = z.infer<typeof s.getSelectionResultSchema>;
 export type CreatedResult = z.infer<typeof s.createdResultSchema>;
 export type UpdatedResult = z.infer<typeof s.updatedResultSchema>;
-export type FindResult = z.infer<typeof s.findResultSchema>;
 export type ManageNodesResult = z.infer<typeof s.manageNodesResultSchema>;
 export type ManageComponentsResult = z.infer<
   typeof s.manageComponentsResultSchema
 >;
 export type ExportResult = z.infer<typeof s.exportResultSchema>;
-export type ListFontsResult = z.infer<typeof s.listFontsResultSchema>;
 
 export type PluginMethod =
   | 'ping'
@@ -49,7 +45,8 @@ export type PluginMethod =
   | 'list_fonts'
   | 'fill_image'
   | 'node_op'
-  | 'component_op';
+  | 'component_op'
+  | 'platform_op';
 
 export type RequestParams<M extends PluginMethod> = M extends 'ping'
   ? PingParams
@@ -62,7 +59,7 @@ export type RequestParams<M extends PluginMethod> = M extends 'ping'
         : M extends 'update_node'
           ? UpdateNodeParams
           : M extends 'find'
-            ? FindParams
+            ? s.FindParams
             : M extends 'export'
               ? ExportParams
               : M extends 'fill_image'
@@ -71,7 +68,9 @@ export type RequestParams<M extends PluginMethod> = M extends 'ping'
                   ? NodeOpParams
                   : M extends 'component_op'
                     ? ComponentOpParams
-                    : ListFontsParams;
+                    : M extends 'platform_op'
+                      ? s.PlatformOpParams
+                      : ListFontsParams;
 
 export type PluginRequest = (
   | { type: 'request'; id: string; method: 'ping'; params: PingParams }
@@ -94,7 +93,7 @@ export type PluginRequest = (
       method: 'update_node';
       params: UpdateNodeParams;
     }
-  | { type: 'request'; id: string; method: 'find'; params: FindParams }
+  | { type: 'request'; id: string; method: 'find'; params: s.FindParams }
   | { type: 'request'; id: string; method: 'export'; params: ExportParams }
   | {
       type: 'request';
@@ -114,6 +113,12 @@ export type PluginRequest = (
       id: string;
       method: 'list_fonts';
       params: ListFontsParams;
+    }
+  | {
+      type: 'request';
+      id: string;
+      method: 'platform_op';
+      params: s.PlatformOpParams;
     }
 ) & {
   /** 目标 MCP server 端口;缺省时路由到第一个已连接 server */
@@ -140,15 +145,6 @@ export function makeResponse<D>(
 }
 
 /** 插件 exportNodes 原始返回(keyed by id,含二进制字节) */
-export interface RawExportFile {
-  id: string;
-  name: string;
-  format: 'PNG' | 'JPG' | 'SVG' | 'PDF';
-  scale: number;
-  mimeType: string;
-  bytes: Uint8Array;
-}
-
 export interface RawExportMap {
-  exports: Record<string, RawExportFile>;
+  exports: Record<string, s.RawExportFile>;
 }

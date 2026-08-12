@@ -12,12 +12,13 @@
     "README.md"
   ],
   "scripts": {
-    "dev": "concurrently \"vite\" \"vite build --config vite.config.code.ts --watch\"",
-    "build": "node -e \"fs.rmSync('dist',{recursive:true,force:true})\" && vite build && vite build --config vite.config.code.ts",
-    "watch": "concurrently \"vite build --watch\" \"vite build --config vite.config.code.ts --watch\"",
-    "typecheck": "tsc --noEmit"
+    "dev": "concurrently \"vite\" \"vite build --mode jsdesign --watch\"",
+    "build": "node -e \"fs.rmSync('dist',{recursive:true,force:true})\" && vite build && vite build --mode jsdesign && vite build --mode figma",
+    "watch": "concurrently \"vite build --watch\" \"vite build --mode jsdesign --watch\"",
+    "typecheck": "tsc --noEmit && tsc -p src/code/figma/tsconfig.json"
   },
   "devDependencies": {
+    "@figma/plugin-typings": "^1.133.0",
     "@jsdesigndeveloper/plugin-typings": "^1.0.12",
     "@types/node": "^24.13.3",
     "autoprefixer": "^10.4.21",

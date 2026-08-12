@@ -459,6 +459,14 @@ export interface SerializedNode {
   variantProperties?: Record<string, string>;
   mainComponentId?: string;
   variantGroupProperties?: Record<string, string[]>;
+  /** 平台特有字段(仅对应平台运行时存在,如 Figma;其他平台恒缺省) */
+  textTruncation?: 'DISABLED' | 'ENDING';
+  maxLines?: number;
+  fillStyleId?: string;
+  strokeStyleId?: string;
+  textStyleId?: string;
+  effectStyleId?: string;
+  componentProperties?: Record<string, ComponentPropertyValue>;
 }
 
 export const serializedNodeSchema: z.ZodType<SerializedNode> = z.lazy(() =>
@@ -555,6 +563,15 @@ export const serializedNodeSchema: z.ZodType<SerializedNode> = z.lazy(() =>
     variantGroupProperties: z
       .record(z.string(), z.array(z.string()))
       .optional(),
+    textTruncation: z.enum(['DISABLED', 'ENDING']).optional(),
+    maxLines: z.number().optional(),
+    fillStyleId: z.string().optional(),
+    strokeStyleId: z.string().optional(),
+    textStyleId: z.string().optional(),
+    effectStyleId: z.string().optional(),
+    componentProperties: z
+      .record(z.string(), componentPropertyValueSchema)
+      .optional(),
   }),
 );
 
@@ -565,8 +582,45 @@ export const createdResultSchema = z.object({
 export const updatedResultSchema = z.object({
   updated: z.array(serializedNodeSchema),
 });
+/** 平台枚举:当前支持即时设计/Figma,未来新增平台在此加值 */
+export const pluginPlatformSchema = z.enum(['jsdesign', 'figma']);
+export type PluginPlatform = z.infer<typeof pluginPlatformSchema>;
+
+/** 平台能力枚举:adapter 声明当前平台支持哪些超集能力(供 ping/capabilities 上报) */
+export const hostCapabilitySchema = z.enum([
+  'styles',
+  'textTruncation',
+  'componentProperties',
+  'variables',
+  'getMainComponentAsync',
+  'platformOps',
+]);
+export type HostCapability = z.infer<typeof hostCapabilitySchema>;
+
+/** 实例组件属性值(Figma ComponentPropertyValue 的线格式,preferredValues 对齐 InstanceSwapPreferredValue) */
+export const componentPropertyValueSchema = z.object({
+  type: z.enum(['BOOLEAN', 'VARIANT', 'TEXT', 'INSTANCE_SWAP']),
+  value: z.union([z.boolean(), z.string()]),
+  preferredValues: z
+    .array(
+      z.object({
+        type: z.enum(['COMPONENT', 'COMPONENT_SET']),
+        key: z.string(),
+      }),
+    )
+    .optional(),
+});
+export type ComponentPropertyValue = z.infer<
+  typeof componentPropertyValueSchema
+>;
+
 export const pingResultSchema = z.object({
   connected: z.boolean(),
+  platform: pluginPlatformSchema.optional().describe('当前连接的插件平台'),
+  capabilities: z
+    .array(hostCapabilitySchema)
+    .optional()
+    .describe('当前平台支持的能力列表(先查此字段再决定能否调用平台特有操作)'),
   error: z.string().optional(),
 });
 export const getSelectionResultSchema = z.object({
@@ -687,6 +741,13 @@ export interface ExecuteOp {
   cornerSmoothing?: number;
   layoutGrids?: LayoutGrid[];
   arcData?: { startingAngle: number; endingAngle: number; innerRadius: number };
+  /** 平台特有写字段(仅对应平台生效,其他平台被忽略) */
+  textTruncation?: 'DISABLED' | 'ENDING';
+  maxLines?: number;
+  fillStyleId?: string;
+  strokeStyleId?: string;
+  textStyleId?: string;
+  effectStyleId?: string;
 }
 
 // 从 discriminated union 派生的平面类型(所有字段 optional,与 ExecuteOp 兼容)
@@ -1133,7 +1194,22 @@ export const updateNodePropsSchema = z
   .and(cornerPropsSchema)
   .and(textPropsSchema)
   .and(autoLayoutPropsSchema)
-  .and(visualPropsSchema);
+  .and(visualPropsSchema)
+  .and(
+    z.object({
+      textTruncation: z
+        .enum(['DISABLED', 'ENDING'])
+        .optional()
+        .describe(
+          '文本截断(DISABLED=不截断,ENDING=末尾省略号截断),仅 Figma 生效',
+        ),
+      maxLines: z.number().optional().describe('文本最大行数,仅 Figma 生效'),
+      fillStyleId: z.string().optional().describe('填充样式 id(团队库样式)'),
+      strokeStyleId: z.string().optional().describe('描边样式 id(团队库样式)'),
+      textStyleId: z.string().optional().describe('文本样式 id(团队库样式)'),
+      effectStyleId: z.string().optional().describe('效果样式 id(团队库样式)'),
+    }),
+  );
 
 export const updateNodeSchema = z.object({
   ids: z.array(z.string()).optional().describe('指定节点 id'),
@@ -1300,3 +1376,42 @@ export const exportSchema = z.object({
 });
 
 export const listFontsSchema = z.object({});
+
+/** 平台特有操作(platform_op)入参:通用通道,op 名由 ping.capabilities 告知 */
+export const platformOpParamsSchema = z.object({
+  op: z
+    .string()
+    .describe(
+      '平台特有操作名(如 figma_variables_create)。先 jsd_ping 看 capabilities 与平台支持列表',
+    ),
+  params: z
+    .record(z.string(), z.unknown())
+    .optional()
+    .describe('操作参数,结构随 op 而定'),
+});
+export type PlatformOpParams = z.infer<typeof platformOpParamsSchema>;
+
+/** 平台特有操作结果:plugin 统一回 {ok, data},data 结构随 op 而定 */
+export const platformOpResultSchema = z.object({
+  ok: z.boolean(),
+  data: z.unknown().optional(),
+});
+export type PlatformOpResult = z.infer<typeof platformOpResultSchema>;
+
+// ---- 由 schema 推导的领域类型(core 与 index.ts 复用,唯一真源) ----
+
+export type SerializedNodeType = z.infer<typeof nodeTypeSchema>;
+export type FindParams = z.infer<typeof findSchema>;
+export type FindResult = z.infer<typeof findResultSchema>;
+export type UpdateNodeProps = z.infer<typeof updateNodePropsSchema>;
+export type ListFontsResult = z.infer<typeof listFontsResultSchema>;
+
+/** 插件 exportNodes 原始返回(keyed by id,含二进制字节) */
+export interface RawExportFile {
+  id: string;
+  name: string;
+  format: 'PNG' | 'JPG' | 'SVG' | 'PDF';
+  scale: number;
+  mimeType: string;
+  bytes: Uint8Array;
+}

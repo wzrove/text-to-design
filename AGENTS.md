@@ -41,7 +41,7 @@
 
 7. **失败后的处理**：看到某 op `ok=false` 时，重试前先用 `jsd_find` 复核目标节点
    id 是否仍存在（可能已被 wrapper 连坐删除），必要时先 `jsd_manage_nodes repair`。
-   - 已加固：`findNode`（`code/utils.ts`）现在对每个节点做 `trySerialize(node,0)`
+   - 已加固：`findNode`（`packages/shared/src/core/utils.ts`）现在对每个节点做 `trySerialize(node,0)`
      校验，悬挂节点**自动静默剔除**（不返回、不删除），op 不会再抛
      `Cannot read properties of undefined (reading 'type')` 这类裸崩，只会回
      「没找到 X 节点」。若目标 id 报「没找到」，说明已失效，先 `repair` 再 `jsd_find`
@@ -63,6 +63,16 @@
    - `icon` 支持精确名（`house`）/ 别名（`home`）/ 模糊与语义联想（`magnifier`→
      `search`）。查无时错误信息里带候选名，按提示重试即可；图标名以 Lucide 官方案
      名为准（如家是 `house` 非 `home`）。
+
+10. **平台特有操作走 `jsd_platform_op`（能力探测先行）**
+    - 平台特有能力（当前仅 Figma：变量/团队库样式/组件属性）走通用通道
+      `jsd_platform_op {op, params}`，先 `jsd_ping` 看 `platform` + `capabilities`
+      确认当前平台支持，再挑 op（`figma_variables_create` / `figma_variables_apply`
+      / `figma_style_apply_by_name` / `figma_component_properties_set`）。
+    - 平台不支持会回「平台不支持操作: xxx」；jsDesign 上这些 op 恒不可用。
+    - 字段级超集（`textTruncation`=`DISABLED|ENDING`、`maxLines`、`fillStyleId` 等）
+      走普通 `jsd_update_node`/`jsd_execute`，jsDesign 上被 `'in'` 守卫静默忽略，
+      不报错但也不生效——LLM 应从 `jsd_ping` 的 `platform` 判断哪些字段可信。
 
 ## 二、服务端实现要点
 

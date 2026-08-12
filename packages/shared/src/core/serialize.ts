@@ -4,16 +4,17 @@ import type {
   SerializedNodeType,
   LetterSpacing as WireLetterSpacing,
   VectorPath as WireVectorPath,
-} from 'text-to-design-shared';
+} from '../schemas';
+import { MIXED, type NodeSkeleton } from './host';
 
 export const MAX_SERIALIZE_DEPTH = 2;
 
-function isMixed(v: unknown): boolean {
-  return typeof v === 'string' && (v as string) === 'figma.mixed';
+function isMixed(v: unknown): v is typeof MIXED {
+  return typeof v === 'string' && (v as string) === MIXED;
 }
 
 export function trySerialize(
-  node: SceneNode,
+  node: NodeSkeleton,
   depth: number = MAX_SERIALIZE_DEPTH,
 ): SerializedNode | null {
   try {
@@ -24,7 +25,7 @@ export function trySerialize(
 }
 
 export function serializeNode(
-  node: SceneNode,
+  node: NodeSkeleton,
   depth: number = MAX_SERIALIZE_DEPTH,
 ): SerializedNode {
   const base: SerializedNode = {
@@ -50,12 +51,11 @@ export function serializeNode(
     base.visible = false;
   if ('locked' in node && node.locked) base.locked = true;
   if ('parent' in node && node.parent) {
-    const p = node.parent as SceneNode;
-    if ('id' in p) base.parentId = p.id;
+    base.parentId = node.parent.id;
   }
 
   if ('fills' in node && Array.isArray(node.fills) && node.fills.length > 0) {
-    base.fills = (node.fills as Paint[]).map((f) => {
+    base.fills = node.fills.map((f) => {
       if (f.type === 'SOLID') {
         return {
           type: 'SOLID',
@@ -105,7 +105,7 @@ export function serializeNode(
     Array.isArray(node.strokes) &&
     node.strokes.length > 0
   ) {
-    base.strokes = (node.strokes as Paint[]).map((s) => {
+    base.strokes = node.strokes.map((s) => {
       if (s.type === 'SOLID') {
         return {
           type: 'SOLID',
@@ -148,7 +148,7 @@ export function serializeNode(
   }
 
   if ('strokeAlign' in node && node.type !== 'FRAME' && node.type !== 'TEXT') {
-    const sa = (node as SceneNode & { strokeAlign: string }).strokeAlign;
+    const sa = node.strokeAlign;
     if (sa != null && sa !== 'CENTER')
       base.strokeAlign = sa as SerializedNode['strokeAlign'];
   }
@@ -160,13 +160,8 @@ export function serializeNode(
     !isMixed(node.strokeJoin)
   )
     base.strokeJoin = node.strokeJoin as SerializedNode['strokeJoin'];
-  if (
-    'dashPattern' in node &&
-    (node as { dashPattern?: readonly number[] }).dashPattern?.length
-  )
-    base.dashPattern = [
-      ...(node as unknown as { dashPattern: readonly number[] }).dashPattern,
-    ];
+  if ('dashPattern' in node && node.dashPattern?.length)
+    base.dashPattern = [...node.dashPattern];
   if (
     'blendMode' in node &&
     node.blendMode !== 'PASS_THROUGH' &&
@@ -179,15 +174,15 @@ export function serializeNode(
     node.cornerSmoothing !== 0
   )
     base.cornerSmoothing = node.cornerSmoothing;
-  if ('constraints' in node) {
+  if ('constraints' in node && node.constraints != null) {
     const c = node.constraints;
     if (c.horizontal !== 'MIN' || c.vertical !== 'MIN')
       base.constraints = { horizontal: c.horizontal, vertical: c.vertical };
   }
   if ('clipsContent' in node && node.type === 'FRAME' && node.clipsContent)
     base.clipsContent = true;
-  if (node.type === 'ELLIPSE' && 'arcData' in node) {
-    const arc = (node as EllipseNode).arcData;
+  if (node.type === 'ELLIPSE' && 'arcData' in node && node.arcData != null) {
+    const arc = node.arcData;
     if (arc.startingAngle !== 0 || arc.endingAngle !== 2 * Math.PI) {
       base.arcData = {
         startingAngle: arc.startingAngle,
@@ -278,54 +273,77 @@ export function serializeNode(
     base.cornerRadius = node.cornerRadius;
   }
   if ('topLeftRadius' in node) {
-    const r = node as RectangleNode;
     base.topLeftRadius =
-      typeof r.topLeftRadius === 'number' ? r.topLeftRadius : undefined;
+      typeof node.topLeftRadius === 'number' ? node.topLeftRadius : undefined;
     base.topRightRadius =
-      typeof r.topRightRadius === 'number' ? r.topRightRadius : undefined;
+      typeof node.topRightRadius === 'number' ? node.topRightRadius : undefined;
     base.bottomLeftRadius =
-      typeof r.bottomLeftRadius === 'number' ? r.bottomLeftRadius : undefined;
+      typeof node.bottomLeftRadius === 'number'
+        ? node.bottomLeftRadius
+        : undefined;
     base.bottomRightRadius =
-      typeof r.bottomRightRadius === 'number' ? r.bottomRightRadius : undefined;
+      typeof node.bottomRightRadius === 'number'
+        ? node.bottomRightRadius
+        : undefined;
   }
   if ('pointCount' in node) {
-    base.pointCount = (node as PolygonNode).pointCount;
+    base.pointCount = node.pointCount;
   }
   if (node.type === 'STAR' && 'innerRadius' in node) {
-    base.innerRadius = (node as StarNode).innerRadius;
+    base.innerRadius = node.innerRadius;
   }
-  if (node.type === 'VECTOR') {
-    base.vectorPaths = (node as VectorNode).vectorPaths.map((p) => ({
+  if (node.type === 'VECTOR' && node.vectorPaths != null) {
+    base.vectorPaths = node.vectorPaths.map((p) => ({
       data: p.data,
-      windingRule: p.windingRule === 'NONE' ? undefined : p.windingRule,
+      windingRule:
+        (p as { windingRule?: string }).windingRule === 'NONE'
+          ? undefined
+          : p.windingRule,
     })) as unknown as WireVectorPath[];
   }
   if ('variantProperties' in node && node.variantProperties != null) {
-    base.variantProperties = { ...(node as InstanceNode).variantProperties };
+    base.variantProperties = { ...node.variantProperties };
   }
-  if (node.type === 'INSTANCE') {
-    base.mainComponentId = (node as InstanceNode).mainComponent?.id;
+  if (node.type === 'INSTANCE' && node.mainComponent != null) {
+    base.mainComponentId = node.mainComponent.id;
   }
-  if (node.type === 'COMPONENT_SET') {
-    const set = node as ComponentSetNode;
+  if ('fillStyleId' in node && node.fillStyleId)
+    base.fillStyleId = node.fillStyleId;
+  if ('strokeStyleId' in node && node.strokeStyleId)
+    base.strokeStyleId = node.strokeStyleId;
+  if ('textStyleId' in node && node.textStyleId)
+    base.textStyleId = node.textStyleId;
+  if ('effectStyleId' in node && node.effectStyleId)
+    base.effectStyleId = node.effectStyleId;
+  if (node.type === 'TEXT') {
+    if ('textTruncation' in node && node.textTruncation === 'ENDING')
+      base.textTruncation = 'ENDING';
+    if ('maxLines' in node && node.maxLines != null)
+      base.maxLines = node.maxLines;
+  }
+  if ('componentProperties' in node && node.componentProperties != null) {
+    base.componentProperties = { ...node.componentProperties };
+  }
+  if (node.type === 'COMPONENT_SET' && node.variantGroupProperties != null) {
     base.variantGroupProperties = Object.fromEntries(
-      Object.entries(set.variantGroupProperties).map(([k, v]) => [
+      Object.entries(node.variantGroupProperties).map(([k, v]) => [
         k,
         [...v.values],
       ]),
     );
   }
-  if (node.type === 'BOOLEAN_OPERATION') {
-    base.booleanOperation = (node as BooleanOperationNode).booleanOperation;
+  if (node.type === 'BOOLEAN_OPERATION' && node.booleanOperation != null) {
+    base.booleanOperation = node.booleanOperation;
   }
-  if ('isMask' in node && (node as SceneNode & { isMask?: boolean }).isMask) {
+  if ('isMask' in node && node.isMask) {
     base.isMask = true;
   }
   if (node.type === 'TEXT') {
     base.characters = node.characters;
     if (!isMixed(node.fontSize)) base.fontSize = node.fontSize as number;
-    const f = node.fontName as FontName | undefined;
-    if (f?.family) base.fontName = { family: f.family, style: f.style };
+    const f = node.fontName;
+    if (f != null && typeof f === 'object' && f.family)
+      base.fontName = { family: f.family, style: f.style };
     if (
       node.textAlignHorizontal !== 'LEFT' &&
       !isMixed(node.textAlignHorizontal)
@@ -341,52 +359,39 @@ export function serializeNode(
       base.textDecoration =
         node.textDecoration as SerializedNode['textDecoration'];
     if (!isMixed(node.lineHeight))
-      base.lineHeight = node.lineHeight as LineHeight;
+      base.lineHeight = node.lineHeight as SerializedNode['lineHeight'];
     if (!isMixed(node.letterSpacing)) {
       base.letterSpacing = node.letterSpacing as unknown as WireLetterSpacing;
     }
   }
   if ('layoutMode' in node && node.layoutMode !== 'NONE') {
-    const frame = node as FrameNode;
     base.layoutMode = node.layoutMode;
-    base.itemSpacing = isMixed(frame.itemSpacing)
+    base.itemSpacing = isMixed(node.itemSpacing) ? undefined : node.itemSpacing;
+    const pTop = isMixed(node.paddingTop) ? undefined : node.paddingTop;
+    const pRight = isMixed(node.paddingRight) ? undefined : node.paddingRight;
+    const pBottom = isMixed(node.paddingBottom)
       ? undefined
-      : frame.itemSpacing;
-    const pTop = isMixed(frame.paddingTop) ? undefined : frame.paddingTop;
-    const pRight = isMixed(frame.paddingRight) ? undefined : frame.paddingRight;
-    const pBottom = isMixed(frame.paddingBottom)
-      ? undefined
-      : frame.paddingBottom;
-    const pLeft = isMixed(frame.paddingLeft) ? undefined : frame.paddingLeft;
+      : node.paddingBottom;
+    const pLeft = isMixed(node.paddingLeft) ? undefined : node.paddingLeft;
     base.paddingTop = pTop;
     base.paddingRight = pRight;
     base.paddingBottom = pBottom;
     base.paddingLeft = pLeft;
-    if (frame.primaryAxisSizingMode != null)
-      base.primaryAxisSizingMode = frame.primaryAxisSizingMode;
-    if (frame.counterAxisSizingMode != null)
-      base.counterAxisSizingMode = frame.counterAxisSizingMode;
-    if (frame.primaryAxisAlignItems != null)
-      base.primaryAxisAlignItems = frame.primaryAxisAlignItems;
-    if (frame.counterAxisAlignItems != null)
-      base.counterAxisAlignItems = frame.counterAxisAlignItems;
+    if (node.primaryAxisSizingMode != null)
+      base.primaryAxisSizingMode = node.primaryAxisSizingMode;
+    if (node.counterAxisSizingMode != null)
+      base.counterAxisSizingMode = node.counterAxisSizingMode;
+    if (node.primaryAxisAlignItems != null)
+      base.primaryAxisAlignItems = node.primaryAxisAlignItems;
+    if (node.counterAxisAlignItems != null)
+      base.counterAxisAlignItems = node.counterAxisAlignItems;
   }
   if (
     'layoutGrids' in node &&
     node.layoutGrids != null &&
     node.layoutGrids.length > 0
   ) {
-    base.layoutGrids = node.layoutGrids.map((raw) => {
-      const g = raw as {
-        pattern: 'ROWS' | 'COLUMNS' | 'GRID';
-        alignment?: 'MIN' | 'MAX' | 'STRETCH' | 'CENTER';
-        gutterSize?: number;
-        count?: number;
-        sectionSize?: number;
-        offset?: number;
-        visible?: boolean;
-        color?: RGBA;
-      };
+    base.layoutGrids = node.layoutGrids.map((g) => {
       const out: NonNullable<SerializedNode['layoutGrids']>[number] = {
         pattern: g.pattern,
       };
@@ -419,9 +424,7 @@ export function serializeNode(
     const kids = node.children ?? [];
     if (kids.length > 0) {
       if (depth > 0) {
-        base.children = kids.map((c) =>
-          serializeNode(c as SceneNode, depth - 1),
-        );
+        base.children = kids.map((c) => serializeNode(c, depth - 1));
       } else {
         base.childCount = kids.length;
       }

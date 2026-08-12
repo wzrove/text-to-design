@@ -1,58 +1,61 @@
-import type { ExecuteOp } from 'text-to-design-shared';
+import type { ExecuteOp } from '../schemas';
+import type { ContainerSkeleton, DesignHost, NodeSkeleton } from './host';
+import { MIXED } from './host';
 import { loadFont } from './utils';
 
 async function buildNode(
+  host: DesignHost,
   spec: ExecuteOp,
-  parent: BaseNode & ChildrenMixin,
-): Promise<SceneNode> {
+  parent: ContainerSkeleton,
+): Promise<NodeSkeleton> {
   const type = spec.type;
-  let node: SceneNode;
+  let node: NodeSkeleton;
   switch (type) {
     case 'TEXT':
-      node = jsDesign.createText();
+      node = host.createText();
       break;
     case 'RECTANGLE':
-      node = jsDesign.createRectangle();
+      node = host.createRectangle();
       break;
     case 'ELLIPSE':
-      node = jsDesign.createEllipse();
+      node = host.createEllipse();
       break;
     case 'LINE':
-      node = jsDesign.createLine();
+      node = host.createLine();
       break;
     case 'POLYGON':
-      node = jsDesign.createPolygon();
+      node = host.createPolygon();
       break;
     case 'STAR':
-      node = jsDesign.createStar();
+      node = host.createStar();
       break;
     case 'VECTOR':
-      node = jsDesign.createVector();
+      node = host.createVector();
       break;
     case 'BOOLEAN_OPERATION': {
       const children = spec.children ?? [];
       if (children.length < 2) {
         throw new Error('BOOLEAN_OPERATION 至少需要 2 个子节点');
       }
-      const tmp = jsDesign.createFrame();
+      const tmp = host.createFrame();
       parent.appendChild(tmp);
       for (const child of children) {
-        await buildNode(child, tmp);
+        await buildNode(host, child, tmp);
       }
       const combine: Record<
         string,
         (
-          nodes: ReadonlyArray<BaseNode>,
-          parent: BaseNode & ChildrenMixin,
-        ) => BooleanOperationNode
+          nodes: readonly NodeSkeleton[],
+          parent: ContainerSkeleton,
+        ) => NodeSkeleton
       > = {
-        UNION: jsDesign.union,
-        SUBTRACT: jsDesign.subtract,
-        INTERSECT: jsDesign.intersect,
-        EXCLUDE: jsDesign.exclude,
+        UNION: host.union,
+        SUBTRACT: host.subtract,
+        INTERSECT: host.intersect,
+        EXCLUDE: host.exclude,
       };
       node = combine[spec.booleanOperation ?? 'UNION'](
-        [...tmp.children],
+        [...(tmp.children ?? [])],
         parent,
       );
       tmp.remove();
@@ -63,16 +66,16 @@ async function buildNode(
       if (children.length < 2) {
         throw new Error('GROUP 至少需要 2 个子节点');
       }
-      const tmp = jsDesign.createFrame();
+      const tmp = host.createFrame();
       parent.appendChild(tmp);
       for (const child of children) {
-        await buildNode(child, tmp);
+        await buildNode(host, child, tmp);
       }
       node = tmp;
       break;
     }
     default:
-      node = jsDesign.createFrame();
+      node = host.createFrame();
   }
 
   node.name = spec.name ?? 'node';
@@ -86,8 +89,8 @@ async function buildNode(
   if (spec.locked != null) node.locked = spec.locked;
   if (spec.visible != null && 'visible' in node) node.visible = spec.visible;
 
-  if (spec.fills && 'fills' in node) node.fills = spec.fills as Paint[];
-  if (spec.strokes && 'strokes' in node) node.strokes = spec.strokes as Paint[];
+  if (spec.fills && 'fills' in node) node.fills = spec.fills;
+  if (spec.strokes && 'strokes' in node) node.strokes = spec.strokes;
 
   if (spec.strokeWeight != null && 'strokeWeight' in node)
     node.strokeWeight = spec.strokeWeight;
@@ -108,7 +111,7 @@ async function buildNode(
   if (spec.dashPattern != null && 'dashPattern' in node)
     node.dashPattern = spec.dashPattern;
   if (spec.blendMode != null && 'blendMode' in node)
-    node.blendMode = spec.blendMode as BlendMode;
+    node.blendMode = spec.blendMode;
   if (spec.cornerSmoothing != null && 'cornerSmoothing' in node)
     node.cornerSmoothing = spec.cornerSmoothing;
   if (spec.constraints != null && 'constraints' in node)
@@ -116,21 +119,20 @@ async function buildNode(
   if (spec.clipsContent != null && 'clipsContent' in node)
     node.clipsContent = spec.clipsContent;
   if (spec.layoutGrids != null && 'layoutGrids' in node)
-    node.layoutGrids = spec.layoutGrids as LayoutGrid[];
+    node.layoutGrids = spec.layoutGrids;
 
-  if (spec.effects && 'effects' in node)
-    node.effects = spec.effects as Effect[];
+  if (spec.effects && 'effects' in node) node.effects = spec.effects;
 
   if ('cornerRadius' in node) {
     if (spec.cornerRadius != null) node.cornerRadius = spec.cornerRadius;
     if ('topLeftRadius' in node) {
-      const r = node as RectangleNode;
-      if (spec.topLeftRadius != null) r.topLeftRadius = spec.topLeftRadius;
-      if (spec.topRightRadius != null) r.topRightRadius = spec.topRightRadius;
+      if (spec.topLeftRadius != null) node.topLeftRadius = spec.topLeftRadius;
+      if (spec.topRightRadius != null)
+        node.topRightRadius = spec.topRightRadius;
       if (spec.bottomLeftRadius != null)
-        r.bottomLeftRadius = spec.bottomLeftRadius;
+        node.bottomLeftRadius = spec.bottomLeftRadius;
       if (spec.bottomRightRadius != null)
-        r.bottomRightRadius = spec.bottomRightRadius;
+        node.bottomRightRadius = spec.bottomRightRadius;
     }
   }
 
@@ -138,40 +140,31 @@ async function buildNode(
     (node.type === 'POLYGON' || node.type === 'STAR') &&
     spec.pointCount != null
   ) {
-    (node as PolygonNode).pointCount = spec.pointCount;
+    node.pointCount = spec.pointCount;
   }
   if (node.type === 'STAR' && spec.innerRadius != null) {
-    (node as StarNode).innerRadius = spec.innerRadius;
+    node.innerRadius = spec.innerRadius;
   }
   if (node.type === 'ELLIPSE' && spec.arcData != null && 'arcData' in node) {
-    const arc = spec.arcData;
-    (node as EllipseNode).arcData = {
-      startingAngle: arc.startingAngle,
-      endingAngle: arc.endingAngle,
-      innerRadius: arc.innerRadius,
-    };
+    node.arcData = spec.arcData;
   }
 
   if (node.type === 'TEXT') {
-    const textNode = node as TextNode;
-    if (spec.fontName && textNode.fontName !== jsDesign.mixed) {
-      await loadFont(spec.fontName.family, spec.fontName.style);
-      textNode.fontName = spec.fontName;
+    if (spec.fontName && node.fontName !== MIXED) {
+      await loadFont(host, spec.fontName.family, spec.fontName.style);
+      node.fontName = spec.fontName;
     }
-    textNode.characters = spec.characters ?? 'text';
-    textNode.fontSize = spec.fontSize ?? 16;
+    node.characters = spec.characters ?? 'text';
+    node.fontSize = spec.fontSize ?? 16;
     if (spec.textAlignHorizontal != null)
-      textNode.textAlignHorizontal = spec.textAlignHorizontal;
+      node.textAlignHorizontal = spec.textAlignHorizontal;
     if (spec.textAlignVertical != null)
-      textNode.textAlignVertical = spec.textAlignVertical;
-    if (spec.textAutoResize != null)
-      textNode.textAutoResize = spec.textAutoResize;
-    if (spec.textCase != null) textNode.textCase = spec.textCase;
-    if (spec.textDecoration != null)
-      textNode.textDecoration = spec.textDecoration;
-    if (spec.lineHeight != null)
-      textNode.lineHeight = spec.lineHeight as unknown as LineHeight;
-    if (spec.letterSpacing != null) textNode.letterSpacing = spec.letterSpacing;
+      node.textAlignVertical = spec.textAlignVertical;
+    if (spec.textAutoResize != null) node.textAutoResize = spec.textAutoResize;
+    if (spec.textCase != null) node.textCase = spec.textCase;
+    if (spec.textDecoration != null) node.textDecoration = spec.textDecoration;
+    if (spec.lineHeight != null) node.lineHeight = spec.lineHeight;
+    if (spec.letterSpacing != null) node.letterSpacing = spec.letterSpacing;
   }
 
   parent.appendChild(node);
@@ -179,10 +172,10 @@ async function buildNode(
     return node;
   }
   if (node.type === 'VECTOR' && spec.vectorPaths != null) {
-    (node as VectorNode).vectorPaths = spec.vectorPaths as VectorPath[];
+    node.vectorPaths = spec.vectorPaths;
   }
   for (const child of spec.children ?? []) {
-    await buildNode(child, node as unknown as BaseNode & ChildrenMixin);
+    await buildNode(host, child, node);
   }
 
   if (
@@ -190,27 +183,42 @@ async function buildNode(
     spec.layoutMode != null &&
     'layoutMode' in node
   ) {
-    const frame = node as FrameNode;
-    frame.layoutMode = spec.layoutMode;
-    frame.itemSpacing = spec.itemSpacing ?? 0;
+    node.layoutMode = spec.layoutMode;
+    node.itemSpacing = spec.itemSpacing ?? 0;
     if (spec.primaryAxisSizingMode != null)
-      frame.primaryAxisSizingMode = spec.primaryAxisSizingMode;
+      node.primaryAxisSizingMode = spec.primaryAxisSizingMode;
     if (spec.counterAxisSizingMode != null)
-      frame.counterAxisSizingMode = spec.counterAxisSizingMode;
+      node.counterAxisSizingMode = spec.counterAxisSizingMode;
     if (spec.primaryAxisAlignItems != null)
-      frame.primaryAxisAlignItems = spec.primaryAxisAlignItems;
+      node.primaryAxisAlignItems = spec.primaryAxisAlignItems;
     if (spec.counterAxisAlignItems != null)
-      frame.counterAxisAlignItems = spec.counterAxisAlignItems;
-    if (spec.paddingTop != null) frame.paddingTop = spec.paddingTop;
-    if (spec.paddingRight != null) frame.paddingRight = spec.paddingRight;
-    if (spec.paddingBottom != null) frame.paddingBottom = spec.paddingBottom;
-    if (spec.paddingLeft != null) frame.paddingLeft = spec.paddingLeft;
+      node.counterAxisAlignItems = spec.counterAxisAlignItems;
+    if (spec.paddingTop != null) node.paddingTop = spec.paddingTop;
+    if (spec.paddingRight != null) node.paddingRight = spec.paddingRight;
+    if (spec.paddingBottom != null) node.paddingBottom = spec.paddingBottom;
+    if (spec.paddingLeft != null) node.paddingLeft = spec.paddingLeft;
   }
   if (spec.layoutGrow != null && 'layoutGrow' in node) {
-    (node as FrameNode & SceneNode).layoutGrow = spec.layoutGrow;
+    node.layoutGrow = spec.layoutGrow;
   }
   if (spec.layoutAlign != null && 'layoutAlign' in node) {
-    (node as FrameNode & SceneNode).layoutAlign = spec.layoutAlign;
+    node.layoutAlign = spec.layoutAlign;
+  }
+
+  // 平台特有超集字段(仅对应平台生效,'in' 守卫在无此字段的平台跳过)
+  if (spec.fillStyleId != null && 'fillStyleId' in node)
+    node.fillStyleId = spec.fillStyleId;
+  if (spec.strokeStyleId != null && 'strokeStyleId' in node)
+    node.strokeStyleId = spec.strokeStyleId;
+  if (spec.textStyleId != null && 'textStyleId' in node)
+    node.textStyleId = spec.textStyleId;
+  if (spec.effectStyleId != null && 'effectStyleId' in node)
+    node.effectStyleId = spec.effectStyleId;
+  if (node.type === 'TEXT') {
+    if (spec.textTruncation != null && 'textTruncation' in node)
+      node.textTruncation = spec.textTruncation;
+    if (spec.maxLines != null && 'maxLines' in node)
+      node.maxLines = spec.maxLines;
   }
   return node;
 }

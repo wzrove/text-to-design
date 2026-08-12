@@ -3,6 +3,8 @@
     "target": "es2023",
     "module": "esnext",
     "lib": ["ES2023", "DOM"],
+    /* 默认(主)编译单元 = jsDesign 平台域(src/code/jsdesign + 共享 plugin.ts) + UI/bridge;
+       figma 域由 src/code/figma/tsconfig.json 独立编译,避免两平台 typings 全局冲突 */
     "types": ["vite/client", "@jsdesigndeveloper/plugin-typings"],
     "skipLibCheck": true,
 
@@ -21,5 +23,6 @@
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src", "ui.html", "vite.config.ts", "vite.config.code.ts"]
+  "include": ["src", "ui.html", "vite.config.ts"],
+  "exclude": ["src/code/figma"]
 }
