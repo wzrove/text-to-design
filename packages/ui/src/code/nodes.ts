@@ -188,9 +188,26 @@ export function reparentNodes(params: {
     throw new Error('没有找到目标父节点');
   }
   const container = parent as BaseNode & ChildrenMixin;
+
   for (const n of nodes) {
-    if (params.index != null) container.insertChild(params.index, n);
-    else container.appendChild(n);
+    // 如果节点已经在目标父级下,跳过
+    if (parent.id === n.parent?.id) continue;
+
+    if (params.index != null) {
+      container.insertChild(params.index, n);
+    } else {
+      // 对于 auto-layout 框架,使用 insertChild 追加到末尾比 appendChild 更可靠
+      const childCount =
+        'children' in container ? (container as FrameNode).children.length : 0;
+      container.insertChild(childCount, n);
+    }
+
+    // 验证父级是否真正改变
+    if (n.parent?.id !== parent.id) {
+      throw new Error(
+        `节点 ${n.id} 移动到 ${parent.id} 失败:父级未变化(仍为 ${n.parent?.id ?? 'undefined'})。可能是目标父级不支持子节点或引擎限制`,
+      );
+    }
   }
   return { moved: nodes.map((n) => serializeNode(n)) };
 }

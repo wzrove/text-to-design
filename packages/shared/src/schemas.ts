@@ -178,7 +178,7 @@ export const layoutGridSchema: z.ZodType<LayoutGrid> = z
 // 矢量路径 (对齐 runtime VectorPath)
 export interface VectorPath {
   data: string;
-  windingRule?: 'NONZERO' | 'EVENODD';
+  windingRule?: 'NONZERO' | 'EVENODD' | 'NONE';
 }
 
 export const vectorPathSchema: z.ZodType<VectorPath> = z.object({
@@ -188,9 +188,9 @@ export const vectorPathSchema: z.ZodType<VectorPath> = z.object({
       'SVG path data,如 "M0 0 L100 0 L100 100 Z"(M=移动到,L=画线到,Z=闭合)',
     ),
   windingRule: z
-    .enum(['NONZERO', 'EVENODD'])
-    .optional()
-    .describe('环绕规则:NONZERO|EVENODD'),
+    .enum(['NONZERO', 'EVENODD', 'NONE'])
+    .default('NONZERO')
+    .describe('环绕规则:NONZERO|EVENODD|NONE,默认 NONZERO'),
 });
 
 // 字体 (对齐 runtime FontName)
