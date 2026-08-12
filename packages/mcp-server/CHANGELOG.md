@@ -1,5 +1,11 @@
 # text-to-design-mcp
 
+## 0.5.1
+
+### Patch Changes
+
+- [`dbd7b10`](https://github.com/wzrove/text-to-design/commit/dbd7b10e3e3c27ca16f5a23c4fc0ad71b53f657f) Thanks [@wzrove](https://github.com/wzrove)! - refactor: jsd_execute 更名 jsd_create_nodes, 加固 reparent/detachInstance 边界校验
+
 ## 0.5.0
 
 ### Minor Changes
