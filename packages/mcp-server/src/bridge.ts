@@ -1,6 +1,6 @@
 import { CLIENT } from './config';
 import { log } from './logger';
-import type { PluginMethod } from './pending';
+import type { PluginMethod, RequestOptions } from './pending';
 import { PendingManager } from './pending';
 import { Transport } from './transport';
 
@@ -8,6 +8,9 @@ import { Transport } from './transport';
 export class Bridge {
   private transport = new Transport();
   private pending: PendingManager;
+
+  /** 插件连接状态变化(true=已连上,false=断开),供工具可用性联动 */
+  onConnectionChange: ((connected: boolean) => void) | null = null;
 
   constructor() {
     this.pending = new PendingManager((text, binary) => {
@@ -18,7 +21,11 @@ export class Bridge {
       if (isBinary) this.pending.onBinary(raw);
       else this.pending.onText(raw);
     };
-    this.transport.onDisconnect = (err) => this.pending.rejectAll(err);
+    this.transport.onConnect = () => this.onConnectionChange?.(true);
+    this.transport.onDisconnect = (err) => {
+      this.pending.rejectAll(err);
+      this.onConnectionChange?.(false);
+    };
   }
 
   get port(): number {
@@ -41,7 +48,7 @@ export class Bridge {
   request(
     method: PluginMethod,
     params: unknown,
-    timeout?: number,
+    opts: RequestOptions = {},
   ): Promise<unknown> {
     if (!this.transport.isConnected) {
       log(`请求被拒(插件未连接): ${method}`);
@@ -51,6 +58,6 @@ export class Bridge {
         ),
       );
     }
-    return this.pending.request(method, params, timeout);
+    return this.pending.request(method, params, opts);
   }
 }

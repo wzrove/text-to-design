@@ -1377,6 +1377,13 @@ export const exportSchema = z.object({
 
 export const listFontsSchema = z.object({});
 
+/** 图片填充入参:server 读本地文件,经二进制通道传给插件 */
+export const fillImageSchema = z.object({
+  ids: z.array(z.string()).describe('要填充图片的节点 id 列表'),
+  sourcePath: z.string().describe('本地图片文件绝对路径,如 /tmp/poster.png'),
+});
+export type FillImageParams = z.infer<typeof fillImageSchema>;
+
 /** 平台特有操作(platform_op)入参:通用通道,op 名由 ping.capabilities 告知 */
 export const platformOpParamsSchema = z.object({
   op: z

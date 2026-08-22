@@ -8,16 +8,19 @@ import {
 } from 'text-to-design-shared';
 import type { Bridge } from '../bridge';
 import { CLIENT } from '../config';
-import { err, structured } from '../core/response';
+import { bridgeTool, type ToolHandle } from '../core/registry';
 import { htmlToSvg } from '../htmlToDesign';
 import { findIcon, iconToSvg, suggestIcons } from '../icons';
 
-/** 创建类:声明式节点 / SVG 导入 / HTML 转设计 */
-export function registerCreateTools(server: McpServer, bridge: Bridge): void {
-  server.registerTool(
-    'jsd_execute',
-    {
-      description: `在画布创建节点(可递归嵌套子节点)。
+/** 创建类:声明式节点 / SVG 导入 / 图标 / HTML 转设计 */
+export function registerCreateTools(
+  server: McpServer,
+  bridge: Bridge,
+): ToolHandle[] {
+  const execute = bridgeTool({
+    name: 'jsd_execute',
+    title: '创建设计节点',
+    description: `在画布创建节点(可递归嵌套子节点)。
 
 节点类型 type:
 - FRAME=容器(可 auto-layout)
@@ -33,93 +36,83 @@ export function registerCreateTools(server: McpServer, bridge: Bridge): void {
 
 填充 fills/描边 strokes:每项为 {type:"SOLID", color:{r,g,b}} 或 {type:"GRADIENT_LINEAR",...},color 的 r/g/b 范围 0-1。
 放置 placement:mode=center 居中画布,manual=保持原始坐标,absolute=使用 x/y 坐标。`,
-      inputSchema: executeSchema,
-      outputSchema: createdResultSchema,
-    },
-    async ({ ops, placement }) => {
-      try {
-        const data = await bridge.request('execute', { ops, placement });
-        return structured(data, createdResultSchema);
-      } catch (e) {
-        return err(e, createdResultSchema);
-      }
-    },
-  );
+    method: 'execute',
+    inputSchema: executeSchema,
+    outputSchema: createdResultSchema,
+    // 纯新增节点,不破坏既有内容
+    annotations: { readOnlyHint: false, destructiveHint: false },
+  });
 
-  server.registerTool(
-    'jsd_create_svg',
-    {
-      description:
-        '将 SVG 字符串直接导入画布(原生 createNodeFromSvg,完整保留 path/矢量/渐变/描边,不经 htmlToSvg 降级)',
-      inputSchema: createSvgSchema,
-      outputSchema: createdResultSchema,
-    },
-    async ({ svg, name }) => {
-      try {
-        const data = await bridge.request('create_svg', {
-          svg,
-          name: name ?? 'svg-design',
-        });
-        return structured(data, createdResultSchema);
-      } catch (e) {
-        return err(e, createdResultSchema);
-      }
-    },
-  );
+  const createSvg = bridgeTool({
+    name: 'jsd_create_svg',
+    title: '导入 SVG',
+    description:
+      '将 SVG 字符串直接导入画布(原生 createNodeFromSvg,完整保留 path/矢量/渐变/描边,不经 htmlToSvg 降级)',
+    method: 'create_svg',
+    inputSchema: createSvgSchema,
+    outputSchema: createdResultSchema,
+    annotations: { readOnlyHint: false, destructiveHint: false },
+    payload: ({ svg, name }) => ({
+      svg,
+      name: name ?? 'svg-design',
+    }),
+  });
 
-  server.registerTool(
-    'jsd_create_icon',
-    {
-      description:
-        '插入内置图标(Lucide 1764 个,服务端本地生成 SVG,不占模型上下文)。icon 填图标名/别名/语义(如 home、arrow-right、search、magnifier),支持模糊匹配与别名联想;找不到时错误信息会列候选名,可按提示重试。color 填描边色、size 填边长、strokeWidth 填描边宽,默认 24px 纯黑 2px。',
-      inputSchema: createIconSchema,
-      outputSchema: createdResultSchema,
-    },
-    async ({ icon, size, color, strokeWidth, name }) => {
-      try {
-        const def = findIcon(icon);
-        if (!def) {
-          const suggests = suggestIcons(icon, 8);
-          const hint = suggests.length
-            ? `,可尝试:${suggests.map((s) => s.name).join(', ')}`
-            : '';
-          return err(new Error(`未知图标:${icon}${hint}`), createdResultSchema);
-        }
-        const svg = iconToSvg(
-          def,
-          size ?? 24,
-          color ?? '#000000',
-          strokeWidth ?? 2,
-        );
-        const data = await bridge.request('create_svg', {
-          svg,
-          name: name ?? `icon-${def.name}`,
-        });
-        return structured(data, createdResultSchema);
-      } catch (e) {
-        return err(e, createdResultSchema);
+  const createIcon = bridgeTool({
+    name: 'jsd_create_icon',
+    title: '插入内置图标',
+    description:
+      '插入内置图标(Lucide 1764 个,服务端本地生成 SVG,不占模型上下文)。icon 填图标名/别名/语义(如 home、arrow-right、search、magnifier),支持模糊匹配与别名联想;找不到时错误信息会列候选名,可按提示重试。color 填描边色、size 填边长、strokeWidth 填描边宽,默认 24px 纯黑 2px。',
+    inputSchema: createIconSchema,
+    outputSchema: createdResultSchema,
+    annotations: { readOnlyHint: false, destructiveHint: false },
+    run: async (args, bridge_, signal) => {
+      const { icon, size, color, strokeWidth, name } = args as {
+        icon: string;
+        size?: number;
+        color?: string;
+        strokeWidth?: number;
+        name?: string;
+      };
+      const def = findIcon(icon);
+      if (!def) {
+        const suggests = suggestIcons(icon, 8);
+        const hint = suggests.length
+          ? `,可尝试:${suggests.map((s) => s.name).join(', ')}`
+          : '';
+        throw new Error(`未知图标:${icon}${hint}`);
       }
+      const svg = iconToSvg(def, size ?? 24, color ?? '#000000', strokeWidth ?? 2);
+      return bridge_.request(
+        'create_svg',
+        { svg, name: name ?? `icon-${def.name}` },
+        { signal },
+      );
     },
-  );
+  });
 
-  server.registerTool(
-    'jsd_html_to_design',
-    {
-      description: `将 HTML 字符串转换为 ${CLIENT.runtime} 设计节点(SVG 保真路线,忽略复杂样式),插入画布中心`,
-      inputSchema: htmlToDesignSchema,
-      outputSchema: createdResultSchema,
+  const htmlToDesign = bridgeTool({
+    name: 'jsd_html_to_design',
+    title: 'HTML 转设计节点',
+    description: `将 HTML 字符串转换为 ${CLIENT.runtime} 设计节点(SVG 保真路线,忽略复杂样式),插入画布中心`,
+    inputSchema: htmlToDesignSchema,
+    outputSchema: createdResultSchema,
+    annotations: { readOnlyHint: false, destructiveHint: false },
+    run: async (args, bridge_, signal) => {
+      const { html, name } = args as { html: string; name?: string };
+      const svg = htmlToSvg(html);
+      return bridge_.request(
+        'create_svg',
+        { svg, name: name ?? 'html-design' },
+        { signal },
+      );
     },
-    async ({ html, name }) => {
-      try {
-        const svg = htmlToSvg(html);
-        const data = await bridge.request('create_svg', {
-          svg,
-          name: name ?? 'html-design',
-        });
-        return structured(data, createdResultSchema);
-      } catch (e) {
-        return err(e, createdResultSchema);
-      }
-    },
-  );
+  });
+
+  return [
+    execute(server, bridge),
+    createSvg(server, bridge),
+    createIcon(server, bridge),
+    htmlToDesign(server, bridge),
+  ];
 }

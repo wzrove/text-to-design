@@ -13,6 +13,8 @@ export class Transport {
   private _port = 0;
 
   onMessage: ((raw: Buffer, isBinary: boolean) => void) | null = null;
+  /** 插件 WS 连上时触发(每次新连接一次) */
+  onConnect: (() => void) | null = null;
   onDisconnect: ((err: Error) => void) | null = null;
 
   get port(): number {
@@ -38,6 +40,11 @@ export class Transport {
       const line = '[text-to-design-mcp] 插件已连接\n';
       process.stderr.write(line);
       log('插件已连接');
+      try {
+        this.onConnect?.();
+      } catch (e) {
+        log(`onConnect 回调异常: ${e instanceof Error ? e.message : String(e)}`);
+      }
       ws.send(
         JSON.stringify({
           type: 'status',

@@ -9,6 +9,10 @@ export const SERVER_VERSION = version;
 export const DAEMON_WAIT_MS = 5000;
 export const DAEMON_POLL_MS = 250;
 
+/** 工具超时分级:ping 短平快;导出/图片填充是大 IO(大图/大文件),放宽到 60s */
+export const PING_TIMEOUT_MS = 5_000;
+export const LONG_IO_TIMEOUT_MS = 60_000;
+
 /** 设计客户端厂商:当前即时设计,扩展其他客户端(如 Figma)时替换此配置即可 */
 export const CLIENT = {
   label: '即时设计',

@@ -20,9 +20,19 @@ type Pending = {
   data?: unknown;
   /** 请求发出时刻,用于统计耗时 */
   startedAt: number;
+  /** 客户端取消传播:MCP tools/call 的 AbortSignal 联动清理 */
+  abort?: { signal: AbortSignal; listener: () => void };
 };
 
 const DEFAULT_TIMEOUT = 30000;
+
+/** 单次桥接请求选项 */
+export interface RequestOptions {
+  /** 超时毫秒数;缺省 DEFAULT_TIMEOUT */
+  timeout?: number;
+  /** 中止信号(MCP ctx.mcpReq.signal),触发后立即清理并拒绝 */
+  signal?: AbortSignal;
+}
 
 /** 请求关联:发出发送、pending 表、响应/二进制帧组装、超时与整体拒绝 */
 export class PendingManager {
@@ -38,8 +48,10 @@ export class PendingManager {
   request(
     method: PluginMethod,
     params: unknown,
-    timeout = DEFAULT_TIMEOUT,
+    opts: RequestOptions = {},
   ): Promise<unknown> {
+    const timeout = opts.timeout ?? DEFAULT_TIMEOUT;
+    const signal = opts.signal;
     const id = `r${++this.seq}`;
     const binary =
       params &&
@@ -63,22 +75,44 @@ export class PendingManager {
     ) as PluginRequest;
     return new Promise((resolve, reject) => {
       const startedAt = Date.now();
-      const timer = setTimeout(() => {
-        this.pending.delete(id);
-        log(`请求超时: ${id} ${method} 耗时=${Date.now() - startedAt}ms`);
-        reject(new Error(`请求超时: ${method}`));
-      }, timeout);
-      this.pending.set(id, {
+      const entry: Pending = {
         id,
         method,
         resolve,
         reject,
-        timer,
+        timer: null as unknown as NodeJS.Timeout,
         waitBinary: false,
         binaryCount: 0,
         buffers: [],
         startedAt,
-      });
+      };
+      entry.timer = setTimeout(() => {
+        this.pending.delete(id);
+        this.detachAbort(entry);
+        log(`请求超时: ${id} ${method} 耗时=${Date.now() - startedAt}ms`);
+        reject(new Error(`请求超时: ${method}`));
+      }, timeout);
+      if (signal) {
+        if (signal.aborted) {
+          clearTimeout(entry.timer);
+          reject(new Error(`请求已取消: ${method}`));
+          return;
+        }
+        entry.abort = {
+          signal,
+          listener: () => {
+            if (this.pending.delete(id)) {
+              this.detachAbort(entry);
+              log(`请求取消: ${id} ${method} 耗时=${Date.now() - startedAt}ms`);
+              reject(new Error(`请求已取消: ${method}`));
+            }
+          },
+        };
+        signal.addEventListener('abort', entry.abort.listener, {
+          once: true,
+        });
+      }
+      this.pending.set(id, entry);
       log(
         `发出请求: ${id} ${method}${binary != null ? ` +binary(${binary.byteLength}B)` : ''}`,
       );
@@ -87,6 +121,14 @@ export class PendingManager {
         binary != null ? Buffer.from(binary) : undefined,
       );
     });
+  }
+
+  /** 结束时统一摘除 abort 监听,防泄漏 */
+  private detachAbort(entry: Pending): void {
+    if (entry.abort) {
+      entry.abort.signal.removeEventListener('abort', entry.abort.listener);
+      entry.abort = undefined;
+    }
   }
 
   onText(raw: Buffer): void {
@@ -132,6 +174,7 @@ export class PendingManager {
     }
     this.pending.delete(msg.id);
     clearTimeout(pending.timer);
+    this.detachAbort(pending);
     log(
       `响应: ${pending.id} ${pending.method} ok=${msg.ok} 耗时=${Date.now() - pending.startedAt}ms${msg.ok ? '' : ` error=${msg.error ?? ''}`}`,
     );
@@ -162,13 +205,17 @@ export class PendingManager {
   rejectAll(err: Error): void {
     for (const [, p] of this.pending) {
       clearTimeout(p.timer);
+      this.detachAbort(p);
       p.reject(err);
     }
     this.pending.clear();
   }
 
   clear(): void {
-    for (const [, p] of this.pending) clearTimeout(p.timer);
+    for (const [, p] of this.pending) {
+      clearTimeout(p.timer);
+      this.detachAbort(p);
+    }
     this.pending.clear();
     this.binaryTarget = null;
   }
@@ -176,6 +223,7 @@ export class PendingManager {
   private settle(pending: Pending): void {
     this.pending.delete(pending.id);
     clearTimeout(pending.timer);
+    this.detachAbort(pending);
     pending.resolve(mergeBytes(pending.data, pending.buffers));
   }
 }
