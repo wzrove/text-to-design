@@ -6,9 +6,12 @@ export type BridgeStatus =
   | 'connected'
   | 'error';
 
+/** 面板日志级别(与服务端 logger 语义对齐) */
+export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
+
 export type BridgeEvent =
   | { type: 'status'; status: BridgeStatus }
-  | { type: 'log'; line: string }
+  | { type: 'log'; level: LogLevel; line: string }
   | { type: 'selection'; data: unknown }
   | { type: 'platform'; platform: PluginPlatform };
 

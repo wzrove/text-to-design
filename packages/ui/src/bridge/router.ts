@@ -4,7 +4,7 @@ import type {
   PluginResponse,
 } from 'text-to-design-shared';
 import { extractBytes, stripBytes } from './binary';
-import type { Conn, Pending } from './types';
+import type { Conn, LogLevel, Pending } from './types';
 import { TIMEOUT } from './types';
 
 /** 请求/响应关联:转发挂超时定时器,code 回包直接回发 WS;localPending 仅存定时器/ping 等待 */
@@ -12,7 +12,7 @@ export class Router {
   private localPending = new Map<string, Pending>();
   private globalSeq = 0;
   private conn: Conn;
-  private log: (line: string) => void;
+  private log: (level: LogLevel, line: string) => void;
 
   /** 插件主动推送的选中状态(selectionchange) */
   onSelection: ((data: unknown) => void) | null = null;
@@ -24,7 +24,7 @@ export class Router {
   onServerStatus: ((msg: { state: string; version?: string }) => void) | null =
     null;
 
-  constructor(conn: Conn, log: (line: string) => void) {
+  constructor(conn: Conn, log: (level: LogLevel, line: string) => void) {
     this.conn = conn;
     this.log = log;
   }
@@ -73,7 +73,7 @@ export class Router {
       return;
     }
     if (msg.type === 'request') {
-      this.log(`收到服务器请求: ${(msg as PluginRequest).method}`);
+      this.log('debug', `收到服务器请求: ${(msg as PluginRequest).method}`);
       const raw = msg as PluginRequest & {
         params?: { hasBinary?: boolean; binaryCount?: number };
       };
@@ -88,7 +88,7 @@ export class Router {
       this.forwardRequest(conn, msg);
       return;
     }
-    this.log(`收到服务器响应(忽略): ${msg.id}`);
+    this.log('debug', `收到服务器响应(忽略): ${msg.id}`);
   }
 
   onWsBinary(conn: Conn, data: ArrayBuffer): void {
@@ -118,7 +118,7 @@ export class Router {
   private forwardRequest(conn: Conn, msg: PluginRequest): void {
     const timer = window.setTimeout(() => {
       if (this.localPending.delete(msg.id)) {
-        this.log(`转发到插件超时: ${msg.method}`);
+        this.log('error', `转发到插件超时: ${msg.method}`);
         this.sendResponseOverWs(conn, msg.id, false, undefined, '插件响应超时');
       }
     }, TIMEOUT);
@@ -178,7 +178,10 @@ export class Router {
       if (!pm.id) return;
       if (pm.type !== 'response') {
         // 插件只回响应,不主动发请求;意外请求忽略并记日志
-        this.log(`忽略未知插件消息: ${(pm as { type?: string }).type}`);
+        this.log(
+          'debug',
+          `忽略未知插件消息: ${(pm as { type?: string }).type}`,
+        );
         return;
       }
       const entry = this.localPending.get(pm.id);
@@ -197,6 +200,7 @@ export class Router {
       this.sendResponseOverWs(this.conn, pm.id, pm.ok, pm.data, pm.error);
     } catch (e) {
       this.log(
+        'error',
         `code 消息处理失败: ${e instanceof Error ? e.message : String(e)}`,
       );
     }
@@ -220,7 +224,7 @@ export class Router {
 
   private sendOverWs(ws: WebSocket | null, msg: PluginResponse): void {
     if (!ws || ws.readyState !== WebSocket.OPEN) {
-      this.log(`发送响应失败(server 未连接): ${msg.id}`);
+      this.log('error', `发送响应失败(server 未连接): ${msg.id}`);
       return;
     }
     ws.send(JSON.stringify(msg));

@@ -4,8 +4,11 @@ import type { PluginPlatform } from 'text-to-design-shared';
 import { WS_PORT } from 'text-to-design-shared';
 import type { BridgeStatus } from './BridgeSocket';
 import { BridgeSocket } from './BridgeSocket';
+import type { LogLevel } from './types';
 
 export interface LogEntry {
+  /** 日志级别(默认 info) */
+  level?: LogLevel;
   id: number;
   time: string;
   line: string;
@@ -38,8 +41,8 @@ export function BridgeProvider(props: ParentProps) {
 
   const now = (): string => new Date().toLocaleTimeString();
 
-  const pushLog = (line: string): void => {
-    const entry: LogEntry = { id: ++seq, time: now(), line };
+  const pushLog = (line: string, level: LogLevel = 'info'): void => {
+    const entry: LogEntry = { id: ++seq, time: now(), line, level };
     setLog((l) => {
       const last = l[l.length - 1];
       if (last && last.line === line) {
@@ -63,7 +66,7 @@ export function BridgeProvider(props: ParentProps) {
       if (e.type === 'status') setStatus(() => e.status);
       else if (e.type === 'selection') setSelection(() => e.data);
       else if (e.type === 'platform') setPlatform(() => e.platform);
-      else pushLog(e.line);
+      else if (e.type === 'log') pushLog(e.line, e.level);
     });
   });
 
@@ -80,9 +83,12 @@ export function BridgeProvider(props: ParentProps) {
       getBridge().connect();
       try {
         const data = await getBridge().pingPlugin();
-        pushLog(`ping 插件成功: ${JSON.stringify(data)}`);
+        pushLog(`ping 插件成功: ${JSON.stringify(data)}`, 'debug');
       } catch (e) {
-        pushLog(`ping 插件失败: ${e instanceof Error ? e.message : String(e)}`);
+        pushLog(
+          `ping 插件失败: ${e instanceof Error ? e.message : String(e)}`,
+          'error',
+        );
       }
     },
   };

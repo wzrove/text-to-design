@@ -17,8 +17,8 @@ export class BridgeSocket {
 
   constructor(port = WS_PORT) {
     this.conn = { port, ws: null, binaryIn: null };
-    this.router = new Router(this.conn, (line) =>
-      this.events.emit({ type: 'log', line }),
+    this.router = new Router(this.conn, (level, line) =>
+      this.events.emit({ type: 'log', level, line }),
     );
     this.router.onSelection = (data) =>
       this.events.emit({ type: 'selection', data });
@@ -32,6 +32,7 @@ export class BridgeSocket {
       if (msg.version && !alreadyConnected) {
         this.events.emit({
           type: 'log',
+          level: 'info',
           line: `服务已确认连接(版本 ${msg.version})`,
         });
       }
