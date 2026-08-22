@@ -25,7 +25,6 @@ export default function StatusBadge() {
         : s === 'connecting'
           ? 'connecting'
           : 'waiting';
-    console.log('StatusBadge----', k, s);
     return k;
   });
   return (

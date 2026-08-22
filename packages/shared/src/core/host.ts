@@ -1,3 +1,4 @@
+import type { z } from 'zod';
 import type * as shared from '../schemas';
 
 /**
@@ -192,6 +193,11 @@ export interface PlatformOp {
   name: string;
   title: string;
   description: string;
+  /**
+   * 可选参数 schema(zod):插件分发前做边界校验,失败直接回结构化错误,
+   * 避免 LLM 传错形状时在实现深层炸出难懂的错。
+   */
+  inputSchema?: z.ZodType;
   run(host: DesignHost, params: unknown): Promise<unknown> | unknown;
 }
 

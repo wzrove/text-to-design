@@ -43,7 +43,6 @@ export function registerPlugin(
   meta: PlatformMeta,
 ): void {
   try {
-    console.log(host, '---');
     if (typeof __html__ === 'string' && __html__.trim() !== '') {
       host.showUI(__html__, UI_OPTIONS);
     } else {
@@ -307,7 +306,19 @@ export function registerPlugin(
             );
             break;
           }
-          const r = await op.run(host, p.params);
+          let params: unknown = p.params ?? {};
+          if (op.inputSchema) {
+            const parsed = op.inputSchema.safeParse(params);
+            if (!parsed.success) {
+              const detail = parsed.error.issues
+                .map((i) => `${i.path.join('.') || '(root)'}: ${i.message}`)
+                .join('; ');
+              send(id, false, undefined, `参数校验失败(${op.name}): ${detail}`);
+              break;
+            }
+            params = parsed.data;
+          }
+          const r = await op.run(host, params);
           send(id, true, { ok: true, data: r });
           break;
         }
