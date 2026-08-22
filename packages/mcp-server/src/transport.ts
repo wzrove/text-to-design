@@ -43,7 +43,9 @@ export class Transport {
       try {
         this.onConnect?.();
       } catch (e) {
-        log(`onConnect 回调异常: ${e instanceof Error ? e.message : String(e)}`);
+        log(
+          `onConnect 回调异常: ${e instanceof Error ? e.message : String(e)}`,
+        );
       }
       ws.send(
         JSON.stringify({

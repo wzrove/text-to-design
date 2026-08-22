@@ -82,7 +82,12 @@ export function registerCreateTools(
           : '';
         throw new Error(`未知图标:${icon}${hint}`);
       }
-      const svg = iconToSvg(def, size ?? 24, color ?? '#000000', strokeWidth ?? 2);
+      const svg = iconToSvg(
+        def,
+        size ?? 24,
+        color ?? '#000000',
+        strokeWidth ?? 2,
+      );
       return bridge_.request(
         'create_svg',
         { svg, name: name ?? `icon-${def.name}` },

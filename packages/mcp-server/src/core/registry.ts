@@ -9,6 +9,8 @@ import { err, structured } from './response';
 export interface ToolHandle {
   enable(): void;
   disable(): void;
+  /** 插件离线时保持可用(如 jsd_ping);由注册方按需注入 */
+  alwaysEnabled?: boolean;
 }
 
 /** MCP ToolAnnotations 的子集(hint 均为可选) */
@@ -73,7 +75,7 @@ export function bridgeTool(
       cb: (args: Record<string, unknown>, ctx: ToolCtx) => Promise<unknown>,
     ) => ToolHandle;
     const register = server.registerTool.bind(server) as unknown as RegisterFn;
-    return register(
+    const handle = register(
       def.name,
       {
         title: def.title,
@@ -104,5 +106,7 @@ export function bridgeTool(
         }
       },
     );
+    handle.alwaysEnabled = def.alwaysEnabled ?? false;
+    return handle;
   };
 }

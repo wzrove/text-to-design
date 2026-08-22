@@ -113,5 +113,9 @@ export function registerRawTools(
     annotations: { readOnlyHint: true },
   });
 
-  return [exportTool(server, bridge), fillImage(server, bridge), listFonts(server, bridge)];
+  return [
+    exportTool(server, bridge),
+    fillImage(server, bridge),
+    listFonts(server, bridge),
+  ];
 }
