@@ -15,6 +15,11 @@ const RECONNECT_DELAY_MS = 1500;
 /** 重连总预算:超时后放弃本次恢复,把错误交还客户端 */
 const RECONNECT_BUDGET_MS = 20000;
 
+/** 目录同步节奏:启动/重连后的快速档尽快收敛,稳态转入慢速档省流 */
+const POLL_FAST_MS = 2000;
+const POLL_FAST_WINDOW_MS = 20000;
+const POLL_SLOW_MS = 15000;
+
 /** 可移除的注册句柄(兼容 RegisteredTool/Prompt/Resource 的最小面) */
 interface RemovableHandle {
   remove(): void;
@@ -258,6 +263,7 @@ export async function serveProxy(initialClient: Client): Promise<void> {
           if (p.state === 'proxy') {
             upstream = p.client;
             wireUpstream(upstream);
+            enterFastPoll(); // 重连后回到快速档,尽快收敛清单
             process.stderr.write('[text-to-design-mcp] shim: 上游已恢复\n');
             await resyncAll(); // 补齐断连期间错过的变更
             return;
@@ -313,18 +319,32 @@ export async function serveProxy(initialClient: Client): Promise<void> {
     await resyncAll(); // 下游握手前先对齐一次清单(尽力而为,失败留待轮询补偿)
     return mcp;
   });
-  // 新鲜度兜底:stateless 上游的变更通知不可达时,靠短周期轮询收敛。
-  // registerTool/remove 自带下游 listChanged 广播,客户端会自动刷新。
-  const pollTimer = setInterval(() => {
-    if (!shuttingDown) void resyncAll();
-  }, 3000);
-  pollTimer.unref();
+  // 新鲜度兜底:stateless 上游的变更通知不可达时,靠轮询收敛。
+  // 自适应节奏:启动/重连后 20s 内走快速档(尽快发现插件上线),
+  // 稳态转慢速档。registerTool/remove 自带下游 listChanged 广播,
+  // 客户端会自动刷新。
+  let fastUntil = Date.now() + POLL_FAST_WINDOW_MS;
+  let pollTimer: NodeJS.Timeout | null = null;
+  const schedulePoll = (): void => {
+    if (shuttingDown) return;
+    const delayMs = Date.now() < fastUntil ? POLL_FAST_MS : POLL_SLOW_MS;
+    pollTimer = setTimeout(() => {
+      if (shuttingDown) return;
+      void resyncAll();
+      schedulePoll();
+    }, delayMs);
+    pollTimer.unref();
+  };
+  const enterFastPoll = (): void => {
+    fastUntil = Date.now() + POLL_FAST_WINDOW_MS;
+  };
+  schedulePoll();
   process.stderr.write(
     `[text-to-design-mcp] shim 模式: stdio → http://127.0.0.1:${HTTP_PORT}/mcp (动态同步,共享 daemon)\n`,
   );
   process.on('SIGINT', async () => {
     shuttingDown = true;
-    clearInterval(pollTimer);
+    if (pollTimer) clearTimeout(pollTimer);
     await stdioHandle.close();
     await upstream.close().catch(() => {});
     process.exit(0);

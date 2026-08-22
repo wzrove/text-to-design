@@ -14,7 +14,7 @@ import {
   SERVER_NAME,
   SERVER_VERSION,
 } from '../config';
-import { log } from '../logger';
+import { debug, log } from '../logger';
 import { buildServer } from '../server';
 import { delay, probeUpstream } from './probe';
 import { serveProxy } from './proxy';
@@ -49,9 +49,11 @@ export async function runDaemon(bridge: Bridge): Promise<void> {
       const start = Date.now();
       const url = req.url ?? '';
       res.on('finish', () => {
-        log(
-          `HTTP ${req.method} ${url} → ${res.statusCode} (${Date.now() - start}ms)`,
-        );
+        // 成功请求降为 debug:shim 轮询会周期性打出大量 200,避免刷屏;
+        // 排查轮询节奏时开 TEXT_TO_DESIGN_MCP_LOG_LEVEL=debug 可见
+        const line = `HTTP ${req.method} ${url} → ${res.statusCode} (${Date.now() - start}ms)`;
+        if (res.statusCode >= 400) log(line);
+        else debug(line);
       });
       if (req.method === 'GET' && url === '/health') {
         res.writeHead(200, { 'content-type': 'application/json' });
