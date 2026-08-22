@@ -102,7 +102,7 @@ pkill -f text-to-design-mcp
 | --- | --- |
 | `jsd_ping` | 检查插件是否在线 |
 | `jsd_get_selection` | 读取画布当前选中的节点 |
-| `jsd_execute` | 按描述创建节点(frame/rect/text 等,支持阴影/描边/渐变/文本样式) |
+| `jsd_create_nodes` | 按描述创建节点(frame/rect/text 等,支持阴影/描边/渐变/文本样式) |
 | `jsd_create_svg` | 直接导入 SVG 字符串(保留 path/矢量数据,不经降级) |
 | `jsd_html_to_design` | 把 HTML 转成设计节点 |
 | `jsd_update_selection` | 修改选中节点的属性(位置/颜色/文字/圆角等) |

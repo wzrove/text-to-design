@@ -17,8 +17,8 @@ export function registerCreateTools(
   server: McpServer,
   bridge: Bridge,
 ): ToolHandle[] {
-  const execute = bridgeTool({
-    name: 'jsd_execute',
+  const createNodes = bridgeTool({
+    name: 'jsd_create_nodes',
     title: '创建设计节点',
     description: `在画布创建节点(可递归嵌套子节点)。
 
@@ -115,7 +115,7 @@ export function registerCreateTools(
   });
 
   return [
-    execute(server, bridge),
+    createNodes(server, bridge),
     createSvg(server, bridge),
     createIcon(server, bridge),
     htmlToDesign(server, bridge),

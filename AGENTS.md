@@ -6,12 +6,12 @@
 
 当前 MCP 服务端（`packages/mcp-server`）与插件 bridge 存在以下已知行为，务必避开：
 
-1. **`jsd_execute` 忌 `children` 深嵌套 + `layout` 同传**
+1. **`jsd_create_nodes` 忌 `children` 深嵌套 + `layout` 同传**
    - 原因：嵌套 children 时插件端 `appendChild` 到失效根页节点（日志典型报错
      `in appendChild: The node with id "2:1" does not exist`），返回 `ok=false`。
    - 规避：先建 Frame / 叶子节点（flat），再用 `jsd_manage_nodes reparent` 归组；
-     `layout`/`layoutMode` 不要直接写进 `execute` 的 `frame` 入参，建完用
-     `jsd_update_selection` 单独设。
+     `layout`/`layoutMode` 不要直接写进 `jsd_create_nodes` 的 `frame` 入参，建完用
+     `jsd_update_node` 单独设。
 
 2. **`jsd_manage_components create_component` 现在是"建空壳"**
    - 已改：create_component 只创建空的 COMPONENT 并返回 id，**不再**把传入节点卷进
@@ -47,8 +47,8 @@
      「没找到 X 节点」。若目标 id 报「没找到」，说明已失效，先 `repair` 再 `jsd_find`
      复核。注意 `isUsable` 只过滤，不删节点（删职归一 `repair`）。
 
-8. **`jsd_execute` / `jsd_manage_nodes` 的 GROUP**
-   - `jsd_execute type=GROUP`: 将子节点归为一组, 内部用 Frame 实现, **支持 auto-layout**
+8. **`jsd_create_nodes` / `jsd_manage_nodes` 的 GROUP**
+   - `jsd_create_nodes type=GROUP`: 将子节点归为一组, 内部用 Frame 实现, **支持 auto-layout**
      (`layoutMode`/`itemSpacing`/`padding*` 等)。序列化返回 `type: 'FRAME'` 是正常的。
    - `jsd_manage_nodes op=group`: 将已有节点 (按 id) 归组, 同样用 Frame 实现, 支持 auto-layout 参数
      (`layoutMode`/`itemSpacing`/`padding*`/`primaryAxis*`/`counterAxis*`)。
@@ -74,7 +74,7 @@
     - `figma_style_apply_by_name` 只支持**本地样式**按名查找；团队库样式无法
       按名检索，不在支持范围。
     - 字段级超集（`textTruncation`=`DISABLED|ENDING`、`maxLines`、`fillStyleId` 等）
-      走普通 `jsd_update_node`/`jsd_execute`，jsDesign 上被 `'in'` 守卫静默忽略，
+      走普通 `jsd_update_node`/`jsd_create_nodes`，jsDesign 上被 `'in'` 守卫静默忽略，
       不报错但也不生效——LLM 应从 `jsd_ping` 的 `platform` 判断哪些字段可信。
 
 ## 二、服务端实现要点

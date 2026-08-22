@@ -141,6 +141,13 @@ export function detachInstanceNodes(
   if (instances.length === 0) {
     throw new Error('没有找到要解绑的实例节点');
   }
+  // 防御性检查:实例必须有 mainComponent 才能解绑
+  const invalidInstances = instances.filter((n) => !n.mainComponent);
+  if (invalidInstances.length > 0) {
+    throw new Error(
+      `以下实例的 mainComponent 已失效,无法解绑:${invalidInstances.map((n) => n.id).join(',')}。建议先运行 repair 清理失效节点`,
+    );
+  }
   const detached = instances.map((n) => n.detachInstance());
   host.viewport.scrollAndZoomIntoView(detached);
   return { created: detached.map((n) => serializeNode(n)) };

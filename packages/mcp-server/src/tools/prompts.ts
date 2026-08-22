@@ -59,7 +59,7 @@ export function registerPrompts(server: McpServer): ToolHandle[] {
           role: 'user' as const,
           content: {
             type: 'text' as const,
-            text: `请把下面的 HTML 转成设计稿。优先调用 jsd_html_to_design(SVG 保真路线,忽略复杂样式);若用户要求可编辑的结构化图层,则改用 jsd_execute 手工映射(容器→FRAME、文本→TEXT、图标/图形→VECTOR),再用 jsd_manage_nodes reparent 组织层级。\n\nHTML:\n\`\`\`\n${String(html)}\n\`\`\`${name == null ? '' : `\n节点名:${String(name)}`}`,
+            text: `请把下面的 HTML 转成设计稿。优先调用 jsd_html_to_design(SVG 保真路线,忽略复杂样式);若用户要求可编辑的结构化图层,则改用 jsd_create_nodes 手工映射(容器→FRAME、文本→TEXT、图标/图形→VECTOR),再用 jsd_manage_nodes reparent 组织层级。\n\nHTML:\n\`\`\`\n${String(html)}\n\`\`\`${name == null ? '' : `\n节点名:${String(name)}`}`,
           },
         },
       ],
@@ -88,7 +88,7 @@ export function registerPrompts(server: McpServer): ToolHandle[] {
           role: 'user' as const,
           content: {
             type: 'text' as const,
-            text: `请插入图标网格:1) 用 jsd_execute 创建一个 FRAME 容器;2) 对每个图标依次调用 jsd_create_icon(size=${Number(size) || 24});3) 用 jsd_manage_nodes op=reparent 把全部图标移入容器;4) 用 jsd_update_node 给容器设 auto-layout(layoutMode=HORIZONTAL,itemSpacing=${Number(gap) || 16},counterAxisAlignItems=CENTER)并 scrollAndZoomIntoView 居中。\n图标列表: ${String(icons)}`,
+            text: `请插入图标网格:1) 用 jsd_create_nodes 创建一个 FRAME 容器;2) 对每个图标依次调用 jsd_create_icon(size=${Number(size) || 24});3) 用 jsd_manage_nodes op=reparent 把全部图标移入容器;4) 用 jsd_update_node 给容器设 auto-layout(layoutMode=HORIZONTAL,itemSpacing=${Number(gap) || 16},counterAxisAlignItems=CENTER)并 scrollAndZoomIntoView 居中。\n图标列表: ${String(icons)}`,
           },
         },
       ],
@@ -112,7 +112,7 @@ function cardRecipe(
       ? `1 个 TEXT 主标题「${title}」`
       : `1 个 TEXT 主标题「${title}」和 1 个 TEXT 副标题「${subtitle}」`;
   return `请用 text-to-design 工具在画布中心创建一张 ${width}x${height} 的卡片,严格按以下步骤:
-1) jsd_execute 平铺创建(不嵌套 children):1 个 FRAME 卡片底板(圆角 12、浅色填充)、${texts};
+1) jsd_create_nodes 平铺创建(不嵌套 children):1 个 FRAME 卡片底板(圆角 12、浅色填充)、${texts};
 2) jsd_manage_nodes op=reparent 把文本移入 Frame;
 3) jsd_update_node 给 Frame 设 auto-layout(layoutMode=VERTICAL,itemSpacing=8,padding=24,counterAxisAlignItems=CENTER),主标题 fontSize 加大;
 4) jsd_get_selection 复核结果结构。`;
