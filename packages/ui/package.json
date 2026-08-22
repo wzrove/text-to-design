@@ -12,7 +12,7 @@
     "README.md"
   ],
   "scripts": {
-    "dev": "concurrently \"vite\" \"vite build --mode jsdesign --watch\"",
+    "dev": "concurrently \"vite\" \"vite build --mode jsdesign --watch\" \"vite build --mode figma --watch\"",
     "build": "node -e \"fs.rmSync('dist',{recursive:true,force:true})\" && vite build && vite build --mode jsdesign && vite build --mode figma",
     "watch": "concurrently \"vite build --watch\" \"vite build --mode jsdesign --watch\"",
     "typecheck": "tsc --noEmit && tsc -p src/code/figma/tsconfig.json"

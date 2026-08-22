@@ -43,7 +43,8 @@ text-to-design 能让 AI 助手(比如 opencode、Claude)直接在你的设计�
     ~/text-to-design-plugin)
 
 4. 上述三步完成后,告知用户剩下两步需手动:
-   - 在即时设计里「插件 → 导入」,选择 ~/text-to-design-plugin/dist/manifest.json,
+   - 在即时设计里「插件 → 导入」,选择 ~/text-to-design-plugin/dist/jsdesign/manifest.json
+     (Figma 则导入 dist/figma/manifest.json),
      运行插件,面板显示「已连接」即就绪
    - 重启 AI 会话,调用 jsd_ping 验证连通
 
@@ -52,7 +53,7 @@ text-to-design 能让 AI 助手(比如 opencode、Claude)直接在你的设计�
 
 **第二步:手动导入设计软件插件**
 
-打开即时设计客户端,点「插件」→「导入」,选择 `~/text-to-design-plugin/dist/manifest.json`,然后回到画布运行这个插件。面板上显示「已连接」,就说明准备好了。
+打开即时设计客户端,点「插件」→「导入」,选择 `~/text-to-design-plugin/dist/jsdesign/manifest.json`,然后回到画布运行这个插件。面板上显示「已连接」,就说明准备好了。(Figma 用户:菜单「Plugins → Development → Import plugin from manifest」导入 `dist/figma/manifest.json`。)
 
 **第三步:重启 AI 工具**
 
@@ -118,8 +119,8 @@ TEXT_TO_DESIGN_MCP_LOG_LEVEL=debug    # 更细:WS 帧级收发
 
 ```bash
 pnpm install
-pnpm dev        # watch 构建 ui/code
-pnpm build      # 构建插件包(packages/ui/dist/)
+pnpm dev        # watch 构建 ui + jsdesign 插件脚本
+pnpm build      # 构建插件包(packages/ui/dist/{jsdesign,figma}/)
 pnpm typecheck  # 全量类型检查
 pnpm mcp        # 开发期启动后台服务(tsx)
 ```

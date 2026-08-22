@@ -65,11 +65,14 @@
      名为准（如家是 `house` 非 `home`）。
 
 10. **平台特有操作走 `jsd_platform_op`（能力探测先行）**
-    - 平台特有能力（当前仅 Figma：变量/团队库样式/组件属性）走通用通道
+    - 平台特有能力（当前仅 Figma：变量/本地样式/组件属性）走通用通道
       `jsd_platform_op {op, params}`，先 `jsd_ping` 看 `platform` + `capabilities`
       确认当前平台支持，再挑 op（`figma_variables_create` / `figma_variables_apply`
-      / `figma_style_apply_by_name` / `figma_component_properties_set`）。
+      / `figma_style_apply_by_name` / `figma_component_properties_set`），参数
+      结构见各 op 描述；传错形状会在插件侧回「参数校验失败(op): 字段: 原因」。
     - 平台不支持会回「平台不支持操作: xxx」；jsDesign 上这些 op 恒不可用。
+    - `figma_style_apply_by_name` 只支持**本地样式**按名查找；团队库样式无法
+      按名检索，不在支持范围。
     - 字段级超集（`textTruncation`=`DISABLED|ENDING`、`maxLines`、`fillStyleId` 等）
       走普通 `jsd_update_node`/`jsd_execute`，jsDesign 上被 `'in'` 守卫静默忽略，
       不报错但也不生效——LLM 应从 `jsd_ping` 的 `platform` 判断哪些字段可信。
