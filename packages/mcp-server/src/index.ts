@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { Bridge } from './bridge';
 import { runDaemon, runShim } from './daemon';
+import { error } from './logger';
 import { syncToolAvailability } from './server';
 
 const bridge = new Bridge();
@@ -15,16 +16,12 @@ const IS_DAEMON =
 if (IS_DAEMON) {
   runDaemon(bridge).catch((e) => {
     bridge.stop();
-    process.stderr.write(
-      `[text-to-design-mcp] daemon 启动失败: ${e instanceof Error ? e.message : String(e)}\n`,
-    );
+    error(`daemon 启动失败: ${e instanceof Error ? e.message : String(e)}`);
     process.exit(1);
   });
 } else {
   runShim().catch((e) => {
-    process.stderr.write(
-      `[text-to-design-mcp] shim 启动失败: ${e instanceof Error ? e.message : String(e)}\n`,
-    );
+    error(`shim 启动失败: ${e instanceof Error ? e.message : String(e)}`);
     process.exit(1);
   });
 }

@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import { error } from '../logger';
 
 /** detached 拉起 daemon(独立常驻,不受本会话生命周期影响) */
 export function spawnDaemon(): void {
@@ -13,8 +14,6 @@ export function spawnDaemon(): void {
   );
   child.unref();
   child.on('error', (e) => {
-    process.stderr.write(
-      `[text-to-design-mcp] 拉起 daemon 失败: ${e.message}\n`,
-    );
+    error(`拉起 daemon 失败: ${e.message}`);
   });
 }

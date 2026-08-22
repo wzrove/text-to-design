@@ -2,7 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/server';
 import type { PluginMethod } from 'text-to-design-shared';
 import type { z } from 'zod';
 import type { Bridge } from '../bridge';
-import { log } from '../logger';
+import { error } from '../logger';
 import type { RequestOptions } from '../pending';
 import { err, structured } from './response';
 
@@ -119,7 +119,7 @@ export function bridgeTool(
           // 不经过本回调,无法在此记录 —— 该类错误只体现在返回给客户端的
           // isError 文本中
           const msg = e instanceof Error ? e.message : String(e);
-          log(`工具 ${def.name} 执行失败: ${msg.slice(0, 200)}`);
+          error(`工具 ${def.name} 执行失败: ${msg.slice(0, 200)}`);
           return err(e, def.outputSchema);
         }
       },

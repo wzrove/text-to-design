@@ -3,6 +3,7 @@ import {
   StreamableHTTPClientTransport,
 } from '@modelcontextprotocol/client';
 import { DAEMON_POLL_MS, HTTP_PORT, SERVER_VERSION } from '../config';
+import { log } from '../logger';
 
 /** GET daemon /health;无 /health 端点(旧版/外来服务/未启动)或失败 → null */
 export async function fetchDaemonHealth(): Promise<{
@@ -31,8 +32,8 @@ export async function probeUpstream(): Promise<
 > {
   const health = await fetchDaemonHealth();
   if (health && health.version !== SERVER_VERSION) {
-    process.stderr.write(
-      `[text-to-design-mcp] 检测到旧版 daemon (${health.version} → ${SERVER_VERSION}),正在替换...\n`,
+    log(
+      `检测到旧版 daemon (${health.version} → ${SERVER_VERSION}),正在替换...`,
     );
     await fetch(`http://127.0.0.1:${HTTP_PORT}/shutdown`, {
       method: 'POST',

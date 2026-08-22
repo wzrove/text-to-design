@@ -14,7 +14,7 @@ import {
   SERVER_NAME,
   SERVER_VERSION,
 } from '../config';
-import { debug, log } from '../logger';
+import { debug, error, log } from '../logger';
 import { buildServer } from '../server';
 import { delay, probeUpstream } from './probe';
 import { serveProxy } from './proxy';
@@ -25,9 +25,7 @@ export { spawnDaemon };
 /** daemon 模式:WS 桥(插件) + HTTP MCP(各会话 shim 连接),无 stdio,常驻 */
 export async function runDaemon(bridge: Bridge): Promise<void> {
   await bridge.start(PORT);
-  process.stderr.write(
-    `[text-to-design-mcp] daemon: 插件 WS ws://localhost:${bridge.port}\n`,
-  );
+  log(`daemon: 插件 WS ws://localhost:${bridge.port}`);
 
   const handler = createMcpHandler(() => buildServer(bridge));
   const nodeHandler = toNodeHandler(handler);
@@ -36,7 +34,7 @@ export async function runDaemon(bridge: Bridge): Promise<void> {
   let httpServer: ReturnType<typeof createServer> | null = null;
 
   const shutdown = (reason: string): void => {
-    process.stderr.write(`[text-to-design-mcp] daemon 退出: ${reason}\n`);
+    log(`daemon 退出: ${reason}`);
     void handler.close();
     bridge.stop();
     httpServer?.close();
@@ -78,12 +76,8 @@ export async function runDaemon(bridge: Bridge): Promise<void> {
     httpServer.listen(HTTP_PORT, '127.0.0.1', () => resolve());
   });
 
-  process.stderr.write(
-    `[text-to-design-mcp] daemon: MCP HTTP http://127.0.0.1:${HTTP_PORT}/mcp (opencode 会话经 shim 连接)\n`,
-  );
-  process.stderr.write(
-    `[text-to-design-mcp] daemon 就绪,常驻运行(更新时由版本自检自动替换)\n`,
-  );
+  log(`daemon: MCP HTTP http://127.0.0.1:${HTTP_PORT}/mcp`);
+  log('daemon 就绪,常驻运行(更新时由版本自检自动替换)');
 
   process.on('SIGINT', () => shutdown('SIGINT'));
 }
@@ -92,16 +86,14 @@ export async function runDaemon(bridge: Bridge): Promise<void> {
 export async function runShim(): Promise<void> {
   const probe = await probeUpstream();
   if (probe.state === 'foreign') {
-    process.stderr.write(
-      `[text-to-design-mcp] 错误: 端口 ${HTTP_PORT} 被非 text-to-design MCP 服务占用,请先释放。\n`,
-    );
+    error(`端口 ${HTTP_PORT} 被非 text-to-design MCP 服务占用,请先释放`);
     process.exit(1);
   } else if (probe.state === 'proxy') {
     await serveProxy(probe.client);
     return;
   }
 
-  process.stderr.write('[text-to-design-mcp] 未发现 daemon,自动拉起...\n');
+  log('未发现 daemon,自动拉起...');
   spawnDaemon();
   const deadline = Date.now() + DAEMON_WAIT_MS;
   while (Date.now() < deadline) {
@@ -112,14 +104,10 @@ export async function runShim(): Promise<void> {
       return;
     }
     if (retry.state === 'foreign') {
-      process.stderr.write(
-        `[text-to-design-mcp] 错误: 端口 ${HTTP_PORT} 被非 text-to-design MCP 服务占用,请先释放。\n`,
-      );
+      error(`端口 ${HTTP_PORT} 被非 text-to-design MCP 服务占用,请先释放`);
       process.exit(1);
     }
   }
-  process.stderr.write(
-    `[text-to-design-mcp] 错误: daemon 启动超时(${DAEMON_WAIT_MS / 1000}s),请检查残留进程后重试。\n`,
-  );
+  error(`daemon 启动超时(${DAEMON_WAIT_MS / 1000}s),请检查残留进程后重试`);
   process.exit(1);
 }

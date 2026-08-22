@@ -3,7 +3,7 @@ import type {
   PluginRequest,
   PluginResponse,
 } from 'text-to-design-shared';
-import { log } from './logger';
+import { log, warn } from './logger';
 
 export type { PluginMethod };
 
@@ -89,7 +89,7 @@ export class PendingManager {
       entry.timer = setTimeout(() => {
         this.pending.delete(id);
         this.detachAbort(entry);
-        log(`请求超时: ${id} ${method} 耗时=${Date.now() - startedAt}ms`);
+        warn(`请求超时: ${id} ${method} 耗时=${Date.now() - startedAt}ms`);
         reject(new Error(`请求超时: ${method}`));
       }, timeout);
       if (signal) {
@@ -136,7 +136,7 @@ export class PendingManager {
     try {
       msg = JSON.parse(raw.toString()) as PluginResponse | PluginRequest;
     } catch {
-      log(`WS 文本解析失败: ${raw.toString().slice(0, 100)}`);
+      warn(`WS 文本解析失败: ${raw.toString().slice(0, 100)}`);
       return;
     }
     if (msg.type === 'request') {
@@ -161,7 +161,7 @@ export class PendingManager {
     }
     const pending = this.pending.get(msg.id);
     if (!pending) {
-      log(`未匹配响应: id=${msg.id}(可能已超时或来源不明)`);
+      warn(`未匹配响应: id=${msg.id}(可能已超时或来源不明)`);
       return;
     }
     if (msg.hasBinary && (msg.binaryCount ?? 1) > 0) {

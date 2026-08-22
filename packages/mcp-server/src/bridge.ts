@@ -1,5 +1,5 @@
 import { CLIENT } from './config';
-import { log } from './logger';
+import { warn } from './logger';
 import type { PluginMethod, RequestOptions } from './pending';
 import { PendingManager } from './pending';
 import { Transport } from './transport';
@@ -51,7 +51,7 @@ export class Bridge {
     opts: RequestOptions = {},
   ): Promise<unknown> {
     if (!this.transport.isConnected) {
-      log(`请求被拒(插件未连接): ${method}`);
+      warn(`请求被拒(插件未连接): ${method}`);
       return Promise.reject(
         new Error(
           `${CLIENT.runtime} 插件未连接。请先在${CLIENT.label}客户端中运行该插件。`,

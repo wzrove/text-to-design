@@ -7,7 +7,8 @@ import {
 } from '@modelcontextprotocol/server';
 import { serveStdio } from '@modelcontextprotocol/server/stdio';
 import { z } from 'zod';
-import { HTTP_PORT, SERVER_NAME, SERVER_VERSION } from '../config';
+import { SERVER_NAME, SERVER_VERSION } from '../config';
+import { log, warn } from '../logger';
 import { delay, probeUpstream } from './probe';
 import { spawnDaemon } from './spawn';
 
@@ -79,9 +80,7 @@ export async function serveProxy(initialClient: Client): Promise<void> {
       return await fn(upstream);
     } catch (e) {
       if (shuttingDown || !isTransportError(e)) throw e;
-      process.stderr.write(
-        '[text-to-design-mcp] shim: 上游请求失败,触发重连后重放\n',
-      );
+      warn('shim: 上游请求失败,触发重连后重放');
       await ensureReconnect();
       return fn(upstream);
     }
@@ -244,9 +243,7 @@ export async function serveProxy(initialClient: Client): Promise<void> {
     ]);
     for (const r of results) {
       if (r.status === 'rejected')
-        process.stderr.write(
-          `[text-to-design-mcp] shim: 同步清单失败: ${String(r.reason).slice(0, 120)}\n`,
-        );
+        warn(`同步清单失败: ${String(r.reason).slice(0, 120)}`);
     }
   };
 
@@ -264,7 +261,7 @@ export async function serveProxy(initialClient: Client): Promise<void> {
             upstream = p.client;
             wireUpstream(upstream);
             enterFastPoll(); // 重连后回到快速档,尽快收敛清单
-            process.stderr.write('[text-to-design-mcp] shim: 上游已恢复\n');
+            log('shim: 上游已恢复');
             await resyncAll(); // 补齐断连期间错过的变更
             return;
           }
@@ -286,7 +283,7 @@ export async function serveProxy(initialClient: Client): Promise<void> {
     client.onclose = () => {
       if (shuttingDown) return;
       // 常驻流断开时兜底触发;stateless 模式通常走请求失败路径
-      process.stderr.write('[text-to-design-mcp] shim: 上游断开,自动重连\n');
+      warn('shim: 上游断开,自动重连');
       ensureReconnect().catch(() => {});
     };
     client.setNotificationHandler(
@@ -339,9 +336,7 @@ export async function serveProxy(initialClient: Client): Promise<void> {
     fastUntil = Date.now() + POLL_FAST_WINDOW_MS;
   };
   schedulePoll();
-  process.stderr.write(
-    `[text-to-design-mcp] shim 模式: stdio → http://127.0.0.1:${HTTP_PORT}/mcp (动态同步,共享 daemon)\n`,
-  );
+  log('shim 模式: stdio → 动态同步,共享 daemon');
   process.on('SIGINT', async () => {
     shuttingDown = true;
     if (pollTimer) clearTimeout(pollTimer);

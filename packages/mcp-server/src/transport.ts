@@ -2,7 +2,7 @@ import type { Server as HttpServer } from 'node:http';
 import { createServer } from 'node:http';
 import { WebSocket, WebSocketServer } from 'ws';
 import { version } from '../package.json' with { type: 'json' };
-import { debug, log } from './logger';
+import { debug, log, warn } from './logger';
 
 /** WSS/HTTP 生命周期(固定端口,被占即失败),消息透传上层 */
 export class Transport {
@@ -37,8 +37,6 @@ export class Transport {
     }, 30_000);
     this.wss.on('connection', (ws) => {
       this.client = ws;
-      const line = '[text-to-design-mcp] 插件已连接\n';
-      process.stderr.write(line);
       log('插件已连接');
       try {
         this.onConnect?.();
@@ -64,8 +62,6 @@ export class Transport {
       });
       ws.on('close', () => {
         if (this.client === ws) this.client = null;
-        const line = '[text-to-design-mcp] 插件断开\n';
-        process.stderr.write(line);
         log('插件断开');
         this.onDisconnect?.(new Error('plugin disconnected'));
       });
@@ -100,7 +96,7 @@ export class Transport {
       this.client.send(data);
       debug(`发送 WS 消息 len=${data.length} bin=${typeof data !== 'string'}`);
     } else {
-      log(`发送失败: 无客户端连接(${data.length} 字节被丢弃)`);
+      warn(`发送失败: 无客户端连接(${data.length} 字节被丢弃)`);
     }
   }
 
