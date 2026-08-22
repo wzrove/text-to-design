@@ -3,6 +3,15 @@ import type * as s from './schemas';
 
 export const WS_PORT = 47812;
 
+/** 日志级别(daemon logger 与插件面板日志面板共用) */
+export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
+export const LOG_LEVEL_ORDER: Record<LogLevel, number> = {
+  debug: 0,
+  info: 1,
+  warn: 2,
+  error: 3,
+};
+
 /* 平台无关核心逻辑(DesignHost 接口 + 序列化/建节点/组件/更新,无平台 typings 依赖) */
 export * from './core';
 /* 重新导出 zod schemas(唯一真源,供 MCP 运行时校验复用) */

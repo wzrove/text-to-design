@@ -1,13 +1,17 @@
-import type { PluginPlatform, PluginRequest } from 'text-to-design-shared';
+// 日志级别唯一真源在 shared,这里再导出维持既有导入路径
+import type {
+  LogLevel,
+  PluginPlatform,
+  PluginRequest,
+} from 'text-to-design-shared';
+
+export type { LogLevel };
 
 export type BridgeStatus =
   | 'disconnected'
   | 'connecting'
   | 'connected'
   | 'error';
-
-/** 面板日志级别(与服务端 logger 语义对齐) */
-export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
 export type BridgeEvent =
   | { type: 'status'; status: BridgeStatus }

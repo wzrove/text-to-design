@@ -1,16 +1,12 @@
 import { appendFileSync } from 'node:fs';
+import { LOG_LEVEL_ORDER, type LogLevel } from 'text-to-design-shared';
 
 const FILE =
   process.env.TEXT_TO_DESIGN_MCP_LOG ?? '/tmp/text-to-design-mcp.log';
 
-type Level = 'debug' | 'info' | 'warn' | 'error';
+type Level = LogLevel;
 
-const LEVEL_ORDER: Record<Level, number> = {
-  debug: 0,
-  info: 1,
-  warn: 2,
-  error: 3,
-};
+const LEVEL_ORDER = LOG_LEVEL_ORDER;
 
 const LEVEL =
   (process.env.TEXT_TO_DESIGN_MCP_LOG_LEVEL as Level | undefined) ?? 'info';
