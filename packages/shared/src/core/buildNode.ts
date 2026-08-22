@@ -172,7 +172,18 @@ async function buildNode(
     return node;
   }
   if (node.type === 'VECTOR' && spec.vectorPaths != null) {
-    node.vectorPaths = spec.vectorPaths;
+    // 防御:类型上 windingRule 必填,但运行时 JSON 可能缺省(如经 shim
+    // 原样转发的历史调用);jsDesign 引擎对 undefined 会直接抛错,
+    // 这里兜底补默认值,兑现 schema 承诺的「默认 NONZERO」
+    const loose = spec.vectorPaths as Array<{
+      data: string;
+      windingRule?: string;
+    }>;
+    node.vectorPaths = loose.map((p) => ({
+      data: p.data,
+      windingRule:
+        p.windingRule ?? ('NONZERO' as 'NONZERO' | 'EVENODD' | 'NONE'),
+    })) as typeof spec.vectorPaths;
   }
   for (const child of spec.children ?? []) {
     await buildNode(host, child, node);
