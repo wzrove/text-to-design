@@ -22,6 +22,9 @@ export function registerCreateTools(
     title: '创建设计节点',
     description: `在画布创建节点(可递归嵌套子节点)。
 
+⚠️ 必填参数 ops 为设计指令数组,最小示例:
+{"ops":[{"type":"RECTANGLE","name":"矩形","width":100,"height":100}]}
+
 节点类型 type:
 - FRAME=容器(可 auto-layout)
 - RECTANGLE=矩形
@@ -29,7 +32,7 @@ export function registerCreateTools(
 - LINE=线段
 - POLYGON=多边形(配合 pointCount)
 - STAR=星形(配合 pointCount + innerRadius)
-- VECTOR=矢量(配合 vectorPaths 传 SVG path data)
+- VECTOR=矢量(配合 vectorPaths 传 SVG path data,windingRule 缺省为 NONZERO)
 - TEXT=文本(配合 characters/fontSize/fontName 等)
 - GROUP=分组(内部用 Frame 实现)
 - BOOLEAN_OPERATION=布尔运算(配合 booleanOperation:UNION|SUBTRACT|INTERSECT|EXCLUDE)

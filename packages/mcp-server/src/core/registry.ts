@@ -2,6 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/server';
 import type { PluginMethod } from 'text-to-design-shared';
 import type { z } from 'zod';
 import type { Bridge } from '../bridge';
+import { log } from '../logger';
 import type { RequestOptions } from '../pending';
 import { err, structured } from './response';
 
@@ -113,6 +114,12 @@ export function bridgeTool(
           }
           return structured(data, def.outputSchema);
         } catch (e) {
+          // 可观测性:插件执行期错误(如引擎校验失败)落日志,便于排查。
+          // 注意:入参 schema 校验失败发生在 SDK 内部(validateToolInput),
+          // 不经过本回调,无法在此记录 —— 该类错误只体现在返回给客户端的
+          // isError 文本中
+          const msg = e instanceof Error ? e.message : String(e);
+          log(`工具 ${def.name} 执行失败: ${msg.slice(0, 200)}`);
           return err(e, def.outputSchema);
         }
       },
