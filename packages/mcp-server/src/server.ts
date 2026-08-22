@@ -4,8 +4,8 @@ import {
 } from '@modelcontextprotocol/server';
 import type { Bridge } from './bridge';
 import { SERVER_NAME, SERVER_VERSION } from './config';
-import { log } from './logger';
 import type { ToolHandle } from './core/registry';
+import { log } from './logger';
 import { toolRegistrars } from './tools';
 
 /** initialize 时下发给客户端模型的使用纪律(与 AGENTS.md 保持同源) */
@@ -43,7 +43,9 @@ export function syncToolAvailability(connected: boolean): void {
       // 会话已死,等 onclose 自行清理
     }
   }
-  log(`工具可用性同步: ${connected ? '上线' : '离线'}(会话数 ${liveSessions.size})`);
+  log(
+    `工具可用性同步: ${connected ? '上线' : '离线'}(会话数 ${liveSessions.size})`,
+  );
 }
 
 /** 装配 McpServer:注册全部工具(工具实现分散在 tools/*,此处只做编排) */

@@ -84,15 +84,26 @@ export function bridgeTool(
         outputSchema: def.outputSchema,
         ...(def.annotations ? { annotations: def.annotations } : {}),
       },
-      async (args, ctx) => {
+      // 注意:SDK 对「无 inputSchema」的工具会以 callback(ctx) 形态调用
+      // (ctx 作为唯一入参),有 inputSchema 时才是 callback(args, ctx)。
+      // 这里统一兼容两种形态,避免 ctx 误位。
+      async (...cbArgs: unknown[]) => {
         try {
+          const hasInput = def.inputSchema != null;
+          const first = cbArgs[0] as Record<string, unknown> | undefined;
+          const second = cbArgs[1] as ToolCtx | undefined;
+          const args: Record<string, unknown> = hasInput ? (first ?? {}) : {};
+          const ctx = (hasInput ? second : first) as ToolCtx | undefined;
+          const signal =
+            ctx?.mcpReq?.signal ??
+            (ctx as unknown as { signal?: AbortSignal } | undefined)?.signal;
           const opts: RequestOptions = {
-            signal: ctx.mcpReq.signal,
+            ...(signal != null ? { signal } : {}),
             ...(def.timeout != null ? { timeout: def.timeout } : {}),
           };
           let data: unknown;
           if (def.run) {
-            data = await def.run(args, bridge, ctx.mcpReq.signal);
+            data = await def.run(args, bridge, signal as AbortSignal);
           } else {
             data = await bridge.request(
               def.method as PluginMethod,
