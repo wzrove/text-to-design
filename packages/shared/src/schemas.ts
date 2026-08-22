@@ -779,10 +779,10 @@ const baseNodeFields = {
   isMask: z.boolean().optional().describe('是否为蒙版'),
   children: z
     .array(z.any())
-    .max(10)
+    .max(100)
     .optional()
     .describe(
-      '子节点数组(GROUP/BOOLEAN_OPERATION 使用,递归嵌套,最多 10 个直接子节点)',
+      '子节点数组(GROUP/BOOLEAN_OPERATION 使用,递归嵌套,最多 100 个直接子节点;更大的结构建议分批创建后用 jsd_manage_nodes op=reparent 归组)',
     ),
 };
 
