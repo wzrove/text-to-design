@@ -1,3 +1,4 @@
+import type { LogLevel, ServerPush } from 'text-to-design-shared';
 import { CLIENT } from './config';
 import { warn } from './logger';
 import type { PluginMethod, RequestOptions } from './pending';
@@ -59,5 +60,16 @@ export class Bridge {
       );
     }
     return this.pending.request(method, params, opts);
+  }
+
+  /** 把一条 daemon 日志以推送帧发给插件 UI(未连接则静默丢弃,与心跳同策略) */
+  notifyLog(level: LogLevel, line: string): void {
+    if (!this.transport.isConnected) return;
+    const push: ServerPush = { type: 'log', level, line };
+    try {
+      this.transport.send(JSON.stringify(push));
+    } catch {
+      // 推送失败不影响主流程
+    }
   }
 }

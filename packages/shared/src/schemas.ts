@@ -1319,47 +1319,87 @@ export const manageNodesSchema = z.discriminatedUnion('op', [
   }),
 ]);
 
-export const manageComponentsSchema = z.discriminatedUnion('op', [
-  z.object({
-    op: z.literal('create_component'),
-    ids: z.array(z.string()).describe('要固化为组件的节点 id 列表'),
-    name: z.string().optional().describe('组件名,默认 component'),
-  }),
-  z.object({
-    op: z.literal('create_instance'),
+/**
+ * 组件操作入参:扁平结构 + 运行时按 op 精查。
+ * 不用 discriminatedUnion 生成 oneOf——调用方漏传 op 时,JSON-Schema 校验会把
+ * 每个分支的缺失字段全列一遍(oneOf 复读机式报错);扁平化后缺 op 只有一行错,
+ * op 合法但缺字段时由 superRefine 给出中文定位。
+ */
+export const manageComponentsSchema = z
+  .object({
+    op: z
+      .enum([
+        'create_component',
+        'create_instance',
+        'detach_instance',
+        'import_component',
+        'swap_component',
+        'set_instance_properties',
+        'combine_as_variants',
+      ])
+      .describe('组件操作类型'),
     ids: z
       .array(z.string())
-      .describe('组件(COMPONENT)节点 id 列表,每个生成一个实例'),
-  }),
-  z.object({
-    op: z.literal('detach_instance'),
-    ids: z.array(z.string()).describe('实例(INSTANCE)节点 id 列表'),
-  }),
-  z.object({
-    op: z.literal('import_component'),
-    key: z.string().describe('团队库组件的唯一标识 Key(从设计稿/团队库获取)'),
-    name: z.string().optional().describe('导入后的组件名'),
-  }),
-  z.object({
-    op: z.literal('swap_component'),
-    ids: z.array(z.string()).describe('实例(INSTANCE)节点 id 列表'),
-    componentId: z.string().describe('目标组件(COMPONENT)节点 id'),
-  }),
-  z.object({
-    op: z.literal('set_instance_properties'),
-    ids: z.array(z.string()).describe('实例(INSTANCE)节点 id 列表'),
+      .optional()
+      .describe(
+        '节点 id 列表;除 import_component 外全部 op 必填(create_component 为要固化的节点,其余为实例/组件节点)',
+      ),
+    name: z
+      .string()
+      .optional()
+      .describe(
+        '名称;create_component/import_component/combine_as_variants 可选',
+      ),
+    key: z
+      .string()
+      .optional()
+      .describe('团队库组件唯一标识 Key(仅 import_component 必填)'),
+    componentId: z
+      .string()
+      .optional()
+      .describe('目标组件(COMPONENT)节点 id(仅 swap_component 必填)'),
     properties: z
       .record(z.string(), z.string())
+      .optional()
       .describe(
-        '变体属性名→值,如 {"状态":"禁用"}。可调属性列表需从 jsd_find/jsd_get_selection 返回的 variantGroupProperties 获取,属性名必须完全匹配',
+        '变体属性名→值,如 {"状态":"禁用"}(仅 set_instance_properties 必填);可调属性需从 jsd_find/jsd_get_selection 返回的 variantGroupProperties 获取,属性名必须完全匹配',
       ),
-  }),
-  z.object({
-    op: z.literal('combine_as_variants'),
-    ids: z.array(z.string()).describe('组件(COMPONENT)节点 id 列表(至少 2 个)'),
-    name: z.string().optional().describe('组件集名'),
-  }),
-]);
+  })
+  .superRefine((v, ctx) => {
+    const missing = (field: string): void => {
+      ctx.addIssue({
+        code: 'custom',
+        path: [field],
+        message: `op=${v.op} 缺少必填字段 ${field}`,
+      });
+    };
+    const hasIds =
+      Array.isArray(v.ids) &&
+      v.ids.length > 0 &&
+      v.ids.every((x) => typeof x === 'string');
+    switch (v.op) {
+      case 'create_component':
+      case 'create_instance':
+      case 'detach_instance':
+      case 'swap_component':
+      case 'set_instance_properties':
+      case 'combine_as_variants':
+        if (!hasIds) missing('ids');
+        break;
+      case 'import_component':
+        if (typeof v.key !== 'string' || v.key.length === 0) missing('key');
+        break;
+    }
+    if (v.op === 'swap_component' && typeof v.componentId !== 'string') {
+      missing('componentId');
+    }
+    if (
+      v.op === 'set_instance_properties' &&
+      (v.properties == null || typeof v.properties !== 'object')
+    ) {
+      missing('properties');
+    }
+  });
 
 export const exportSchema = z.object({
   ids: z.array(z.string()).describe('要导出的节点 id 列表'),

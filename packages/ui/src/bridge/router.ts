@@ -2,6 +2,7 @@ import type {
   PluginPlatform,
   PluginRequest,
   PluginResponse,
+  ServerPush,
 } from 'text-to-design-shared';
 import { extractBytes, stripBytes } from './binary';
 import type { Conn, LogLevel, Pending } from './types';
@@ -50,10 +51,7 @@ export class Router {
   }
 
   onWsText(conn: Conn, text: string): void {
-    let msg:
-      | PluginRequest
-      | PluginResponse
-      | { type: 'status'; state: string; version?: string };
+    let msg: PluginRequest | PluginResponse | ServerPush;
     try {
       msg = JSON.parse(text);
     } catch {
@@ -61,6 +59,11 @@ export class Router {
     }
     if (msg.type === 'status') {
       this.onServerStatus?.(msg);
+      return;
+    }
+    if (msg.type === 'log') {
+      // daemon 侧日志实时推送:直接进面板(级别过滤/去重由 LogPanel 承接)
+      this.log(msg.level, msg.line);
       return;
     }
     if (

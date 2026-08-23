@@ -24,18 +24,15 @@ export default function ConnectionHint() {
     window.setTimeout(() => setCopied(false), 1500);
   };
 
-  const _status = createMemo(() => {
-    const s = status();
-    return s !== 'connected';
-  });
+  const disconnected = createMemo(() => status() !== 'connected');
 
   // memo 派生:display 变化返回对应提示条;元素内表达式惰性求值,
   // copied 反馈走细粒度更新,不会重建整个提示条
   const hint = createMemo(() => {
-    switch (_status()) {
+    switch (disconnected()) {
       case true:
         return (
-          <div class="hint-enter rounded-lg border border-warning/40 bg-warning/10 p-2.5 text-xs">
+          <div class="hint-enter rounded-lg border border-[var(--component-hint-warn-border)] bg-[var(--component-hint-warn-bg)] p-2.5 text-xs">
             <div class="font-bold text-warning-content">尚未连接 AI 服务</div>
             <p class="mt-1 text-warning-content/80">
               打开你的 AI 助手,点下方「复制给 AI
@@ -63,7 +60,7 @@ export default function ConnectionHint() {
         );
       default:
         return (
-          <div class="hint-enter rounded-lg border border-success/40 bg-success/10 px-2.5 py-1.5 text-xs text-success-content/90">
+          <div class="hint-enter rounded-lg border border-[var(--component-hint-ok-border)] bg-[var(--component-hint-ok-bg)] px-2.5 py-1.5 text-xs text-success-content/90">
             已连接。选中画布节点后点「复制」,把内容发给 AI
             助手——例如:「按这个节点样式帮我再做一张卡片」
           </div>
@@ -71,5 +68,10 @@ export default function ConnectionHint() {
     }
   });
 
-  return <>{hint()}</>;
+  // 连接状态是关键上下文:切换时经 polite live region 播报,不打断当前朗读
+  return (
+    <div role="status" aria-live="polite">
+      {hint()}
+    </div>
+  );
 }

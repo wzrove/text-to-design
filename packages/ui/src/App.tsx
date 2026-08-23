@@ -17,7 +17,10 @@ function Shell() {
         </h1>
         <EnvironmentBadge platform={platform()} />
         <StatusBadge />
-        <span class="badge badge-sm badge-info shrink-0 font-mono">
+        <span
+          class="badge badge-sm badge-ghost shrink-0 font-mono text-base-content/60"
+          title="MCP 桥接端口(可用环境变量 TEXT_TO_DESIGN_MCP_PORT 修改)"
+        >
           :{port()}
         </span>
       </header>

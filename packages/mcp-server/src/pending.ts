@@ -3,7 +3,7 @@ import type {
   PluginRequest,
   PluginResponse,
 } from 'text-to-design-shared';
-import { log, warn } from './logger';
+import { error, log, warn } from './logger';
 
 export type { PluginMethod };
 
@@ -175,9 +175,10 @@ export class PendingManager {
     this.pending.delete(msg.id);
     clearTimeout(pending.timer);
     this.detachAbort(pending);
-    log(
-      `响应: ${pending.id} ${pending.method} ok=${msg.ok} 耗时=${Date.now() - pending.startedAt}ms${msg.ok ? '' : ` error=${msg.error ?? ''}`}`,
-    );
+    const doneLine = `响应: ${pending.id} ${pending.method} ok=${msg.ok} 耗时=${Date.now() - pending.startedAt}ms${msg.ok ? '' : ` error=${msg.error ?? ''}`}`;
+    // 失败响应升为 error 级:文件日志与 UI 推送面板同步显红
+    if (msg.ok) log(doneLine);
+    else error(doneLine);
     if (msg.ok) pending.resolve(msg.data);
     else pending.reject(new Error(msg.error ?? 'plugin error'));
   }

@@ -144,6 +144,10 @@ export type PluginResponse<D = unknown> = {
   binaryCount?: number;
 };
 
+/** 服务器主动下发的推送帧(daemon → 插件 UI,单向通知,无需回包) */
+export type ServerPush =
+  | { type: 'log'; level: LogLevel; line: string }
+  | { type: 'status'; state: string; version?: string };
 export function makeResponse<D>(
   id: string,
   ok: boolean,

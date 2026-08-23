@@ -25,6 +25,7 @@ export interface BridgeStore {
   disconnect: () => void;
   rescan: () => void;
   ping: () => void;
+  clearLog: () => void;
 }
 
 const BridgeContext = createContext<BridgeStore>();
@@ -79,6 +80,7 @@ export function BridgeProvider(props: ParentProps) {
     connect: () => getBridge().connect(),
     disconnect: () => getBridge().disconnect(),
     rescan: () => getBridge().rescan(),
+    clearLog: () => setLog([]),
     ping: async () => {
       getBridge().connect();
       try {

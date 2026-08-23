@@ -1,11 +1,13 @@
+@import "./styles/tokens.css";
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* 细滚动条(浅色主题,与 base-300 一致) */
+/* 细滚动条:引用组件层 token(design-tokens.json → tokens.css) */
 * {
   scrollbar-width: thin;
-  scrollbar-color: #e9eee2 transparent;
+  scrollbar-color: var(--component-scrollbar-thumb) transparent;
 }
 
 ::-webkit-scrollbar {
@@ -14,12 +16,12 @@
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #e9eee2;
+  background: var(--component-scrollbar-thumb);
   border-radius: 2px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #d6ddd0;
+  background: var(--component-scrollbar-thumb-hover);
 }
 
 ::-webkit-scrollbar-track {
@@ -37,5 +39,17 @@
   }
   to {
     opacity: 1;
+  }
+}
+
+/* 动效可达性:系统开启「减少动态效果」时压缩所有过渡/动画 */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

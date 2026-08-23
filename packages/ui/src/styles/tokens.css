@@ -1,0 +1,72 @@
+/* Design Tokens - Auto-generated */
+/* Do not edit directly - modify tokens.json instead */
+
+/* === PRIMITIVES === */
+:root {
+  --primitive-color-brand-green: #8ad654;
+  --primitive-color-brand-coral: #f76868;
+  --primitive-color-status-light-blue: #2563eb;
+  --primitive-color-status-light-green: #15803d;
+  --primitive-color-status-light-amber: #b45309;
+  --primitive-color-status-light-red: #dc2626;
+  --primitive-color-status-dark-blue: #5aa9f7;
+  --primitive-color-status-dark-green: #34c467;
+  --primitive-color-status-dark-amber: #f59e0b;
+  --primitive-color-status-dark-red: #ef4444;
+  --primitive-color-dot-scale-sky: #0ea5e9;
+  --primitive-color-dot-scale-indigo: #6366f1;
+  --primitive-color-dot-scale-teal: #14b8a6;
+  --primitive-color-dot-scale-orange: #f97316;
+  --primitive-color-dot-scale-orange-light: #fb923c;
+  --primitive-color-dot-scale-yellow: #eab308;
+  --primitive-color-dot-scale-purple: #a855f7;
+  --primitive-color-dot-scale-green-bright: #22c55e;
+  --primitive-color-dot-scale-pink: #ec4899;
+  --primitive-color-dot-scale-pink-light: #f472b6;
+  --primitive-color-dot-scale-pink-pale: #f9a8d4;
+  --primitive-color-dot-scale-slate: #94a3b8;
+  --primitive-color-dot-scale-slate-light: #cbd5e1;
+  --primitive-color-neutral-alpha-thumb: rgba(128, 128, 128, 0.35);
+  --primitive-color-neutral-alpha-thumb-hover: rgba(128, 128, 128, 0.55);
+}
+
+/* === SEMANTIC === */
+:root {
+  --color-primary: #8ad654;
+  --color-accent: #f76868;
+  --color-info: #2563eb;
+  --color-success: #15803d;
+  --color-warning: #b45309;
+  --color-error: #dc2626;
+}
+
+/* === COMPONENTS === */
+:root {
+  --status-chip-connected-bg: rgba(21, 128, 61, 0.1);
+  --status-chip-connected-border: rgba(21, 128, 61, 0.25);
+  --status-chip-connecting-bg: rgba(37, 99, 235, 0.1);
+  --status-chip-connecting-border: rgba(37, 99, 235, 0.25);
+  --status-chip-waiting-bg: rgba(180, 83, 9, 0.1);
+  --status-chip-waiting-border: rgba(180, 83, 9, 0.25);
+  --hint-warn-bg: rgba(180, 83, 9, 0.08);
+  --hint-warn-border: rgba(180, 83, 9, 0.35);
+  --hint-ok-bg: rgba(21, 128, 61, 0.08);
+  --hint-ok-border: rgba(21, 128, 61, 0.35);
+  --type-dot-frame: #0ea5e9;
+  --type-dot-group: #94a3b8;
+  --type-dot-rectangle: #6366f1;
+  --type-dot-ellipse: #14b8a6;
+  --type-dot-line: #cbd5e1;
+  --type-dot-polygon: #f97316;
+  --type-dot-star: #eab308;
+  --type-dot-vector: #a855f7;
+  --type-dot-text: #22c55e;
+  --type-dot-component: #ec4899;
+  --type-dot-component-set: #f472b6;
+  --type-dot-instance: #f9a8d4;
+  --type-dot-boolean-operation: #fb923c;
+  --type-dot-slice: #cbd5e1;
+  --log-error-tint: rgba(239, 68, 68, 0.06);
+  --scrollbar-thumb: rgba(128, 128, 128, 0.35);
+  --scrollbar-thumb-hover: rgba(128, 128, 128, 0.55);
+}
