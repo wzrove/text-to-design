@@ -15,7 +15,7 @@ export function registerSessionTools(
   const ping = bridgeTool({
     name: 'jsd_ping',
     title: `检查 ${CLIENT.runtime} 插件连接`,
-    description: `检查 ${CLIENT.runtime} 插件是否在线(需先启动插件并保持运行)`,
+    description: `检查插件是否在线(需先启动 ${CLIENT.runtime} 插件并保持运行)`,
     outputSchema: pingResultSchema,
     annotations: { readOnlyHint: true },
     alwaysEnabled: true,
@@ -48,9 +48,7 @@ export function registerSessionTools(
   const getSelection = bridgeTool({
     name: 'jsd_get_selection',
     title: '读取画布选中',
-    description: `获取画布当前选中的节点信息(名称/类型/尺寸/位置/填充/文本/子树结构)。
-
-可选 depth 参数控制序列化深度:0=仅自身,1=含直接子节点,2=含孙节点,默认 2。`,
+    description: `获取画布当前选中节点的序列化树(名称/类型/尺寸/位置/填充/子结构);depth 控制层级深度,默认 2`,
     method: 'get_selection',
     outputSchema: getSelectionResultSchema,
     annotations: { readOnlyHint: true },

@@ -1237,87 +1237,118 @@ export const findSchema = z.object({
     .describe('序列化深度:0=仅自身,1=含直接子节点;缺省 1'),
 });
 
-export const manageNodesSchema = z.discriminatedUnion('op', [
-  z.object({
-    op: z.literal('select'),
-    ids: z.array(z.string()).describe('要选中的节点 id 列表'),
-  }),
-  z.object({
-    op: z.literal('remove'),
+/**
+ * 节点结构操作入参:扁平结构 + 运行时按 op 精查(与 manageComponentsSchema 同范式)。
+ * 不用 discriminatedUnion 生成 oneOf——根级 oneOf 有两个问题:
+ * 1) 调用方漏传 op 时,JSON-Schema 校验把每个分支的缺失字段全列一遍(oneOf 复读机式报错);
+ * 2) 部分客户端对「根级 oneOf 工具」的出参序列化存在缺陷,实参会在到达服务端前被丢弃
+ *    (实测 7/7 复现,扁平对象工具无此现象)。扁平化后两点同时规避。
+ */
+export const manageNodesSchema = z
+  .object({
+    op: z
+      .enum([
+        'select',
+        'remove',
+        'clone',
+        'group',
+        'ungroup',
+        'flatten',
+        'outline_stroke',
+        'reparent',
+        'repair',
+      ])
+      .describe(
+        '节点结构操作类型:select 设当前选中 | remove 删除(matchName 可再过滤) | clone 复制(右下偏移) | group 编组(可带 layoutMode/itemSpacing/padding* 参数) | ungroup 解组 | flatten 合并为矢量(至少 2 节点) | outline_stroke 描边转轮廓 | reparent 移到 parentId 下(缺省当前选中第一个) | repair 清理已损坏节点',
+      ),
     ids: z
       .array(z.string())
       .optional()
-      .describe('要删除的节点 id 列表,缺省用当前选中'),
+      .describe(
+        '节点 id 列表;除 remove/repair 外全部 op 必填(remove 缺省用当前选中)',
+      ),
     matchName: z
       .string()
       .optional()
-      .describe('在 ids(或当前选中)范围内,仅删除 name 精确匹配的节点'),
-  }),
-  z.object({
-    op: z.literal('clone'),
-    ids: z.array(z.string()).describe('要复制的节点 id 列表'),
-  }),
-  z.object({
-    op: z.literal('group'),
-    ids: z.array(z.string()).describe('要编组的节点 id 列表'),
-    name: z.string().optional().describe('组名'),
+      .describe(
+        '仅 remove:在 ids(或当前选中)范围内,仅删除 name 精确匹配的节点',
+      ),
+    name: z.string().optional().describe('仅 group:组名'),
     layoutMode: z
       .enum(['NONE', 'HORIZONTAL', 'VERTICAL'])
       .optional()
       .describe(
-        '自动布局方向:NONE=纯归组,子节点仅叠加,HORIZONTAL=水平排列,VERTICAL=垂直排列',
+        '仅 group。自动布局方向:NONE=纯归组,子节点仅叠加,HORIZONTAL=水平排列,VERTICAL=垂直排列',
       ),
-    itemSpacing: z.number().optional().describe('自动布局项间距(px)'),
-    paddingTop: z.number().optional().describe('上内边距(px)'),
-    paddingRight: z.number().optional().describe('右内边距(px)'),
-    paddingBottom: z.number().optional().describe('下内边距(px)'),
-    paddingLeft: z.number().optional().describe('左内边距(px)'),
+    itemSpacing: z.number().optional().describe('仅 group。自动布局项间距(px)'),
+    paddingTop: z.number().optional().describe('仅 group。上内边距(px)'),
+    paddingRight: z.number().optional().describe('仅 group。右内边距(px)'),
+    paddingBottom: z.number().optional().describe('仅 group。下内边距(px)'),
+    paddingLeft: z.number().optional().describe('仅 group。左内边距(px)'),
     primaryAxisSizingMode: z
       .enum(['FIXED', 'AUTO'])
       .optional()
-      .describe('主轴尺寸模式:FIXED|AUTO'),
+      .describe('仅 group。主轴尺寸模式:FIXED|AUTO'),
     counterAxisSizingMode: z
       .enum(['FIXED', 'AUTO'])
       .optional()
-      .describe('交叉轴尺寸模式:FIXED|AUTO'),
+      .describe('仅 group。交叉轴尺寸模式:FIXED|AUTO'),
     primaryAxisAlignItems: z
       .enum(['MIN', 'MAX', 'CENTER', 'SPACE_BETWEEN'])
       .optional()
-      .describe('主轴对齐:MIN|MAX|CENTER|SPACE_BETWEEN'),
+      .describe('仅 group。主轴对齐:MIN|MAX|CENTER|SPACE_BETWEEN'),
     counterAxisAlignItems: z
       .enum(['MIN', 'MAX', 'CENTER'])
       .optional()
-      .describe('交叉轴对齐:MIN|MAX|CENTER'),
-  }),
-  z.object({
-    op: z.literal('ungroup'),
-    ids: z.array(z.string()).describe('要取消编组的节点 id 列表'),
-  }),
-  z.object({
-    op: z.literal('flatten'),
-    ids: z
-      .array(z.string())
-      .describe('要合并为单个矢量的节点 id 列表(至少 2 个)'),
-  }),
-  z.object({
-    op: z.literal('outline_stroke'),
-    ids: z.array(z.string()).describe('要转描边的节点 id 列表'),
-  }),
-  z.object({
-    op: z.literal('reparent'),
-    ids: z.array(z.string()).describe('要移动的节点 id 列表'),
+      .describe('仅 group。交叉轴对齐:MIN|MAX|CENTER'),
     parentId: z
       .string()
       .optional()
-      .describe('目标父节点 id,缺省用当前选中第一个节点'),
-    index: z.number().optional().describe('插入位置,缺省追加到末尾'),
-  }),
-  z.object({
-    op: z
-      .literal('repair')
-      .describe('清理画布中已损坏/失效的节点(读取失败的节点直接删除)'),
-  }),
-]);
+      .describe('仅 reparent:目标父节点 id,缺省用当前选中第一个节点'),
+    index: z
+      .number()
+      .optional()
+      .describe('仅 reparent:插入位置,缺省追加到末尾'),
+  })
+  .superRefine((v, ctx) => {
+    const missing = (field: string): void => {
+      ctx.addIssue({
+        code: 'custom',
+        path: [field],
+        message: `op=${v.op} 缺少必填字段 ${field}`,
+      });
+    };
+    const hasIds =
+      Array.isArray(v.ids) &&
+      v.ids.length > 0 &&
+      v.ids.every((x) => typeof x === 'string');
+    switch (v.op) {
+      case 'select':
+      case 'clone':
+      case 'group':
+      case 'ungroup':
+      case 'flatten':
+      case 'outline_stroke':
+      case 'reparent':
+        if (!hasIds) missing('ids');
+        break;
+      case 'remove':
+      case 'repair':
+        break;
+    }
+    if (
+      v.op === 'flatten' &&
+      hasIds &&
+      Array.isArray(v.ids) &&
+      v.ids.length < 2
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['ids'],
+        message: 'op=flatten 至少需要 2 个节点 id',
+      });
+    }
+  });
 
 /**
  * 组件操作入参:扁平结构 + 运行时按 op 精查。
@@ -1437,6 +1468,74 @@ export const platformOpParamsSchema = z.object({
     .describe('操作参数,结构随 op 而定'),
 });
 export type PlatformOpParams = z.infer<typeof platformOpParamsSchema>;
+
+// ---- 批量编排(jsd_batch):服务端顺序执行多步工具调用,前步结果注入后步 ----
+
+export const batchCallSchema = z.object({
+  id: z
+    .string()
+    .optional()
+    .describe(
+      '步骤唯一标识,供后续步骤以 {{id.字段路径}} 引用本步结果;缺省自动命名 step1/step2/…',
+    ),
+  tool: z
+    .string()
+    .describe(
+      '要执行的 jsd_* 工具名,如 jsd_create_nodes / jsd_find / jsd_update_node',
+    ),
+  args: z
+    .record(z.string(), z.unknown())
+    .optional()
+    .describe(
+      '该工具的完整入参;任意位置的字符串值里可用 {{步骤id_字段路径}} 引用先前步骤结果',
+    ),
+  continueOnError: z
+    .boolean()
+    .optional()
+    .describe(
+      '本步【执行】失败时是否继续后续步骤;仅对执行失败生效,id 重复/未知工具/引用解析失败一律中止',
+    ),
+});
+export type BatchCall = z.infer<typeof batchCallSchema>;
+
+/** 与 manageComponentsSchema 同思路:扁平结构,schema 保持简单,语义约束由运行时给出 */
+export const batchSchema = z.object({
+  calls: z
+    .array(batchCallSchema)
+    .min(1)
+    .max(50)
+    .describe('按数组顺序执行的步骤列表'),
+  stopOnError: z
+    .boolean()
+    .optional()
+    .describe(
+      '全局失败策略,默认 true=任一步执行失败即停止,false=配合单步走完全部',
+    ),
+});
+export type BatchParams = z.infer<typeof batchSchema>;
+
+export const batchResultSchema = z.object({
+  ok: z
+    .boolean()
+    .describe('全部步骤均执行且成功(executed 小于 total 即为中途停止)'),
+  executed: z.number().int().min(0).describe('实际产生结果的步骤数'),
+  total: z.number().int().min(0).describe('计划的步骤总数'),
+  results: z
+    .array(
+      z.object({
+        id: z.string(),
+        tool: z.string(),
+        ok: z.boolean(),
+        data: z
+          .unknown()
+          .optional()
+          .describe('成功时该工具的 structuredContent'),
+        error: z.string().optional().describe('失败原因(人读文本)'),
+      }),
+    )
+    .describe('各步骤结果,顺序与入参一致;被中止而未执行的步骤不出现在此列表'),
+});
+export type BatchResult = z.infer<typeof batchResultSchema>;
 
 /** 平台特有操作结果:plugin 统一回 {ok, data},data 结构随 op 而定 */
 export const platformOpResultSchema = z.object({

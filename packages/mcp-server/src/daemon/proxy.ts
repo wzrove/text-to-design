@@ -9,6 +9,7 @@ import { serveStdio } from '@modelcontextprotocol/server/stdio';
 import { z } from 'zod';
 import { SERVER_NAME, SERVER_VERSION } from '../config';
 import { log, warn } from '../logger';
+import { friendlyInputSchema } from './friendly-schema';
 import { delay, probeUpstream } from './probe';
 import { spawnDaemon } from './spawn';
 
@@ -110,7 +111,9 @@ export async function serveProxy(initialClient: Client): Promise<void> {
           description: t.description,
           annotations: t.annotations,
           ...(t.inputSchema
-            ? { inputSchema: fromJsonSchema(t.inputSchema as never) }
+            ? // 入参失败信息走友好化改写(回显入参+联合分支清单),
+              // 避免 ajv 对 oneOf 平铺出的超长报错误导调用方
+              { inputSchema: friendlyInputSchema(t.inputSchema as never) }
             : {}),
           ...(t.outputSchema
             ? { outputSchema: fromJsonSchema(t.outputSchema as never) }

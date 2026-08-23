@@ -10,12 +10,9 @@ import { toolRegistrars } from './tools';
 
 /** initialize 时下发给客户端模型的使用纪律(与 AGENTS.md 保持同源) */
 const INSTRUCTIONS = `操作设计画布的工具集。调用纪律:
-- 新建复杂结构:先用 jsd_create_nodes 平铺创建 Frame/叶子节点,再用 jsd_manage_nodes op=reparent 归组;children 深嵌套易失败。auto-layout 参数(layoutMode/itemSpacing/padding* 等)建完后用 jsd_update_node 单独设置。
-- 组件:create_component 只建空壳组件,子节点再用 reparent 归入;combine_as_variants 基于副本合并,原组件保留。
-- 出现 ok=false 或「没找到 X 节点」:先 jsd_find 复核目标 id 是否已失效(可能被连坐删除),必要时 jsd_manage_nodes op=repair 清理悬挂节点后重试。
-- GROUP 内部以 Frame 实现,序列化返回 FRAME 属正常。
-- 插图标一律用 jsd_create_icon(Lucide 1764 个,支持别名/模糊联想),别手写 SVG。
-- 平台特有能力(Figma 变量/本地样式/组件属性):先看 jsd_ping 返回的 platform+capabilities,再走 jsd_platform_op。`;
+- 复杂结构先用 jsd_create_nodes 平铺创建完整 ops 数组(children 深嵌套易失败),再 jsd_manage_nodes op=reparent 归组;auto-layout(layoutMode/itemSpacing/padding* 等)最后用 jsd_update_node 单独设置。
+- 跨工具多步流程用 jsd_batch 编排:{{步骤id_字段}} 引用上步结果,中间 id 不回传模型。
+- ok=false 或「没找到 X 节点」:先 jsd_find 复核 id 是否已失效(可能被连坐删除),必要时 jsd_manage_nodes op=repair 清理后重试。`;
 
 interface LiveSession {
   server: McpServer;

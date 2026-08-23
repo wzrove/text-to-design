@@ -42,6 +42,9 @@ export type ManageComponentsResult = z.infer<
   typeof s.manageComponentsResultSchema
 >;
 export type ExportResult = z.infer<typeof s.exportResultSchema>;
+export type BatchParams = z.infer<typeof s.batchSchema>;
+export type BatchCall = z.infer<typeof s.batchCallSchema>;
+export type BatchResult = z.infer<typeof s.batchResultSchema>;
 
 export type PluginMethod =
   | 'ping'

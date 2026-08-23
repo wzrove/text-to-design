@@ -27,6 +27,28 @@ export interface ToolCtx {
   mcpReq: { signal: AbortSignal };
 }
 
+/**
+ * 可编程执行体签名:给定已解析的入参直接执行工具(含统一 try/catch 兜底)。
+ * MCP 工具回调内部委托它;jsd_batch 编排按键直调,绕开 MCP 往返。
+ */
+export type ToolExecutor = (
+  args: Record<string, unknown>,
+  signal: AbortSignal | undefined,
+) => Promise<unknown>;
+
+/** 工具名 → 执行体(daemon 单进程多会话共享;重复注册以后者为准,行为一致) */
+const executors = new Map<string, ToolExecutor>();
+
+/** 按名查找执行体;未注册工具返回 undefined */
+export function lookupExecutor(name: string): ToolExecutor | undefined {
+  return executors.get(name);
+}
+
+/** 全部已注册工具名(排序;jsd_batch 报错提示用) */
+export function executorNames(): string[] {
+  return [...executors.keys()].sort();
+}
+
 export interface BridgeToolDef {
   name: string;
   title: string;
@@ -76,6 +98,40 @@ export function bridgeTool(
       cb: (args: Record<string, unknown>, ctx: ToolCtx) => Promise<unknown>,
     ) => ToolHandle;
     const register = server.registerTool.bind(server) as unknown as RegisterFn;
+    // 可编程执行体:MCP 回调与 jsd_batch 编排共用(统一兜底/超时/取消传播)
+    const executeTool: ToolExecutor = async (args, signal) => {
+      try {
+        const opts: RequestOptions = {
+          ...(signal != null ? { signal } : {}),
+          ...(def.timeout != null ? { timeout: def.timeout } : {}),
+        };
+        let data: unknown;
+        if (def.run) {
+          data = await def.run(
+            args,
+            bridge,
+            signal ?? new AbortController().signal,
+          );
+        } else {
+          data = await bridge.request(
+            def.method as PluginMethod,
+            def.payload ? def.payload(args) : args,
+            opts,
+          );
+        }
+        return structured(data, def.outputSchema);
+      } catch (e) {
+        // 可观测性:插件执行期错误(如引擎校验失败)落日志,便于排查。
+        // 注意:入参 schema 校验失败发生在 SDK 内部(validateToolInput),
+        // 不经过本回调,无法在此记录 —— 该类错误只体现在返回给客户端的
+        // isError 文本中
+        const msg = e instanceof Error ? e.message : String(e);
+        error(`工具 ${def.name} 执行失败: ${msg.slice(0, 200)}`);
+        return err(e, def.outputSchema);
+      }
+    };
+    // daemon 单进程内同名工具重复注册以后者为准(行为一致)
+    executors.set(def.name, executeTool);
     const handle = register(
       def.name,
       {
@@ -89,39 +145,15 @@ export function bridgeTool(
       // (ctx 作为唯一入参),有 inputSchema 时才是 callback(args, ctx)。
       // 这里统一兼容两种形态,避免 ctx 误位。
       async (...cbArgs: unknown[]) => {
-        try {
-          const hasInput = def.inputSchema != null;
-          const first = cbArgs[0] as Record<string, unknown> | undefined;
-          const second = cbArgs[1] as ToolCtx | undefined;
-          const args: Record<string, unknown> = hasInput ? (first ?? {}) : {};
-          const ctx = (hasInput ? second : first) as ToolCtx | undefined;
-          const signal =
-            ctx?.mcpReq?.signal ??
-            (ctx as unknown as { signal?: AbortSignal } | undefined)?.signal;
-          const opts: RequestOptions = {
-            ...(signal != null ? { signal } : {}),
-            ...(def.timeout != null ? { timeout: def.timeout } : {}),
-          };
-          let data: unknown;
-          if (def.run) {
-            data = await def.run(args, bridge, signal as AbortSignal);
-          } else {
-            data = await bridge.request(
-              def.method as PluginMethod,
-              def.payload ? def.payload(args) : args,
-              opts,
-            );
-          }
-          return structured(data, def.outputSchema);
-        } catch (e) {
-          // 可观测性:插件执行期错误(如引擎校验失败)落日志,便于排查。
-          // 注意:入参 schema 校验失败发生在 SDK 内部(validateToolInput),
-          // 不经过本回调,无法在此记录 —— 该类错误只体现在返回给客户端的
-          // isError 文本中
-          const msg = e instanceof Error ? e.message : String(e);
-          error(`工具 ${def.name} 执行失败: ${msg.slice(0, 200)}`);
-          return err(e, def.outputSchema);
-        }
+        const hasInput = def.inputSchema != null;
+        const first = cbArgs[0] as Record<string, unknown> | undefined;
+        const second = cbArgs[1] as ToolCtx | undefined;
+        const args: Record<string, unknown> = hasInput ? (first ?? {}) : {};
+        const ctx = (hasInput ? second : first) as ToolCtx | undefined;
+        const signal =
+          ctx?.mcpReq?.signal ??
+          (ctx as unknown as { signal?: AbortSignal } | undefined)?.signal;
+        return executeTool(args, signal);
       },
     );
     handle.alwaysEnabled = def.alwaysEnabled ?? false;

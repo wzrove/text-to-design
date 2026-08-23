@@ -1,6 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/server';
 import type { Bridge } from '../bridge';
 import type { ToolHandle } from '../core/registry';
+import { registerBatchTools } from './batch';
 import { registerCreateTools } from './create';
 import { registerManageTools } from './manage';
 import { registerModifyTools } from './modify';
@@ -19,6 +20,8 @@ export const toolRegistrars: RegisterTools[] = [
   registerModifyTools,
   registerManageTools,
   registerRawTools,
+  // 编排器依赖其它工具的执行体注册表,放在功能组之后注册
+  registerBatchTools,
   registerPlatformTools,
   registerResources,
   // 配方 prompt 不依赖插件连接,恒可用

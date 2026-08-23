@@ -19,15 +19,7 @@ export function registerRawTools(
   const exportTool = bridgeTool({
     name: 'jsd_export',
     title: '导出节点为图片',
-    description: `导出节点为图片/文件。
-
-参数说明:
-- format:导出格式 PNG/JPG/SVG/PDF,默认 PNG
-- scale:缩放倍率(PNG/JPG),默认 1
-- savePath:落盘到本地文件路径(如 /tmp/icon.png),推荐在不支持图像的模型时使用
-- includeDataUrl:是否同时返回 base64 dataURL(供支持图像的模型直接查看)
-
-两种输出方式可并存:传 savePath 落盘 + 不传 includeDataUrl 则仅落盘;传 includeDataUrl 则返回 base64。`,
+    description: `导出节点为 PNG/JPG/SVG/PDF;savePath 落盘与 includeDataUrl 返回 base64 可并存,参数见 inputSchema。`,
     inputSchema: exportSchema,
     outputSchema: exportResultSchema,
     // 画布只读;但会写本地文件,不标 readOnly
@@ -77,8 +69,7 @@ export function registerRawTools(
   const fillImage = bridgeTool({
     name: 'jsd_fill_image',
     title: '本地图片填充节点',
-    description:
-      '将本地图片文件字节填充到指定节点(IMAGE fill)。MCP server 读取本地文件,经二进制通道传给插件,插件调用 createImage 后填入节点',
+    description: '读取本地图片文件填充到指定节点(IMAGE fill)',
     inputSchema: fillImageSchema,
     outputSchema: updatedResultSchema,
     annotations: { readOnlyHint: false, destructiveHint: false },

@@ -14,10 +14,7 @@ export function registerPlatformTools(
   const platformOp = bridgeTool({
     name: 'jsd_platform_op',
     title: '平台特有操作',
-    description: `执行平台特有操作(如 Figma 的变量/本地样式/组件属性等流程级能力)。
-先 jsd_ping 查看返回的 platform 与 capabilities,确认平台支持哪些能力;
-op 取平台支持的操作名(常见: figma_variables_create / figma_variables_apply / figma_style_apply_by_name / figma_component_properties_set),参数结构见各 op 描述。
-当前平台不支持时会返回"平台不支持操作"错误。`,
+    description: `执行平台特有能力(Figma 变量/本地样式/组件属性等)。先用 jsd_ping 查看 platform、capabilities 及支持的操作名,params 随 op 而定;平台不支持时返回错误`,
     method: 'platform_op',
     inputSchema: platformOpParamsSchema,
     outputSchema: platformOpResultSchema,
