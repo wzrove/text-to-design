@@ -1476,7 +1476,7 @@ export const batchCallSchema = z.object({
     .string()
     .optional()
     .describe(
-      '步骤唯一标识,供后续步骤以 {{id.字段路径}} 引用本步结果;缺省自动命名 step1/step2/…',
+      '步骤唯一标识,供后续步骤以双花括号占位符(id.字段路径)引用本步结果;缺省自动命名 step1/step2/…',
     ),
   tool: z
     .string()
@@ -1487,7 +1487,7 @@ export const batchCallSchema = z.object({
     .record(z.string(), z.unknown())
     .optional()
     .describe(
-      '该工具的完整入参;任意位置的字符串值里可用 {{步骤id_字段路径}} 引用先前步骤结果',
+      '该工具的完整入参;任意位置的字符串值里可放双花括号占位符(步骤id.字段路径)引用先前步骤结果',
     ),
   continueOnError: z
     .boolean()

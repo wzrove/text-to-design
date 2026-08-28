@@ -11,7 +11,7 @@ import { toolRegistrars } from './tools';
 /** initialize 时下发给客户端模型的使用纪律(与 AGENTS.md 保持同源) */
 const INSTRUCTIONS = `操作设计画布的工具集。调用纪律:
 - 复杂结构先用 jsd_create_nodes 平铺创建完整 ops 数组(children 深嵌套易失败),再 jsd_manage_nodes op=reparent 归组;auto-layout(layoutMode/itemSpacing/padding* 等)最后用 jsd_update_node 单独设置。
-- 跨工具多步流程用 jsd_batch 编排:{{步骤id_字段}} 引用上步结果,中间 id 不回传模型。
+- 跨工具多步流程用 jsd_batch 编排:双花括号占位符(步骤id.字段路径)引用上步结果,中间 id 不回传模型。
 - ok=false 或「没找到 X 节点」:先 jsd_find 复核 id 是否已失效(可能被连坐删除),必要时 jsd_manage_nodes op=repair 清理后重试。`;
 
 interface LiveSession {

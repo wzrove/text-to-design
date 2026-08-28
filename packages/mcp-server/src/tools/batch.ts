@@ -44,13 +44,17 @@ function resolveRef(expr: string, steps: Map<string, unknown>): unknown {
   const path = dot === -1 ? '' : expr.slice(dot + 1);
   if (!steps.has(id)) {
     const known = [...steps.keys()].join(', ') || '无';
-    throw new Error(`引用了不存在或未成功的步骤 {{${expr}}}(已完成: ${known})`);
+    throw new Error(
+      `占位符引用的步骤不存在或未成功:「${expr}」(已完成: ${known})`,
+    );
   }
   const root = steps.get(id);
   if (path === '') return root;
   const r = getPath(root, path);
   if (!r.ok) {
-    throw new Error(`无法解析引用 {{${expr}}}:请核对步骤 ${id} 的返回结构`);
+    throw new Error(
+      `无法解析占位符引用「${expr}」:请核对步骤 ${id} 的返回结构`,
+    );
   }
   return r.value;
 }
@@ -59,7 +63,7 @@ const REF_RE = /\{\{\s*([^{}]+?)\s*\}\}/g;
 
 const WHOLE_REF_RE = /^\{\{\s*([^{}]+?)\s*\}\}$/;
 
-/** 深度遍历入参:{{ref}} 独占整值时保留原类型;内嵌于长字符串时以 JSON 文本展开 */
+/** 深度遍历入参:引用占位符独占整值时保留原类型;内嵌于长字符串时以 JSON 文本展开 */
 function resolveRefs(value: unknown, steps: Map<string, unknown>): unknown {
   if (typeof value === 'string') {
     const whole = WHOLE_REF_RE.exec(value.trim());
@@ -86,8 +90,8 @@ export function registerBatchTools(
   const batch = bridgeTool({
     name: 'jsd_batch',
     title: '批量编排执行',
-    description: `批量编排器:一次请求内顺序执行多个 jsd_* 步骤,前一步结果经 {{步骤id_字段路径}} 注入后一步 args,中间 id 不回传模型,显著减少往返与上下文。
-{{ref}} 独占一个参数值时保留原类型(数组可直接作 ids 用),嵌在字符串中按 JSON 文本展开;id 重复/未知工具/引用失败立即中止,工具执行失败默认也中止(stopOnError=false 或单步 continueOnError=true 可走完)。每步只回传 structuredContent。`,
+    description: `批量编排器:一次请求内顺序执行多个 jsd_* 步骤,前一步结果经双花括号占位符(内容为 步骤id.字段路径)注入后一步 args,中间 id 不回传模型,显著减少往返与上下文。
+占位符独占一个参数值时保留原类型(数组可直接作 ids 用),嵌在字符串中按 JSON 文本展开;id 重复/未知工具/引用失败立即中止,工具执行失败默认也中止(stopOnError=false 或单步 continueOnError=true 可走完)。每步只回传 structuredContent。`,
     inputSchema: batchSchema,
     outputSchema: batchResultSchema,
     // calls 里可能带 remove/flatten 等破坏性 op,如实标注
