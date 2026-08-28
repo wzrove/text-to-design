@@ -1,20 +1,34 @@
 # UI 配色体系(text-to-design 插件)
 
 > 分层事实来源:`design-tokens.json`(Primitive 原始值)→
-> `src/styles/tokens.css`(生成的 Component 层 CSS 变量)→
+> `src/styles/tokens.css`(生成的 Component 层 CSS 变量,引用 primitive)→
 > `tailwind.config.js`(daisyUI Semantic 主题)。本文档是使用说明书。
 > 依据:ui-ux-pro-max 指南(对比度 ≥4.5:1、禁纯色传义、淡底组合规范)
-> + design-system 三层 Token 架构。
+> + design-system 两层 Token 架构(CSS 仅保留 primitive + component 引用)。
 
-## 〇、三层 Token 架构(design-system 规范)
+## 〇、统一架构(零 hex 重复)
 
 ```text
-Primitive(design-tokens.json 原始色值)
-        ↓ 语义别名
-Semantic(tailwind.config.js daisyUI 主题 = 下表)
+design-tokens.json(两层:primitive + component)
+        ↓ 生成 CSS
+tokens.css 两层:
+  --primitive-*        daisyUI 不覆盖的色板(dot-scale 13 项 + neutral-alpha 2 项)
+  --component-*        引用 primitive(var());rgba alpha 派生保留字面量
         ↓ 组件消费
-Component(src/styles/tokens.css 的 --component-*,生成物勿手改)
+TSX 组件(var(--component-*) + tailwind daisyUI 语义类)
+
+tailwind.config.js daisyUI 主题:
+  primary / accent / info / success / warning / error / base-* / *-content
+        (语义色唯一来源,tokens.css 不重复这些 hex)
 ```
+
+设计原则:
+- **语义色**(primary/accent/info/success/warning/error)→ tailwind.config.js
+  是唯一来源,daisyUI 需要原始值计算 *-content 对比色
+- **色板**(dot-scale/neutral-alpha)→ tokens.css 是唯一来源,daisyUI 不覆盖
+- **rgba alpha 变体**→ 保留字面量(CSS 无法在 var() 上叠 alpha 不改色相),
+  注释标明 daisyUI 派生源
+- 两个文件**无任何 hex 重复**:改语义色改 tailwind.config.js,改色板改 tokens.css
 
 再生成与校验(packages/ui 目录下执行):
 

@@ -4,6 +4,10 @@ import daisyui from 'daisyui';
 
 // ─── 配色体系总览(详见 packages/ui/COLORS.md)─────────────────────────
 //
+// ⚠️ 此文件是语义色(primary/accent/info/success/warning/error)的唯一来源。
+// tokens.css 仅保留 daisyUI 不覆盖的色板(dot-scale、neutral-alpha)。
+// 两者无 hex 重复:改颜色只改一处。
+//
 // 角色        亮色        暗色        用途
 // primary    #8AD654    #8AD654    品牌动作色:btn-primary、Logo 主绿(与状态绿解耦)
 /// secondary  #333333    #c9cfd6    次级实心表面(当前组件未直接使用,保留兼容)

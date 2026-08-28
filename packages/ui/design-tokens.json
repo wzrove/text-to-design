@@ -2,22 +2,6 @@
   "$schema": "https://design-tokens.org/schema.json",
   "primitive": {
     "color": {
-      "brand": {
-        "green": { "$value": "#8ad654", "$type": "color" },
-        "coral": { "$value": "#f76868", "$type": "color" }
-      },
-      "status-light": {
-        "blue": { "$value": "#2563eb", "$type": "color" },
-        "green": { "$value": "#15803d", "$type": "color" },
-        "amber": { "$value": "#b45309", "$type": "color" },
-        "red": { "$value": "#dc2626", "$type": "color" }
-      },
-      "status-dark": {
-        "blue": { "$value": "#5aa9f7", "$type": "color" },
-        "green": { "$value": "#34c467", "$type": "color" },
-        "amber": { "$value": "#f59e0b", "$type": "color" },
-        "red": { "$value": "#ef4444", "$type": "color" }
-      },
       "dot-scale": {
         "sky": { "$value": "#0ea5e9", "$type": "color" },
         "indigo": { "$value": "#6366f1", "$type": "color" },
@@ -39,31 +23,6 @@
           "$value": "rgba(128, 128, 128, 0.55)",
           "$type": "color"
         }
-      }
-    }
-  },
-  "semantic": {
-    "color": {
-      "primary": {
-        "$value": "{primitive.color.brand.green}",
-        "$type": "color"
-      },
-      "accent": { "$value": "{primitive.color.brand.coral}", "$type": "color" },
-      "info": {
-        "$value": "{primitive.color.status-light.blue}",
-        "$type": "color"
-      },
-      "success": {
-        "$value": "{primitive.color.status-light.green}",
-        "$type": "color"
-      },
-      "warning": {
-        "$value": "{primitive.color.status-light.amber}",
-        "$type": "color"
-      },
-      "error": {
-        "$value": "{primitive.color.status-light.red}",
-        "$type": "color"
       }
     }
   },
