@@ -1,5 +1,6 @@
 import type {
   ListFontsResult,
+  ListStylesResult,
   RawExportFile,
   SerializedNode,
 } from '../schemas';
@@ -69,4 +70,26 @@ export async function listFonts(host: DesignHost): Promise<ListFontsResult> {
   const fonts = await host.listAvailableFontsAsync();
   const families = [...new Set(fonts.map((f) => f.fontName.family))].sort();
   return { families, count: families.length };
+}
+
+/** 本地样式枚举:两平台 API 同构(PAINT/TEXT/EFFECT/GRID),getter 缺失时跳过 */
+export function listStyles(host: DesignHost): ListStylesResult {
+  const getters = [
+    host.getLocalPaintStyles,
+    host.getLocalTextStyles,
+    host.getLocalEffectStyles,
+    host.getLocalGridStyles,
+  ] as const;
+  const styles: ListStylesResult['styles'] = [];
+  for (const getter of getters) {
+    if (typeof getter !== 'function') continue;
+    for (const s of getter.call(host) ?? []) {
+      styles.push({
+        id: s.id,
+        name: s.name,
+        type: s.type as ListStylesResult['styles'][number]['type'],
+      });
+    }
+  }
+  return { styles, count: styles.length };
 }

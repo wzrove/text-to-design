@@ -1,6 +1,11 @@
-import type { SerializedNode } from '../schemas';
-import type { DesignHost, NodeSkeleton } from './host';
+import type {
+  ComponentPropertyValue,
+  SerializedNode,
+  UpdateNodeProps,
+} from '../schemas';
+import { type DesignHost, MIXED, type NodeSkeleton } from './host';
 import { serializeNode } from './serialize';
+import { updateSelection } from './update';
 import { findNode } from './utils';
 
 export function createComponentNodes(
@@ -151,4 +156,289 @@ export function detachInstanceNodes(
   const detached = instances.map((n) => n.detachInstance());
   host.viewport.scrollAndZoomIntoView(detached);
   return { created: detached.map((n) => serializeNode(n)) };
+}
+
+// ---- 实例覆盖复制/套用(对齐参考实现的 get/set_instance_overrides) ----
+
+/** 实例覆盖快照:插件进程内缓存,不落 MCP 线格式(仅摘要回传模型) */
+export interface OverrideSnapshot {
+  sourceId: string;
+  sourceName: string;
+  /** 源组件的 COMPONENT 节点 id:swapToSource 在源实例被删后仍可定位组件 */
+  mainComponentId?: string;
+  /** 变体属性(跨平台) */
+  variantProperties?: Record<string, string>;
+  /** Figma 组件属性(仅该平台存在,in 守卫天然跳过其他平台) */
+  componentProperties?: Record<string, ComponentPropertyValue>;
+  /** 可见属性子集(fills/文本/圆角/效果/描边等,不含几何与命名) */
+  props?: UpdateNodeProps;
+}
+
+/** 复制结果的摘要(只回传键名,不回传大体积值) */
+export interface OverrideSummary {
+  variantProperties?: Record<string, string>;
+  componentProperties?: Record<string, ComponentPropertyValue>;
+  propsSummary?: string[];
+}
+
+/** 单实例套用结果 */
+export interface AppliedOverride {
+  instanceId: string;
+  instanceName: string;
+  ok: boolean;
+  message?: string;
+}
+
+/** 插件侧缓存:copy 覆盖同 key;上限 20 条逐出最旧;插件进程重启即清空 */
+const OVERRIDE_CACHE_MAX = 20;
+const overrideCache = new Map<string, OverrideSnapshot>();
+
+export function getCachedOverride(
+  sourceId: string,
+): OverrideSnapshot | undefined {
+  return overrideCache.get(sourceId);
+}
+
+function cachePut(snapshot: OverrideSnapshot): void {
+  overrideCache.set(snapshot.sourceId, snapshot);
+  if (overrideCache.size > OVERRIDE_CACHE_MAX) {
+    const oldest = overrideCache.keys().next().value;
+    if (oldest != null) overrideCache.delete(oldest);
+  }
+}
+
+function toSummary(snapshot: OverrideSnapshot): OverrideSummary {
+  return {
+    ...(snapshot.variantProperties != null
+      ? { variantProperties: snapshot.variantProperties }
+      : {}),
+    ...(snapshot.componentProperties != null
+      ? { componentProperties: snapshot.componentProperties }
+      : {}),
+    ...(snapshot.props != null
+      ? { propsSummary: Object.keys(snapshot.props) }
+      : {}),
+  };
+}
+
+/** 从实例采集可见属性子集:只同步样式/文本,不动位置与命名 */
+function captureVisibleProps(node: NodeSkeleton): UpdateNodeProps | undefined {
+  const props: Record<string, unknown> = {};
+  if (node.type === 'TEXT') {
+    if (node.characters != null) props.characters = node.characters;
+    if (node.fontSize != null && node.fontSize !== MIXED)
+      props.fontSize = node.fontSize;
+    if (node.fontName != null && node.fontName !== MIXED)
+      props.fontName = node.fontName;
+  }
+  if ('fills' in node && Array.isArray(node.fills)) props.fills = node.fills;
+  if ('effects' in node && Array.isArray(node.effects))
+    props.effects = node.effects;
+  if (node.strokeWeight != null) props.strokeWeight = node.strokeWeight;
+  if (node.strokeAlign != null) props.strokeAlign = node.strokeAlign;
+  if (node.blendMode != null) props.blendMode = node.blendMode;
+  if (typeof node.opacity === 'number') props.opacity = node.opacity;
+  if (node.cornerRadius != null) props.cornerRadius = node.cornerRadius;
+  if (node.topLeftRadius != null) props.topLeftRadius = node.topLeftRadius;
+  if (node.topRightRadius != null) props.topRightRadius = node.topRightRadius;
+  if (node.bottomLeftRadius != null)
+    props.bottomLeftRadius = node.bottomLeftRadius;
+  if (node.bottomRightRadius != null)
+    props.bottomRightRadius = node.bottomRightRadius;
+  return Object.keys(props).length > 0 ? (props as UpdateNodeProps) : undefined;
+}
+
+function captureOverrideSnapshot(
+  host: DesignHost,
+  sourceId: string,
+  includeVisibleProps: boolean,
+): OverrideSnapshot {
+  const source = findNode(host, [sourceId]).find((n) => n.type === 'INSTANCE');
+  if (!source) {
+    throw new Error(`没有找到源实例: ${sourceId}`);
+  }
+  if (!source.mainComponent) {
+    throw new Error(
+      `源实例 ${sourceId} 的 mainComponent 已失效,无法复制覆盖。建议先 jsd_manage_nodes op=repair 清理后重试`,
+    );
+  }
+  const snapshot: OverrideSnapshot = {
+    sourceId,
+    sourceName: source.name,
+    mainComponentId: source.mainComponent.id,
+    ...(source.variantProperties != null &&
+    Object.keys(source.variantProperties).length > 0
+      ? { variantProperties: { ...source.variantProperties } }
+      : {}),
+    ...('componentProperties' in source &&
+    source.componentProperties != null &&
+    Object.keys(source.componentProperties).length > 0
+      ? { componentProperties: { ...source.componentProperties } }
+      : {}),
+    ...(includeVisibleProps ? { props: captureVisibleProps(source) } : {}),
+  };
+  return snapshot;
+}
+
+/** 把快照套用到目标实例:可选 swap → 变体/组件属性 → 可见属性。逐条 try/catch */
+async function applyOverrideSnapshot(
+  host: DesignHost,
+  snapshot: OverrideSnapshot,
+  ids: string[],
+  swapToSource: boolean,
+): Promise<{
+  applied: AppliedOverride[];
+  total: number;
+  source: OverrideSummary;
+}> {
+  const applied: AppliedOverride[] = [];
+  for (const targetId of ids) {
+    try {
+      const target = findNode(host, [targetId]).find(
+        (n) => n.type === 'INSTANCE',
+      );
+      if (!target) {
+        applied.push({
+          instanceId: targetId,
+          instanceName: '',
+          ok: false,
+          message: '实例不存在或已失效',
+        });
+        continue;
+      }
+      if (swapToSource && snapshot.mainComponentId != null) {
+        const main = findNode(host, [snapshot.mainComponentId]).find(
+          (n) => n.type === 'COMPONENT',
+        );
+        if (!main) {
+          applied.push({
+            instanceId: targetId,
+            instanceName: target.name,
+            ok: false,
+            message: '源组件已失效,无法 swapToSource',
+          });
+          continue;
+        }
+        target.swapComponent(main);
+      }
+      // Figma 有 componentProperties 时走部分更新(整体赋值会重置其余属性且新版只读);
+      // 否则(jsDesign)走跨平台变体属性。两者都经 setProperties 部分更新语义合并。
+      if (
+        snapshot.componentProperties != null &&
+        Object.keys(snapshot.componentProperties).length > 0
+      ) {
+        // 只带 {type, value} 的部分更新:整体赋值会重置其余属性且新版 API 只读
+        const patch: Record<string, ComponentPropertyValue> = {};
+        for (const [k, v] of Object.entries(snapshot.componentProperties)) {
+          patch[k] = { type: v.type, value: v.value };
+        }
+        target.setProperties(patch);
+      } else if (
+        snapshot.variantProperties != null &&
+        Object.keys(snapshot.variantProperties).length > 0
+      ) {
+        target.setProperties(snapshot.variantProperties);
+      }
+      if (snapshot.props != null && Object.keys(snapshot.props).length > 0) {
+        // 复用 updateSelection:含 TEXT 的 loadFont 等边界处理
+        await updateSelection(host, {
+          ids: [targetId],
+          props: snapshot.props,
+        });
+      }
+      applied.push({
+        instanceId: targetId,
+        instanceName: target.name,
+        ok: true,
+      });
+    } catch (e) {
+      applied.push({
+        instanceId: targetId,
+        instanceName: '',
+        ok: false,
+        message: e instanceof Error ? e.message : String(e),
+      });
+    }
+  }
+  const failed = applied.filter((r) => !r.ok);
+  if (failed.length === applied.length && applied.length > 0) {
+    throw new Error(
+      `全部实例套用失败:${failed
+        .map((f) => `${f.instanceId}(${f.message ?? '未知错误'})`)
+        .join(', ')}`,
+    );
+  }
+  return { applied, total: ids.length, source: toSummary(snapshot) };
+}
+
+/** 无状态一次性「复制+套用」:不写缓存,适合 jsd_batch 流水 */
+export async function syncInstanceOverrides(
+  host: DesignHost,
+  params: {
+    sourceId: string;
+    ids: string[];
+    includeVisibleProps?: boolean;
+    swapToSource?: boolean;
+  },
+): Promise<{
+  applied: AppliedOverride[];
+  total: number;
+  source: OverrideSummary;
+}> {
+  const snapshot = captureOverrideSnapshot(
+    host,
+    params.sourceId,
+    params.includeVisibleProps !== false,
+  );
+  return applyOverrideSnapshot(
+    host,
+    snapshot,
+    params.ids,
+    params.swapToSource ?? false,
+  );
+}
+
+/** 两段式第一段:复制源实例覆盖为快照,写入插件侧缓存,返回摘要 + snapshotId(=sourceId) */
+export function copyInstanceOverrides(
+  host: DesignHost,
+  params: { sourceId: string; includeVisibleProps?: boolean },
+): {
+  snapshotId: string;
+  sourceName: string;
+  captured: OverrideSummary;
+} {
+  const snapshot = captureOverrideSnapshot(
+    host,
+    params.sourceId,
+    params.includeVisibleProps !== false,
+  );
+  cachePut(snapshot);
+  return {
+    snapshotId: snapshot.sourceId,
+    sourceName: snapshot.sourceName,
+    captured: toSummary(snapshot),
+  };
+}
+
+/** 两段式第二段:按 sourceId 从缓存取快照套用到目标实例;miss 报错提示先 copy */
+export async function applyCachedOverrides(
+  host: DesignHost,
+  params: { sourceId: string; ids: string[]; swapToSource?: boolean },
+): Promise<{
+  applied: AppliedOverride[];
+  total: number;
+  source: OverrideSummary;
+}> {
+  const snapshot = overrideCache.get(params.sourceId);
+  if (!snapshot) {
+    throw new Error(
+      `缓存中没有 ${params.sourceId} 的覆盖快照,请先调用 jsd_manage_components op=copy_overrides`,
+    );
+  }
+  return applyOverrideSnapshot(
+    host,
+    snapshot,
+    params.ids,
+    params.swapToSource ?? false,
+  );
 }

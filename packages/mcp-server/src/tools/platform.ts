@@ -14,7 +14,7 @@ export function registerPlatformTools(
   const platformOp = bridgeTool({
     name: 'jsd_platform_op',
     title: '平台特有操作',
-    description: `执行平台特有能力(Figma 变量/本地样式/组件属性等)。先用 jsd_ping 查看 platform、capabilities 及支持的操作名,params 随 op 而定;平台不支持时返回错误`,
+    description: `执行平台特有能力(Figma 变量/本地样式/组件属性等)。CRITICAL: 不要凭空猜测 op 名与参数——必须先取 jsd_ping 的 capabilities 确认当前平台支持的操作名与入参结构(随平台而异),params 随 op 而定;平台不支持时返回错误`,
     method: 'platform_op',
     inputSchema: platformOpParamsSchema,
     outputSchema: platformOpResultSchema,

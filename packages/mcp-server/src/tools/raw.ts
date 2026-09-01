@@ -64,6 +64,25 @@ export function registerRawTools(
       }
       return { exports: results };
     },
+    // 多 id 反馈:点名「请求了但没导出」的节点(导出失败/节点已失效时插件静默跳过)
+    extraContent: (data, args) => {
+      const ids = (args.ids as string[] | undefined) ?? [];
+      const exports = (data as { exports: { id: string }[] }).exports ?? [];
+      const blocks: { type: 'text'; text: string }[] = [];
+      if (exports.length > 0)
+        blocks.push({ type: 'text', text: `已导出 ${exports.length} 个节点` });
+      if (ids.length > 0) {
+        const got = new Set(exports.map((e) => e.id));
+        const missing = ids.filter((id) => !got.has(id));
+        if (missing.length > 0) {
+          blocks.push({
+            type: 'text',
+            text: `导出失败(节点可能已失效): ${missing.join(', ')}。可用 jsd_find 复核`,
+          });
+        }
+      }
+      return blocks;
+    },
   });
 
   const fillImage = bridgeTool({

@@ -56,6 +56,36 @@ export function registerResources(
     },
   );
 
+  const styles = server.registerResource(
+    'styles',
+    'jsd://styles',
+    {
+      title: '本地样式列表',
+      description:
+        '当前文档可复用的本地样式(PAINT/TEXT/EFFECT/GRID),含 id/name/type;按名应用样式前先读这里拿准确样式名',
+      mimeType: 'application/json',
+    },
+    async () => {
+      const data = await bridge.request('list_styles', {});
+      return jsonContents('jsd://styles', data);
+    },
+  );
+
+  const page = server.registerResource(
+    'page',
+    'jsd://page',
+    {
+      title: '当前页结构总览',
+      description:
+        '当前页顶层节点的轻量摘要(名称/类型/位置/尺寸/子节点数),不递归;从头设计整页前先读这里看页面已有内容',
+      mimeType: 'application/json',
+    },
+    async () => {
+      const data = await bridge.request('get_page', {});
+      return jsonContents('jsd://page', data);
+    },
+  );
+
   const nodeTemplate = server.registerResource(
     'node',
     new ResourceTemplate('jsd://node/{id}', { list: undefined }),
@@ -75,5 +105,5 @@ export function registerResources(
   );
 
   // 资源依赖插件在线,不标 alwaysEnabled → 随连接门控
-  return [selection, fonts, nodeTemplate];
+  return [selection, fonts, styles, page, nodeTemplate];
 }

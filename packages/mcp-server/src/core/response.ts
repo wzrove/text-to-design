@@ -110,10 +110,13 @@ export function err(
   return schema ? { ...base, structuredContent: emptyFor(schema) } : base;
 }
 
-/** 返回类型:人读文本 + 结构化数据(与 outputSchema 对应) */
+/** 返回类型:人读文本 + 结构化数据(与 outputSchema 对应)。
+ *  extra 为成功时的附加文本块(置于 JSON 文本之前),用于进度/汇总/逐条失败提示,
+ *  与参考实现(set_multiple_text_contents 多段 content)对齐。 */
 export function structured(
   data: unknown,
   schema?: z.ZodType,
+  extra?: { type: 'text'; text: string }[],
 ): {
   content: { type: 'text'; text: string }[];
   structuredContent: unknown;
@@ -122,7 +125,10 @@ export function structured(
   if (schema) {
     const parsed = schema.safeParse(data);
     if (parsed.success) {
-      return { content: text(data).content, structuredContent: parsed.data };
+      return {
+        content: [...(extra ?? []), ...text(data).content],
+        structuredContent: parsed.data,
+      };
     }
     // 插件返回异常数据(过不了 schema)时仍兜底返回合法空结构
     return {
@@ -131,5 +137,8 @@ export function structured(
       isError: true,
     };
   }
-  return { content: text(data).content, structuredContent: data };
+  return {
+    content: [...(extra ?? []), ...text(data).content],
+    structuredContent: data,
+  };
 }

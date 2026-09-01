@@ -100,6 +100,14 @@ export class Transport {
     }
   }
 
+  /** 日志/状态推送专用通道:不打印自身日志——否则「推送一条日志 → send 再打一条 debug →
+   *  又推送一条」会形成自激链;调用方已判定在线,静默失败由 logger 的 try/catch 兜住 */
+  sendPush(frame: string): void {
+    if (this.client && this.client.readyState === WebSocket.OPEN) {
+      this.client.send(frame);
+    }
+  }
+
   private tryListen(p: number): Promise<boolean> {
     return new Promise((resolve) => {
       const onError = (): void => {

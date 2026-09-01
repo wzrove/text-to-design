@@ -1,6 +1,12 @@
 import type { ExecuteOp } from '../schemas';
 import type { ContainerSkeleton, DesignHost, NodeSkeleton } from './host';
 import { MIXED } from './host';
+import {
+  assertBooleanOperation,
+  normalizeEffects,
+  normalizePaints,
+  normalizeVectorPaths,
+} from './normalize';
 import { loadFont } from './utils';
 
 async function buildNode(
@@ -54,10 +60,8 @@ async function buildNode(
         INTERSECT: host.intersect,
         EXCLUDE: host.exclude,
       };
-      node = combine[spec.booleanOperation ?? 'UNION'](
-        [...(tmp.children ?? [])],
-        parent,
-      );
+      const op = assertBooleanOperation(spec.booleanOperation ?? 'UNION');
+      node = combine[op]([...(tmp.children ?? [])], parent);
       tmp.remove();
       break;
     }
@@ -89,8 +93,10 @@ async function buildNode(
   if (spec.locked != null) node.locked = spec.locked;
   if (spec.visible != null && 'visible' in node) node.visible = spec.visible;
 
-  if (spec.fills && 'fills' in node) node.fills = spec.fills;
-  if (spec.strokes && 'strokes' in node) node.strokes = spec.strokes;
+  if (spec.fills != null && 'fills' in node)
+    node.fills = normalizePaints(spec.fills, 'fills');
+  if (spec.strokes != null && 'strokes' in node)
+    node.strokes = normalizePaints(spec.strokes, 'strokes');
 
   if (spec.strokeWeight != null && 'strokeWeight' in node)
     node.strokeWeight = spec.strokeWeight;
@@ -121,7 +127,8 @@ async function buildNode(
   if (spec.layoutGrids != null && 'layoutGrids' in node)
     node.layoutGrids = spec.layoutGrids;
 
-  if (spec.effects && 'effects' in node) node.effects = spec.effects;
+  if (spec.effects != null && 'effects' in node)
+    node.effects = normalizeEffects(spec.effects);
 
   if ('cornerRadius' in node) {
     if (spec.cornerRadius != null) node.cornerRadius = spec.cornerRadius;
@@ -172,18 +179,10 @@ async function buildNode(
     return node;
   }
   if (node.type === 'VECTOR' && spec.vectorPaths != null) {
-    // 防御:类型上 windingRule 必填,但运行时 JSON 可能缺省(如经 shim
-    // 原样转发的历史调用);jsDesign 引擎对 undefined 会直接抛错,
-    // 这里兜底补默认值,兑现 schema 承诺的「默认 NONZERO」
-    const loose = spec.vectorPaths as Array<{
-      data: string;
-      windingRule?: string;
-    }>;
-    node.vectorPaths = loose.map((p) => ({
-      data: p.data,
-      windingRule:
-        p.windingRule ?? ('NONZERO' as 'NONZERO' | 'EVENODD' | 'NONE'),
-    })) as typeof spec.vectorPaths;
+    // 归一化:data 必填,windingRule 缺省 NONZERO(引擎对 undefined 直接抛错)
+    node.vectorPaths = normalizeVectorPaths(
+      spec.vectorPaths,
+    ) as typeof spec.vectorPaths;
   }
   for (const child of spec.children ?? []) {
     await buildNode(host, child, node);

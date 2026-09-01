@@ -1,6 +1,7 @@
 import type { SerializedNode, UpdateNodeProps } from '../schemas';
 import type { DesignHost, NodeSkeleton } from './host';
 import { MIXED } from './host';
+import { normalizeEffects, normalizePaints } from './normalize';
 import { serializeNode } from './serialize';
 import { collectTargets, findNode, loadFont } from './utils';
 
@@ -9,6 +10,15 @@ async function applyProps(
   node: NodeSkeleton,
   props: UpdateNodeProps,
 ): Promise<void> {
+  // 先整体归一化一次(多目标节点复用同一份合法数据),引擎赋值前兜底
+  const fills =
+    props.fills != null ? normalizePaints(props.fills, 'fills') : undefined;
+  const strokes =
+    props.strokes != null
+      ? normalizePaints(props.strokes, 'strokes')
+      : undefined;
+  const effects =
+    props.effects != null ? normalizeEffects(props.effects) : undefined;
   if (props.name != null) node.name = props.name;
   if (props.x != null) node.x = props.x;
   if (props.y != null) node.y = props.y;
@@ -21,7 +31,7 @@ async function applyProps(
     const h = props.height ?? node.height;
     if ('resize' in node) node.resize(w, h);
   }
-  if (props.fills != null && 'fills' in node) node.fills = props.fills;
+  if (fills != null && 'fills' in node) node.fills = fills;
   if (props.strokeWeight != null && 'strokeWeight' in node)
     node.strokeWeight = props.strokeWeight;
   if (props.strokeTopWeight != null && 'strokeTopWeight' in node)
@@ -32,7 +42,7 @@ async function applyProps(
     node.strokeLeftWeight = props.strokeLeftWeight;
   if (props.strokeRightWeight != null && 'strokeRightWeight' in node)
     node.strokeRightWeight = props.strokeRightWeight;
-  if (props.strokes != null && 'strokes' in node) node.strokes = props.strokes;
+  if (strokes != null && 'strokes' in node) node.strokes = strokes;
   if (props.strokeAlign != null && 'strokeAlign' in node)
     node.strokeAlign = props.strokeAlign;
   if (props.strokeCap != null && 'strokeCap' in node)
@@ -54,7 +64,7 @@ async function applyProps(
   if (node.type === 'ELLIPSE' && props.arcData != null && 'arcData' in node) {
     node.arcData = props.arcData;
   }
-  if (props.effects != null && 'effects' in node) node.effects = props.effects;
+  if (effects != null && 'effects' in node) node.effects = effects;
 
   if (props.cornerRadius != null && 'cornerRadius' in node)
     node.cornerRadius = props.cornerRadius;
@@ -203,7 +213,13 @@ export async function updateSelection(
     base = host.currentPage.selection;
   }
   if (base.length === 0) {
-    throw new Error('没有可修改的节点: 请先选中节点,或传入有效的 ids');
+    const idsHint =
+      params.ids != null && params.ids.length > 0
+        ? `(请求 ids: ${JSON.stringify(params.ids)})`
+        : '(未传 ids,当前画布无选中)';
+    throw new Error(
+      `没有可修改的节点: 请先选中节点,或传入有效的 ids${idsHint};可用 jsd_find 复核节点存在与 id 有效性`,
+    );
   }
   const targets = collectTargets(
     base,

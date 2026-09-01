@@ -73,6 +73,14 @@ export interface BridgeToolDef {
     bridge: Bridge,
     signal: AbortSignal,
   ) => Promise<unknown>;
+  /**
+   * 成功响应的附加文本块(置于结构化 JSON 文本之前),用于进度/汇总/逐条失败提示。
+   * 典型用例:多 id 操作对比「请求的 ids」与返回结果,点名未命中的节点。
+   */
+  extraContent?: (
+    data: unknown,
+    args: Record<string, unknown>,
+  ) => { type: 'text'; text: string }[];
 }
 
 /**
@@ -101,6 +109,20 @@ export function bridgeTool(
     // 可编程执行体:MCP 回调与 jsd_batch 编排共用(统一兜底/超时/取消传播)
     const executeTool: ToolExecutor = async (args, signal) => {
       try {
+        // 入参 schema 校验:直接 MCP 调用已由 SDK validateToolInput 校验过(幂等,
+        // 成本可忽略),这里补齐 jsd_batch 直调 executor 的路径——内层工具的
+        // inputSchema 不生效,坏载荷(颜色带 a / 0-255 / 渐变带 color / 缺
+        // blendMode 等)会原样穿透到引擎抛 in set_fills/set_effects。
+        if (def.inputSchema != null) {
+          const parsed = def.inputSchema.safeParse(args);
+          if (!parsed.success) {
+            const detail = parsed.error.issues
+              .map((i) => `${i.path.join('.') || '(root)'}: ${i.message}`)
+              .join('; ');
+            throw new Error(`参数校验失败(${def.name}): ${detail}`);
+          }
+          args = parsed.data as Record<string, unknown>;
+        }
         const opts: RequestOptions = {
           ...(signal != null ? { signal } : {}),
           ...(def.timeout != null ? { timeout: def.timeout } : {}),
@@ -119,7 +141,11 @@ export function bridgeTool(
             opts,
           );
         }
-        return structured(data, def.outputSchema);
+        return structured(
+          data,
+          def.outputSchema,
+          def.extraContent ? def.extraContent(data, args) : undefined,
+        );
       } catch (e) {
         // 可观测性:插件执行期错误(如引擎校验失败)落日志,便于排查。
         // 注意:入参 schema 校验失败发生在 SDK 内部(validateToolInput),

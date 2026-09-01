@@ -110,10 +110,11 @@ text-to-design 能让 AI 助手(比如 opencode、Claude)直接在你的设计�
 
 ```bash
 tail -f /tmp/text-to-design-mcp.log   # 服务日志:请求/响应耗时、HTTP 状态、插件连接
-TEXT_TO_DESIGN_MCP_LOG_LEVEL=debug    # 更细:WS 帧级收发
+TEXT_TO_DESIGN_MCP_LOG_LEVEL=debug    # 更细落盘:WS 帧级收发(只影响日志文件,不影响面板)
 ```
 
-插件面板自带状态与日志(收到服务请求 / 转发失败 / 未匹配响应)。
+插件面板自带状态与日志:服务端日志实时推送(档位切到「全部」可见 debug 帧级明细),
+插件离线期间的日志先缓冲、上线时按顺序回放。
 
 ### 构建与开发
 

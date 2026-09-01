@@ -1,4 +1,9 @@
-import type { FindParams, FindResult, SerializedNode } from '../schemas';
+import type {
+  FindParams,
+  FindResult,
+  PageStructureResult,
+  SerializedNode,
+} from '../schemas';
 import type { DesignHost, NodeSkeleton } from './host';
 import { serializeNode, trySerialize } from './serialize';
 import { findNode } from './utils';
@@ -35,7 +40,40 @@ export function setSelection(
     throw new Error('没有找到要选中的节点');
   }
   host.currentPage.selection = nodes;
+  // 参考实现(set_selections)同步滚动视口,让「看一眼选中」时画面切过去
+  host.viewport.scrollAndZoomIntoView(nodes);
   return { selected: nodes.map((n) => n.id) };
+}
+
+/** 页面结构总览:当前页顶层节点的轻量摘要(serializeNode depth=0,不递归子节点) */
+export function getPageStructure(host: DesignHost): PageStructureResult {
+  const children = host.currentPage.children ?? [];
+  const nodes: PageStructureResult['nodes'] = [];
+  for (const c of children) {
+    const s = trySerialize(c, 0);
+    if (s) {
+      nodes.push({
+        id: s.id,
+        name: s.name,
+        type: s.type,
+        x: s.x,
+        y: s.y,
+        ...(s.width != null ? { width: s.width } : {}),
+        ...(s.height != null ? { height: s.height } : {}),
+        ...(s.childCount != null ? { childCount: s.childCount } : {}),
+      });
+    } else {
+      // 失效节点最小壳,不整体扑灭页面总览
+      nodes.push({
+        id: c.id,
+        name: c.name,
+        type: c.type,
+        x: Math.round(c.x) || 0,
+        y: Math.round(c.y) || 0,
+      });
+    }
+  }
+  return { pageName: host.currentPage.name, nodes, count: nodes.length };
 }
 
 export function removeNodes(
@@ -69,7 +107,9 @@ export function cloneNodes(
 ): { created: SerializedNode[] } {
   const nodes = findNode(host, ids);
   if (nodes.length === 0) {
-    throw new Error('没有找到要复制的节点');
+    throw new Error(
+      `没有找到要复制的节点(请求 ids: ${ids.length ? JSON.stringify(ids) : '无'});请先用 jsd_find 确认节点存在且 id 有效`,
+    );
   }
   const page = host.currentPage;
   const created: NodeSkeleton[] = [];

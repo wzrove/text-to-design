@@ -8,8 +8,10 @@ import type {
   SerializedNode,
 } from 'text-to-design-shared';
 import {
+  applyCachedOverrides,
   cloneNodes,
   combineAsVariantsNodes,
+  copyInstanceOverrides,
   createComponentNodes,
   createInstances,
   createSvgNode,
@@ -19,9 +21,11 @@ import {
   fillImageNode,
   findNodes,
   flattenNodes,
+  getPageStructure,
   groupNodes,
   importComponentNodes,
   listFonts,
+  listStyles,
   makeResponse,
   outlineStrokeNodes,
   removeNodes,
@@ -30,6 +34,7 @@ import {
   setInstanceProperties,
   setSelection,
   swapComponents,
+  syncInstanceOverrides,
   trySerialize,
   updateSelection,
 } from 'text-to-design-shared';
@@ -267,6 +272,37 @@ export function registerPlugin(
                 }),
               );
               break;
+            case 'copy_overrides':
+              send(
+                id,
+                true,
+                copyInstanceOverrides(host, {
+                  sourceId: p.sourceId ?? '',
+                }),
+              );
+              break;
+            case 'apply_overrides':
+              send(
+                id,
+                true,
+                await applyCachedOverrides(host, {
+                  sourceId: p.sourceId ?? '',
+                  ids: p.ids ?? [],
+                  swapToSource: p.swapToSource ?? false,
+                }),
+              );
+              break;
+            case 'sync_overrides':
+              send(
+                id,
+                true,
+                await syncInstanceOverrides(host, {
+                  sourceId: p.sourceId ?? '',
+                  ids: p.ids ?? [],
+                  swapToSource: p.swapToSource ?? false,
+                }),
+              );
+              break;
             default:
               send(
                 id,
@@ -292,6 +328,14 @@ export function registerPlugin(
         case 'list_fonts': {
           const r = await listFonts(host);
           send(id, true, r);
+          break;
+        }
+        case 'list_styles': {
+          send(id, true, listStyles(host));
+          break;
+        }
+        case 'get_page': {
+          send(id, true, getPageStructure(host));
           break;
         }
         case 'platform_op': {
@@ -331,7 +375,10 @@ export function registerPlugin(
           );
       }
     } catch (e) {
-      console.error(e);
+      // 可观测性:引擎/运行时错误带堆栈与请求摘要落插件 console,
+      // 便于定位 "not a function" / "in set_fills" 这类难懂错误
+      const paramsSummary = JSON.stringify(msg.params ?? {}).slice(0, 500);
+      console.error(`[plugin] ${msg.method} 失败, params=${paramsSummary}`, e);
       fail(id, msg.method, e);
     }
   };

@@ -32,6 +32,8 @@ export type FillImageParams = {
   hasBinary?: boolean;
 };
 export type ListFontsParams = z.infer<typeof s.listFontsSchema>;
+export type ListStylesParams = z.infer<typeof s.listStylesSchema>;
+export type GetPageStructureParams = z.infer<typeof s.getPageStructureSchema>;
 
 export type PingResult = z.infer<typeof s.pingResultSchema>;
 export type GetSelectionResult = z.infer<typeof s.getSelectionResultSchema>;
@@ -49,12 +51,14 @@ export type BatchResult = z.infer<typeof s.batchResultSchema>;
 export type PluginMethod =
   | 'ping'
   | 'get_selection'
+  | 'get_page'
   | 'execute'
   | 'create_svg'
   | 'update_node'
   | 'find'
   | 'export'
   | 'list_fonts'
+  | 'list_styles'
   | 'fill_image'
   | 'node_op'
   | 'component_op'
@@ -82,7 +86,11 @@ export type RequestParams<M extends PluginMethod> = M extends 'ping'
                     ? ComponentOpParams
                     : M extends 'platform_op'
                       ? s.PlatformOpParams
-                      : ListFontsParams;
+                      : M extends 'list_styles'
+                        ? ListStylesParams
+                        : M extends 'get_page'
+                          ? GetPageStructureParams
+                          : ListFontsParams;
 
 export type PluginRequest = (
   | { type: 'request'; id: string; method: 'ping'; params: PingParams }
@@ -125,6 +133,18 @@ export type PluginRequest = (
       id: string;
       method: 'list_fonts';
       params: ListFontsParams;
+    }
+  | {
+      type: 'request';
+      id: string;
+      method: 'list_styles';
+      params: ListStylesParams;
+    }
+  | {
+      type: 'request';
+      id: string;
+      method: 'get_page';
+      params: GetPageStructureParams;
     }
   | {
       type: 'request';

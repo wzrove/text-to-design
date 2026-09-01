@@ -21,6 +21,25 @@ export function registerModifyTools(
     inputSchema: updateNodeSchema,
     outputSchema: updatedResultSchema,
     annotations: { readOnlyHint: false, destructiveHint: false },
+    // 多 id 反馈:点名「请求了但没更新」的节点(引擎静默跳过失效 id,需要显式提示)
+    extraContent: (data, args) => {
+      const ids = (args.ids as string[] | undefined) ?? [];
+      const updated = (data as { updated: { id: string }[] }).updated ?? [];
+      const blocks: { type: 'text'; text: string }[] = [];
+      if (updated.length > 0)
+        blocks.push({ type: 'text', text: `已更新 ${updated.length} 个节点` });
+      if (ids.length > 0) {
+        const got = new Set(updated.map((n) => n.id));
+        const missing = ids.filter((id) => !got.has(id));
+        if (missing.length > 0) {
+          blocks.push({
+            type: 'text',
+            text: `以下节点未更新(可能已失效/被连坐删除): ${missing.join(', ')}。可用 jsd_find 复核后重试`,
+          });
+        }
+      }
+      return blocks;
+    },
   });
 
   const find = bridgeTool({

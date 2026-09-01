@@ -20,7 +20,8 @@ export function registerCreateTools(
     name: 'jsd_create_nodes',
     title: '创建设计节点',
     description: `在画布创建节点,可递归嵌套子节点。
-必填 ops 为设计指令数组,如 {"ops":[{"type":"RECTANGLE","name":"矩形","width":100,"height":100}]};节点类型(FRAME/RECTANGLE/ELLIPSE/LINE/POLYGON/STAR/VECTOR/TEXT/GROUP/BOOLEAN_OPERATION)、填充描边、placement 放置方式等结构见 inputSchema 各字段说明。`,
+必填 ops 为设计指令数组,如 {"ops":[{"type":"RECTANGLE","name":"矩形","width":100,"height":100}]};节点类型(FRAME/RECTANGLE/ELLIPSE/LINE/POLYGON/STAR/VECTOR/TEXT/GROUP/BOOLEAN_OPERATION)、填充描边、placement 放置方式等结构见 inputSchema 各字段说明。
+整页/整屏等复杂结构:先取 design-strategy prompt 的「一层只建一层 + 归组后再布局」纪律再动手,别边建边改`,
     method: 'execute',
     inputSchema: executeSchema,
     outputSchema: createdResultSchema,

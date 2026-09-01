@@ -2,23 +2,35 @@ import { z } from 'zod';
 
 // ---- 基础类型 (对齐 plugin-typings runtime) ----
 
-export const rgbSchema = z.object({
-  r: z
-    .number()
-    .min(0)
-    .max(1)
-    .describe('红色通道,范围 0-1(0=无,1=满),如纯红为 1'),
-  g: z.number().min(0).max(1).describe('绿色通道,范围 0-1'),
-  b: z.number().min(0).max(1).describe('蓝色通道,范围 0-1'),
-});
+export const rgbSchema = z
+  .object({
+    r: z
+      .number()
+      .min(0)
+      .max(1, '颜色通道最大 1(0-255 的色值请先除以 255 归一化)')
+      .describe('红色通道,范围 0-1(0=无,1=满),如纯红为 1'),
+    g: z
+      .number()
+      .min(0)
+      .max(1, '颜色通道最大 1(0-255 的色值请先除以 255 归一化)')
+      .describe('绿色通道,范围 0-1'),
+    b: z
+      .number()
+      .min(0)
+      .max(1, '颜色通道最大 1(0-255 的色值请先除以 255 归一化)')
+      .describe('蓝色通道,范围 0-1'),
+  })
+  .strict();
 export type RGB = z.infer<typeof rgbSchema>;
 
-export const rgbaSchema = z.object({
-  r: z.number().min(0).max(1),
-  g: z.number().min(0).max(1),
-  b: z.number().min(0).max(1),
-  a: z.number().min(0).max(1),
-});
+export const rgbaSchema = z
+  .object({
+    r: z.number().min(0).max(1, '颜色通道最大 1(0-255 请先归一化)'),
+    g: z.number().min(0).max(1, '颜色通道最大 1(0-255 请先归一化)'),
+    b: z.number().min(0).max(1, '颜色通道最大 1(0-255 请先归一化)'),
+    a: z.number().min(0).max(1, 'alpha 通道最大 1(0-255 请先归一化)'),
+  })
+  .strict();
 export type RGBA = z.infer<typeof rgbaSchema>;
 
 export const gradientStopSchema = z
@@ -38,38 +50,6 @@ export const transformSchema = z
   ])
   .describe('变换矩阵,如 [[1,0,0],[0,1,0]] 表示无变换(Identity)');
 export type Transform = z.infer<typeof transformSchema>;
-
-// Paint: 填充/描边的统一表示 (对齐 runtime Paint union)
-export const paintSchema = z.discriminatedUnion('type', [
-  z.object({
-    type: z.literal('SOLID'),
-    color: rgbSchema,
-    opacity: z.number().min(0).max(1).optional(),
-    visible: z.boolean().optional(),
-    blendMode: z.string().optional(),
-  }),
-  z.object({
-    type: z.literal('GRADIENT_LINEAR'),
-    gradientStops: z.array(gradientStopSchema),
-    gradientTransform: transformSchema,
-  }),
-  z.object({
-    type: z.literal('GRADIENT_RADIAL'),
-    gradientStops: z.array(gradientStopSchema),
-    gradientTransform: transformSchema,
-  }),
-  z.object({
-    type: z.literal('GRADIENT_ANGULAR'),
-    gradientStops: z.array(gradientStopSchema),
-    gradientTransform: transformSchema,
-  }),
-  z.object({
-    type: z.literal('IMAGE'),
-    imageHash: z.string(),
-    scaleMode: z.enum(['FILL', 'FIT', 'CROP', 'TILE']).optional(),
-  }),
-]);
-export type Paint = z.infer<typeof paintSchema>;
 
 // 混合模式 (对齐 runtime BlendMode)
 export const blendModeSchema = z.enum([
@@ -93,37 +73,87 @@ export const blendModeSchema = z.enum([
 ]);
 export type BlendMode = z.infer<typeof blendModeSchema>;
 
+// Paint: 填充/描边的统一表示 (对齐 runtime Paint union)
+export const paintSchema = z.discriminatedUnion('type', [
+  z
+    .object({
+      type: z.literal('SOLID'),
+      color: rgbSchema,
+      opacity: z.number().min(0).max(1).optional(),
+      visible: z.boolean().optional(),
+      blendMode: blendModeSchema.optional(),
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal('GRADIENT_LINEAR'),
+      gradientStops: z.array(gradientStopSchema),
+      gradientTransform: transformSchema,
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal('GRADIENT_RADIAL'),
+      gradientStops: z.array(gradientStopSchema),
+      gradientTransform: transformSchema,
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal('GRADIENT_ANGULAR'),
+      gradientStops: z.array(gradientStopSchema),
+      gradientTransform: transformSchema,
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal('IMAGE'),
+      imageHash: z.string(),
+      scaleMode: z.enum(['FILL', 'FIT', 'CROP', 'TILE']).optional(),
+    })
+    .strict(),
+]);
+export type Paint = z.infer<typeof paintSchema>;
+
 // 效果 (对齐 runtime Effect discriminated union)
 export const effectSchema = z.discriminatedUnion('type', [
-  z.object({
-    type: z.literal('DROP_SHADOW'),
-    color: rgbaSchema,
-    offset: z.object({ x: z.number(), y: z.number() }),
-    radius: z.number().min(0),
-    spread: z.number().optional(),
-    visible: z.boolean().optional(),
-    blendMode: blendModeSchema.default('NORMAL'),
-    showShadowBehindNode: z.boolean().optional(),
-  }),
-  z.object({
-    type: z.literal('INNER_SHADOW'),
-    color: rgbaSchema,
-    offset: z.object({ x: z.number(), y: z.number() }),
-    radius: z.number().min(0),
-    spread: z.number().optional(),
-    visible: z.boolean().optional(),
-    blendMode: blendModeSchema.default('NORMAL'),
-  }),
-  z.object({
-    type: z.literal('LAYER_BLUR'),
-    radius: z.number().min(0),
-    visible: z.boolean().optional(),
-  }),
-  z.object({
-    type: z.literal('BACKGROUND_BLUR'),
-    radius: z.number().min(0),
-    visible: z.boolean().optional(),
-  }),
+  z
+    .object({
+      type: z.literal('DROP_SHADOW'),
+      color: rgbaSchema,
+      offset: z.object({ x: z.number(), y: z.number() }),
+      radius: z.number().min(0),
+      spread: z.number().optional(),
+      visible: z.boolean().optional(),
+      blendMode: blendModeSchema.default('NORMAL'),
+      showShadowBehindNode: z.boolean().optional(),
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal('INNER_SHADOW'),
+      color: rgbaSchema,
+      offset: z.object({ x: z.number(), y: z.number() }),
+      radius: z.number().min(0),
+      spread: z.number().optional(),
+      visible: z.boolean().optional(),
+      blendMode: blendModeSchema.default('NORMAL'),
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal('LAYER_BLUR'),
+      radius: z.number().min(0),
+      visible: z.boolean().optional(),
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal('BACKGROUND_BLUR'),
+      radius: z.number().min(0),
+      visible: z.boolean().optional(),
+    })
+    .strict(),
 ]);
 export type Effect = z.infer<typeof effectSchema>;
 
@@ -327,8 +357,15 @@ export const autoLayoutPropsSchema = z.object({
   layoutMode: z
     .enum(['NONE', 'HORIZONTAL', 'VERTICAL'])
     .optional()
-    .describe('自动布局方向:NONE|HORIZONTAL|VERTICAL'),
-  itemSpacing: z.number().optional().describe('自动布局项间距(px)'),
+    .describe(
+      '自动布局方向:NONE|HORIZONTAL|VERTICAL。传 itemSpacing/padding*/primaryAxis* 等布局属性前必须先设为 HORIZONTAL 或 VERTICAL',
+    ),
+  itemSpacing: z
+    .number()
+    .optional()
+    .describe(
+      '自动布局项间距(px);primaryAxisAlignItems=SPACE_BETWEEN 时该项被忽略(子项均匀分布)',
+    ),
   paddingTop: z.number().optional().describe('上内边距(px)'),
   paddingRight: z.number().optional().describe('右内边距(px)'),
   paddingBottom: z.number().optional().describe('下内边距(px)'),
@@ -344,7 +381,9 @@ export const autoLayoutPropsSchema = z.object({
   primaryAxisAlignItems: z
     .enum(['MIN', 'MAX', 'CENTER', 'SPACE_BETWEEN'])
     .optional()
-    .describe('主轴对齐:MIN|MAX|CENTER|SPACE_BETWEEN'),
+    .describe(
+      '主轴对齐:MIN|MAX|CENTER|SPACE_BETWEEN;设为 SPACE_BETWEEN 时 itemSpacing 被忽略(子项均匀分布)',
+    ),
   counterAxisAlignItems: z
     .enum(['MIN', 'MAX', 'CENTER'])
     .optional()
@@ -641,12 +680,38 @@ export const manageNodesResultSchema = z.object({
     .union([serializedNodeSchema, z.array(serializedNodeSchema)])
     .optional(),
 });
+/** 实例覆盖摘要(只回传键名,不回传大体积值) */
+export const overrideSummarySchema = z.object({
+  variantProperties: z.record(z.string(), z.string()).optional(),
+  componentProperties: z
+    .record(z.string(), componentPropertyValueSchema)
+    .optional(),
+  propsSummary: z.array(z.string()).optional(),
+});
+
+/** 单实例套用结果 */
+export const applyOverrideItemSchema = z.object({
+  instanceId: z.string(),
+  instanceName: z.string(),
+  ok: z.boolean(),
+  message: z.string().optional(),
+});
+
 export const manageComponentsResultSchema = z.object({
   created: z
     .union([serializedNodeSchema, z.array(serializedNodeSchema)])
     .optional(),
   swapped: z.array(serializedNodeSchema).optional(),
   updated: z.array(serializedNodeSchema).optional(),
+  /** copy_overrides 返回的快照标识(=源实例 id) */
+  snapshotId: z.string().optional(),
+  sourceName: z.string().optional(),
+  /** copy_overrides 返回的复制摘要 */
+  captured: overrideSummarySchema.optional(),
+  /** apply/sync 返回的逐条套用结果 */
+  applied: z.array(applyOverrideItemSchema).optional(),
+  /** apply/sync 返回的已套用摘要 */
+  source: overrideSummarySchema.optional(),
 });
 export const exportResultSchema = z.object({
   exports: z.array(
@@ -663,6 +728,36 @@ export const exportResultSchema = z.object({
 });
 export const listFontsResultSchema = z.object({
   families: z.array(z.string()),
+  count: z.number(),
+});
+
+/** 页面结构总览:当前页顶层节点的轻量摘要(不递归子节点) */
+export const pageStructureResultSchema = z.object({
+  pageName: z.string(),
+  nodes: z.array(
+    z.object({
+      id: z.string(),
+      name: z.string(),
+      type: nodeTypeSchema,
+      x: z.number(),
+      y: z.number(),
+      width: z.number().optional(),
+      height: z.number().optional(),
+      childCount: z.number().optional(),
+    }),
+  ),
+  count: z.number(),
+});
+
+/** 本地样式枚举结果(两平台 API 同构:PAINT/TEXT/EFFECT/GRID) */
+export const listStylesResultSchema = z.object({
+  styles: z.array(
+    z.object({
+      id: z.string(),
+      name: z.string(),
+      type: z.enum(['PAINT', 'TEXT', 'EFFECT', 'GRID']),
+    }),
+  ),
   count: z.number(),
 });
 
@@ -778,7 +873,7 @@ const baseNodeFields = {
   locked: z.boolean().optional().describe('锁定图层'),
   isMask: z.boolean().optional().describe('是否为蒙版'),
   children: z
-    .array(z.any())
+    .array(z.lazy(() => executeNodeSchema))
     .max(100)
     .optional()
     .describe(
@@ -847,7 +942,9 @@ const frameNodeSchema = z
     itemSpacing: z
       .number()
       .optional()
-      .describe('自动布局项间距(px),需先设 layoutMode'),
+      .describe(
+        '自动布局项间距(px),需先设 layoutMode;primaryAxisAlignItems=SPACE_BETWEEN 时该项被忽略(子项均匀分布)',
+      ),
     paddingTop: z.number().optional().describe('上内边距(px)'),
     paddingRight: z.number().optional().describe('右内边距(px)'),
     paddingBottom: z.number().optional().describe('下内边距(px)'),
@@ -863,7 +960,9 @@ const frameNodeSchema = z
     primaryAxisAlignItems: z
       .enum(['MIN', 'MAX', 'CENTER', 'SPACE_BETWEEN'])
       .optional()
-      .describe('主轴对齐:MIN|MAX|CENTER|SPACE_BETWEEN'),
+      .describe(
+        '主轴对齐:MIN|MAX|CENTER|SPACE_BETWEEN;设为 SPACE_BETWEEN 时 itemSpacing 被忽略(子项均匀分布)',
+      ),
     counterAxisAlignItems: z
       .enum(['MIN', 'MAX', 'CENTER'])
       .optional()
@@ -1030,7 +1129,12 @@ const groupNodeSchema = z
       .describe(
         '自动布局方向:NONE=纯归组,HORIZONTAL=水平,VERTICAL=垂直。传 itemSpacing/padding* 等布局属性前必须先设为 HORIZONTAL 或 VERTICAL',
       ),
-    itemSpacing: z.number().optional().describe('项间距(px),需先设 layoutMode'),
+    itemSpacing: z
+      .number()
+      .optional()
+      .describe(
+        '项间距(px),需先设 layoutMode;primaryAxisAlignItems=SPACE_BETWEEN 时该项被忽略(子项均匀分布)',
+      ),
     paddingTop: z.number().optional().describe('上内边距(px)'),
     paddingRight: z.number().optional().describe('右内边距(px)'),
     paddingBottom: z.number().optional().describe('下内边距(px)'),
@@ -1046,7 +1150,9 @@ const groupNodeSchema = z
     primaryAxisAlignItems: z
       .enum(['MIN', 'MAX', 'CENTER', 'SPACE_BETWEEN'])
       .optional()
-      .describe('主轴对齐'),
+      .describe(
+        '主轴对齐:MIN|MAX|CENTER|SPACE_BETWEEN;设为 SPACE_BETWEEN 时 itemSpacing 被忽略(子项均匀分布)',
+      ),
     counterAxisAlignItems: z
       .enum(['MIN', 'MAX', 'CENTER'])
       .optional()
@@ -1087,7 +1193,10 @@ const booleanOperationNodeSchema = z
       .describe(
         '布尔运算:UNION=合并,SUBTRACT=减去,INTERSECT=相交,EXCLUDE=排除',
       ),
-    children: z.array(z.any()).min(2).describe('要合并的子节点数组(至少 2 个)'),
+    children: z
+      .array(z.lazy(() => executeNodeSchema))
+      .min(2)
+      .describe('要合并的子节点数组(至少 2 个)'),
     ...visualFields,
   })
   .describe('BOOLEAN_OPERATION=布尔运算(合并子节点)');
@@ -1280,7 +1389,12 @@ export const manageNodesSchema = z
       .describe(
         '仅 group。自动布局方向:NONE=纯归组,子节点仅叠加,HORIZONTAL=水平排列,VERTICAL=垂直排列',
       ),
-    itemSpacing: z.number().optional().describe('仅 group。自动布局项间距(px)'),
+    itemSpacing: z
+      .number()
+      .optional()
+      .describe(
+        '仅 group。自动布局项间距(px);primaryAxisAlignItems=SPACE_BETWEEN 时该项被忽略(子项均匀分布)',
+      ),
     paddingTop: z.number().optional().describe('仅 group。上内边距(px)'),
     paddingRight: z.number().optional().describe('仅 group。右内边距(px)'),
     paddingBottom: z.number().optional().describe('仅 group。下内边距(px)'),
@@ -1296,7 +1410,9 @@ export const manageNodesSchema = z
     primaryAxisAlignItems: z
       .enum(['MIN', 'MAX', 'CENTER', 'SPACE_BETWEEN'])
       .optional()
-      .describe('仅 group。主轴对齐:MIN|MAX|CENTER|SPACE_BETWEEN'),
+      .describe(
+        '仅 group。主轴对齐:MIN|MAX|CENTER|SPACE_BETWEEN;设为 SPACE_BETWEEN 时 itemSpacing 被忽略(子项均匀分布)',
+      ),
     counterAxisAlignItems: z
       .enum(['MIN', 'MAX', 'CENTER'])
       .optional()
@@ -1367,6 +1483,9 @@ export const manageComponentsSchema = z
         'swap_component',
         'set_instance_properties',
         'combine_as_variants',
+        'copy_overrides',
+        'apply_overrides',
+        'sync_overrides',
       ])
       .describe('组件操作类型'),
     ids: z
@@ -1395,6 +1514,18 @@ export const manageComponentsSchema = z
       .describe(
         '变体属性名→值,如 {"状态":"禁用"}(仅 set_instance_properties 必填);可调属性需从 jsd_find/jsd_get_selection 返回的 variantGroupProperties 获取,属性名必须完全匹配',
       ),
+    sourceId: z
+      .string()
+      .optional()
+      .describe(
+        '源实例(INSTANCE)节点 id;copy_overrides/apply_overrides/sync_overrides 必填',
+      ),
+    swapToSource: z
+      .boolean()
+      .optional()
+      .describe(
+        '套用时是否把目标实例 swap 成源组件,默认 false(swap 会丢失目标既有覆盖,需显式开启)',
+      ),
   })
   .superRefine((v, ctx) => {
     const missing = (field: string): void => {
@@ -1419,6 +1550,20 @@ export const manageComponentsSchema = z
         break;
       case 'import_component':
         if (typeof v.key !== 'string' || v.key.length === 0) missing('key');
+        break;
+      case 'copy_overrides':
+        if (typeof v.sourceId !== 'string' || v.sourceId.length === 0)
+          missing('sourceId');
+        break;
+      case 'apply_overrides':
+        if (!hasIds) missing('ids');
+        if (typeof v.sourceId !== 'string' || v.sourceId.length === 0)
+          missing('sourceId');
+        break;
+      case 'sync_overrides':
+        if (!hasIds) missing('ids');
+        if (typeof v.sourceId !== 'string' || v.sourceId.length === 0)
+          missing('sourceId');
         break;
     }
     if (v.op === 'swap_component' && typeof v.componentId !== 'string') {
@@ -1447,6 +1592,8 @@ export const exportSchema = z.object({
 });
 
 export const listFontsSchema = z.object({});
+export const listStylesSchema = z.object({});
+export const getPageStructureSchema = z.object({});
 
 /** 图片填充入参:server 读本地文件,经二进制通道传给插件 */
 export const fillImageSchema = z.object({
@@ -1551,6 +1698,8 @@ export type FindParams = z.infer<typeof findSchema>;
 export type FindResult = z.infer<typeof findResultSchema>;
 export type UpdateNodeProps = z.infer<typeof updateNodePropsSchema>;
 export type ListFontsResult = z.infer<typeof listFontsResultSchema>;
+export type ListStylesResult = z.infer<typeof listStylesResultSchema>;
+export type PageStructureResult = z.infer<typeof pageStructureResultSchema>;
 
 /** 插件 exportNodes 原始返回(keyed by id,含二进制字节) */
 export interface RawExportFile {

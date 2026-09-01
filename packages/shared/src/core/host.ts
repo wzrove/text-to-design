@@ -90,7 +90,10 @@ export interface NodeSkeleton extends ContainerSkeleton {
   createInstance(): NodeSkeleton;
   detachInstance(): NodeSkeleton;
   swapComponent(component: NodeSkeleton): void;
-  setProperties(properties: Record<string, string>): void;
+  /** 变体值(Record<string,string>)或 Figma 组件属性(ComponentPropertyValue)两种形态 */
+  setProperties(
+    properties: Record<string, string | shared.ComponentPropertyValue>,
+  ): void;
   outlineStroke(): NodeSkeleton | null;
   ungroup(): void;
 
@@ -178,6 +181,15 @@ export interface DesignHost {
 
   /** 插件外壳:UI 生命周期 / 事件订阅 / 消息收发(两平台同构) */
   showUI(html: string, options: { width?: number; height?: number }): void;
+  /** 本地样式枚举(平台超集:四 getter 均为两平台 PluginAPI 原生符号) */
+  getLocalPaintStyles?(): readonly { id: string; name: string; type: string }[];
+  getLocalTextStyles?(): readonly { id: string; name: string; type: string }[];
+  getLocalEffectStyles?(): readonly {
+    id: string;
+    name: string;
+    type: string;
+  }[];
+  getLocalGridStyles?(): readonly { id: string; name: string; type: string }[];
   on(event: string, handler: (...args: unknown[]) => void): void;
   readonly ui: {
     postMessage(message: unknown): void;

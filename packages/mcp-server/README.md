@@ -104,14 +104,43 @@ pkill -f text-to-design-mcp
 | `jsd_get_selection` | 读取画布当前选中的节点 |
 | `jsd_create_nodes` | 按描述创建节点(frame/rect/text 等,支持阴影/描边/渐变/文本样式) |
 | `jsd_create_svg` | 直接导入 SVG 字符串(保留 path/矢量数据,不经降级) |
+| `jsd_create_icon` | 按名称/别名模糊匹配插入 Lucide 内置图标,查无时返回候选名 |
 | `jsd_html_to_design` | 把 HTML 转成设计节点 |
-| `jsd_update_selection` | 修改选中节点的属性(位置/颜色/文字/圆角等) |
-| `jsd_find` | 按名称/类型查找节点 |
+| `jsd_update_node` | 按 id 批量修改节点属性(位置/颜色/文字/圆角等,ids 缺省作用于当前选中;部分 id 失效时在文本里逐条点名) |
+| `jsd_find` | 按名称/类型/id 查找节点 |
+| `jsd_batch` | 批量编排器:一次请求顺序执行多个 jsd_* 步骤,双花括号占位符串起中间值 |
 | `jsd_manage_nodes` | 节点结构操作,op 含 select/remove/clone/group/ungroup/flatten/outline_stroke/reparent/repair(清理引擎残留失效节点) |
-| `jsd_manage_components` | 组件/实例操作,op 含 create_component(建空壳,子节点用 reparent 归入)/create_instance/detach_instance/import_component/swap_component/set_instance_properties/combine_as_variants |
-| `jsd_export` | 导出节点为 PNG/JPG/SVG/PDF |
+| `jsd_manage_components` | 组件/实例操作,op 含 create_component(建空壳,子节点用 reparent 归入)/create_instance/detach_instance/import_component/swap_component/set_instance_properties/combine_as_variants/copy_overrides(复制源实例覆盖为快照,缓存)/apply_overrides(按快照批量套用,可 swapToSource)/sync_overrides(无状态一次性复制+套用) |
+| `jsd_export` | 导出节点为 PNG/JPG/SVG/PDF(导出失败的 id 在文本里点名) |
 | `jsd_list_fonts` | 列出可用字体 |
 | `jsd_fill_image` | 用本地图片填充节点 |
+| `jsd_platform_op` | 平台特有能力通用通道(Figma 变量/本地样式等),先看 jsd_ping 的 capabilities |
+
+### 配方 prompt(`prompts/list`)
+
+带参数的操作引导词,让 AI 少猜流程细节;策略类以 assistant 身份下发,配方式以 user 身份下发。
+
+| prompt | 用途 |
+| --- | --- |
+| `design-strategy` | 设计策略总纲:命名/层级/间距字号阶梯/出错回滚,附登录页示例结构树 |
+| `design-card` | 生成一张带标题的卡片(平铺创建 + reparent 归组 + 事后设布局) |
+| `text-replace-strategy` | 大改文案:clone 留底 → 语义分块 → 批量替换 → 逐块导小图复核 |
+| `variant-sync` | 把一个实例的样式/文案批量套用到多个同类实例(优先 sync_overrides / copy+apply,手工 jsd_update_node 兜底) |
+| `html-to-design` | HTML 转设计稿,含保真度取舍说明 |
+| `icon-grid` | 批量插入 Lucide 图标并排成自动布局网格 |
+| `script-ops` | 脚本化调用纪律:压缩工具往返与上下文占用 |
+
+### 只读资源(`resources/list`)
+
+按需实时读取画布状态,模型可直接作为上下文(插件离线时随连接门控隐藏)。
+
+| resource | 内容 |
+| --- | --- |
+| `jsd://canvas/selection` | 当前选中的序列化树(等价 jsd_get_selection depth=2) |
+| `jsd://fonts` | 当前环境可用字体族 |
+| `jsd://styles` | 当前文档可复用本地样式(PAINT/TEXT/EFFECT/GRID,按名应用样式前先读这里) |
+| `jsd://page` | 当前页顶层节点轻量摘要(名称/类型/位置/尺寸/子节点数,从头设计整页前先读) |
+| `jsd://node/{id}` | 按 id 读节点序列化结构 |
 
 ### 工作原理(简版)
 
@@ -127,13 +156,13 @@ pkill -f text-to-design-mcp
 | `TEXT_TO_DESIGN_MCP_PORT` | `47812` | 与插件通信的端口(被占用会启动失败) |
 | `TEXT_TO_DESIGN_MCP_HTTP_PORT` | `47820` | 内部服务端口(一般不用动) |
 | `TEXT_TO_DESIGN_MCP_LOG` | `/tmp/text-to-design-mcp.log` | 日志文件路径 |
-| `TEXT_TO_DESIGN_MCP_LOG_LEVEL` | `info` | 日志级别:`debug`/`info`/`warn`/`error` |
+| `TEXT_TO_DESIGN_MCP_LOG_LEVEL` | `info` | 落盘级别:`debug`/`info`/`warn`/`error`;只约束日志文件,面板推送全量下发 |
 
 ### 日志排查
 
 - 看日志:`tail -f /tmp/text-to-design-mcp.log`(请求/响应耗时、HTTP 状态码、插件连接、二进制组装都会记)
-- 要更细的连接日志,启动时设 `TEXT_TO_DESIGN_MCP_LOG_LEVEL=debug`(默认 info)
-- 插件面板自带连接状态和日志,也能帮定位
+- 要更细的连接日志,启动时设 `TEXT_TO_DESIGN_MCP_LOG_LEVEL=debug`(默认 info);该开关只减落盘量,面板推送不受限制
+- 插件面板自带连接状态和日志:服务端日志实时推送,档位默认隐藏 debug,切「全部」可见帧级明细;插件离线期间的日志会先缓冲,上线后按顺序回放
 
 ### 构建与开发
 
