@@ -268,7 +268,7 @@ export const manageComponentsSchema = z
         'sync_overrides',
       ])
       .describe(
-        '组件操作类型;注意 combine_as_variants 与 detach_instance 在当前即时设计引擎实测不可用(详见 jsd_manage_components 工具描述)',
+        '组件操作类型;注意 combine_as_variants/detach_instance 在当前即时设计引擎有内部崩溃,已内置多姿势/副本兜底,仍失败时详见 jsd_manage_components 工具描述',
       ),
     ids: z
       .array(z.string())

@@ -81,10 +81,20 @@ export function registerModifyTools(
     extraContent: (data, args) => {
       const ids = (args.ids as string[] | undefined) ?? [];
       const updated =
-        (data as { updated: { id: string; type?: string }[] }).updated ?? [];
+        (
+          data as {
+            updated: { id: string; type?: string }[];
+            warnings?: string[];
+          }
+        ).updated ?? [];
       const blocks: { type: 'text'; text: string }[] = [];
       if (updated.length > 0)
         blocks.push({ type: 'text', text: `已更新 ${updated.length} 个节点` });
+      // 写时检测到的平台已知问题(如实例内文字覆盖渲染不生效),显式透传
+      const warnings = (data as { warnings?: string[] }).warnings ?? [];
+      for (const w of warnings) {
+        blocks.push({ type: 'text', text: `⚠ ${w}` });
+      }
       // 类型不匹配的属性被 runtime 静默跳过,这里显式点名,避免调用方误以为生效
       const props = (args.props ?? {}) as Record<string, unknown>;
       const requested = Object.keys(props).filter(

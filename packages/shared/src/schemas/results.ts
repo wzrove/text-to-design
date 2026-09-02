@@ -13,6 +13,8 @@ export const createdResultSchema = z.object({
 });
 export const updatedResultSchema = z.object({
   updated: z.array(serializedNodeSchema),
+  /** 写时检测到的平台已知问题(如实例内文字样式覆盖渲染不生效) */
+  warnings: z.array(z.string()).optional(),
 });
 
 export const pingResultSchema = z.object({

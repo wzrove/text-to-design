@@ -128,9 +128,62 @@ export function combineAsVariantsNodes(
   if (components.length < 2) {
     throw new Error('combine_as_variants 至少需要 2 个组件节点');
   }
-  // 用 clone 副本合并,保留原组件:原组件不被卷进 SET,删 SET 只删副本,免残留。
+  const page = host.currentPage;
+  const errText = (e: unknown): string =>
+    e instanceof Error ? e.message : String(e);
+
+  // 引擎 combineAsVariants 实测存在内部崩溃(get_booleanOperation: Value is not
+  // a string),按副作用从小到大依次尝试三种姿势;全部失败时汇总报错便于定位引擎缺陷。
+  let set: NodeSkeleton | undefined;
+  const errors: string[] = [];
+
+  // 姿势 1:克隆并入当前页(默认姿势,原组件保留)
   const clones = components.map((c) => c.clone());
-  const set = host.combineAsVariants(clones, host.currentPage);
+  try {
+    set = host.combineAsVariants(clones, page);
+  } catch (e) {
+    errors.push(`克隆并入当前页: ${errText(e)}`);
+    for (const c of clones) {
+      try {
+        c.remove();
+      } catch {
+        // 半途被引擎卷走/已失效,忽略
+      }
+    }
+  }
+
+  // 姿势 2:克隆先移入目标父级再合并(引擎可能要求节点已在目标父级内)
+  if (set == null) {
+    const moved = components.map((c) => c.clone());
+    try {
+      for (const c of moved) page.appendChild(c);
+      set = host.combineAsVariants(moved, page);
+    } catch (e) {
+      errors.push(`克隆移入当前页后合并: ${errText(e)}`);
+      for (const c of moved) {
+        try {
+          c.remove();
+        } catch {
+          // 忽略
+        }
+      }
+    }
+  }
+
+  // 姿势 3:原节点在其所在父级直接合并(原组件会被卷入组件集,不再保留)
+  if (set == null) {
+    try {
+      set = host.combineAsVariants(components, components[0].parent ?? page);
+    } catch (e) {
+      errors.push(`原节点直接合并: ${errText(e)}`);
+    }
+  }
+
+  if (set == null) {
+    throw new Error(
+      `combine_as_variants 三种姿势均失败,疑似引擎缺陷(建议附以下报错上报):${errors.join(';')}`,
+    );
+  }
   if (params.name != null) set.name = params.name;
   host.viewport.scrollAndZoomIntoView([set]);
   return { created: serializeNode(set) };

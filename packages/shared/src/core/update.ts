@@ -196,6 +196,16 @@ async function applyProps(
   }
 }
 
+/** 目标节点是否位于 INSTANCE 内(实例子节点,平台对部分样式覆盖存在渲染缺陷) */
+function insideInstance(node: NodeSkeleton): boolean {
+  let p = node.parent;
+  while (p != null) {
+    if (p.type === 'INSTANCE') return true;
+    p = p.parent;
+  }
+  return false;
+}
+
 export async function updateSelection(
   host: DesignHost,
   params: {
@@ -204,7 +214,7 @@ export async function updateSelection(
     recursive?: boolean;
     props: UpdateNodeProps;
   },
-): Promise<{ updated: SerializedNode[] }> {
+): Promise<{ updated: SerializedNode[]; warnings?: string[] }> {
   const props = params.props ?? {};
   let base: readonly NodeSkeleton[];
   if (params.ids != null && params.ids.length > 0) {
@@ -231,8 +241,22 @@ export async function updateSelection(
       `没有命中 matchName="${params.matchName}" 的节点(matchName 为精确匹配,需与节点 name 完全一致,非模糊搜索;可用 jsd_find 复核名称后重试)`,
     );
   }
+  const warnings: string[] = [];
   for (const node of targets) {
     await applyProps(host, node, props);
+    // 平台缺陷:实例子文字的 fills/fontName 覆盖回显成功但渲染不生效,写时点名
+    if (
+      node.type === 'TEXT' &&
+      (props.fills != null || props.fontName != null) &&
+      insideInstance(node)
+    ) {
+      warnings.push(
+        `文字节点 ${node.name}(${node.id})位于 INSTANCE 内:当前平台对实例子文字的 fills/fontName 覆盖实测渲染不生效(回显是新值),导出前请目检,或改用静态节点`,
+      );
+    }
   }
-  return { updated: targets.map((n) => serializeNode(n)) };
+  return {
+    updated: targets.map((n) => serializeNode(n)),
+    ...(warnings.length > 0 ? { warnings } : {}),
+  };
 }

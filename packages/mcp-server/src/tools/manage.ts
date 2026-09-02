@@ -31,7 +31,7 @@ export function registerManageTools(
     description: `组件/实例操作,按 op 分发:
 create_component 建「空壳」组件(不会固化传入节点,返回全新 100×100 空组件,原节点不动)。正确流程:1) resize 空壳到目标尺寸 → 2) reparent 原 Frame 的子节点进空壳 → 3) 删除原 Frame → 4) 需要填充/圆角/阴影时再 jsd_update_node 补。顺序必须先 resize 后 reparent,否则子节点默认 SCALE 约束会被拉伸到错位(或先给子节点 constraints:{horizontal:"MIN",vertical:"MIN"})。
 create_instance 生成实例 | import_component 按 key 从团队库导入 | swap_component 换绑组件 | set_instance_properties 设置变体属性(可选值看节点的 variantGroupProperties) | copy_overrides 把源实例的覆盖(变体/组件属性/可见样式文本)复制为快照并缓存,返回 snapshotId(=源实例 id) | apply_overrides 按 snapshotId 把快照批量套用到目标实例(可 swapToSource,缓存 miss 会报错,需先 copy) | sync_overrides 无状态一次性「复制+套用」(不写缓存,适合 jsd_batch)。
-⚠ 已知平台缺陷(实测):combine_as_variants 当前不可用(实例不能直接合成,两个 COMPONENT 也报引擎错误),变体需求用「母组件+实例+实例覆盖」替代或引导用户在即时设计 UI 手动合并;detach_instance 当前报引擎错误不可用,需要可编辑副本时用 jsd_create_nodes 重建。
+⚠ 已知平台缺陷(实测):combine_as_variants 引擎存在内部崩溃,工具会依次尝试「克隆并入当前页 / 克隆移入当前页后合并 / 原节点直接合并(原组件会被卷入组件集)」三种姿势,全部失败时汇总报错(请附报错上报);实例不能直接合成变体,必须传 COMPONENT 节点。detach_instance 引擎报错时已内置克隆副本兜底,仍失败按报错提示操作;需要可编辑副本时也可用 jsd_create_nodes 重建。
 componentProperties 仅 Figma 生效;jsDesign 自动降级为变体属性+可见样式。`,
     method: 'component_op',
     inputSchema: manageComponentsSchema,
