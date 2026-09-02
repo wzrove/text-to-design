@@ -21,6 +21,7 @@ export default function manifestPlugin(platform: Platform) {
               name: 'text-to-design MCP Bridge',
               api: '1.0.0',
               editorType: ['figma'],
+              permissions: ['activeusers'],
               // 不设 documentAccess: 保持 legacy 访问模式。core 引擎与 adapter
               // 大量使用同步 API(getNodeById/getLocal*Styles),Figma 在
               // 'dynamic-page' 模式下会让这些同步 API 直接抛异常。
@@ -39,6 +40,8 @@ export default function manifestPlugin(platform: Platform) {
                   'http://localhost',
                   'https://localhost',
                 ],
+                reasoning:
+                  '该插件需要连接本地API服务以同步处理数据，若不开放localhost访问则核心功能将无法运行。',
               },
             }
           : JSON.parse(readFileSync(resolve(root, 'manifest.json'), 'utf8'));

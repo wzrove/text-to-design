@@ -4,5 +4,6 @@ export default defineConfig({
   build: {
     ssr: 'src/index.ts',
     outDir: 'dist',
+    minify: true,
   },
 });

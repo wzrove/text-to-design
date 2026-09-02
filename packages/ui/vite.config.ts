@@ -41,7 +41,7 @@ export default defineConfig(({ mode }): UserConfig => {
         emptyOutDir: false,
         sourcemap: false,
         target: 'es6',
-        minify: false,
+        minify: true,
         rolldownOptions: {
           input: {
             code: resolve(

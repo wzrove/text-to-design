@@ -2,47 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/server';
 import { z } from 'zod';
 import type { ToolHandle } from '../core/registry';
 
-/** 高频配方 prompt:可复用的操作引导词(只收工具 description 覆盖不到的流程级内容) */
 export function registerPrompts(server: McpServer): ToolHandle[] {
-  const designCard = server.registerPrompt(
-    'design-card',
-    {
-      title: '设计卡片',
-      description:
-        '在画布生成一张带标题的卡片,严格遵循「平铺创建 + reparent 归组 + 事后设布局」纪律',
-      argsSchema: z.object({
-        title: z.string().describe('卡片主标题文案'),
-        subtitle: z.string().optional().describe('副标题文案(可选)'),
-        width: z
-          .string()
-          .optional()
-          .describe(
-            '卡宽 px 的数字字符串,默认 "320"(MCP prompt 参数均为字符串)',
-          ),
-        height: z
-          .string()
-          .optional()
-          .describe('卡高 px 的数字字符串,默认 "200"'),
-      }),
-    },
-    ({ title, subtitle, width, height }) => ({
-      messages: [
-        {
-          role: 'user' as const,
-          content: {
-            type: 'text' as const,
-            text: cardRecipe(
-              String(title),
-              subtitle == null ? undefined : String(subtitle),
-              Number(width) || 320,
-              Number(height) || 200,
-            ),
-          },
-        },
-      ],
-    }),
-  );
-
   const htmlToDesign = server.registerPrompt(
     'html-to-design',
     {
@@ -208,7 +168,6 @@ export function registerPrompts(server: McpServer): ToolHandle[] {
 
   // 配方是静态引导词,不依赖插件连接 → 恒可用
   return [
-    designCard,
     htmlToDesign,
     iconGrid,
     scriptOps,
@@ -216,22 +175,6 @@ export function registerPrompts(server: McpServer): ToolHandle[] {
     textReplace,
     variantSync,
   ].map((handle) => Object.assign(handle, { alwaysEnabled: true }));
-}
-
-function cardRecipe(
-  title: string,
-  subtitle: string | undefined,
-  width: number,
-  height: number,
-): string {
-  const texts =
-    subtitle == null
-      ? `1 个 TEXT 主标题「${title}」`
-      : `1 个 TEXT 主标题「${title}」和 1 个 TEXT 副标题「${subtitle}」`;
-  return `请在画布中心创建一张 ${width}x${height} 的卡片:
-1) jsd_create_nodes 一次平铺创建 FRAME 底板(圆角 12、浅色填充)与${texts};
-2) jsd_manage_nodes op=reparent 把文本移入 Frame;
-3) jsd_update_node 给 Frame 设 auto-layout(VERTICAL,itemSpacing=8,padding=24,counterAxisAlignItems=CENTER),主标题 fontSize 加大。`;
 }
 
 /** 脚本化调用配方:压缩工具往返次数与上下文占用 */

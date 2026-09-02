@@ -48,7 +48,7 @@ export function registerPlugin(
   meta: PlatformMeta,
 ): void {
   try {
-    if (typeof __html__ === 'string' && __html__.trim() !== '') {
+    if (__html__ || (typeof __html__ === 'string' && __html__.trim() !== '')) {
       host.showUI(__html__, UI_OPTIONS);
     } else {
       console.warn('[plugin] __html__ 未注入,UI 面板为空');
