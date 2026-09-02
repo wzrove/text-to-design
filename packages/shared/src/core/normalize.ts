@@ -1,4 +1,5 @@
 import type { Effect, Paint, VectorPath } from '../schemas';
+import { parseHexColor } from '../schemas';
 
 /**
  * 引擎赋值前的归一化(平台无关,防御纵深):
@@ -28,10 +29,19 @@ interface NormalizedColor {
   a?: number;
 }
 
-/** 颜色通道归一化:0-255 → 0-1(任一路 >1 视为 0-255 输入,整组 /255);0-1 原样保留 */
+/** 颜色通道归一化:hex 字符串与 0-255 → 0-1(任一路 >1 视为 0-255 输入,整组 /255);0-1 原样保留 */
 function normalizeColor(raw: unknown, path: string): NormalizedColor {
+  if (typeof raw === 'string') {
+    const hex = parseHexColor(raw);
+    if (hex == null) {
+      throw new Error(
+        `${path} 颜色字符串无效: ${raw}(支持 #RGB/#RGBA/#RRGGBB/#RRGGBBAA 或 {r,g,b[,a]} 对象)`,
+      );
+    }
+    return hex;
+  }
   if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
-    throw new Error(`${path} 必须是颜色对象 {r,g,b[,a]}`);
+    throw new Error(`${path} 必须是颜色对象 {r,g,b[,a]} 或 hex 字符串`);
   }
   const o = raw as Record<string, unknown>;
   let r = normChannel(o.r, path, 'r');

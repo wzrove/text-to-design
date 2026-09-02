@@ -19,7 +19,7 @@ export function registerRawTools(
   const exportTool = bridgeTool({
     name: 'jsd_export',
     title: '导出节点为图片',
-    description: `导出节点为 PNG/JPG/SVG/PDF;savePath 落盘与 includeDataUrl 返回 base64 可并存,参数见 inputSchema。`,
+    description: `导出节点为 PNG/JPG/SVG/PDF;ids 为必填数组(单节点也写成 ids:["123:456"],不是 nodeId),savePath 落盘与 includeDataUrl 返回 base64 可并存。完整字段见 inputSchema。`,
     inputSchema: exportSchema,
     outputSchema: exportResultSchema,
     // 画布只读;但会写本地文件,不标 readOnly

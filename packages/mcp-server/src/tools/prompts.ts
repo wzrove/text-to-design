@@ -201,7 +201,7 @@ function designStrategyRecipe(screen?: string): string {
 5) 间距与字号阶梯:主标题 > 正文标签 > 按钮文本 > 辅助说明;同级元素间距一致,用 itemSpacing 统一控制,不靠手调坐标凑。
 6) 视觉顺序:自上而下按阅读顺序排布,主操作按钮放在输入项之后,次要链接(忘记密码/注册)放最后。
 7) 出错回滚:ok=false 或「没找到 X 节点」→ jsd_find 复核 id 是否已失效(可能被连坐删除),必要时 jsd_manage_nodes op=repair 清理后重试。
-8) 收敛复核:整批做完只做一次 jsd_get_selection(depth=1),或 jsd_export 导小图(scale=0.5)看效果;不要每步都读一遍。
+8) 收敛复核:整批做完只做一次 jsd_get_selection(depth=1),或 jsd_export({ids:[要看的节点id], scale:0.5}) 导小图看效果(ids 为必填数组);不要每步都读一遍。
 
 示例结构(登录页):
 - 登录页(FRAME)
@@ -236,7 +236,7 @@ function textReplaceRecipe(rootId?: string): string {
 - ids 来自上一步查询时,用 jsd_batch 的 {{步骤id.字段路径}} 占位符直接串起来,中间 id 不回传模型。
 
 ## 4. 逐块复核
-- 每替换完一块,jsd_export 导出该块(scale=0.5)看一眼:文字是否溢出容器、层级有没有乱、间距有没有被撑开。
+- 每替换完一块,jsd_export({ids:[该块节点id], scale:0.5}) 导出看一眼:文字是否溢出容器、层级有没有乱、间距有没有被撑开。
 - 有问题先修当前块再继续下一块,不要把所有错误攒到最后。
 
 ## 5. 收尾
@@ -270,5 +270,5 @@ function variantSyncRecipe(sourceId?: string, targetType?: string): string {
 - 引擎不支持时再退化为手工:jsd_update_node ids=[目标] 填字段 + jsd_manage_components op=set_instance_properties 设变体值。
 
 ## 4. 复核
-- jsd_export(scale=0.5) 抽查一张,确认间距与层级没被撑乱;再 jsd_get_selection(depth=1) 总复核。`;
+- jsd_export({ids:[抽查节点id], scale=0.5}) 抽查一张,确认间距与层级没被撑乱;再 jsd_get_selection(depth=1) 总复核。`;
 }

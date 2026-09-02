@@ -47,7 +47,10 @@ for (const dir of PUBLISHABLE) {
   if (isPublished(name, version)) {
     console.log(`\nskip ${name}@${version} (已发布)`);
   } else {
-    run('npm', ['publish', '--access', 'public'], { cwd: resolve(ROOT, dir) });
+    // pnpm publish 会把 catalog:/workspace: 协议替换为真实版本号,npm publish 不支持
+    run('pnpm', ['publish', '--access', 'public', '--no-git-checks'], {
+      cwd: resolve(ROOT, dir),
+    });
     console.log(`\npublished ${name}@${version}`);
   }
 

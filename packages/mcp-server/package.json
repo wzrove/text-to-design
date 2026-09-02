@@ -34,14 +34,14 @@
     "htmlparser2": "^10.0.0",
     "lucide-static": "^1.30.0",
     "ws": "^8.21.1",
-    "zod": "^4.4.3"
+    "zod": "catalog:"
   },
   "devDependencies": {
-    "@types/node": "^24.13.3",
+    "@types/node": "catalog:",
     "@types/ws": "^8.18.1",
     "text-to-design-shared": "workspace:*",
     "tsx": "^4.20.0",
-    "typescript": "^7.0.2",
-    "vite": "^8.2.0"
+    "typescript": "catalog:",
+    "vite": "catalog:"
   }
 }

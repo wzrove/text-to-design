@@ -18,20 +18,20 @@
     "typecheck": "tsc --noEmit && tsc -p src/code/figma/tsconfig.json"
   },
   "devDependencies": {
-    "@figma/plugin-typings": "^1.133.0",
+    "@figma/plugin-typings": "^1.137.0",
     "@jsdesigndeveloper/plugin-typings": "^1.0.12",
-    "@types/node": "^24.13.3",
-    "autoprefixer": "^10.4.21",
-    "concurrently": "10.0.4",
+    "@types/node": "catalog:",
+    "autoprefixer": "^10.5.4",
+    "concurrently": "catalog:",
     "daisyui": "^4.12.24",
-    "postcss": "^8.5.3",
-    "solid-js": "^1.9.14",
-    "tailwindcss": "^3.4.17",
+    "postcss": "^8.5.26",
+    "solid-js": "^1.9.15",
+    "tailwindcss": "^3.4.19",
     "text-to-design-shared": "workspace:*",
-    "typescript": "^7.0.2",
-    "vite": "^8.2.0",
+    "typescript": "catalog:",
+    "vite": "catalog:",
     "vite-plugin-singlefile": "^2.3.3",
     "vite-plugin-solid": "^2.11.14",
-    "zod": "^4.4.3"
+    "zod": "catalog:"
   }
 }

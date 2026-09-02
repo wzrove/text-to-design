@@ -227,7 +227,9 @@ export async function updateSelection(
     params.recursive ?? false,
   );
   if (targets.length === 0) {
-    throw new Error(`没有命中 matchName="${params.matchName}" 的节点`);
+    throw new Error(
+      `没有命中 matchName="${params.matchName}" 的节点(matchName 为精确匹配,需与节点 name 完全一致,非模糊搜索;可用 jsd_find 复核名称后重试)`,
+    );
   }
   for (const node of targets) {
     await applyProps(host, node, props);

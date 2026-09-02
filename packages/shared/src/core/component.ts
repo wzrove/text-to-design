@@ -136,26 +136,103 @@ export function combineAsVariantsNodes(
   return { created: serializeNode(set) };
 }
 
+/** mainComponent 可安全触碰(读属性不崩)才算活着;僵尸引用会让引擎解绑时内部崩溃 */
+function mainComponentAlive(n: NodeSkeleton): boolean {
+  try {
+    const main = n.mainComponent;
+    return main != null && typeof main.id === 'string';
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * jsDesign 引擎 detachInstance 偶发内部崩溃(t.get is not a function),
+ * 多见于被 setProperties/swapComponent 改过覆盖的原节点。副本兜底:
+ * 克隆到原位(引擎侧干净状态)解绑副本,删原实例,几何不变。
+ */
+function detachWithRecovery(inst: NodeSkeleton): NodeSkeleton {
+  let firstMsg = '';
+  try {
+    return inst.detachInstance();
+  } catch (firstErr) {
+    firstMsg = firstErr instanceof Error ? firstErr.message : String(firstErr);
+  }
+  // 副本兜底:克隆插回原位(引擎侧干净状态)再解绑,成功后删原实例
+  let clone: NodeSkeleton | undefined;
+  try {
+    const parent = inst.parent;
+    if (!parent) throw new Error('实例无父节点,副本无处安放');
+    const index =
+      'children' in parent
+        ? (parent.children ?? []).findIndex((c) => c.id === inst.id)
+        : -1;
+    clone = inst.clone();
+    if (index >= 0 && 'insertChild' in parent) {
+      parent.insertChild(index, clone);
+    } else {
+      parent.appendChild(clone);
+    }
+    const frame = clone.detachInstance();
+    clone = undefined; // 已转为 frame,不再清理
+    inst.remove();
+    return frame;
+  } catch (retryErr) {
+    // 半途而废时删掉克隆,避免画布残留重复实例
+    try {
+      clone?.remove();
+    } catch {
+      // 已被移除或引擎级损坏,忽略
+    }
+    const retryMsg =
+      retryErr instanceof Error ? retryErr.message : String(retryErr);
+    throw new Error(
+      `实例 ${inst.id} 解绑失败(直接:${firstMsg};副本兜底:${retryMsg})。可尝试先 repair,或在画布中选中后用快捷键 Ctrl/⌘+Alt+B 手动分离`,
+    );
+  }
+}
+
+// detachWithRecovery 不需要 host:克隆先插回原父级再解绑
 export function detachInstanceNodes(
   host: DesignHost,
   ids: string[],
 ): {
   created: SerializedNode[];
+  failed: { id: string; message: string }[];
 } {
   const instances = findNode(host, ids).filter((n) => n.type === 'INSTANCE');
   if (instances.length === 0) {
     throw new Error('没有找到要解绑的实例节点');
   }
-  // 防御性检查:实例必须有 mainComponent 才能解绑
-  const invalidInstances = instances.filter((n) => !n.mainComponent);
-  if (invalidInstances.length > 0) {
+  const detached: NodeSkeleton[] = [];
+  const failed: { id: string; message: string }[] = [];
+  for (const inst of instances) {
+    if (!mainComponentAlive(inst)) {
+      failed.push({
+        id: inst.id,
+        message:
+          'mainComponent 已失效,无法解绑。建议先运行 repair 清理失效节点',
+      });
+      continue;
+    }
+    try {
+      detached.push(detachWithRecovery(inst));
+    } catch (e) {
+      failed.push({
+        id: inst.id,
+        message: e instanceof Error ? e.message : String(e),
+      });
+    }
+  }
+  if (detached.length === 0 && failed.length > 0) {
     throw new Error(
-      `以下实例的 mainComponent 已失效,无法解绑:${invalidInstances.map((n) => n.id).join(',')}。建议先运行 repair 清理失效节点`,
+      `全部实例解绑失败:${failed.map((f) => `${f.id}(${f.message})`).join(', ')}`,
     );
   }
-  const detached = instances.map((n) => n.detachInstance());
-  host.viewport.scrollAndZoomIntoView(detached);
-  return { created: detached.map((n) => serializeNode(n)) };
+  if (detached.length > 0) {
+    host.viewport.scrollAndZoomIntoView(detached);
+  }
+  return { created: detached.map((n) => serializeNode(n)), failed };
 }
 
 // ---- 实例覆盖复制/套用(对齐参考实现的 get/set_instance_overrides) ----
