@@ -151,6 +151,7 @@ const frameNodeSchema = z
       .describe('自动布局内对齐:MIN|CENTER|MAX|STRETCH|INHERIT'),
     ...visualFields,
   })
+  .strict()
   .superRefine((val, ctx) => {
     // itemSpacing/padding*/primaryAxis*/counterAxis* 需要 layoutMode != NONE
     const hasLayoutFields =
@@ -175,7 +176,10 @@ const frameNodeSchema = z
       });
     }
   })
-  .describe('FRAME=容器(可 auto-layout)');
+  .strict()
+  .describe(
+    'FRAME=容器(可 auto-layout)。注意:未显式传 fills 时引擎默认白底,透明容器请显式传 fills:[{type:"SOLID",color:{r:0,g:0,b:0},opacity:0}]',
+  );
 
 const rectangleNodeSchema = z
   .object({
@@ -188,6 +192,7 @@ const rectangleNodeSchema = z
     bottomRightRadius: z.number().optional().describe('右下圆角(px)'),
     ...visualFields,
   })
+  .strict()
   .describe('RECTANGLE=矩形');
 
 const ellipseNodeSchema = z
@@ -205,6 +210,7 @@ const ellipseNodeSchema = z
       .describe('环形路径参数(弧线),可画圆环'),
     ...visualFields,
   })
+  .strict()
   .describe('ELLIPSE=椭圆(配合 arcData 可画环)');
 
 const lineNodeSchema = z
@@ -213,6 +219,7 @@ const lineNodeSchema = z
     ...baseNodeFields,
     ...visualFields,
   })
+  .strict()
   .describe('LINE=线段');
 
 const polygonNodeSchema = z
@@ -227,6 +234,7 @@ const polygonNodeSchema = z
     bottomRightRadius: z.number().optional().describe('右下圆角(px)'),
     ...visualFields,
   })
+  .strict()
   .describe('POLYGON=多边形(配合 pointCount)');
 
 const starNodeSchema = z
@@ -244,6 +252,7 @@ const starNodeSchema = z
     bottomRightRadius: z.number().optional().describe('右下圆角(px)'),
     ...visualFields,
   })
+  .strict()
   .describe('STAR=星形(配合 pointCount + innerRadius)');
 
 const vectorNodeSchema = z
@@ -255,13 +264,20 @@ const vectorNodeSchema = z
       .describe('矢量路径数组,每项含 SVG path data(如 "M0 0 L100 100")'),
     ...visualFields,
   })
-  .describe('VECTOR=矢量(配合 vectorPaths 传 SVG path data)');
+  .strict()
+  .describe(
+    'VECTOR=矢量(配合 vectorPaths 传 SVG path data)。注意:当前平台创建后 vectorPaths 偶发丢失/形变,短直线段建议改用 LINE+rotation 更稳定',
+  );
 
 const textNodeSchema = z
   .object({
     type: z.literal('TEXT'),
     ...baseNodeFields,
-    characters: z.string().describe('文本内容,如 "Hello World"'),
+    characters: z
+      .string()
+      .describe(
+        '文本内容,如 "Hello World"。注意:个别 emoji 依赖客户端字体可能缺字(渲染为 ☒),上线前逐个目检',
+      ),
     fontSize: z.number().optional().describe('字号(px),默认 16'),
     fontName: fontNameSchema
       .optional()
@@ -298,6 +314,7 @@ const textNodeSchema = z
       .describe('字距:{value,unit},unit 为 PIXELS|PERCENT'),
     ...visualFields,
   })
+  .strict()
   .describe('TEXT=文本(配合 characters/fontSize/fontName 等)');
 
 const groupNodeSchema = z
@@ -346,6 +363,7 @@ const groupNodeSchema = z
       .describe('交叉轴对齐'),
     ...visualFields,
   })
+  .strict()
   .superRefine((val, ctx) => {
     const hasLayoutFields =
       val.itemSpacing != null ||
@@ -386,6 +404,7 @@ const booleanOperationNodeSchema = z
       .describe('要合并的子节点数组(至少 2 个)'),
     ...visualFields,
   })
+  .strict()
   .describe('BOOLEAN_OPERATION=布尔运算(合并子节点)');
 
 // 导出: discriminated union on `type`(用于 JSON Schema 生成,LLM 看到按 type 分组的字段)

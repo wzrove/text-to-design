@@ -91,7 +91,8 @@ export function registerBatchTools(
     name: 'jsd_batch',
     title: '批量编排执行',
     description: `批量编排器:一次请求内顺序执行多个 jsd_* 步骤,前一步结果经双花括号占位符(内容为 步骤id.字段路径)注入后一步 args,中间 id 不回传模型,显著减少往返与上下文。
-占位符独占一个参数值时保留原类型(数组可直接作 ids 用),嵌在字符串中按 JSON 文本展开;id 重复/未知工具/引用失败立即中止,工具执行失败默认也中止(stopOnError=false 或单步 continueOnError=true 可走完)。每步只回传 structuredContent。`,
+占位符独占一个参数值时保留原类型(数组可直接作 ids 用),嵌在字符串中按 JSON 文本展开;id 重复/未知工具/引用失败立即中止,工具执行失败默认也中止(stopOnError=false 或单步 continueOnError=true 可走完)。每步只回传 structuredContent。
+常用取值路径速查(路径与各工具返回结构对应,写错会报「无法解析占位符引用」):jsd_create_nodes/create_instance/manage_nodes group 等 → {{id.created[0].id}}(created 为数组);jsd_create_svg/jsd_create_icon/manage_components create_component → {{id.created.id}}(created 为单对象);jsd_find → {{id.nodes[0].id}};jsd_update_node → {{id.updated[0].id}}。`,
     inputSchema: batchSchema,
     outputSchema: batchResultSchema,
     // calls 里可能带 remove/flatten 等破坏性 op,如实标注

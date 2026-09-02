@@ -55,29 +55,32 @@ export const updateNodePropsSchema = z
       .optional()
       .describe('效果样式 id(团队库样式;平台无此能力时被忽略)'),
   })
+  .strict()
   .describe(
-    '要修改的属性;各字段仅在匹配的节点类型上生效(如 pointCount 仅 POLYGON/STAR、layoutMode 仅 FRAME),不匹配的字段会被忽略并在结果中提示',
+    '要修改的属性;各字段仅在匹配的节点类型上生效(如 pointCount 仅 POLYGON/STAR、layoutMode 仅 FRAME),不匹配的字段会被忽略并在结果中提示。只接受此处列出的键,写错键名会直接报错而不是静默忽略',
   );
 
-export const updateNodeSchema = z.object({
-  ids: z
-    .array(z.string())
-    .optional()
-    .describe('要修改的节点 id 列表;缺省时作用于当前选中节点'),
-  matchName: z
-    .string()
-    .optional()
-    .describe(
-      '按节点 name 过滤(精确等值匹配,非模糊/包含;可用 jsd_find 先复核名称),仅命中节点被修改',
-    ),
-  recursive: z
-    .boolean()
-    .optional()
-    .describe(
-      '是否递归应用到子节点子树,默认 false;目标为大容器时慎用(会连坐修改全部后代)',
-    ),
-  props: updateNodePropsSchema.describe('要修改的属性'),
-});
+export const updateNodeSchema = z
+  .object({
+    ids: z
+      .array(z.string())
+      .optional()
+      .describe('要修改的节点 id 列表;缺省时作用于当前选中节点'),
+    matchName: z
+      .string()
+      .optional()
+      .describe(
+        '按节点 name 过滤(精确等值匹配,非模糊/包含;可用 jsd_find 先复核名称),仅命中节点被修改',
+      ),
+    recursive: z
+      .boolean()
+      .optional()
+      .describe(
+        '是否递归应用到子节点子树,默认 false;目标为大容器时慎用(会连坐修改全部后代)',
+      ),
+    props: updateNodePropsSchema.describe('要修改的属性'),
+  })
+  .strict();
 
 export const findSchema = z.object({
   ids: z.array(z.string()).optional().describe('按节点 id 精确查找,优先级最高'),
@@ -95,6 +98,21 @@ export const findSchema = z.object({
     .describe('序列化深度:0=仅自身,1=含直接子节点;缺省 1'),
 });
 
+// 组件/实例操作 op 全集(与 manageComponentsSchema 的 op 枚举保持同步),
+// 用于把误投到 jsd_manage_nodes 的组件操作在报错里指路到 jsd_manage_components
+const COMPONENT_OPS = [
+  'create_component',
+  'create_instance',
+  'detach_instance',
+  'import_component',
+  'swap_component',
+  'set_instance_properties',
+  'combine_as_variants',
+  'copy_overrides',
+  'apply_overrides',
+  'sync_overrides',
+];
+
 /**
  * 节点结构操作入参:扁平结构 + 运行时按 op 精查(与 manageComponentsSchema 同范式)。
  * 不用 discriminatedUnion 生成 oneOf——根级 oneOf 有两个问题:
@@ -105,17 +123,28 @@ export const findSchema = z.object({
 export const manageNodesSchema = z
   .object({
     op: z
-      .enum([
-        'select',
-        'remove',
-        'clone',
-        'group',
-        'ungroup',
-        'flatten',
-        'outline_stroke',
-        'reparent',
-        'repair',
-      ])
+      .enum(
+        [
+          'select',
+          'remove',
+          'clone',
+          'group',
+          'ungroup',
+          'flatten',
+          'outline_stroke',
+          'reparent',
+          'repair',
+        ],
+        {
+          error: (iss) => {
+            const raw: unknown = (iss as { input?: unknown }).input;
+            const v = typeof raw === 'string' ? raw : '';
+            return COMPONENT_OPS.includes(v)
+              ? `"${v}" 是组件/实例操作,应使用 jsd_manage_components;本工具仅支持:select|remove|clone|group|ungroup|flatten|outline_stroke|reparent|repair`
+              : `无效 op${v === '' ? '(缺省)' : ` "${v}"`},本工具支持:select|remove|clone|group|ungroup|flatten|outline_stroke|reparent|repair(组件/实例操作在 jsd_manage_components)`;
+          },
+        },
+      )
       .describe(
         '节点结构操作类型:select 设当前选中 | remove 删除(matchName 可再过滤) | clone 复制(右下偏移) | group 编组(可带 layoutMode/itemSpacing/padding* 参数) | ungroup 解组 | flatten 合并为矢量(至少 2 节点) | outline_stroke 描边转轮廓 | reparent 移到 parentId 下(缺省当前选中第一个) | repair 清理已损坏节点',
       ),
@@ -169,11 +198,13 @@ export const manageNodesSchema = z
     parentId: z
       .string()
       .optional()
-      .describe('仅 reparent:目标父节点 id,缺省用当前选中第一个节点'),
+      .describe(
+        '仅 reparent:目标父节点 id,缺省用当前选中第一个节点。reparent 后节点坐标按新父相对系解释,通常需手动修正 x/y',
+      ),
     index: z
       .number()
       .optional()
-      .describe('仅 reparent:插入位置,缺省追加到末尾'),
+      .describe('仅 reparent:插入位置,缺省追加到末尾;置底用 0'),
   })
   .superRefine((v, ctx) => {
     const missing = (field: string): void => {
@@ -236,7 +267,9 @@ export const manageComponentsSchema = z
         'apply_overrides',
         'sync_overrides',
       ])
-      .describe('组件操作类型'),
+      .describe(
+        '组件操作类型;注意 combine_as_variants 与 detach_instance 在当前即时设计引擎实测不可用(详见 jsd_manage_components 工具描述)',
+      ),
     ids: z
       .array(z.string())
       .optional()

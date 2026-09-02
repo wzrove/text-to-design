@@ -33,18 +33,20 @@ export const placementSchema = z
     }
   });
 
-export const executeSchema = z.object({
-  ops: z
-    .array(executeNodeSchema)
-    .describe(
-      '设计指令节点树;建议单一根节点(多个根节点会被 placement 统一摆放,可能互相叠放)',
-    ),
-  placement: placementSchema
-    .optional()
-    .describe(
-      '放置方式,缺省 center 居中且忽略 ops 内根节点的 x/y。需要按坐标摆放时传 mode:"manual"(保留 ops 内 x/y)或 "absolute"(顶层统一坐标)',
-    ),
-});
+export const executeSchema = z
+  .object({
+    ops: z
+      .array(executeNodeSchema)
+      .describe(
+        '设计指令节点树;建议单一根节点(多个根节点会被 placement 统一摆放,可能互相叠放)',
+      ),
+    placement: placementSchema
+      .optional()
+      .describe(
+        '放置方式,缺省 center 居中且忽略 ops 内根节点的 x/y。需要按坐标摆放时传 mode:"manual"(保留 ops 内 x/y)或 "absolute"(顶层统一坐标)',
+      ),
+  })
+  .strict();
 
 export const createSvgSchema = z.object({
   svg: z

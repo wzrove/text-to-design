@@ -71,7 +71,8 @@ export function registerModifyTools(
   const updateNode = bridgeTool({
     name: 'jsd_update_node',
     title: '修改节点属性',
-    description: `按 id 批量修改节点属性(位置/尺寸/填充/文本/效果等,字段见 inputSchema);ids 缺省作用于当前选中;与目标节点类型不匹配的属性会被忽略并在结果中点名。结构操作(分组/删除/移动)用 jsd_manage_nodes。`,
+    description: `按 id 批量修改节点属性(位置/尺寸/填充/文本/效果等,字段见 inputSchema,写错键名会直接报错);ids 缺省作用于当前选中;与目标节点类型不匹配的属性会被忽略并在结果中点名。结构操作(分组/删除/移动)用 jsd_manage_nodes。
+⚠ 已知平台缺陷(实测):对 INSTANCE 子文字节点(Instance:<实例id>;<原id>)改 fills/fontName 时,返回回显是新值但画布/导出渲染仍是组件原样式(引擎静默丢弃);characters 内容、形状节点 strokes、文字 visible 的覆盖正常。需要实例级文字颜色/字重差异时,用静态节点重建。`,
     method: 'update_node',
     inputSchema: updateNodeSchema,
     outputSchema: updatedResultSchema,
@@ -126,7 +127,7 @@ export function registerModifyTools(
     name: 'jsd_find',
     title: '查找节点',
     description:
-      '在当前页面查找节点:ids 精确匹配优先,name 模糊,type 过滤;返回序列化节点列表(最多 100 条)',
+      '在当前页面查找节点:ids 精确匹配优先,name 模糊,type 过滤;返回序列化节点列表(最多 100 条)。大区域查询先 depth:0 拿节点清单,再按 ids/name 定向小范围查,避免大响应被截断丢尾部节点 id',
     method: 'find',
     inputSchema: findSchema,
     outputSchema: findResultSchema,
