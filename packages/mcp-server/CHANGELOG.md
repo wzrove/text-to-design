@@ -1,5 +1,11 @@
 # text-to-design-mcp
 
+## 0.6.1
+
+### Patch Changes
+
+- [`cffe325`](https://github.com/wzrove/text-to-design/commit/cffe3253a2f4352632e090e8ce4ed840cfa366f7) Thanks [@wzrove](https://github.com/wzrove)! - feat: enhance error handling and warnings for component operations and updates
+
 ## 0.6.0
 
 ### Minor Changes
