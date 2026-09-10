@@ -8,35 +8,44 @@ import {
 import type { Bridge } from '../bridge';
 import { bridgeTool, type ToolHandle } from '../core/registry';
 
-/** 管理类:节点结构操作 + 组件/实例操作 */
+/**
+ * 管理类:两个按 op 分发的聚合入口,保留给批量/混合场景。
+ * 单操作已拆成独立小工具(见 nodes.ts / components.ts),每个工具的描述里
+ * 带了对应的平台缺陷与正确流程。
+ */
 export function registerManageTools(
   server: McpServer,
   bridge: Bridge,
 ): ToolHandle[] {
   const manageNodes = bridgeTool({
     name: 'jsd_manage_nodes',
-    title: '节点结构操作',
-    description: `节点结构操作,按 op 分发:select 设当前选中 | remove 删除(matchName 可再过滤) | clone 复制(右下偏移;注意克隆 COMPONENT 得到的是 INSTANCE 而非可编辑副本) | group 编组(可带 layoutMode/itemSpacing/padding* 参数) | ungroup 解组 | flatten 合并为矢量(至少 2 节点) | outline_stroke 描边转轮廓 | reparent 移到 parentId 下(缺省当前选中第一个;reparent 后坐标按新父相对系解释,需手动修正 x/y) | repair 清理已损坏节点。
-属性修改用 jsd_update_node;组件/实例操作(create_component/create_instance/变体合并等)用 jsd_manage_components,两工具 op 不通用。`,
+    title: '节点结构操作(聚合)',
+    description: `按 op 分发的节点结构操作聚合入口:select|remove|clone|group|ungroup|flatten|outline_stroke|reparent|repair。单次单操作请优先用对应小工具:jsd_select_nodes / jsd_delete_node / jsd_clone_node / jsd_group_nodes / jsd_ungroup_nodes / jsd_flatten_nodes / jsd_outline_stroke / jsd_reparent_nodes / jsd_repair_nodes(描述含平台缺陷与正确流程)。属性修改用 jsd_set_* 系列(含 jsd_set_shape);组件/实例操作用 jsd_manage_components 或 jsd_create_component / jsd_sync_overrides 等,两工具 op 不通用`,
     method: 'node_op',
     inputSchema: manageNodesSchema,
     outputSchema: manageNodesResultSchema,
     // remove/flatten/repair 会删改结构,如实标注破坏性
     annotations: { readOnlyHint: false, destructiveHint: true },
+    followUp: {
+      type: 'tool',
+      tool: 'jsd_set_layout',
+      description: '结构改完后设置容器自动布局',
+    },
   });
 
   const manageComponents = bridgeTool({
     name: 'jsd_manage_components',
-    title: '组件与实例操作',
-    description: `组件/实例操作,按 op 分发:
-create_component 建「空壳」组件(不会固化传入节点,返回全新 100×100 空组件,原节点不动)。正确流程:1) resize 空壳到目标尺寸 → 2) reparent 原 Frame 的子节点进空壳 → 3) 删除原 Frame → 4) 需要填充/圆角/阴影时再 jsd_update_node 补。顺序必须先 resize 后 reparent,否则子节点默认 SCALE 约束会被拉伸到错位(或先给子节点 constraints:{horizontal:"MIN",vertical:"MIN"})。
-create_instance 生成实例 | import_component 按 key 从团队库导入 | swap_component 换绑组件 | set_instance_properties 设置变体属性(可选值看节点的 variantGroupProperties) | copy_overrides 把源实例的覆盖(变体/组件属性/可见样式文本)复制为快照并缓存,返回 snapshotId(=源实例 id) | apply_overrides 按 snapshotId 把快照批量套用到目标实例(可 swapToSource,缓存 miss 会报错,需先 copy) | sync_overrides 无状态一次性「复制+套用」(不写缓存,适合 jsd_batch)。
-⚠ 已知平台缺陷(实测):combine_as_variants 引擎存在内部崩溃,工具会依次尝试「克隆并入当前页 / 克隆移入当前页后合并 / 原节点直接合并(原组件会被卷入组件集)」三种姿势,全部失败时汇总报错(请附报错上报);实例不能直接合成变体,必须传 COMPONENT 节点。detach_instance 引擎报错时已内置克隆副本兜底,仍失败按报错提示操作;需要可编辑副本时也可用 jsd_create_nodes 重建。
-componentProperties 仅 Figma 生效;jsDesign 自动降级为变体属性+可见样式。`,
+    title: '组件与实例操作(聚合)',
+    description: `按 op 分发的组件/实例操作聚合入口:create_component|create_instance|detach_instance|import_component|swap_component|set_instance_properties|combine_as_variants|copy_overrides|apply_overrides|sync_overrides。单次单操作请优先用对应小工具:jsd_create_component / jsd_create_instance / jsd_detach_instance / jsd_import_component / jsd_swap_component / jsd_set_instance_properties / jsd_combine_as_variants / jsd_copy_overrides / jsd_apply_overrides / jsd_sync_overrides(描述含平台缺陷与正确流程)。节点结构操作用 jsd_manage_nodes,两工具 op 不通用`,
     method: 'component_op',
     inputSchema: manageComponentsSchema,
     outputSchema: manageComponentsResultSchema,
     annotations: { readOnlyHint: false, destructiveHint: true },
+    followUp: {
+      type: 'tool',
+      tool: 'jsd_set_instance_properties',
+      description: '组件/实例改完后设置变体属性',
+    },
   });
 
   return [manageNodes(server, bridge), manageComponents(server, bridge)];

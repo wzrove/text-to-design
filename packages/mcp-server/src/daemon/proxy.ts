@@ -104,30 +104,37 @@ export async function serveProxy(initialClient: Client): Promise<void> {
         config: Record<string, unknown>,
         cb: (args: Record<string, unknown>) => Promise<unknown>,
       ) => RemovableHandle;
-      const handle = register(
-        t.name,
-        {
-          title: t.title,
-          description: t.description,
-          annotations: t.annotations,
-          ...(t.inputSchema
-            ? // 入参失败信息走友好化改写(回显入参+联合分支清单),
-              // 避免 ajv 对 oneOf 平铺出的超长报错误导调用方
-              { inputSchema: friendlyInputSchema(t.inputSchema as never) }
-            : {}),
-          ...(t.outputSchema
-            ? { outputSchema: fromJsonSchema(t.outputSchema as never) }
-            : {}),
-        },
-        async (args) =>
-          withUpstream((c) =>
-            c.callTool({
-              name: t.name,
-              arguments: (args ?? {}) as Record<string, unknown>,
-            }),
-          ),
-      );
-      toolHandles.set(t.name, { handle, raw });
+      try {
+        const handle = register(
+          t.name,
+          {
+            title: t.title,
+            description: t.description,
+            annotations: t.annotations,
+            ...(t.inputSchema
+              ? // 入参失败信息走友好化改写(回显入参+联合分支清单),
+                // 避免 ajv 对 oneOf 平铺出的超长报错误导调用方
+                { inputSchema: friendlyInputSchema(t.inputSchema as never) }
+              : {}),
+            ...(t.outputSchema
+              ? { outputSchema: fromJsonSchema(t.outputSchema as never) }
+              : {}),
+          },
+          async (args) =>
+            withUpstream((c) =>
+              c.callTool({
+                name: t.name,
+                arguments: (args ?? {}) as Record<string, unknown>,
+              }),
+            ),
+        );
+        toolHandles.set(t.name, { handle, raw });
+      } catch (e) {
+        // 单工具注册失败不连坐整批:不入 toolHandles,下一轮 diff 会重试
+        warn(
+          `工具注册失败(${t.name}): ${e instanceof Error ? e.message : String(e)}`,
+        );
+      }
     }
     for (const [name, entry] of [...toolHandles]) {
       if (!seen.has(name)) {
@@ -268,7 +275,8 @@ export async function serveProxy(initialClient: Client): Promise<void> {
             await resyncAll(); // 补齐断连期间错过的变更
             return;
           }
-          // daemon 不在了(被杀/未起) → 按版本自检逻辑重新拉起
+          // daemon 不在了(被杀/未起) → 按版本自检逻辑重新拉起;
+          // starting(在跑但未就绪) 只需等待,无需重复拉起
           if (p.state === 'none') spawnDaemon();
         } catch (e) {
           lastError = e; /* 单轮失败,下轮重试 */

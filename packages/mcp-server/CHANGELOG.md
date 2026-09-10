@@ -5,6 +5,16 @@
 ### Patch Changes
 
 - [`cffe325`](https://github.com/wzrove/text-to-design/commit/cffe3253a2f4352632e090e8ce4ed840cfa366f7) Thanks [@wzrove](https://github.com/wzrove)! - feat: enhance error handling and warnings for component operations and updates
+- fix: 修掉 `jsd_get_selection` 等工具的 `Structured content does not match the tool's output schema` 报错
+
+  - 根因:MCP SDK 固定按 draft-2020-12 生成 JSON Schema,`z.tuple` 会编译成 `{prefixItems:[...], items:false}`;而客户端
+    `AjvJsonSchemaValidator` 用的是 **classic draft-07 Ajv**,不认 `prefixItems`,把 `items:false` 当「数组必须为空」,
+    于是所有带渐变填充(GRADIENT_LINEAR/RADIAL/ANGULAR)的节点在校验 `gradientTransform` 时必然失败。
+  - shared:`transformSchema` 由 `z.tuple([z.tuple(x3), z.tuple(x3)])` 改为 `z.array(z.array(z.number()).length(3)).length(2)`,
+    只产出 minItems/maxItems,两个 draft 下语义一致。运行时校验强度不变。
+  - 影响面:修复前 12 个工具的 inputSchema、48 个 outputSchema 含 draft-07 无法解析的关键字(共 53 个工具)。
+  - 新增 `scripts/check-schema-draft07.mjs` 作为回归守卫:扫描全部工具的 input/output schema,
+    发现 `prefixItems`/`items:false` 等 draft-2020-12 专有关键字即报错退出。
 
 ## 0.6.0
 

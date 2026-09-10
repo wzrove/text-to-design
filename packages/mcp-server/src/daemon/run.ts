@@ -93,8 +93,13 @@ export async function runShim(): Promise<void> {
     return;
   }
 
-  log('未发现 daemon,自动拉起...');
-  spawnDaemon();
+  // starting:本项目 daemon 在跑但未就绪,不必重复拉起,静候即可
+  if (probe.state === 'none') {
+    log('未发现 daemon,自动拉起...');
+    spawnDaemon();
+  } else {
+    log('daemon 正在启动,等待就绪...');
+  }
   const deadline = Date.now() + DAEMON_WAIT_MS;
   while (Date.now() < deadline) {
     await delay(DAEMON_POLL_MS);

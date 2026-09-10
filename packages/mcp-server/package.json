@@ -23,7 +23,8 @@
     "prepublishOnly": "pnpm build",
     "start": "node dist/index.js",
     "start:dev": "tsx src/index.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "check:schema": "node scripts/check-schema-draft07.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/client": "^2.0.0",

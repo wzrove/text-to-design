@@ -135,8 +135,10 @@ export class PendingManager {
     let msg: PluginResponse | PluginRequest;
     try {
       msg = JSON.parse(raw.toString()) as PluginResponse | PluginRequest;
-    } catch {
-      warn(`WS 文本解析失败: ${raw.toString().slice(0, 100)}`);
+    } catch (e) {
+      warn(
+        `WS 文本解析失败(${e instanceof Error ? e.message : String(e)}): ${raw.toString().slice(0, 100)}`,
+      );
       return;
     }
     if (msg.type === 'request') {
@@ -166,6 +168,15 @@ export class PendingManager {
     }
     if (msg.hasBinary && (msg.binaryCount ?? 1) > 0) {
       log(`二进制响应开始: id=${msg.id} count=${msg.binaryCount ?? 1}`);
+      // 单槽位设计:上一轮二进制没收齐又来新的 meta 帧,说明前者已不可能完成
+      // (插件中断/丢帧),显式收尾并告警,避免旧 target 悬挂吞掉后续帧
+      if (this.binaryTarget) {
+        const stale = this.binaryTarget;
+        this.binaryTarget = null;
+        warn(
+          `二进制响应被覆盖: 旧 id=${stale.id}(${stale.buffers.length}/${stale.binaryCount} 帧未收齐),新 id=${msg.id}`,
+        );
+      }
       pending.waitBinary = true;
       pending.binaryCount = msg.binaryCount ?? 1;
       pending.data = msg.data;
@@ -185,7 +196,7 @@ export class PendingManager {
 
   onBinary(raw: Buffer): void {
     if (!this.binaryTarget) {
-      log(`孤儿二进制帧 len=${raw.byteLength}(无待组装响应)`);
+      warn(`孤儿二进制帧 len=${raw.byteLength}(无待组装响应,已丢弃)`);
       return;
     }
     this.binaryTarget.buffers.push(raw);

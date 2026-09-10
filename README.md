@@ -81,20 +81,24 @@ text-to-design 能让 AI 助手(比如 opencode、Claude)直接在你的设计�
 
 ### 完整工具清单
 
+一个操作对应一个 `jsd_*` 工具(没有 op 分发)。常用工具:
+
 | 工具 | 说明 |
 | --- | --- |
 | `jsd_ping` | 检查插件是否在线 |
-| `jsd_get_selection` | 获取画布当前选中节点 |
+| `jsd_get_selection` / `jsd_find` | 读取当前选中 / 按名称类型 id 查找节点 |
 | `jsd_create_nodes` | 执行声明式设计指令(frame/rect/text/... 节点树) |
-| `jsd_create_svg` | 直接导入 SVG 字符串(保留 path 矢量数据) |
-| `jsd_html_to_design` | HTML 转设计节点 |
-| `jsd_update_selection` | 修改选中节点的属性(位置/颜色/文字/圆角等) |
-| `jsd_find` | 按名称/类型查找节点 |
-| `jsd_manage_nodes` | 节点结构操作:select/remove/clone/group/ungroup/flatten/outline_stroke/reparent |
-| `jsd_manage_components` | 组件/实例操作:create_component/create_instance/detach_instance/import_component/swap_component/set_instance_properties/combine_as_variants |
+| `jsd_create_svg` / `jsd_create_icon` / `jsd_html_to_design` | 导入 SVG / 插入内置图标 / HTML 转设计节点 |
+| `jsd_set_fill_color` / `jsd_set_stroke` / `jsd_set_cornerRadius` | 填充 / 描边 / 圆角 |
+| `jsd_set_text` / `jsd_move_node` / `jsd_resize_node` | 文本内容排版 / 位置 / 尺寸 |
+| `jsd_set_layout` / `jsd_set_effects` / `jsd_set_visibility` / `jsd_rename_node` | 自动布局 / 阴影等效果 / 显隐锁定 / 重命名 |
+| `jsd_update_node` | 一次改多组字段(聚合入口) |
+| `jsd_clone_node` / `jsd_group_nodes` / `jsd_reparent_nodes` / `jsd_delete_node` | 复制 / 编组 / 移入父节点 / 删除 |
+| `jsd_create_component` / `jsd_create_instance` / `jsd_sync_overrides` | 建组件 / 生成实例 / 批量同步同类实例样式 |
+| `jsd_batch` | 一次请求顺序执行多步,双花括号占位符串起中间值 |
 | `jsd_export` | 导出节点为 PNG/JPG/SVG/PDF |
-| `jsd_list_fonts` | 列出可用字体 |
-| `jsd_fill_image` | 用本地图片填充节点 |
+| `jsd_list_fonts` / `jsd_fill_image` | 列出可用字体 / 用本地图片填充节点 |
+| `jsd_platform_op` | 平台特有能力通用通道,先看 `jsd_ping` 的 capabilities |
 
 完整工具清单见 [`packages/mcp-server/README.md`](packages/mcp-server/README.md) 末尾。
 

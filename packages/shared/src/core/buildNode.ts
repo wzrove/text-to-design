@@ -4,6 +4,7 @@ import { MIXED } from './host';
 import {
   assertBooleanOperation,
   normalizeEffects,
+  normalizeLayoutGrids,
   normalizePaints,
   normalizeVectorPaths,
 } from './normalize';
@@ -125,7 +126,7 @@ async function buildNode(
   if (spec.clipsContent != null && 'clipsContent' in node)
     node.clipsContent = spec.clipsContent;
   if (spec.layoutGrids != null && 'layoutGrids' in node)
-    node.layoutGrids = spec.layoutGrids;
+    node.layoutGrids = normalizeLayoutGrids(spec.layoutGrids);
 
   if (spec.effects != null && 'effects' in node)
     node.effects = normalizeEffects(spec.effects);

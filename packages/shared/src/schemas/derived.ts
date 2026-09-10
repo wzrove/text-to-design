@@ -1,5 +1,5 @@
 import type { z } from 'zod';
-import type { findSchema, updateNodePropsSchema } from './inputs';
+import type { findSchema } from './inputs';
 import type { nodeTypeSchema } from './node-type';
 import type {
   findResultSchema,
@@ -7,13 +7,38 @@ import type {
   listStylesResultSchema,
   pageStructureResultSchema,
 } from './results';
+import type {
+  MoveProps,
+  RenameProps,
+  ResizeProps,
+  SetCornerRadiusProps,
+  SetEffectsProps,
+  SetFillProps,
+  SetLayoutProps,
+  SetShapeProps,
+  SetStrokeProps,
+  SetTextProps,
+  SetVisibilityProps,
+} from './split-ops';
 
 // ---- 由 schema 推导的领域类型(core 与 index.ts 复用,唯一真源) ----
 
 export type SerializedNodeType = z.infer<typeof nodeTypeSchema>;
 export type FindParams = z.infer<typeof findSchema>;
 export type FindResult = z.infer<typeof findResultSchema>;
-export type UpdateNodeProps = z.infer<typeof updateNodePropsSchema>;
+// 引擎赋值函数(applyProps)按字段逐个判空,入参需容纳全部 11 个方法的字段;
+// 11 组字段零重叠,故取 Partial 交集,不额外维护一张大表。
+export type UpdateNodeProps = Partial<SetFillProps> &
+  Partial<SetStrokeProps> &
+  Partial<SetCornerRadiusProps> &
+  Partial<SetTextProps> &
+  Partial<MoveProps> &
+  Partial<ResizeProps> &
+  Partial<SetLayoutProps> &
+  Partial<SetEffectsProps> &
+  Partial<SetVisibilityProps> &
+  Partial<RenameProps> &
+  Partial<SetShapeProps>;
 export type ListFontsResult = z.infer<typeof listFontsResultSchema>;
 export type ListStylesResult = z.infer<typeof listStylesResultSchema>;
 export type PageStructureResult = z.infer<typeof pageStructureResultSchema>;

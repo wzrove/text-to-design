@@ -10,7 +10,7 @@ import { err, structured } from './response';
 export interface ToolHandle {
   enable(): void;
   disable(): void;
-  /** 插件离线时保持可用(如 jsd_ping);由注册方按需注入 */
+  /** 语义标记:该工具在插件离线时也应可用(如 jsd_ping);目录已不随连接门控 */
   alwaysEnabled?: boolean;
 }
 
@@ -21,6 +21,14 @@ export interface ToolHints {
   idempotentHint?: boolean;
   openWorldHint?: boolean;
 }
+
+/**
+ * 工具结果的 followUp 引导(参照 server.ts 参考实现,MCP 协议结果字段):
+ * 指向推荐的下一个 prompt 或下一个 tool,结果带该字段即提示调用方继续哪一步。
+ */
+export type FollowUp =
+  | { type: 'prompt'; prompt: string }
+  | { type: 'tool'; tool: string; description?: string };
 
 /** 工具回调拿到的请求上下文(只声明用到的字段;SDK 会传入完整 ServerContext) */
 export interface ToolCtx {
@@ -60,7 +68,7 @@ export interface BridgeToolDef {
   annotations?: ToolHints;
   /** 超时毫秒数;缺省用 PendingManager 默认(30s) */
   timeout?: number;
-  /** 插件离线时保持可用(如 jsd_ping);默认随连接状态 enable/disable */
+  /** 语义标记:该工具在插件离线时也应可用(如 jsd_ping);目录已不随连接门控 */
   alwaysEnabled?: boolean;
   /** args → 插件 params 映射;缺省恒等透传 */
   payload?: (args: Record<string, unknown>) => unknown;
@@ -81,6 +89,8 @@ export interface BridgeToolDef {
     data: unknown,
     args: Record<string, unknown>,
   ) => { type: 'text'; text: string }[];
+  /** 工具结果的 followUp 引导(指向推荐的下一个工具/prompt);有则注入结果 followUp 字段 */
+  followUp?: FollowUp;
 }
 
 /**
@@ -145,6 +155,7 @@ export function bridgeTool(
           data,
           def.outputSchema,
           def.extraContent ? def.extraContent(data, args) : undefined,
+          def.followUp,
         );
       } catch (e) {
         // 可观测性:插件执行期错误(如引擎校验失败)落日志,便于排查。
@@ -153,7 +164,7 @@ export function bridgeTool(
         // isError 文本中
         const msg = e instanceof Error ? e.message : String(e);
         error(`工具 ${def.name} 执行失败: ${msg.slice(0, 200)}`);
-        return err(e, def.outputSchema);
+        return err(e, def.outputSchema, def.followUp);
       }
     };
     // daemon 单进程内同名工具重复注册以后者为准(行为一致)

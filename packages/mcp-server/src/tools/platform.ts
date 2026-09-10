@@ -20,6 +20,11 @@ export function registerPlatformTools(
     outputSchema: platformOpResultSchema,
     // 变量/样式多与团队库等外部实体打交道
     annotations: { readOnlyHint: false, openWorldHint: true },
+    followUp: {
+      type: 'tool',
+      tool: 'jsd_get_selection',
+      description: '复核平台操作在画布上的效果',
+    },
   });
   return [platformOp(server, bridge)];
 }

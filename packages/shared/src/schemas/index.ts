@@ -10,3 +10,4 @@ export * from './platform';
 export * from './results';
 export * from './serialized-node';
 export * from './shared-props';
+export * from './split-ops';

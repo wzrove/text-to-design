@@ -15,7 +15,7 @@ export class Bridge {
   /** 离线期间攒下的日志(旧→新),上线回放后清空 */
   private logRing: ServerPush[] = [];
 
-  /** 插件连接状态变化(true=已连上,false=断开),供工具可用性联动 */
+  /** 插件连接状态变化(true=已连上,false=断开),用于日志/状态推送与目录同步 */
   onConnectionChange: ((connected: boolean) => void) | null = null;
 
   constructor() {
@@ -28,7 +28,7 @@ export class Bridge {
       else this.pending.onText(raw);
     };
     this.transport.onConnect = () => {
-      // 先回放离线日志,再广播连接状态变化:随后的「工具可用性同步: 上线」
+      // 先回放离线日志,再广播连接状态变化:随后的「连接状态变化: 插件上线」
       // 会排在历史之后,面板时间线不倒挂
       this.replayLogs();
       this.onConnectionChange?.(true);
@@ -96,8 +96,9 @@ export class Bridge {
   private sendLogPush(push: ServerPush): void {
     try {
       this.transport.sendPush(JSON.stringify(push));
-    } catch {
-      // 推送失败不影响主流程
+    } catch (e) {
+      // 推送失败不影响主流程,但需留痕:否则面板静默丢日志无从排查
+      warn(`日志推送失败: ${e instanceof Error ? e.message : String(e)}`);
     }
   }
 }

@@ -21,7 +21,7 @@ function jsonContents(
 
 /**
  * 只读资源:把画布状态暴露为 MCP resources(模型可直接读取为上下文)。
- * 均为按需实时读取(插件离线时随连接门控自动隐藏)。
+ * 均为按需实时读取(插件离线时调用返回明确的未连接报错,目录不隐藏)。
  */
 export function registerResources(
   server: McpServer,
@@ -104,6 +104,6 @@ export function registerResources(
     },
   );
 
-  // 资源依赖插件在线,不标 alwaysEnabled → 随连接门控
+  // 资源依赖插件在线:可用性由 Bridge.request 运行时兜底,不随连接隐藏
   return [selection, fonts, styles, page, nodeTemplate];
 }

@@ -25,6 +25,11 @@ export function registerRawTools(
     // 画布只读;但会写本地文件,不标 readOnly
     annotations: { readOnlyHint: false, destructiveHint: false },
     timeout: LONG_IO_TIMEOUT_MS,
+    followUp: {
+      type: 'tool',
+      tool: 'jsd_fill_image',
+      description: '导出后用该图片填充到节点',
+    },
     run: async (args, bridge_, signal) => {
       const { ids, format, scale, savePath, includeDataUrl } = args as {
         ids: string[];
@@ -93,6 +98,11 @@ export function registerRawTools(
     outputSchema: updatedResultSchema,
     annotations: { readOnlyHint: false, destructiveHint: false },
     timeout: LONG_IO_TIMEOUT_MS,
+    followUp: {
+      type: 'tool',
+      tool: 'jsd_get_selection',
+      description: '复核图片填充效果',
+    },
     run: async (args, bridge_, signal) => {
       const { ids, sourcePath } = args as {
         ids: string[];
@@ -121,6 +131,11 @@ export function registerRawTools(
     method: 'list_fonts',
     outputSchema: listFontsResultSchema,
     annotations: { readOnlyHint: true },
+    followUp: {
+      type: 'tool',
+      tool: 'jsd_set_text',
+      description: '用列出的字体设置文本',
+    },
   });
 
   return [

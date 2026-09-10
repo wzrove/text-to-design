@@ -20,6 +20,11 @@ export function registerSessionTools(
     annotations: { readOnlyHint: true },
     alwaysEnabled: true,
     timeout: PING_TIMEOUT_MS,
+    followUp: {
+      type: 'tool',
+      tool: 'jsd_get_selection',
+      description: '连接确认后读取当前选中',
+    },
     run: async () => {
       try {
         const data = (await bridge.request(
@@ -52,6 +57,11 @@ export function registerSessionTools(
     method: 'get_selection',
     outputSchema: getSelectionResultSchema,
     annotations: { readOnlyHint: true },
+    followUp: {
+      type: 'tool',
+      tool: 'jsd_find',
+      description: '在选中范围内继续精确查找节点',
+    },
   });
 
   return [ping(server, bridge), getSelection(server, bridge)];

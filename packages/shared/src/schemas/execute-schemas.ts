@@ -12,6 +12,7 @@ import {
   vectorPathSchema,
 } from './base';
 import type { ExecuteOp } from './execute-op';
+import { nodeTypeSchema } from './node-type';
 
 // 从 discriminated union 派生的平面类型(所有字段 optional,与 ExecuteOp 兼容)
 type MergeUnion<T> = T extends unknown ? { [K in keyof T]?: T[K] } : never;
@@ -27,6 +28,25 @@ export type ExecuteOpFromSchema = MergeUnion<
   | z.infer<typeof groupNodeSchema>
   | z.infer<typeof booleanOperationNodeSchema>
 >;
+
+/**
+ * 子节点直通 schema。
+ *
+ * 不能引用 executeNodeSchema:那是 10 种节点类型的 discriminatedUnion,zod 导出 JSON Schema
+ * 时无法通过 $ref 复用循环引用,只能整体内联——单个 create_* 工具的 inputSchema 因此膨胀到
+ * 约 18 万字符。这里只列判别字段与最常用定位字段,其余字段 catchall 放行:引擎收到的数据与
+ * 严格校验时完全一致,字段写错由引擎报错;顶层入参本身仍是完整严格校验。
+ */
+const childNodeSchema: z.ZodType<ExecuteOp> = z
+  .object({
+    type: nodeTypeSchema.describe('子节点类型'),
+    name: z.string().optional(),
+    x: z.number().optional().describe('相对父节点的 X(px)'),
+    y: z.number().optional().describe('相对父节点的 Y(px)'),
+    width: z.number().optional(),
+    height: z.number().optional(),
+  })
+  .catchall(z.unknown());
 
 // ---- 基础字段(所有节点共享) ----
 const baseNodeFields = {
@@ -50,11 +70,11 @@ const baseNodeFields = {
   locked: z.boolean().optional(),
   isMask: z.boolean().optional(),
   children: z
-    .array(z.lazy(() => executeNodeSchema))
+    .array(childNodeSchema)
     .max(100)
     .optional()
     .describe(
-      '子节点数组(递归嵌套,最多 100 个直接子节点;更大的结构建议分批创建后用 jsd_manage_nodes op=reparent 归组)。子节点 x/y 相对父节点,未传 x/y 会叠放在父节点原点(0,0)——非 auto-layout 容器需为每个子节点指定相对坐标',
+      '子节点数组(递归嵌套,最多 100 个直接子节点;更大的结构建议分批创建后用 jsd_manage_nodes op=reparent 归组)。子节点可使用的字段与顶层 create 入参一致(fills/strokes/cornerRadius/effects 等均可用);x/y 相对父节点,未传 x/y 会叠放在父节点原点(0,0)——非 auto-layout 容器需为每个子节点指定相对坐标',
     ),
 };
 
@@ -323,7 +343,7 @@ const groupNodeSchema = z
     ...baseNodeFields,
     // GROUP 运行时要求至少 2 个子节点(core/buildNode),schema 前置拦截
     children: z
-      .array(z.lazy(() => executeNodeSchema))
+      .array(childNodeSchema)
       .min(2)
       .max(100)
       .describe('子节点数组,至少 2 个;递归嵌套,最多 100 个直接子节点'),
@@ -399,7 +419,7 @@ const booleanOperationNodeSchema = z
         '布尔运算:UNION=合并,SUBTRACT=减去,INTERSECT=相交,EXCLUDE=排除',
       ),
     children: z
-      .array(z.lazy(() => executeNodeSchema))
+      .array(childNodeSchema)
       .min(2)
       .describe('要合并的子节点数组(至少 2 个)'),
     ...visualFields,
@@ -424,6 +444,21 @@ export const executeNodeSchema: z.ZodType<ExecuteOp> = z.discriminatedUnion(
     booleanOperationNodeSchema,
   ],
 );
+
+// 各类型子 schema 导出:供 per-type 拆分工具(create.ts 等)取单节点负载做 inputSchema,
+// 每个工具只用自己那一类,避免整体 executeNodeSchema 大表挑字段。
+export {
+  booleanOperationNodeSchema,
+  ellipseNodeSchema,
+  frameNodeSchema,
+  groupNodeSchema,
+  lineNodeSchema,
+  polygonNodeSchema,
+  rectangleNodeSchema,
+  starNodeSchema,
+  textNodeSchema,
+  vectorNodeSchema,
+};
 
 // 导出各子类型(供 UI 侧类型断言使用)
 export type FrameNodeOp = z.infer<typeof frameNodeSchema>;

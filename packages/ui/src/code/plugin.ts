@@ -145,8 +145,19 @@ export function registerPlugin(
           send(id, true, r);
           break;
         }
-        case 'update_node': {
-          const r = await updateSelection(host, msg.params);
+        // 属性引擎方法:方法名即字段分组,updateSelection 按 PROP_METHOD_FIELDS 拦截越界字段
+        case 'set_fill':
+        case 'set_stroke':
+        case 'set_corner_radius':
+        case 'set_text':
+        case 'move':
+        case 'resize':
+        case 'set_layout':
+        case 'set_effects':
+        case 'set_visibility':
+        case 'rename':
+        case 'set_shape': {
+          const r = await updateSelection(host, msg.params, msg.method);
           send(id, true, r);
           break;
         }

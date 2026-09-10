@@ -1,4 +1,5 @@
 import type { z } from 'zod';
+import type { FollowUp } from './registry';
 
 function text(content: unknown): { content: { type: 'text'; text: string }[] } {
   return {
@@ -90,14 +91,17 @@ function emptyFor(schema: AnyZod): unknown {
 export function err(
   e: unknown,
   schema?: z.ZodType,
+  followUp?: FollowUp,
 ): {
   content: { type: 'text'; text: string }[];
   structuredContent?: unknown;
   isError: true;
+  followUp?: FollowUp;
 } {
   const base: {
     content: { type: 'text'; text: string }[];
     isError: true;
+    followUp?: FollowUp;
   } = {
     content: [
       {
@@ -107,20 +111,24 @@ export function err(
     ],
     isError: true,
   };
+  if (followUp !== undefined) base.followUp = followUp;
   return schema ? { ...base, structuredContent: emptyFor(schema) } : base;
 }
 
 /** 返回类型:人读文本 + 结构化数据(与 outputSchema 对应)。
  *  extra 为成功时的附加文本块(置于 JSON 文本之前),用于进度/汇总/逐条失败提示,
- *  与参考实现(set_multiple_text_contents 多段 content)对齐。 */
+ *  与参考实现(set_multiple_text_contents 多段 content)对齐。
+ *  followUp 为工具结果的下一步引导(MCP 协议结果字段),有则注入结果。 */
 export function structured(
   data: unknown,
   schema?: z.ZodType,
   extra?: { type: 'text'; text: string }[],
+  followUp?: FollowUp,
 ): {
   content: { type: 'text'; text: string }[];
   structuredContent: unknown;
   isError?: true;
+  followUp?: FollowUp;
 } {
   if (schema) {
     const parsed = schema.safeParse(data);
@@ -128,6 +136,7 @@ export function structured(
       return {
         content: [...(extra ?? []), ...text(data).content],
         structuredContent: parsed.data,
+        ...(followUp !== undefined ? { followUp } : {}),
       };
     }
     // 插件返回异常数据(过不了 schema)时仍兜底返回合法空结构
@@ -135,10 +144,12 @@ export function structured(
       content: text(data).content,
       structuredContent: emptyFor(schema),
       isError: true,
+      ...(followUp !== undefined ? { followUp } : {}),
     };
   }
   return {
     content: [...(extra ?? []), ...text(data).content],
     structuredContent: data,
+    ...(followUp !== undefined ? { followUp } : {}),
   };
 }

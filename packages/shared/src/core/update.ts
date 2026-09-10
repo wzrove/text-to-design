@@ -1,7 +1,12 @@
-import type { SerializedNode, UpdateNodeProps } from '../schemas';
+import type { PropMethod, SerializedNode, UpdateNodeProps } from '../schemas';
+import { PROP_METHOD_FIELDS } from '../schemas';
 import type { DesignHost, NodeSkeleton } from './host';
 import { MIXED } from './host';
-import { normalizeEffects, normalizePaints } from './normalize';
+import {
+  normalizeEffects,
+  normalizeLayoutGrids,
+  normalizePaints,
+} from './normalize';
 import { serializeNode } from './serialize';
 import { collectTargets, findNode, loadFont } from './utils';
 
@@ -60,7 +65,7 @@ async function applyProps(
   if (props.constraints != null && 'constraints' in node)
     node.constraints = props.constraints;
   if (props.layoutGrids != null && 'layoutGrids' in node)
-    node.layoutGrids = props.layoutGrids;
+    node.layoutGrids = normalizeLayoutGrids(props.layoutGrids);
   if (node.type === 'ELLIPSE' && props.arcData != null && 'arcData' in node) {
     node.arcData = props.arcData;
   }
@@ -214,8 +219,21 @@ export async function updateSelection(
     recursive?: boolean;
     props: UpdateNodeProps;
   },
+  /** 属性引擎方法名;给定则按该方法的字段白名单拦截越界字段 */
+  method?: PropMethod,
 ): Promise<{ updated: SerializedNode[]; warnings?: string[] }> {
   const props = params.props ?? {};
+  // 方法名即字段分组:越界字段直接拒绝,而不是静默应用或静默忽略。
+  // 进程内调用方(如 apply_overrides)不传 method,保留全字段路径。
+  if (method != null) {
+    const allowed = new Set(PROP_METHOD_FIELDS[method]);
+    const stray = Object.keys(props).filter((k) => !allowed.has(k));
+    if (stray.length > 0) {
+      throw new Error(
+        `方法 ${method} 不接受字段: ${stray.join(', ')};该方法只负责 ${[...allowed].join(', ')}`,
+      );
+    }
+  }
   let base: readonly NodeSkeleton[];
   if (params.ids != null && params.ids.length > 0) {
     base = findNode(host, params.ids);

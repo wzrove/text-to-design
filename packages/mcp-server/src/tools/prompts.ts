@@ -19,7 +19,7 @@ export function registerPrompts(server: McpServer): ToolHandle[] {
           role: 'user' as const,
           content: {
             type: 'text' as const,
-            text: `请把下面的 HTML 转成设计稿。默认走 jsd_html_to_design(SVG 保真,忽略复杂样式);需要可编辑图层时才改用 jsd_create_nodes 手工映射(容器→FRAME、文本→TEXT、图形→VECTOR)后 reparent 归组。\n\nHTML:\n\`\`\`\n${String(html)}\n\`\`\`${name == null ? '' : `\n节点名:${String(name)}`}`,
+            text: `请把下面的 HTML 转成设计稿。默认走 jsd_html_to_design(SVG 保真,忽略复杂样式);需要可编辑图层时才改用 per-type create 工具(jsd_create_frame 等)手工映射(容器→FRAME、文本→TEXT、图形→VECTOR)后 reparent 归组。\n\nHTML:\n\`\`\`\n${String(html)}\n\`\`\`${name == null ? '' : `\n节点名:${String(name)}`}`,
           },
         },
       ],
@@ -48,7 +48,7 @@ export function registerPrompts(server: McpServer): ToolHandle[] {
           role: 'user' as const,
           content: {
             type: 'text' as const,
-            text: `请插入图标网格:1) jsd_create_nodes 建一个 FRAME 容器;2) 每个图标各调一次 jsd_create_icon(size=${Number(size) || 24});3) jsd_manage_nodes op=reparent 把全部图标移入容器;4) jsd_update_node 给容器设 auto-layout(layoutMode=HORIZONTAL,itemSpacing=${Number(gap) || 16},counterAxisAlignItems=CENTER)。\n图标列表: ${String(icons)}`,
+            text: `请插入图标网格:1) jsd_create_frame 建一个 FRAME 容器;2) 每个图标各调一次 jsd_create_icon(size=${Number(size) || 24});3) jsd_reparent_nodes 把全部图标移入容器;4) jsd_set_layout 给容器设 auto-layout(layoutMode=HORIZONTAL,itemSpacing=${Number(gap) || 16},counterAxisAlignItems=CENTER)。\n图标列表: ${String(icons)}`,
           },
         },
       ],
@@ -116,7 +116,7 @@ export function registerPrompts(server: McpServer): ToolHandle[] {
     {
       title: '文本批量替换策略',
       description:
-        '大改文案的安全流程:clone 留底 → 按语义分块 → jsd_update_node ids 批量替换 → 逐块导小图复核',
+        '大改文案的安全流程:jsd_clone_node 留底 → 按语义分块 → jsd_set_text ids 批量替换 → 逐块导小图复核',
       argsSchema: z.object({
         rootId: z.string().optional().describe('根节点 id;留空取当前选中'),
       }),
@@ -195,12 +195,12 @@ function designStrategyRecipe(screen?: string): string {
   return `# 画布创作纪律
 
 1) 先摸底再动手:jsd_get_selection(depth=2) 看现状(名称/类型/尺寸/填充/子结构),已有节点用 jsd_find 精确定位,不要重复创建同名元素。
-2) 一层只建一层:每个界面先建主容器 FRAME,再分区放内容。复杂结构用 jsd_create_nodes 一次平铺建完,不要用 children 深嵌套(易整体失败)。
+2) 一层只建一层:每个界面先建主容器 FRAME,再分区放内容。复杂结构用 jsd_batch 编排多个 per-type create 步骤一次建完,不要用 children 深嵌套(易整体失败)。
 3) 命名语义化:用「登录页 / Logo 容器 / 邮箱输入 / 主按钮」这类说明用途的名字,不用「矩形 1」「Frame 2」;同一批元素命名风格保持一致。
-4) 归组后再布局:jsd_manage_nodes op=reparent 把文本等元素移入目标容器;auto-layout(layoutMode/itemSpacing/padding*/primaryAxisAlignItems 等)最后用 jsd_update_node 单独设,别在建节点时混着传。
+4) 归组后再布局:jsd_reparent_nodes 把文本等元素移入目标容器;auto-layout(layoutMode/itemSpacing/padding*/primaryAxisAlignItems 等)最后用 jsd_set_layout 单独设,别在建节点时混着传。
 5) 间距与字号阶梯:主标题 > 正文标签 > 按钮文本 > 辅助说明;同级元素间距一致,用 itemSpacing 统一控制,不靠手调坐标凑。
 6) 视觉顺序:自上而下按阅读顺序排布,主操作按钮放在输入项之后,次要链接(忘记密码/注册)放最后。
-7) 出错回滚:ok=false 或「没找到 X 节点」→ jsd_find 复核 id 是否已失效(可能被连坐删除),必要时 jsd_manage_nodes op=repair 清理后重试。
+7) 出错回滚:ok=false 或「没找到 X 节点」→ jsd_find 复核 id 是否已失效(可能被连坐删除),必要时 jsd_repair_nodes 清理后重试。
 8) 收敛复核:整批做完只做一次 jsd_get_selection(depth=1),或 jsd_export({ids:[要看的节点id], scale:0.5}) 导小图看效果(ids 为必填数组);不要每步都读一遍。
 
 示例结构(登录页):
@@ -226,13 +226,13 @@ function textReplaceRecipe(rootId?: string): string {
 
 ## 1. 摸底与分块
 - 对 ${root} 先 jsd_get_selection 看结构,按语义把文本分成几块:表格按行或列、卡片按「同名字段一组」、表单按「标签 + 输入」一组、导航按菜单项一组。
-- 不按坐标硬切;语义相关的文本应同批处理,这样一次 jsd_update_node 就能覆盖一整块。
+- 不按坐标硬切;语义相关的文本应同批处理,这样一次 jsd_set_text 就能覆盖一整块。
 
 ## 2. 先留安全副本
-- jsd_manage_nodes op=clone 复制一份原文案版本。确认改完没问题再删(或重命名为「原文案备份」留档)。
+- jsd_clone_node 复制一份原文案版本。确认改完没问题再删(或 jsd_rename_node 重命名为「原文案备份」留档)。
 
 ## 3. 分块批量替换
-- 每块一次 jsd_update_node:ids 传该块全部文本节点 id,逐条改 characters;需要时连带 fontSize/lineHeight 一起调,避免改完溢出容器。
+- 每块一次 jsd_set_text:ids 传该块全部文本节点 id,逐条改 characters;需要时连带 fontSize/lineHeight 一起调,避免改完溢出容器。
 - ids 来自上一步查询时,用 jsd_batch 的 {{步骤id.字段路径}} 占位符直接串起来,中间 id 不回传模型。
 
 ## 4. 逐块复核
@@ -262,12 +262,12 @@ function variantSyncRecipe(sourceId?: string, targetType?: string): string {
 - 对 ${source} 用 jsd_get_selection(depth=2) 确认它是可复用的 INSTANCE,并记录源 id。
 
 ## 2. 定位目标实例
-- jsd_find(${target}) 拿到全部目标实例 id;缺的实例用 jsd_manage_components op=create_instance 补建。
+- jsd_find(${target}) 拿到全部目标实例 id;缺的实例用 jsd_create_instance 补建。
 
 ## 3. 批量套用(优先引擎级)
-- 首选 jsd_manage_components op=sync_overrides:sourceId=源实例 id,ids=全部目标 id,一次完成「复制+套用」(自动同步变体/组件属性/可见样式文本,不动位置)。
-- 需要先审后套或多次套用同一快照时,用两段式:先 op=copy_overrides(sourceId) 拿到 snapshotId,再 op=apply_overrides(sourceId, ids) 批量套用(可加 swapToSource=true 把目标换绑成源组件)。
-- 引擎不支持时再退化为手工:jsd_update_node ids=[目标] 填字段 + jsd_manage_components op=set_instance_properties 设变体值。
+- 首选 jsd_sync_overrides:sourceId=源实例 id,ids=全部目标 id,一次完成「复制+套用」(自动同步变体/组件属性/可见样式文本,不动位置)。
+- 需要先审后套或多次套用同一快照时,用两段式:先 jsd_copy_overrides(sourceId) 拿到 snapshotId,再 jsd_apply_overrides(sourceId, ids) 批量套用(可加 swapToSource=true 把目标换绑成源组件)。
+- 引擎不支持时再退化为手工:jsd_set_fill_color / jsd_set_text 等 ids=[目标] 填字段 + jsd_set_instance_properties 设变体值。
 
 ## 4. 复核
 - jsd_export({ids:[抽查节点id], scale=0.5}) 抽查一张,确认间距与层级没被撑乱;再 jsd_get_selection(depth=1) 总复核。`;

@@ -37,6 +37,18 @@ export const transformPropsSchema = z.object({
   locked: z.boolean().optional(),
 });
 
+/** 多边形/星形形状参数 */
+export const shapePropsSchema = z.object({
+  pointCount: z
+    .number()
+    .optional()
+    .describe('多边形/星形角点数(仅 POLYGON/STAR 生效)'),
+  innerRadius: z
+    .number()
+    .optional()
+    .describe('星形内半径比例(0-1,相对外半径;仅 STAR 生效)'),
+});
+
 export const strokePropsSchema = z.object({
   strokes: z
     .array(paintSchema)
@@ -60,6 +72,10 @@ export const strokePropsSchema = z.object({
     .optional()
     .describe('描边连接:MITER|BEVEL|ROUND'),
   dashPattern: z.array(z.number()).optional().describe('虚线段数组,如 [4,4]'),
+  strokeStyleId: z
+    .string()
+    .optional()
+    .describe('描边样式 id(团队库样式;平台无此能力时被忽略)'),
 });
 
 export const cornerPropsSchema = z.object({
@@ -119,6 +135,15 @@ export const textPropsSchema = z.object({
     .describe('文本装饰:NONE|UNDERLINE|STRIKETHROUGH'),
   lineHeight: lineHeightSchema.optional().describe('行高:{value,unit}'),
   letterSpacing: letterSpacingSchema.optional().describe('字距:{value,unit}'),
+  textStyleId: z
+    .string()
+    .optional()
+    .describe('文本样式 id(团队库样式;平台无此能力时被忽略)'),
+  textTruncation: z
+    .enum(['DISABLED', 'ENDING'])
+    .optional()
+    .describe('文本截断(DISABLED=不截断,ENDING=末尾省略号截断),仅 Figma 生效'),
+  maxLines: z.number().optional().describe('文本最大行数,仅 Figma 生效'),
 });
 
 export const autoLayoutPropsSchema = z.object({
@@ -170,7 +195,15 @@ export const visualPropsSchema = z.object({
     .describe(
       '填充列表(Paint 数组;整体替换,非合并,需保留的现有填充项要一并传入)',
     ),
+  fillStyleId: z
+    .string()
+    .optional()
+    .describe('填充样式 id(团队库样式;平台无此能力时被忽略)'),
   blendMode: blendModeSchema.optional(),
+  effectStyleId: z
+    .string()
+    .optional()
+    .describe('效果样式 id(团队库样式;平台无此能力时被忽略)'),
   effects: z
     .array(effectSchema)
     .optional()

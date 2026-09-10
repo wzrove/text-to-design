@@ -24,8 +24,9 @@ export class Transport {
   async start(port: number): Promise<void> {
     this.http = createServer();
     this.wss = new WebSocketServer({ server: this.http });
-    this.wss.on('error', () => {
-      // 端口冲突等错误由 tryListen 处理,此处避免未捕获异常
+    this.wss.on('error', (e) => {
+      // 端口冲突等错误由 tryListen 处理,此处避免未捕获异常,但需留痕
+      warn(`WS server 错误: ${e instanceof Error ? e.message : String(e)}`);
     });
     this.heartbeat = setInterval(() => {
       if (this.client && this.client.readyState === WebSocket.OPEN) {

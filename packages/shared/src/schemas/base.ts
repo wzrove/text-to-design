@@ -22,6 +22,17 @@ export function parseHexColor(
   return out;
 }
 
+/** 颜色通道(0-1);引擎侧唯一形态,hex 由 core/normalize.ts 在引擎赋值前转换 */
+export interface RGB {
+  r: number;
+  g: number;
+  b: number;
+  a?: number;
+}
+
+/** 客户端可传的颜色:0-1 通道对象或 hex 字符串(#RGB/#RGBA/#RRGGBB/#RRGGBBAA) */
+export type RGBInput = RGB | string;
+
 const colorChannels = z
   .object({
     r: z
@@ -48,51 +59,46 @@ const colorChannels = z
   })
   .strict();
 
-// 颜色 = 通道对象(0-1)或 hex 字符串;hex 在 parse 阶段即转为通道对象,
-// 引擎/序列化层永远只看到 {r,g,b[,a]}。
+// 颜色 = 通道对象(0-1)或 hex 字符串。只做校验不做 transform:hex→通道的
+// 归一化在 core/normalize.ts 引擎赋值前统一完成(schema 带 transform 时
+// z.toJSONSchema 直接抛 "Transforms cannot be represented in JSON Schema")。
 // 不用 union:union 失败时 zod 只报笼统的 "Invalid input",这里手动分发校验,
 // 对象输入透出通道级精确报错(如 0-255 归一化提示),字符串输入给出 hex 格式提示。
 const COLOR_TYPE_HINT =
   '颜色需为 {r,g,b[,a]} 对象(通道 0-1,0-255 色值请先除以 255)或 hex 字符串(#RGB/#RGBA/#RRGGBB/#RRGGBBAA,如 "#ff0000")';
 
-const colorSchema = z
-  .unknown()
-  .superRefine((v, ctx) => {
-    if (typeof v === 'string') {
-      if (parseHexColor(v) == null) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: `无效 hex 颜色 "${v}"(${COLOR_TYPE_HINT})`,
-        });
-      }
-      return;
+// 单段 as:入参类型是客户端形态 RGBInput,输出类型是归一化后的通道对象
+// (core/normalize.ts 产出),两侧语义各自成立
+const colorSchema = z.unknown().superRefine((v, ctx) => {
+  if (typeof v === 'string') {
+    if (parseHexColor(v) == null) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `无效 hex 颜色 "${v}"(${COLOR_TYPE_HINT})`,
+      });
     }
-    const r = colorChannels.safeParse(v);
-    if (!r.success) {
-      for (const issue of r.error.issues) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: issue.path,
-          message: issue.message,
-        });
-      }
+    return;
+  }
+  const r = colorChannels.safeParse(v);
+  if (!r.success) {
+    for (const issue of r.error.issues) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: issue.path,
+        message: issue.message,
+      });
     }
-  })
-  .transform((v) =>
-    typeof v === 'string'
-      ? (parseHexColor(v) ?? { r: 0, g: 0, b: 0 })
-      : (v as { r: number; g: number; b: number; a?: number }),
-  );
+  }
+}) as z.ZodType<RGB, RGBInput>;
 
 export const rgbSchema = colorSchema.describe(
   '颜色:{r,g,b} 对象(通道 0-1)或 hex 字符串,如 "#ff0000"(带透明度可用 8 位 hex,其 alpha 会转为 paint 级 opacity)',
 );
-export type RGB = z.infer<typeof rgbSchema>;
 
 export const rgbaSchema = colorSchema.describe(
   'RGBA 颜色:{r,g,b,a} 对象(通道 0-1,a 缺省按 1)或 hex 字符串,如 "#ff0000"、"#ff000080"',
 );
-export type RGBA = z.infer<typeof rgbaSchema>;
+export type RGBA = RGB;
 
 export const gradientStopSchema = z
   .object({
@@ -108,11 +114,19 @@ export const gradientStopSchema = z
   );
 export type GradientStop = z.infer<typeof gradientStopSchema>;
 
+/**
+ * 变换矩阵。**不要改回 `z.tuple`**：
+ * SDK 固定按 draft-2020-12 生成 JSON Schema，tuple 会编译成
+ * `{prefixItems:[...], items:false}`；而 MCP 客户端（@modelcontextprotocol/sdk
+ * 的 AjvJsonSchemaValidator，见 validation/ajv-provider.js）用的是 **classic
+ * draft-07 Ajv**，它不认 `prefixItems`，于是 `items:false` 被理解成
+ * 「数组必须为空」→ 任何渐变填充的 gradientTransform 都必然校验失败
+ * （报 "Structured content does not match the tool's output schema"）。
+ * 纯嵌套数组 + length() 只产出 minItems/maxItems，两个 draft 下语义一致。
+ */
 export const transformSchema = z
-  .tuple([
-    z.tuple([z.number(), z.number(), z.number()]),
-    z.tuple([z.number(), z.number(), z.number()]),
-  ])
+  .array(z.array(z.number()).length(3))
+  .length(2)
   .describe('变换矩阵,如 [[1,0,0],[0,1,0]] 表示无变换(Identity)');
 export type Transform = z.infer<typeof transformSchema>;
 

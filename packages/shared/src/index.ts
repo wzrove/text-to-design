@@ -22,7 +22,19 @@ export type PingParams = z.infer<typeof s.pingSchema>;
 export type GetSelectionParams = z.infer<typeof s.getSelectionSchema>;
 export type ExecuteParams = z.infer<typeof s.executeSchema>;
 export type CreateSvgParams = z.infer<typeof s.createSvgSchema>;
-export type UpdateNodeParams = z.infer<typeof s.updateNodeSchema>;
+export type SetFillParams = z.infer<typeof s.setFillParamsSchema>;
+export type SetStrokeParams = z.infer<typeof s.setStrokeParamsSchema>;
+export type SetCornerRadiusParams = z.infer<
+  typeof s.setCornerRadiusParamsSchema
+>;
+export type SetTextParams = z.infer<typeof s.setTextParamsSchema>;
+export type MoveParams = z.infer<typeof s.moveParamsSchema>;
+export type ResizeParams = z.infer<typeof s.resizeParamsSchema>;
+export type SetLayoutParams = z.infer<typeof s.setLayoutParamsSchema>;
+export type SetEffectsParams = z.infer<typeof s.setEffectsParamsSchema>;
+export type SetVisibilityParams = z.infer<typeof s.setVisibilityParamsSchema>;
+export type RenameParams = z.infer<typeof s.renameParamsSchema>;
+export type SetShapeParams = z.infer<typeof s.setShapeParamsSchema>;
 export type NodeOpParams = z.infer<typeof s.manageNodesSchema>;
 export type ComponentOpParams = z.infer<typeof s.manageComponentsSchema>;
 export type ExportParams = z.infer<typeof s.exportSchema>;
@@ -54,7 +66,7 @@ export type PluginMethod =
   | 'get_page'
   | 'execute'
   | 'create_svg'
-  | 'update_node'
+  | s.PropMethod
   | 'find'
   | 'export'
   | 'list_fonts'
@@ -64,6 +76,21 @@ export type PluginMethod =
   | 'component_op'
   | 'platform_op';
 
+/** 属性引擎方法 → 各自专属的 params 类型(不再共用一份 50 键大表) */
+type PropParamsByMethod = {
+  set_fill: SetFillParams;
+  set_stroke: SetStrokeParams;
+  set_corner_radius: SetCornerRadiusParams;
+  set_text: SetTextParams;
+  move: MoveParams;
+  resize: ResizeParams;
+  set_layout: SetLayoutParams;
+  set_effects: SetEffectsParams;
+  set_visibility: SetVisibilityParams;
+  rename: RenameParams;
+  set_shape: SetShapeParams;
+};
+
 export type RequestParams<M extends PluginMethod> = M extends 'ping'
   ? PingParams
   : M extends 'get_selection'
@@ -72,8 +99,8 @@ export type RequestParams<M extends PluginMethod> = M extends 'ping'
       ? ExecuteParams
       : M extends 'create_svg'
         ? CreateSvgParams
-        : M extends 'update_node'
-          ? UpdateNodeParams
+        : M extends keyof PropParamsByMethod
+          ? PropParamsByMethod[M]
           : M extends 'find'
             ? s.FindParams
             : M extends 'export'
@@ -107,12 +134,43 @@ export type PluginRequest = (
       method: 'create_svg';
       params: CreateSvgParams;
     }
+  /** 属性引擎方法:每个方法各一份 params 线格式,params.props 只含本方法白名单内的字段 */
+  | { type: 'request'; id: string; method: 'set_fill'; params: SetFillParams }
   | {
       type: 'request';
       id: string;
-      method: 'update_node';
-      params: UpdateNodeParams;
+      method: 'set_stroke';
+      params: SetStrokeParams;
     }
+  | {
+      type: 'request';
+      id: string;
+      method: 'set_corner_radius';
+      params: SetCornerRadiusParams;
+    }
+  | { type: 'request'; id: string; method: 'set_text'; params: SetTextParams }
+  | { type: 'request'; id: string; method: 'move'; params: MoveParams }
+  | { type: 'request'; id: string; method: 'resize'; params: ResizeParams }
+  | {
+      type: 'request';
+      id: string;
+      method: 'set_layout';
+      params: SetLayoutParams;
+    }
+  | {
+      type: 'request';
+      id: string;
+      method: 'set_effects';
+      params: SetEffectsParams;
+    }
+  | {
+      type: 'request';
+      id: string;
+      method: 'set_visibility';
+      params: SetVisibilityParams;
+    }
+  | { type: 'request'; id: string; method: 'rename'; params: RenameParams }
+  | { type: 'request'; id: string; method: 'set_shape'; params: SetShapeParams }
   | { type: 'request'; id: string; method: 'find'; params: s.FindParams }
   | { type: 'request'; id: string; method: 'export'; params: ExportParams }
   | {

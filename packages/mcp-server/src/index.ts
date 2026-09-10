@@ -6,7 +6,7 @@ import { syncToolAvailability } from './server';
 
 const bridge = new Bridge();
 
-// 插件上线/掉线 → 同步所有会话的工具可用性(离线时除 ping 外隐藏)
+// 插件上线/掉线 → 通知所有会话(工具目录保持稳定,可用性由运行时兜底)
 bridge.onConnectionChange = syncToolAvailability;
 
 // 日志触发 → 实时推送插件 UI。daemon 持有 WS:在线直推,离线进环形缓冲待上线回放;

@@ -1,4 +1,4 @@
-import type { Effect, Paint, VectorPath } from '../schemas';
+import type { Effect, LayoutGrid, Paint, VectorPath } from '../schemas';
 import { parseHexColor } from '../schemas';
 
 /**
@@ -55,6 +55,27 @@ function normalizeColor(raw: unknown, path: string): NormalizedColor {
     if (a != null) a /= 255;
   }
   return { r, g, b, a };
+}
+
+/** 布局网格归一化:color 的 hex 字符串转通道对象(引擎只收 {r,g,b[,a]}) */
+export function normalizeLayoutGrids(value: unknown): LayoutGrid[] {
+  if (!Array.isArray(value)) {
+    throw new Error(
+      `layoutGrids 必须是数组,收到 ${value === null ? 'null' : Array.isArray(value) ? '数组' : typeof value}`,
+    );
+  }
+  return value.map((raw, i) => {
+    if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
+      throw new Error(`layoutGrids[${i}] 必须是布局网格对象`);
+    }
+    const g = raw as Record<string, unknown>;
+    return {
+      ...g,
+      ...(g.color != null
+        ? { color: normalizeColor(g.color, `layoutGrids[${i}].color`) }
+        : {}),
+    } as LayoutGrid;
+  });
 }
 
 /** 把 unknown 归一化成合法 Paint 数组;非数组直接抛错(引擎对非数组容器会报 not a function) */

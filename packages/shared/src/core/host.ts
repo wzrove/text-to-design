@@ -21,6 +21,23 @@ export interface NodeSkeleton extends ContainerSkeleton {
   rotation: number;
   parent: NodeSkeleton | null;
 
+  /**
+   * 绝对坐标(页面系,含旋转/父级变换换算),可读写。
+   * Figma/jsDesign SceneNode 原生属性,窄接口此处显式声明供 core 使用。
+   * reparent 后用它还原节点原绝对位置,避免坐标漂移。
+   */
+  absolutePosition?: { x: number; y: number };
+  /**
+   * 绝对包围盒(页面系,轴对齐,含旋转后的真实范围),只读。
+   * 渲染节点才有;非渲染节点(如 Page)为 null。用于原地归组时计算组框边界。
+   */
+  absoluteBoundingBox?: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  } | null;
+
   remove(): void;
   clone(): NodeSkeleton;
   resize(width: number, height: number): void;

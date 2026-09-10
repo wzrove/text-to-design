@@ -6,8 +6,15 @@ export const HTTP_PORT = Number(
 );
 export const SERVER_NAME = 'text-to-design-mcp-server';
 export const SERVER_VERSION = version;
-export const DAEMON_WAIT_MS = 5000;
+
+/** shim 等待 daemon 就绪的总预算(冷启动 + 版本替换叠加时的上限) */
+export const DAEMON_WAIT_MS = 15000;
 export const DAEMON_POLL_MS = 250;
+
+/** 旧版 daemon 替换:等它退出并释放端口的预算。
+ *  需覆盖「进程收到 /shutdown → 事件循环排空 → 端口释放 + TIME_WAIT」,
+ *  过短会在仍可探到 health 时误判为外来服务占用 */
+export const DAEMON_REPLACE_MS = 6000;
 
 /** 工具超时分级:ping 短平快;导出/图片填充是大 IO(大图/大文件),放宽到 60s */
 export const PING_TIMEOUT_MS = 5_000;

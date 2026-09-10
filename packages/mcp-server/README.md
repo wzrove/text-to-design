@@ -98,23 +98,55 @@ pkill -f text-to-design-mcp
 
 ### 完整工具清单
 
+**一个操作对应一个工具**,没有 op 分发;三个聚合入口(`jsd_manage_nodes` / `jsd_manage_components` / `jsd_update_node`)仅用于批量或一次改多组字段。所有写工具都支持 `ids`(缺省作用于当前选中)。
+
 | 工具 | 用途 |
 | --- | --- |
-| `jsd_ping` | 检查插件是否在线 |
+| `jsd_ping` | 检查插件是否在线,并返回平台 capabilities |
 | `jsd_get_selection` | 读取画布当前选中的节点 |
+| `jsd_find` | 按名称/类型/id 查找节点 |
 | `jsd_create_nodes` | 按描述创建节点(frame/rect/text 等,支持阴影/描边/渐变/文本样式) |
 | `jsd_create_svg` | 直接导入 SVG 字符串(保留 path/矢量数据,不经降级) |
 | `jsd_create_icon` | 按名称/别名模糊匹配插入 Lucide 内置图标,查无时返回候选名 |
 | `jsd_html_to_design` | 把 HTML 转成设计节点 |
-| `jsd_update_node` | 按 id 批量修改节点属性(位置/颜色/文字/圆角等,ids 缺省作用于当前选中;部分 id 失效时在文本里逐条点名) |
-| `jsd_find` | 按名称/类型/id 查找节点 |
+| `jsd_set_fill_color` | 填充(fills 整体替换)、混合模式、填充样式 |
+| `jsd_set_stroke` | 描边列表/宽度(可四边分开)/对齐/端点/连接/虚线/描边样式 |
+| `jsd_set_cornerRadius` | 圆角半径(四角可分开)与圆角平滑度 |
+| `jsd_set_text` | 文本内容与排版(characters/fontSize/fontName/对齐/行高/字距/截断) |
+| `jsd_move_node` | 位置 x/y 与旋转 |
+| `jsd_resize_node` | 尺寸 width/height |
+| `jsd_set_layout` | FRAME auto-layout(layoutMode/间距/内边距/对齐/伸缩/约束) |
+| `jsd_set_effects` | 阴影/模糊、溢出裁剪、布局网格、椭圆环形参数 |
+| `jsd_set_visibility` | 不透明度、显示开关、锁定 |
+| `jsd_rename_node` | 重命名 |
+| `jsd_update_node` | 聚合:一次改多组字段,或改 pointCount/innerRadius 等长尾字段 |
+| `jsd_select_nodes` | 设置画布当前选中 |
+| `jsd_delete_node` | 删除节点(matchName 可再过滤;ids 缺省删当前选中) |
+| `jsd_clone_node` | 复制节点(克隆 COMPONENT 得到 INSTANCE) |
+| `jsd_group_nodes` | 编组(至少 2 个),可同时设置 auto-layout |
+| `jsd_ungroup_nodes` | 解组 |
+| `jsd_flatten_nodes` | 至少 2 个节点合并为单一矢量 |
+| `jsd_outline_stroke` | 描边转轮廓矢量(几何被烘焙) |
+| `jsd_reparent_nodes` | 移入父节点成为其子节点(坐标需手动修正) |
+| `jsd_repair_nodes` | 清理引擎残留的损坏/失效节点 |
+| `jsd_manage_nodes` | 聚合入口,op 含 select/remove/clone/group/ungroup/flatten/outline_stroke/reparent/repair |
+| `jsd_create_component` | 建「空壳」组件:先 resize 再 reparent 归入子节点,最后删除原容器 |
+| `jsd_create_instance` | 按 COMPONENT 生成实例 |
+| `jsd_detach_instance` | 取消实例链接,得到可自由编辑的普通节点 |
+| `jsd_import_component` | 按 key 从团队库导入组件 |
+| `jsd_swap_component` | 换绑组件(丢弃目标既有覆盖) |
+| `jsd_set_instance_properties` | 设置变体属性(属性名需与 variantGroupProperties 完全匹配) |
+| `jsd_combine_as_variants` | 合并为变体集(仅 COMPONENT,实例不能直接合成) |
+| `jsd_copy_overrides` | 复制源实例覆盖为快照,返回 snapshotId(缓存) |
+| `jsd_apply_overrides` | 按 snapshotId 批量套用,可 swapToSource |
+| `jsd_sync_overrides` | 无状态一次性「复制+套用」,适合 jsd_batch |
+| `jsd_manage_components` | 聚合入口,op 含 create_component/create_instance/detach_instance/import_component/swap_component/set_instance_properties/combine_as_variants/copy_overrides/apply_overrides/sync_overrides |
 | `jsd_batch` | 批量编排器:一次请求顺序执行多个 jsd_* 步骤,双花括号占位符串起中间值 |
-| `jsd_manage_nodes` | 节点结构操作,op 含 select/remove/clone/group/ungroup/flatten/outline_stroke/reparent/repair(清理引擎残留失效节点) |
-| `jsd_manage_components` | 组件/实例操作,op 含 create_component(建空壳,子节点用 reparent 归入)/create_instance/detach_instance/import_component/swap_component/set_instance_properties/combine_as_variants/copy_overrides(复制源实例覆盖为快照,缓存)/apply_overrides(按快照批量套用,可 swapToSource)/sync_overrides(无状态一次性复制+套用) |
 | `jsd_export` | 导出节点为 PNG/JPG/SVG/PDF(导出失败的 id 在文本里点名) |
 | `jsd_list_fonts` | 列出可用字体 |
+| `jsd_list_styles` | 列出本地样式(PAINT/TEXT/EFFECT/GRID) |
 | `jsd_fill_image` | 用本地图片填充节点 |
-| `jsd_platform_op` | 平台特有能力通用通道(Figma 变量/本地样式等),先看 jsd_ping 的 capabilities |
+| `jsd_platform_op` | 平台特有能力通用通道(Figma 变量等),先看 jsd_ping 的 capabilities |
 
 ### 配方 prompt(`prompts/list`)
 
@@ -123,9 +155,8 @@ pkill -f text-to-design-mcp
 | prompt | 用途 |
 | --- | --- |
 | `design-strategy` | 设计策略总纲:命名/层级/间距字号阶梯/出错回滚,附登录页示例结构树 |
-| `design-card` | 生成一张带标题的卡片(平铺创建 + reparent 归组 + 事后设布局) |
-| `text-replace-strategy` | 大改文案:clone 留底 → 语义分块 → 批量替换 → 逐块导小图复核 |
-| `variant-sync` | 把一个实例的样式/文案批量套用到多个同类实例(优先 sync_overrides / copy+apply,手工 jsd_update_node 兜底) |
+| `text-replace-strategy` | 大改文案:jsd_clone_node 留底 → 语义分块 → jsd_set_text 批量替换 → 逐块导小图复核 |
+| `variant-sync` | 把一个实例的样式/文案批量套用到多个同类实例(优先 jsd_sync_overrides / copy+apply,手工 jsd_set_* 兜底) |
 | `html-to-design` | HTML 转设计稿,含保真度取舍说明 |
 | `icon-grid` | 批量插入 Lucide 图标并排成自动布局网格 |
 | `script-ops` | 脚本化调用纪律:压缩工具往返与上下文占用 |

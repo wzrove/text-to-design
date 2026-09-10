@@ -29,6 +29,7 @@ export {
 export {
   assertBooleanOperation,
   normalizeEffects,
+  normalizeLayoutGrids,
   normalizePaints,
   normalizeVectorPaths,
 } from './normalize';

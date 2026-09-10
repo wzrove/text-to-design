@@ -12,7 +12,7 @@ export const batchCallSchema = z.object({
   tool: z
     .string()
     .describe(
-      '要执行的 jsd_* 工具名,如 jsd_create_nodes / jsd_find / jsd_update_node',
+      '要执行的 jsd_* 工具名,如 jsd_create_rectangle / jsd_find / jsd_set_fill_color',
     ),
   args: z
     .record(z.string(), z.unknown())
