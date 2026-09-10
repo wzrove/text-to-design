@@ -39,8 +39,14 @@ type CreateNodeKind =
   | 'GROUP'
   | 'BOOLEAN_OPERATION';
 
-/** 各节点类型的 per-type 子 schema(取 shape 去掉 type 字面量,再挂 placement) */
-const PER_TYPE_NODE_SCHEMA: Record<CreateNodeKind, z.ZodObject<any>> = {
+/**
+ * 各节点类型的 per-type 子 schema(取 shape 去掉 type 字面量,再挂 placement)。
+ * 类型只用到 .shape 重建同形 object,故只声明 shape 这一必需成员,避免 any 逃逸类型检查;
+ * 子 schema 带 refine/strict 包装,不能收窄成 z.ZodObject。
+ */
+type PerTypeNodeSchema = { shape: Record<string, z.ZodType> };
+
+const PER_TYPE_NODE_SCHEMA: Record<CreateNodeKind, PerTypeNodeSchema> = {
   FRAME: frameNodeSchema,
   RECTANGLE: rectangleNodeSchema,
   ELLIPSE: ellipseNodeSchema,

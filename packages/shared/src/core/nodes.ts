@@ -313,7 +313,9 @@ export function groupNodes(
 
   if (useLayout) {
     // auto-layout:引擎接管子节点排布与组框尺寸,因此无需手动还原子节点坐标。
-    frame.layoutMode = params.layoutMode!;
+    // useLayout 已保证 layoutMode 非空且非 NONE,这里用局部变量承接以收窄类型(免非空断言)
+    const layoutMode = params.layoutMode ?? 'NONE';
+    frame.layoutMode = layoutMode;
     frame.itemSpacing = params.itemSpacing ?? 0;
     // 默认让组框按内容自适应尺寸(贴合子节点),除非调用方显式要求 FIXED
     frame.primaryAxisSizingMode = params.primaryAxisSizingMode ?? 'AUTO';
