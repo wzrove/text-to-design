@@ -137,12 +137,23 @@ export function combineAsVariantsNodes(
   let set: NodeSkeleton | undefined;
   const errors: string[] = [];
 
-  // 姿势 1:克隆并入当前页(默认姿势,原组件保留)
+  // 姿势 1:克隆并入当前页(默认姿势,原组件保留)。
+  // P30:jsDesign 上 host.combineAsVariants 可能返回一个非空 set,但任何对它的
+  // 属性访问(set.name / 后续 serializeNode)都会触发引擎内部 getter 崩
+  // (get_booleanOperation / get_name: Value is not a string)。该崩不在调用
+  // 内部抛出,一路冒到 plugin 外层 try,把引擎原文回给调用方,富出口文案错过。
+  // 修法:把 name 赋值 + serializeNode(序列化时同样会触发内部 getter)都纳入同
+  // 一个 try,任何姿势中间崩都重置 set 为 undefined,错误归并到 errors[];
+  // 全部姿势失败时统一抛富出口文案。
   const clones = components.map((c) => c.clone());
   try {
-    set = host.combineAsVariants(clones, page);
+    const s = host.combineAsVariants(clones, page);
+    if (params.name != null && s != null) s.name = params.name;
+    if (s != null) serializeNode(s); // 探活:任何引擎 getter 抛都归本姿势
+    set = s ?? undefined;
   } catch (e) {
     errors.push(`克隆并入当前页: ${errText(e)}`);
+    set = undefined;
     for (const c of clones) {
       try {
         c.remove();
@@ -157,9 +168,13 @@ export function combineAsVariantsNodes(
     const moved = components.map((c) => c.clone());
     try {
       for (const c of moved) page.appendChild(c);
-      set = host.combineAsVariants(moved, page);
+      const s = host.combineAsVariants(moved, page);
+      if (params.name != null && s != null) s.name = params.name;
+      if (s != null) serializeNode(s);
+      set = s ?? undefined;
     } catch (e) {
       errors.push(`克隆移入当前页后合并: ${errText(e)}`);
+      set = undefined;
       for (const c of moved) {
         try {
           c.remove();
@@ -173,9 +188,16 @@ export function combineAsVariantsNodes(
   // 姿势 3:原节点在其所在父级直接合并(原组件会被卷入组件集,不再保留)
   if (set == null) {
     try {
-      set = host.combineAsVariants(components, components[0].parent ?? page);
+      const s = host.combineAsVariants(
+        components,
+        components[0].parent ?? page,
+      );
+      if (params.name != null && s != null) s.name = params.name;
+      if (s != null) serializeNode(s);
+      set = s ?? undefined;
     } catch (e) {
       errors.push(`原节点直接合并: ${errText(e)}`);
+      set = undefined;
     }
   }
 
@@ -198,7 +220,7 @@ export function combineAsVariantsNodes(
       ].join(''),
     );
   }
-  if (params.name != null) set.name = params.name;
+  // name 已在三种姿势各自的 try 内赋值并跟同姿势一起作废处理,这里无需再设。
   host.viewport.scrollAndZoomIntoView([set]);
   return { created: serializeNode(set) };
 }
