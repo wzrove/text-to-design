@@ -1,5 +1,15 @@
 # text-to-design-mcp
 
+## 0.7.0
+
+### Minor Changes
+
+- [`29a0ab7`](https://github.com/wzrove/text-to-design/commit/29a0ab7963269edc6f78b30c1cb7f3866a392fcb) Thanks [@wzrove](https://github.com/wzrove)! - feat: split giant op-dispatch tools into single-purpose tools (jsd*set*\* / jsd_delete_node / jsd_reparent_nodes / jsd_create_component etc.), keep jsd_manage_nodes / jsd_manage_components / jsd_update_node as aggregate entries
+
+### Patch Changes
+
+- [`309b40b`](https://github.com/wzrove/text-to-design/commit/309b40b1598b7ab792c09bc7c4af6432de597d94) Thanks [@wzrove](https://github.com/wzrove)! - fix: 平台缺陷兜底 —— P22 batch 步骤回显摘要裁剪(丢 vectorPaths 等大字段,超预算降级为 id 清单,占位符解析不受影响)、P23 reparent 同时返回 moved 与 updated 并补全各 op 返回键速查、P24 combine_as_variants 全败时返回可执行出口(改用「族名 / 状态」多主件,保留引擎原文供上报)、P25-B 含结构变更的批次自动复核同层几何漂移(结果 warnings,checkDrift=false 可关)、P26 recursive 不再改目标节点自身(叶子除外),连自身改需显式 includeSelf 且结果带 warnings 点名;并修正 P25-A 文档:reparent 跨父级移动保持绝对位置(内部换算),不再写「需手动修正 x/y」
+
 ## 0.6.1
 
 ### Patch Changes
