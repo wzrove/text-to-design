@@ -150,7 +150,7 @@ export function registerCreateTools(
     createNodeTool('LINE', {
       name: 'jsd_create_line',
       title: '创建线段',
-      description: `创建单个 LINE 线段节点,width/height 尺寸与描边等视觉字段。本工具只建一个根线段;短直线段建议 LINE+rotation 布局更稳定。建多个根节点/复杂树用 jsd_batch 编排`,
+      description: `创建单个 LINE 线段节点,width/height 尺寸与描边等视觉字段。本工具只建一个根线段;短直线段建议 LINE+rotation 布局更稳定。横线/竖线可把一维传 0:引擎 resize 校验要求 >= 0.01,插件创建时把零轴抬到 0.01 过校验(视觉是直线,序列化回读该轴仍是 0);jsd_resize_node 改尺寸同样支持零轴。建多个根节点/复杂树用 jsd_batch 编排`,
       followUp: CREATE_BATCH_FOLLOWUP,
     }),
     createNodeTool('POLYGON', {

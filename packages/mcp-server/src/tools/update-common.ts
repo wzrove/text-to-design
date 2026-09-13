@@ -138,8 +138,13 @@ export interface PropToolDef {
  */
 export function propUpdateTool(def: PropToolDef): BridgeToolDef {
   const fields = PROP_METHOD_FIELDS[def.method];
+  // 只点名本方法 OWNER 的字段做「未生效」反馈:某些字段虽在本方法入参里
+  // (如 resize 的 x/y),却不登记在 PROP_APPLICABILITY,点名会被误报成
+  // 「与目标节点类型不匹配,已被忽略」。这些几何字段永远生效,不参与点名。
   const requestedProps = (args: Record<string, unknown>): string[] =>
-    fields.filter((k) => args[k] !== undefined);
+    fields.filter(
+      (k) => args[k] !== undefined && PROP_APPLICABILITY[k] !== undefined,
+    );
   return {
     name: def.name,
     title: def.title,

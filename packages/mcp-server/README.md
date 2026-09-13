@@ -114,7 +114,7 @@ pkill -f text-to-design-mcp
 | `jsd_set_cornerRadius` | 圆角半径(四角可分开)与圆角平滑度 |
 | `jsd_set_text` | 文本内容与排版(characters/fontSize/fontName/对齐/行高/字距/截断) |
 | `jsd_move_node` | 位置 x/y 与旋转 |
-| `jsd_resize_node` | 尺寸 width/height |
+| `jsd_resize_node` | 尺寸 width/height,可同时传 x/y 一步改尺寸并定位 |
 | `jsd_set_layout` | FRAME auto-layout(layoutMode/间距/内边距/对齐/伸缩/约束) |
 | `jsd_set_effects` | 阴影/模糊、溢出裁剪、布局网格、椭圆环形参数 |
 | `jsd_set_visibility` | 不透明度、显示开关、锁定 |
@@ -127,7 +127,7 @@ pkill -f text-to-design-mcp
 | `jsd_ungroup_nodes` | 解组 |
 | `jsd_flatten_nodes` | 至少 2 个节点合并为单一矢量 |
 | `jsd_outline_stroke` | 描边转轮廓矢量(几何被烘焙) |
-| `jsd_reparent_nodes` | 移入父节点成为其子节点(坐标需手动修正) |
+| `jsd_reparent_nodes` | 移入父节点成为其子节点(parentId 建议显式传;跨父级后需修正 x/y) |
 | `jsd_repair_nodes` | 清理引擎残留的损坏/失效节点 |
 | `jsd_manage_nodes` | 聚合入口,op 含 select/remove/clone/group/ungroup/flatten/outline_stroke/reparent/repair |
 | `jsd_create_component` | 建「空壳」组件:先 resize 再 reparent 归入子节点,最后删除原容器 |

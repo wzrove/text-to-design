@@ -143,7 +143,7 @@ export function registerNodeOpTools(
       name: 'jsd_reparent_nodes',
       title: '移动节点到父节点下',
       description:
-        '把节点移入 parentId(缺省当前选中第一个)成为其子节点,可指定插入位置。移动后坐标按新父相对系解释,通常需紧跟一次 jsd_move_node 修正 x/y',
+        '把节点移入 parentId 成为其子节点,可指定插入位置。⚠ **parentId 请显式传**:缺省值取「当前选中里第一个不是被移动节点的节点」——当前选中为空或不含父容器时该值不可靠(会报「没有找到目标父节点」,或把节点误移进另一个被选中的节点下)。需要依赖缺省时的两种姿势:①先 jsd_select_nodes 选中目标容器;②只调层序 → 传 index 且 ids 里含被调整节点本身,此时缺省父级 = 该节点的原父级。⚠ 层序语义:index 是 children 数组下标(0 = 最底层),children 顺序即绘制顺序(末位 = 最上层),序列化里对应字段是 z —— 判断遮挡读 z,调层序就用本工具 + index。节点已在该父级下时本工具只调层序,x/y 不变;auto-layout 容器同样支持(index 会在内部临时关掉布局插入再恢复),若引擎没落位会明确报错并提示改 itemSpacing / 对齐。跨父级移动后坐标按新父相对系解释,需修正 x/y:用 jsd_resize_node 传 x/y(可与 width/height 一次改完)或 jsd_move_node',
       inputSchema: reparentNodesSchema,
       annotations: { readOnlyHint: false, destructiveHint: false },
       followUp: {

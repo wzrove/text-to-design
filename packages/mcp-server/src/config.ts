@@ -20,6 +20,15 @@ export const DAEMON_REPLACE_MS = 6000;
 export const PING_TIMEOUT_MS = 5_000;
 export const LONG_IO_TIMEOUT_MS = 60_000;
 
+/** jsd_export 内联 base64(dataURL)的体积上限(字节)。
+ *  超出该值一律不内联,改为落盘并返回路径引用。
+ *  背景:内联大 base64 会随工具结果进入会话历史并常驻内存,
+ *  实测会撑爆宿主进程堆(large_object_space 单调增长)导致 OOM。
+ *  可用环境变量 TEXT_TO_DESIGN_MCP_MAX_INLINE_DATA_URL_BYTES 覆盖。 */
+export const MAX_INLINE_DATA_URL_BYTES = Number(
+  process.env.TEXT_TO_DESIGN_MCP_MAX_INLINE_DATA_URL_BYTES ?? 512 * 1024,
+);
+
 /** jsd_batch 整批上限:每步仍受自身 timeout 约束,此处只封顶整次编排 */
 export const BATCH_TIMEOUT_MS = 120_000;
 

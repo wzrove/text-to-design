@@ -45,13 +45,19 @@
   --component-type-dot-vector: var(--primitive-color-dot-scale-purple);
   --component-type-dot-text: var(--primitive-color-dot-scale-green-bright);
   --component-type-dot-component: var(--primitive-color-dot-scale-pink);
-  --component-type-dot-component-set: var(--primitive-color-dot-scale-pink-light);
+  --component-type-dot-component-set: var(
+    --primitive-color-dot-scale-pink-light
+  );
   --component-type-dot-instance: var(--primitive-color-dot-scale-pink-pale);
-  --component-type-dot-boolean-operation: var(--primitive-color-dot-scale-orange-light);
+  --component-type-dot-boolean-operation: var(
+    --primitive-color-dot-scale-orange-light
+  );
   --component-type-dot-slice: var(--primitive-color-dot-scale-slate-light);
   /* log-error-tint: rgba 派生自 daisyUI 暗色主题 error(见 tailwind.config.js) */
   --component-log-error-tint: rgba(239, 68, 68, 0.06);
   /* scrollbar: 直接引用 --primitive-color-neutral-alpha-* */
   --component-scrollbar-thumb: var(--primitive-color-neutral-alpha-thumb);
-  --component-scrollbar-thumb-hover: var(--primitive-color-neutral-alpha-thumb-hover);
+  --component-scrollbar-thumb-hover: var(
+    --primitive-color-neutral-alpha-thumb-hover
+  );
 }

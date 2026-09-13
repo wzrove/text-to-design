@@ -8,7 +8,29 @@ import {
   normalizePaints,
   normalizeVectorPaths,
 } from './normalize';
-import { loadFont } from './utils';
+import { loadFont, MIN_RESIZE_SIZE } from './utils';
+
+/**
+ * 按 spec 的 width/height 定尺寸;只给了一维时另一维沿用当前值。
+ *
+ * LINE 例外:允许某一维为 0(横线/竖线,画布上已有 LINE 序列化即为 height:0),
+ * 但引擎 resize 校验要求 >= 0.01(实测 P9,直接传 0 会报
+ * `in resize: Expected "width" to have value >= 0.01`),这里把零轴抬到引擎
+ * 可接受的最小值,视觉上仍是一条直线。
+ */
+function applySize(node: NodeSkeleton, spec: ExecuteOp): void {
+  if (spec.width == null || !('resize' in node)) return;
+  const targetW = spec.width;
+  const targetH = spec.height ?? node.height;
+  if (node.type === 'LINE') {
+    node.resize(
+      Math.max(targetW, MIN_RESIZE_SIZE),
+      Math.max(targetH, MIN_RESIZE_SIZE),
+    );
+  } else {
+    node.resize(targetW, targetH);
+  }
+}
 
 async function buildNode(
   host: DesignHost,
@@ -87,15 +109,20 @@ async function buildNode(
   node.x = spec.x ?? 0;
   node.y = spec.y ?? 0;
 
-  if (spec.width != null && 'resize' in node)
-    node.resize(spec.width, spec.height ?? node.height);
+  applySize(node, spec);
   if (spec.rotation != null) node.rotation = spec.rotation;
   if (spec.opacity != null && 'opacity' in node) node.opacity = spec.opacity;
   if (spec.locked != null) node.locked = spec.locked;
   if (spec.visible != null && 'visible' in node) node.visible = spec.visible;
 
-  if (spec.fills != null && 'fills' in node)
+  if (spec.fills != null && 'fills' in node) {
     node.fills = normalizePaints(spec.fills, 'fills');
+  } else if (spec.strokes != null && 'fills' in node && node.type !== 'FRAME') {
+    // 只给了描边、没给填充:引擎会给图形自动塞 #CCCCCC 灰底(P10),
+    // 纯描边图标就成了灰块。这里显式清空填充。
+    // 例外 FRAME:容器按文档走引擎默认白底,不在此改动。
+    node.fills = [];
+  }
   if (spec.strokes != null && 'strokes' in node)
     node.strokes = normalizePaints(spec.strokes, 'strokes');
 
@@ -195,7 +222,14 @@ async function buildNode(
     'layoutMode' in node
   ) {
     node.layoutMode = spec.layoutMode;
+    // itemSpacing 一贯缺省 0;padding 必须与它同口径:
+    // 引擎在开启 auto-layout 时会把四边 padding 默认置 10(实测 P18),
+    // 调用方没传就显式归 0,免得「没写 padding 却莫名多出 10px 内边距」。
     node.itemSpacing = spec.itemSpacing ?? 0;
+    node.paddingTop = spec.paddingTop ?? 0;
+    node.paddingRight = spec.paddingRight ?? 0;
+    node.paddingBottom = spec.paddingBottom ?? 0;
+    node.paddingLeft = spec.paddingLeft ?? 0;
     if (spec.primaryAxisSizingMode != null)
       node.primaryAxisSizingMode = spec.primaryAxisSizingMode;
     if (spec.counterAxisSizingMode != null)
@@ -204,16 +238,58 @@ async function buildNode(
       node.primaryAxisAlignItems = spec.primaryAxisAlignItems;
     if (spec.counterAxisAlignItems != null)
       node.counterAxisAlignItems = spec.counterAxisAlignItems;
-    if (spec.paddingTop != null) node.paddingTop = spec.paddingTop;
-    if (spec.paddingRight != null) node.paddingRight = spec.paddingRight;
-    if (spec.paddingBottom != null) node.paddingBottom = spec.paddingBottom;
-    if (spec.paddingLeft != null) node.paddingLeft = spec.paddingLeft;
+
+    // 显式给了尺寸、却没声明该轴的 sizingMode → 该轴钉成 FIXED。
+    // 引擎开启 auto-layout 时默认按内容撑开(AUTO),会把调用方给的尺寸悄悄吃掉:
+    // 实测传 width:690,height:210 带嵌套 children,返回 630×160(P18)。
+    // 调用方显式声明过 sizingMode 的一律尊重,不抢。
+    const widthIsPrimary = spec.layoutMode === 'HORIZONTAL';
+    if (
+      spec.width != null &&
+      spec.primaryAxisSizingMode == null &&
+      widthIsPrimary
+    )
+      node.primaryAxisSizingMode = 'FIXED';
+    if (
+      spec.width != null &&
+      spec.counterAxisSizingMode == null &&
+      !widthIsPrimary
+    )
+      node.counterAxisSizingMode = 'FIXED';
+    if (
+      spec.height != null &&
+      spec.primaryAxisSizingMode == null &&
+      !widthIsPrimary
+    )
+      node.primaryAxisSizingMode = 'FIXED';
+    if (
+      spec.height != null &&
+      spec.counterAxisSizingMode == null &&
+      widthIsPrimary
+    )
+      node.counterAxisSizingMode = 'FIXED';
   }
   if (spec.layoutGrow != null && 'layoutGrow' in node) {
     node.layoutGrow = spec.layoutGrow;
   }
   if (spec.layoutAlign != null && 'layoutAlign' in node) {
     node.layoutAlign = spec.layoutAlign;
+  }
+
+  // 尺寸最后再定一次(P18):开启 auto-layout 会触发引擎按子项重算容器尺寸,
+  // 把建节点早期那次 resize 覆盖掉 —— 实测传 width:690,height:210 带嵌套
+  // children 建卡片,返回却是 630×122。显式给了尺寸就以调用方为准再压一遍。
+  applySize(node, spec);
+
+  // resize 会把显式声明的 AUTO 悄悄改回 FIXED(实测:声明 primaryAxis/
+  // counterAxis 都是 AUTO 并给 width:500,height:80,压完尺寸后两个轴都变成
+  // FIXED)。所以压完尺寸要把调用方**声明过**的 sizingMode 再写一次,
+  // 否则上一行的 resize 就等于抢了调用方的显式意图 —— 说了要 hug 却给固定尺寸。
+  if (node.type === 'FRAME' && spec.layoutMode != null) {
+    if (spec.primaryAxisSizingMode != null)
+      node.primaryAxisSizingMode = spec.primaryAxisSizingMode;
+    if (spec.counterAxisSizingMode != null)
+      node.counterAxisSizingMode = spec.counterAxisSizingMode;
   }
 
   // 平台特有超集字段(仅对应平台生效,'in' 守卫在无此字段的平台跳过)

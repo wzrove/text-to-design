@@ -350,6 +350,13 @@ const cases: Array<
     'resize',
     { ids: ['1:2'], props: { width: 100 } },
   ],
+  // resize 同时收 x/y:尺寸 + 定位一次改完(move 仍是 x/y 的语义归属方法)
+  [
+    'jsd_resize_node',
+    { ids: ['1:2'], width: 100, x: 10, y: 20 },
+    'resize',
+    { ids: ['1:2'], props: { width: 100, x: 10, y: 20 } },
+  ],
   [
     'jsd_set_layout',
     { ids: ['1:2'], layoutMode: 'HORIZONTAL', itemSpacing: 12 },
@@ -478,6 +485,17 @@ console.log(
   ).slice(0, 120),
 );
 console.log('反馈(文本改 characters):', fb1.text.slice(0, 160));
+// resize 带 x/y:几何字段永远生效,不该被点名成「类型不匹配,已被忽略」
+const fbXY = await invoke('jsd_resize_node', {
+  ids: ['1:2'],
+  width: 100,
+  x: 10,
+  y: 20,
+});
+if (fbXY.text.includes('与目标节点类型不匹配')) {
+  fail++;
+  console.log(`✗ resize 传 x/y 触发误报: ${fbXY.text.slice(0, 200)}`);
+}
 console.log(
   '反馈(缺 id 点名):',
   JSON.stringify(await invoke('jsd_move_node', { x: 1 })).slice(0, 200),

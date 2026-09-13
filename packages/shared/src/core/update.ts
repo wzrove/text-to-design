@@ -8,12 +8,13 @@ import {
   normalizePaints,
 } from './normalize';
 import { serializeNode } from './serialize';
-import { collectTargets, findNode, loadFont } from './utils';
+import { collectTargets, findNode, loadFont, MIN_RESIZE_SIZE } from './utils';
 
 async function applyProps(
   host: DesignHost,
   node: NodeSkeleton,
-  props: UpdateNodeProps,
+  // 放宽为局部扩展:x/y 与 width/height 可能来自两个不同方法组的入参(见 updateSelection)
+  props: UpdateNodeProps & { x?: number; y?: number },
 ): Promise<void> {
   // 先整体归一化一次(多目标节点复用同一份合法数据),引擎赋值前兜底
   const fills =
@@ -34,7 +35,22 @@ async function applyProps(
   if (props.width != null || props.height != null) {
     const w = props.width ?? node.width;
     const h = props.height ?? node.height;
-    if ('resize' in node) node.resize(w, h);
+    if ('resize' in node) {
+      if (node.type === 'LINE') {
+        // 与创建路径同源(P9):LINE 的「线长 + 零厚」合法,但引擎 resize 校验
+        // 要求两维 >= 0.01,直接传 0 会被拒。这里复用同一条零轴豁免,
+        // 让 jsd_resize_node 也能把横/竖线改成 0 → 1px 以外的尺寸。
+        node.resize(Math.max(w, MIN_RESIZE_SIZE), Math.max(h, MIN_RESIZE_SIZE));
+      } else if (w < MIN_RESIZE_SIZE || h < MIN_RESIZE_SIZE) {
+        // 不再让引擎断言原样冒泡(「in resize: Expected "width" to have value >= 0.01」
+        // 读起来看不出该怎么办)。明确说清限制与替代做法。
+        throw new Error(
+          `${node.type} 的 width/height 最小为 ${MIN_RESIZE_SIZE}(引擎 resize 校验);要画横线/竖线请改用 LINE 并把一维传 0`,
+        );
+      } else {
+        node.resize(w, h);
+      }
+    }
   }
   if (fills != null && 'fills' in node) node.fills = fills;
   if (props.strokeWeight != null && 'strokeWeight' in node)
@@ -201,14 +217,110 @@ async function applyProps(
   }
 }
 
-/** 目标节点是否位于 INSTANCE 内(实例子节点,平台对部分样式覆盖存在渲染缺陷) */
-function insideInstance(node: NodeSkeleton): boolean {
+/** 沿父链找最近的 INSTANCE 祖先(实例子节点样式覆盖的平台缺陷只出现在这类节点上) */
+function enclosingInstance(node: NodeSkeleton): NodeSkeleton | null {
   let p = node.parent;
   while (p != null) {
-    if (p.type === 'INSTANCE') return true;
+    if (p.type === 'INSTANCE') return p;
     p = p.parent;
   }
-  return false;
+  return null;
+}
+
+/**
+ * 样式类字段:写在 INSTANCE 内的子节点上时,平台不保证渲染生效
+ * (P7 实测 fills / fontName 回显是新值、渲染仍是组件原样式;其余样式同类风险)。
+ * 几何/结构/命名类字段(x/y/width/height/name/visible/locked/布局)不在其列 ——
+ * 那些在实例上是正常生效的覆盖,不该报风险。
+ */
+const INSTANCE_RISKY_PROPS = new Set([
+  'fills',
+  'strokes',
+  'strokeWeight',
+  'strokeTopWeight',
+  'strokeBottomWeight',
+  'strokeLeftWeight',
+  'strokeRightWeight',
+  'strokeAlign',
+  'strokeCap',
+  'strokeJoin',
+  'dashPattern',
+  'blendMode',
+  'effects',
+  'cornerRadius',
+  'topLeftRadius',
+  'topRightRadius',
+  'bottomLeftRadius',
+  'bottomRightRadius',
+  'cornerSmoothing',
+  'fontName',
+  'fontSize',
+  'lineHeight',
+  'letterSpacing',
+  'textCase',
+  'textDecoration',
+  'textAlignHorizontal',
+  'textAlignVertical',
+]);
+
+/** 风险提示里最多点名几个节点,其余折叠成计数,免得递归批量时刷屏 */
+const INSTANCE_WARN_SAMPLE = 3;
+
+/**
+ * 平台超集字段:仅对应平台运行时存在(如 Figma 的截断/样式 id,见 schemas/platform.ts
+ * 的 hostCapabilitySchema)。当前平台没有这些属性时,`'in'` 守卫会**静默跳过**,
+ * 调用方看到回显成功却不知道根本没生效。这里显式点名 —— 也就是把「能力判断看
+ * jsd_ping」这条语义从提示词下沉到代码,别再靠模型自觉。
+ */
+const PLATFORM_SUPERSET_PROPS = new Set([
+  'textTruncation',
+  'maxLines',
+  'fillStyleId',
+  'strokeStyleId',
+  'textStyleId',
+  'effectStyleId',
+]);
+
+/** 仅 TEXT 适用的超集字段:其他类型传了属于「类型不匹配」,不该报成「平台不支持」 */
+const TEXT_ONLY_SUPERSET_PROPS = new Set(['textTruncation', 'maxLines']);
+
+/** 该字段是否因当前平台运行时不具备而会被静默跳过 */
+function isUnsupportedSupersetProp(key: string, node: NodeSkeleton): boolean {
+  if (!PLATFORM_SUPERSET_PROPS.has(key)) return false;
+  if (TEXT_ONLY_SUPERSET_PROPS.has(key) && node.type !== 'TEXT') return false;
+  return !(key in node);
+}
+
+/**
+ * 实例子节点样式改不动的**可执行出口**:顺着名字路径在实例的主组件里定位同源
+ * 子节点,把它的 id 直接算出来。调用方拿到就能改主组件(所有实例一起继承),
+ * 不必自己再翻组件树。名字对不上(改过名 / 结构不一致)返回 null,
+ * 由告警文案回落为「改主组件或 detach」。
+ */
+function instanceStyleFixHint(
+  instance: NodeSkeleton,
+  node: NodeSkeleton,
+): string | null {
+  try {
+    const main = instance.mainComponent ?? null;
+    if (main == null) return null;
+    const path: string[] = [];
+    let cur: NodeSkeleton | null = node;
+    while (cur != null && cur.id !== instance.id) {
+      path.unshift(cur.name);
+      cur = cur.parent;
+    }
+    if (path.length === 0) return null;
+    let target: NodeSkeleton = main;
+    for (const name of path) {
+      const next = (target.children ?? []).find((c) => c.name === name);
+      if (next == null) return null;
+      target = next;
+    }
+    return `主组件(${main.id})里的「${node.name}」(${target.id})`;
+  } catch {
+    return null;
+  }
 }
 
 export async function updateSelection(
@@ -260,18 +372,58 @@ export async function updateSelection(
     );
   }
   const warnings: string[] = [];
+  const riskyTargets: { label: string; hint: string | null }[] = [];
+  const riskyProps = new Set<string>();
+  const ignoredSuperset = new Set<string>();
   for (const node of targets) {
-    await applyProps(host, node, props);
-    // 平台缺陷:实例子文字的 fills/fontName 覆盖回显成功但渲染不生效,写时点名
-    if (
-      node.type === 'TEXT' &&
-      (props.fills != null || props.fontName != null) &&
-      insideInstance(node)
-    ) {
-      warnings.push(
-        `文字节点 ${node.name}(${node.id})位于 INSTANCE 内:当前平台对实例子文字的 fills/fontName 覆盖实测渲染不生效(回显是新值),导出前请目检,或改用静态节点`,
-      );
+    // 平台超集字段:当前平台没有该属性,'in' 守卫会静默跳过 → 先记下来点名
+    for (const key of Object.keys(props)) {
+      if (isUnsupportedSupersetProp(key, node)) {
+        ignoredSuperset.add(key);
+      }
     }
+    await applyProps(host, node, props);
+    // 平台缺陷:实例子节点的样式覆盖回显成功但渲染不生效 → 写时点名,别让调用方以为改成了
+    const instance = enclosingInstance(node);
+    if (instance != null) {
+      for (const key of Object.keys(props)) {
+        if (INSTANCE_RISKY_PROPS.has(key)) {
+          riskyProps.add(key);
+          riskyTargets.push({
+            label: `${node.name}(${node.id})`,
+            hint: instanceStyleFixHint(instance, node),
+          });
+          break;
+        }
+      }
+    }
+  }
+  if (riskyTargets.length > 0) {
+    const sample = riskyTargets.slice(0, INSTANCE_WARN_SAMPLE);
+    const rest =
+      riskyTargets.length > INSTANCE_WARN_SAMPLE
+        ? ` 等 ${riskyTargets.length} 个节点`
+        : '';
+    const hints = sample
+      .filter((t) => t.hint != null)
+      .map((t) => `${t.label} → 改 ${t.hint}`);
+    warnings.push(
+      [
+        `实例子节点样式覆盖有平台风险:${sample.map((t) => t.label).join('、')}${rest} 位于 INSTANCE 内,`,
+        '平台对实例子节点的样式覆盖不保证渲染生效(实测 fills/fontName 回显是新值但渲染仍是组件原样式)。',
+        `本次改动字段:${[...riskyProps].join(', ')}。`,
+        hints.length > 0
+          ? `可靠改法 —— 改主组件对应子节点(所有实例一起继承):${hints.join(';')};`
+          : '可靠改法 —— 改该实例的主组件对应子节点(所有实例一起继承);',
+        '若只需要这一个实例不一样,先 jsd_detach_instance 把它脱离组件(变静态节点)再改;',
+        '完成后用 jsd_export 导小图目检确认(回显不等于生效)。',
+      ].join(''),
+    );
+  }
+  if (ignoredSuperset.size > 0) {
+    warnings.push(
+      `以下字段是平台超集能力,当前平台运行时不支持,已忽略:${[...ignoredSuperset].join(', ')};哪些能力可用看 jsd_ping 的 capabilities(只列平台差异项,jsDesign 通常只有 styles)`,
+    );
   }
   return {
     updated: targets.map((n) => serializeNode(n)),

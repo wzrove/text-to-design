@@ -33,7 +33,7 @@ export function registerResources(
     {
       title: '画布当前选中',
       description:
-        '当前选中节点的序列化树(含直接子节点),实时从插件读取;等价于 jsd_get_selection depth=2',
+        '当前选中节点的序列化树(含直接子节点),实时从插件读取;等价于 jsd_get_selection depth=2。⚠ 每个节点带 z = 在父级 children 里的下标 = 绘制顺序(0 = 最底层,越大越靠上)',
       mimeType: 'application/json',
     },
     async () => {

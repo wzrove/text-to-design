@@ -9,6 +9,7 @@ import type {
 } from 'text-to-design-shared';
 import {
   applyCachedOverrides,
+  CORE_CAPABILITIES,
   cloneNodes,
   combineAsVariantsNodes,
   copyInstanceOverrides,
@@ -125,7 +126,10 @@ export function registerPlugin(
           send(id, true, {
             pong: true,
             platform,
+            // capabilities 只列平台差异项(jsDesign 仅 styles);
+            // 核心能力两平台一致,直接回传共享常量,避免调用方从 capabilities 里误判
             capabilities: meta.capabilities,
+            coreCapabilities: CORE_CAPABILITIES,
           });
           break;
         case 'get_selection':
@@ -186,7 +190,22 @@ export function registerPlugin(
               send(
                 id,
                 true,
-                groupNodes(host, { ids: p.ids ?? [], name: p.name }),
+                groupNodes(host, {
+                  ids: p.ids ?? [],
+                  name: p.name,
+                  // 布局参数必须原样透传:此前只传 ids/name,导致 layoutMode
+                  // 及间距/对齐/padding 在插件侧全被丢弃,永远走纯归组分支
+                  layoutMode: p.layoutMode,
+                  itemSpacing: p.itemSpacing,
+                  paddingTop: p.paddingTop,
+                  paddingRight: p.paddingRight,
+                  paddingBottom: p.paddingBottom,
+                  paddingLeft: p.paddingLeft,
+                  primaryAxisSizingMode: p.primaryAxisSizingMode,
+                  counterAxisSizingMode: p.counterAxisSizingMode,
+                  primaryAxisAlignItems: p.primaryAxisAlignItems,
+                  counterAxisAlignItems: p.counterAxisAlignItems,
+                }),
               );
               break;
             case 'ungroup':
@@ -390,7 +409,11 @@ export function registerPlugin(
       // 便于定位 "not a function" / "in set_fills" 这类难懂错误
       const paramsSummary = JSON.stringify(msg.params ?? {}).slice(0, 500);
       console.error(`[plugin] ${msg.method} 失败, params=${paramsSummary}`, e);
-      fail(id, msg.method, e);
+      const opName =
+        msg.method === 'node_op' || msg.method === 'component_op'
+          ? ` ${String((msg.params as { op?: string } | undefined)?.op ?? '')}`
+          : '';
+      fail(id, `${msg.method}${opName}`, e);
     }
   };
 }

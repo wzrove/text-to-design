@@ -35,4 +35,4 @@ export {
 } from './normalize';
 export { MAX_SERIALIZE_DEPTH, serializeNode, trySerialize } from './serialize';
 export { updateSelection } from './update';
-export { collectTargets, findNode, loadFont } from './utils';
+export { collectTargets, findNode, loadFont, MIN_RESIZE_SIZE } from './utils';

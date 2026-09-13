@@ -4,9 +4,130 @@ import type {
   PageStructureResult,
   SerializedNode,
 } from '../schemas';
-import type { ContainerSkeleton, DesignHost, NodeSkeleton } from './host';
+import type {
+  ContainerSkeleton,
+  DesignHost,
+  NodeSkeleton,
+  PageSkeleton,
+} from './host';
 import { serializeNode, trySerialize } from './serialize';
 import { findNode } from './utils';
+
+/**
+ * 节点在页面坐标系里的原点(绝对坐标)。
+ *
+ * 平台差异:jsDesign 的 `absolutePosition` **存在但字段为 undefined**(实测读出
+ * `{x:undefined,y:undefined}`),写入还会触发引擎 `set_x` 断言。因此这里:
+ * 1. 优先读原生 `absolutePosition`,但**必须逐字段校验有限性**,否则 NaN 会顺着
+ *    后续赋值流进引擎,报错变成难以定位的 `set_x` 断言;
+ * 2. 读不到就沿父链累加 x/y 兜底(忽略旋转,覆盖无旋转的常见场景)。
+ *    父级若为异常代理对象其 x/y 可能 undefined,每一步都要校验。
+ *
+ * 用于 reparent / groupNodes 前后对齐坐标:放置类操作一律以「页面系」为基准,
+ * 不依赖引擎是否自动换算(实测同一父级会换算、深层容器不换算,见 P17)。
+ */
+function absoluteOrigin(node: NodeSkeleton): { x: number; y: number } {
+  const abs = node.absolutePosition;
+  if (abs != null && Number.isFinite(abs.x) && Number.isFinite(abs.y)) {
+    return { x: abs.x, y: abs.y };
+  }
+  let x = Number.isFinite(node.x) ? node.x : 0;
+  let y = Number.isFinite(node.y) ? node.y : 0;
+  let p: NodeSkeleton | null = node.parent;
+  let guard = 0;
+  while (p && guard < 64) {
+    if (Number.isFinite(p.x)) x += p.x;
+    if (Number.isFinite(p.y)) y += p.y;
+    p = p.parent ?? null;
+    guard += 1;
+  }
+  return { x, y };
+}
+
+/**
+ * 容器是否开启 auto-layout。auto-layout 容器的子节点次序/坐标由布局接管:
+ * 走 `insertChild` 会触发引擎布局重算路径读取子节点 layoutGrow,而插件侧节点
+ * 代理在 jsDesign 上该读取会崩(实测 `get_layoutGrow: ... reading 'jsGet'`,见 P8)。
+ */
+function isAutoLayoutContainer(node: ContainerSkeleton): boolean {
+  return (
+    'layoutMode' in node &&
+    (node as { layoutMode?: string }).layoutMode != null &&
+    (node as { layoutMode?: string }).layoutMode !== 'NONE'
+  );
+}
+
+/**
+ * 临时关掉 auto-layout 时会被引擎连带重置的布局属性(P14)。
+ *
+ * 实测:只恢复 layoutMode 是不够的 —— 引擎在 layoutMode → NONE 时会把
+ * primaryAxisSizingMode / counterAxisSizingMode 重置成另一组默认(AUTO↔FIXED 对调),
+ * 结果「调个层序把容器尺寸模式改了」。下面这些一并快照、恢复。
+ */
+const LAYOUT_PRESERVE_KEYS = [
+  'primaryAxisSizingMode',
+  'counterAxisSizingMode',
+  'primaryAxisAlignItems',
+  'counterAxisAlignItems',
+  'itemSpacing',
+  'paddingTop',
+  'paddingRight',
+  'paddingBottom',
+  'paddingLeft',
+] as const;
+
+type LayoutRecord = Record<string, unknown>;
+
+function snapshotLayout(container: ContainerSkeleton): LayoutRecord {
+  const src = container as unknown as LayoutRecord;
+  const snap: LayoutRecord = {};
+  for (const key of LAYOUT_PRESERVE_KEYS) {
+    if (src[key] != null) snap[key] = src[key];
+  }
+  return snap;
+}
+
+function restoreLayout(container: ContainerSkeleton, snap: LayoutRecord): void {
+  const dst = container as unknown as LayoutRecord;
+  for (const [key, value] of Object.entries(snap)) {
+    try {
+      dst[key] = value;
+    } catch {
+      // 单个属性恢复失败不影响其余属性:宁可少恢复一项,也不要把插入节点的操作整体回滚
+    }
+  }
+}
+
+/**
+ * 把节点按 index 插到 parent 下(index = children 下标 = 绘制顺序,0 = 最底层)。
+ *
+ * 非 auto-layout 容器直接 `insertChild`。
+ * auto-layout 容器**临时**把 layoutMode 置 NONE、插好再恢复:插入本身不再是布局
+ * 操作,从而绕过 P8 那条会崩的布局重算路径;恢复后引擎按新的 children 顺序重排,
+ * index 因此在 auto-layout 容器上也能生效(此前只能报错)。
+ * 恢复时连同布局属性一起还原(见 LAYOUT_PRESERVE_KEYS),异常一律在 finally 里恢复,
+ * 不留半残状态。
+ */
+function insertChildAt(
+  parent: ContainerSkeleton,
+  index: number,
+  node: NodeSkeleton,
+): void {
+  if (!isAutoLayoutContainer(parent)) {
+    parent.insertChild(index, node);
+    return;
+  }
+  const owner = parent as ContainerSkeleton & { layoutMode?: 'NONE' };
+  const mode = owner.layoutMode ?? 'NONE';
+  const snap = snapshotLayout(parent);
+  try {
+    owner.layoutMode = 'NONE';
+    parent.insertChild(index, node);
+  } finally {
+    owner.layoutMode = mode;
+    restoreLayout(parent, snap);
+  }
+}
 
 export function findNodes(host: DesignHost, params: FindParams): FindResult {
   const page = host.currentPage;
@@ -49,7 +170,8 @@ export function setSelection(
 export function getPageStructure(host: DesignHost): PageStructureResult {
   const children = host.currentPage.children ?? [];
   const nodes: PageStructureResult['nodes'] = [];
-  for (const c of children) {
+  // 下标 = 绘制顺序(z):顶层节点没有父级可回查,这里按页面 children 顺序直接给出
+  for (const [z, c] of children.entries()) {
     const s = trySerialize(c, 0);
     if (s) {
       nodes.push({
@@ -58,6 +180,7 @@ export function getPageStructure(host: DesignHost): PageStructureResult {
         type: s.type,
         x: s.x,
         y: s.y,
+        z,
         ...(s.width != null ? { width: s.width } : {}),
         ...(s.height != null ? { height: s.height } : {}),
         ...(s.childCount != null ? { childCount: s.childCount } : {}),
@@ -70,6 +193,7 @@ export function getPageStructure(host: DesignHost): PageStructureResult {
         type: c.type,
         x: Math.round(c.x) || 0,
         y: Math.round(c.y) || 0,
+        z,
       });
     }
   }
@@ -166,7 +290,6 @@ export function groupNodes(
   // 归组后再用 absolutePosition 还原,实现「原地编组」。
   const absInfo = nodes.map((n) => {
     const native = n as NodeSkeleton & {
-      absolutePosition?: { x: number; y: number };
       absoluteBoundingBox?: {
         x: number;
         y: number;
@@ -174,23 +297,9 @@ export function groupNodes(
         height: number;
       } | null;
     };
-    // 兜底:原生属性缺失时沿父链累加 x/y(忽略旋转,仅覆盖无旋转常见场景)
-    const fallbackPos = (): { x: number; y: number } => {
-      let x = n.x;
-      let y = n.y;
-      let p = n.parent;
-      let guard = 0;
-      while (p && guard < 64) {
-        x += p.x;
-        y += p.y;
-        p = (p as NodeSkeleton).parent ?? null;
-        guard += 1;
-      }
-      return { x, y };
-    };
-    const pos = native.absolutePosition
-      ? { x: native.absolutePosition.x, y: native.absolutePosition.y }
-      : fallbackPos();
+    // absoluteOrigin 内部已处理 jsDesign「absolutePosition 存在但字段为
+    // undefined」的坑并校验有限性,这里直接取页面系原点。
+    const pos = absoluteOrigin(n);
     const box = native.absoluteBoundingBox
       ? {
           x: native.absoluteBoundingBox.x,
@@ -251,7 +360,9 @@ export function groupNodes(
     ? parentChildren.findIndex((c) => c.id === nodes[0].id)
     : -1;
   if (firstIndex >= 0) {
-    parent.insertChild(firstIndex, frame);
+    // 走 insertChildAt:目标父级若是 auto-layout 容器,直接 insertChild 会崩(P8),
+    // 这里内部临时关掉布局插入再恢复,原索引位与 z-order 都能保住。
+    insertChildAt(parent, firstIndex, frame);
   } else {
     parent.appendChild(frame);
   }
@@ -262,13 +373,7 @@ export function groupNodes(
   const frameNative = frame as NodeSkeleton & {
     absolutePosition?: { x: number; y: number };
   };
-  const parentNative = parent as NodeSkeleton;
-  const parentPos =
-    parentNative.absolutePosition != null &&
-    finite(parentNative.absolutePosition.x) &&
-    finite(parentNative.absolutePosition.y)
-      ? parentNative.absolutePosition
-      : { x: 0, y: 0 };
+  const parentPos = absoluteOrigin(parent as NodeSkeleton);
   const localX = minX - parentPos.x;
   const localY = minY - parentPos.y;
   let usedAbsolute = false;
@@ -374,6 +479,17 @@ export function outlineStrokeNodes(
   return { created: created.map((n) => serializeNode(n)) };
 }
 
+/** 解析 index(层序调整)时,候选父级里是否真的能装下这批节点 */
+function canReorderInto(
+  container: ContainerSkeleton,
+  nodes: readonly NodeSkeleton[],
+): boolean {
+  const children = (container as { children?: readonly NodeSkeleton[] })
+    .children;
+  if (children == null) return false;
+  return nodes.every((n) => children.some((c) => c.id === n.id));
+}
+
 export function reparentNodes(
   host: DesignHost,
   params: {
@@ -386,27 +502,72 @@ export function reparentNodes(
   if (nodes.length === 0) {
     throw new Error('没有找到要移动的节点');
   }
-  const parent =
-    params.parentId != null
-      ? findNode(host, [params.parentId])[0]
-      : host.currentPage.selection[0];
-  if (!parent) {
-    throw new Error('没有找到目标父节点');
+  const selection = host.currentPage.selection;
+  const movingIds = new Set(params.ids);
+  // 只给 index 不给 parentId 时的语义歧义(旧实现直接把 selection[0] 当父节点用,
+  // 于是「调整层序」变成了「移进当前选中的第一个节点下」):
+  // - 若当前选中里含被移动节点本身(调层序的常见情形:选中一个先调它自己的 z),
+  //   把第一个**不是被移动节点**的选中项当父节点;一个都没有则说明调用方要的是
+  //   「在同级内调整层序」,按原父级解析;
+  // - 若选中里不含被移动节点,维持旧语义:selection[0] 即目标父节点。
+  const selectionHasTarget = selection.some((s) => movingIds.has(s.id));
+  const firstParent = (nodes[0].parent as NodeSkeleton | null) ?? null;
+  let parent: NodeSkeleton | PageSkeleton | undefined;
+  if (params.parentId != null) {
+    parent = findNode(host, [params.parentId])[0];
+  } else if (selectionHasTarget) {
+    parent =
+      selection.find((s) => !movingIds.has(s.id)) ??
+      (params.index != null ? (firstParent ?? undefined) : selection[0]);
+  } else {
+    parent = selection[0];
   }
-  const isAutoLayout =
-    'layoutMode' in parent &&
-    (parent as NodeSkeleton).layoutMode != null &&
-    (parent as NodeSkeleton).layoutMode !== 'NONE';
+  // 仍解析不到时再兜一次:index + 全部节点同父 → 按原父级调层序
+  if (!parent && params.index != null && firstParent) {
+    if (
+      nodes.every((n) => n.parent === nodes[0].parent) &&
+      canReorderInto(firstParent, nodes)
+    ) {
+      parent = firstParent;
+    }
+  }
+  if (!parent) {
+    const got = params.parentId != null ? `parentId="${params.parentId}"` : '';
+    throw new Error(
+      `没有找到目标父节点${
+        got ? `(${got} 不是有效节点 id,或节点已失效)` : ''
+      };传 parentId 指定目标容器,或用 jsd_select_nodes 先选中父容器;只调整层序可传 index 且选中被调整节点本身`,
+    );
+  }
+  const isAutoLayout = isAutoLayoutContainer(parent);
+  // 目标父级的绝对原点:reparent 后用它把子节点还原回原绝对位置。
+  // 父级本身不移动,故移动前取值即可。
+  const parentOrigin = absoluteOrigin(parent as NodeSkeleton);
+  const inserted: { node: NodeSkeleton; index: number; target: number }[] = [];
   for (const n of nodes) {
-    // 如果节点已经在目标父级下,跳过
-    if (parent.id === n.parent?.id) continue;
+    const alreadyChild = parent.id === n.parent?.id;
 
-    // auto-layout 父容器:insertChild 会走引擎的布局重算路径读取子节点
-    // layoutGrow,而插件侧节点代理在 jsDesign 上该读取会崩
-    // (实测 "get_layoutGrow: Cannot read properties of undefined (reading 'jsGet')")。
-    // 改用 appendChild 追加,规避该路径;非 auto-layout 仍走 insertChild 以支持 index。
-    if (params.index != null && !isAutoLayout) {
-      parent.insertChild(params.index, n);
+    // 已在目标父级下、又没要求位置:确实无需移动
+    if (alreadyChild && params.index == null) continue;
+
+    if (alreadyChild) {
+      // 同父级 = 只调层序(P11:旧实现在这里直接 continue,
+      // 导致「用 reparent 调层序」静默失效)
+      reorderChild(host, parent, n, params.index ?? 0);
+      continue;
+    }
+
+    // 移动前的绝对原点(P17):引擎是否自动换算坐标**不稳定**
+    // (实测同父级的一层容器会换算,嵌在 auto-layout 里的深层容器不换算,
+    // 后者会让节点保留旧相对 x/y 而飞出画布)。这里自页面系记账,移动后统一还原。
+    const origin = absoluteOrigin(n);
+
+    if (params.index != null) {
+      // 指定插入位置:insertChildAt 在 auto-layout 父级上临时关布局再插,
+      // 不再像旧实现那样把 index 静默丢掉、只往后追加。
+      const target = clampIndex(parent, params.index);
+      insertChildAt(parent, target, n);
+      inserted.push({ node: n, index: parentIndex(parent, n), target });
     } else {
       parent.appendChild(n);
     }
@@ -417,8 +578,89 @@ export function reparentNodes(
         `节点 ${n.id} 移动到 ${parent.id} 失败:父级未变化(仍为 ${n.parent?.id ?? 'undefined'})。可能是目标父级不支持子节点或引擎限制`,
       );
     }
+
+    // 还原绝对位置。auto-layout 父级例外:子节点排布由布局接管,写 x/y 无效
+    // 且会被引擎覆盖,交给布局即可。
+    if (!isAutoLayout) {
+      const x = origin.x - parentOrigin.x;
+      const y = origin.y - parentOrigin.y;
+      if (Number.isFinite(x)) n.x = x;
+      if (Number.isFinite(y)) n.y = y;
+    }
+  }
+  for (const it of inserted) {
+    if (it.index !== it.target) {
+      throw new Error(
+        `节点 ${it.node.id} 插入 ${parent.id} 的位置未生效:期望 children 下标 ${it.target},实际 ${it.index}${
+          isAutoLayout
+            ? '(auto-layout 容器:次序由布局接管,可改用 itemSpacing / 对齐 控制)'
+            : ''
+        }`,
+      );
+    }
   }
   return { moved: nodes.map((n) => serializeNode(n)) };
+}
+
+/** 节点在父级 children 里的实际下标;读不到返回 -1 */
+function parentIndex(parent: ContainerSkeleton, node: NodeSkeleton): number {
+  return (
+    (parent as { children?: readonly NodeSkeleton[] }).children?.findIndex(
+      (c) => c.id === node.id,
+    ) ?? -1
+  );
+}
+
+/** 把下标夹到父容器 children 的合法区间 */
+function clampIndex(parent: ContainerSkeleton, index: number): number {
+  const len =
+    (parent as { children?: readonly NodeSkeleton[] }).children?.length ?? 0;
+  return Math.min(Math.max(Math.trunc(index), 0), Math.max(len, 0));
+}
+
+/**
+ * 同父级调层序(P11)。
+ *
+ * `index` 语义 = 目标在父节点 `children` 数组里的最终下标,
+ * 而 `children` 是**绘制顺序**(下标 0 = 最底层,末位 = 最上层)。
+ *
+ * 两步走:
+ * 1. 直接按 index 插(insertChildAt;auto-layout 容器内部临时关布局再恢复,
+ *    因此 auto-layout 也走这条路,不再一上来就报错);
+ * 2. 若引擎对「已是该父级子级」的节点不重排(实测 jsDesign 为 no-op,
+ *    返回成功但顺序不变),兜底走「先移出到当前页 → 再按 index 插回」,
+ *    这条路径已验证可行。往返后把 x/y 原样写回,同父级下坐标不变。
+ *    auto-layout 容器不适用该兜底(移出即被布局摘掉),此时直接报错点名。
+ */
+function reorderChild(
+  host: DesignHost,
+  parent: NodeSkeleton,
+  node: NodeSkeleton,
+  index: number,
+): void {
+  const actual = (): number => parentIndex(parent, node);
+  const target = (): number => clampIndex(parent, index);
+
+  insertChildAt(parent, index, node);
+  if (actual() === target()) return;
+
+  if (isAutoLayoutContainer(parent)) {
+    throw new Error(
+      `节点 ${node.id} 在 auto-layout 父级 ${parent.id} 下调层序未生效:期望下标 ${target()},实际 ${actual()};auto-layout 容器次序由布局接管,请改 itemSpacing / primaryAxisAlignItems,或先把 layoutMode 设为 NONE`,
+    );
+  }
+
+  const { x, y } = node;
+  host.currentPage.appendChild(node);
+  insertChildAt(parent, index, node);
+  node.x = x;
+  node.y = y;
+
+  if (actual() !== target()) {
+    throw new Error(
+      `节点 ${node.id} 在父级 ${parent.id} 下调整层序失败:期望下标 ${target()},实际 ${actual()}`,
+    );
+  }
 }
 
 function collectAll(node: NodeSkeleton, out: NodeSkeleton[]): void {

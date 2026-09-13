@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { nodeTypeSchema } from './node-type';
 import {
   componentPropertyValueSchema,
+  coreCapabilitySchema,
   hostCapabilitySchema,
   pluginPlatformSchema,
 } from './platform';
@@ -24,6 +25,12 @@ export const pingResultSchema = z.object({
     .array(hostCapabilitySchema)
     .optional()
     .describe('当前平台支持的能力列表(先查此字段再决定能否调用平台特有操作)'),
+  coreCapabilities: z
+    .array(coreCapabilitySchema)
+    .optional()
+    .describe(
+      '所有平台都具备的核心能力(create/modify/structure/component/export/image),不随平台变化',
+    ),
   error: z.string().optional(),
 });
 export const getSelectionResultSchema = z.object({
@@ -107,6 +114,8 @@ export const pageStructureResultSchema = z.object({
       type: nodeTypeSchema,
       x: z.number(),
       y: z.number(),
+      /** 在页面 children 里的下标 = 绘制顺序,0 = 最底层(顶层节点同理) */
+      z: z.number().optional(),
       width: z.number().optional(),
       height: z.number().optional(),
       childCount: z.number().optional(),

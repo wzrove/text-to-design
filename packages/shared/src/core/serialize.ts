@@ -24,9 +24,34 @@ export function trySerialize(
   }
 }
 
+/**
+ * 节点在父级 `children` 里的下标(= 绘制顺序,0 = 最底层)。
+ *
+ * 平台语义「children 顺序即绘制顺序」在这里被显式化成 `z` 字段回传,
+ * 调用方读 `z` 判断遮挡即可,不需要记住数组方向(这正是「速查表」条目的代码化落点)。
+ *
+ * 按 id 比对而非对象引用:插件侧每次访问 `children` 可能返回新的代理对象。
+ * 读取失败(节点已失效 / 父级无 children)返回 undefined,不阻塞整体序列化。
+ */
+function childIndexOf(node: NodeSkeleton): number | undefined {
+  try {
+    const kids = node.parent?.children;
+    if (kids == null) return undefined;
+    const i = kids.findIndex((c) => c.id === node.id);
+    return i >= 0 ? i : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * @param zIndex 已知的父级下标(递归 children 时直接传入,省掉一次父级扫描);
+ *   顶层调用留空则按父级 children 现算。
+ */
 export function serializeNode(
   node: NodeSkeleton,
   depth: number = MAX_SERIALIZE_DEPTH,
+  zIndex?: number,
 ): SerializedNode {
   const base: SerializedNode = {
     id: node.id,
@@ -53,6 +78,8 @@ export function serializeNode(
   if ('parent' in node && node.parent) {
     base.parentId = node.parent.id;
   }
+  const z = zIndex ?? childIndexOf(node);
+  if (z != null) base.z = z;
 
   if ('fills' in node && Array.isArray(node.fills) && node.fills.length > 0) {
     base.fills = node.fills.map((f) => {
@@ -424,7 +451,8 @@ export function serializeNode(
     const kids = node.children ?? [];
     if (kids.length > 0) {
       if (depth > 0) {
-        base.children = kids.map((c) => serializeNode(c, depth - 1));
+        // 下标即绘制顺序,顺手把 z 填了(子级递归不必再回查父级)
+        base.children = kids.map((c, i) => serializeNode(c, depth - 1, i));
       } else {
         base.childCount = kids.length;
       }

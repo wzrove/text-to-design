@@ -15,7 +15,7 @@ export function registerSessionTools(
   const ping = bridgeTool({
     name: 'jsd_ping',
     title: `检查 ${CLIENT.runtime} 插件连接`,
-    description: `检查插件是否在线(需先启动 ${CLIENT.runtime} 插件并保持运行)`,
+    description: `检查插件是否在线(需先启动 ${CLIENT.runtime} 插件并保持运行)。返回两个能力表:coreCapabilities 为核心能力(create/modify/structure/component/export/image,两平台一致);capabilities 只列平台差异超集(如 variables/componentProperties/textTruncation),jsDesign 通常只有 styles`,
     outputSchema: pingResultSchema,
     annotations: { readOnlyHint: true },
     alwaysEnabled: true,
@@ -35,11 +35,13 @@ export function registerSessionTools(
           pong?: boolean;
           platform?: unknown;
           capabilities?: unknown;
+          coreCapabilities?: unknown;
         };
         return {
           connected: true,
           platform: data?.platform,
           capabilities: data?.capabilities,
+          coreCapabilities: data?.coreCapabilities,
         };
       } catch (e) {
         return {
@@ -53,7 +55,7 @@ export function registerSessionTools(
   const getSelection = bridgeTool({
     name: 'jsd_get_selection',
     title: '读取画布选中',
-    description: `获取画布当前选中节点的序列化树(名称/类型/尺寸/位置/填充/子结构);depth 控制层级深度,默认 2`,
+    description: `获取画布当前选中节点的序列化树(名称/类型/尺寸/位置/填充/子结构);depth 控制层级深度,默认 2。⚠ 每个节点带 z = 在父级 children 里的下标 = 绘制顺序(0 = 最底层,越大越靠上),判断遮挡读 z 即可`,
     method: 'get_selection',
     outputSchema: getSelectionResultSchema,
     annotations: { readOnlyHint: true },

@@ -83,6 +83,35 @@ function receivedKeys(value: unknown): string {
   return keys.length > 0 ? `字段 [${keys.join(', ')}]` : '空对象 {}';
 }
 
+/**
+ * 找出**真正越界**的顶层字段(入参里有、schema 里没有)。
+ *
+ * 背景:strict schema 拒字段时,ajv 只给一句
+ * `data must NOT have additional properties`,而上层又把「实际收到的全部字段」
+ * 平铺进报错 —— 看着像每个字段都非法。实测给 `jsd_create_frame` 传
+ * `cornerRadius` 时就这样,调用方(尤其 LLM)会以为自己整个入参格式错了,
+ * 反复重写一遍而不是删掉那一个字段(P19)。
+ *
+ * 只在能确定 schema 允许的字段集时返回(单层 object schema);
+ * 联合 schema(anyOf/oneOf)与放行额外字段的 schema 返回 null,由上层退回原报错。
+ */
+function unexpectedKeys(
+  value: unknown,
+  schema: JsonSchemaSubset,
+): string[] | null {
+  if (schema.oneOf != null || schema.anyOf != null) return null;
+  const props = schema.properties;
+  if (props == null || typeof props !== 'object') return null;
+  if (value == null || typeof value !== 'object' || Array.isArray(value)) {
+    return null;
+  }
+  const allowed = new Set(Object.keys(props as Record<string, unknown>));
+  const unexpected = Object.keys(value as Record<string, unknown>).filter(
+    (k) => !allowed.has(k),
+  );
+  return unexpected.length > 0 ? unexpected : null;
+}
+
 /** 包装 fromJsonSchema 的产物:校验行为不变,失败信息改写为人话 */
 export function friendlyInputSchema(
   schema: Parameters<typeof fromJsonSchema>[0],
@@ -113,6 +142,22 @@ export function friendlyInputSchema(
         branchHint != null
           ? `该工具按判别字段分发,可选值: ${branchHint}。`
           : '';
+
+      // 越界字段优先点名:只删这几个字段就能通过,别把整个入参重写一遍
+      const unexpected = unexpectedKeys(value, schema as JsonSchemaSubset);
+      if (unexpected != null) {
+        const allowed = Object.keys(
+          (schema as JsonSchemaSubset).properties as Record<string, unknown>,
+        );
+        return {
+          issues: [
+            {
+              message: `入参校验失败: 字段 [${unexpected.join(', ')}] 不被该工具接受,请删掉后重试(其余字段本身合法)。该工具接受: [${allowed.join(', ')}]。原始校验: ${detail}`,
+            },
+          ],
+        };
+      }
+
       return {
         issues: [
           {

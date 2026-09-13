@@ -80,7 +80,12 @@ const baseNodeFields = {
 
 // 视觉字段(填充/描边/效果等,所有节点共享)
 const visualFields = {
-  fills: z.array(paintSchema).optional().describe('填充列表(Paint 数组)'),
+  fills: z
+    .array(paintSchema)
+    .optional()
+    .describe(
+      '填充列表(Paint 数组)。缺省时的引擎默认:FRAME 为白底;非 FRAME 图形若同时传了 strokes,则填充置空(纯描边,不再被引擎塞 #CCCCCC 灰底)——需要底色请显式传 fills',
+    ),
   strokes: z.array(paintSchema).optional().describe('描边列表(Paint 数组)'),
   strokeWeight: z.number().optional().describe('描边宽度(px)'),
   strokeTopWeight: z.number().optional().describe('描边顶部宽(px)'),
@@ -122,6 +127,22 @@ const visualFields = {
     .array(layoutGridSchema)
     .optional()
     .describe('布局网格(参考线)'),
+};
+
+/**
+ * 圆角字段(FRAME/RECTANGLE/ELLIPSE/POLYGON/STAR/VECTOR 等共用)。
+ *
+ * 单独抽出来是因为 FRAME 原来**没有**这些字段:调用方给 `jsd_create_frame`
+ * 传 `cornerRadius` 会被 strict schema 拒掉,而报错只说「must NOT have
+ * additional properties」并把全部入参字段列进去,看着像每个字段都非法(P19)。
+ * 实际引擎是支持 FRAME 圆角的(jsd_set_cornerRadius 也写明 FRAME 生效)。
+ */
+const cornerFields = {
+  cornerRadius: z.number().optional().describe('圆角半径(px),四角统一'),
+  topLeftRadius: z.number().optional().describe('左上圆角(px)'),
+  topRightRadius: z.number().optional().describe('右上圆角(px)'),
+  bottomLeftRadius: z.number().optional().describe('左下圆角(px)'),
+  bottomRightRadius: z.number().optional().describe('右下圆角(px)'),
 };
 
 // ---- 各类型 schema ----
@@ -169,6 +190,7 @@ const frameNodeSchema = z
       .enum(['MIN', 'CENTER', 'MAX', 'STRETCH', 'INHERIT'])
       .optional()
       .describe('自动布局内对齐:MIN|CENTER|MAX|STRETCH|INHERIT'),
+    ...cornerFields,
     ...visualFields,
   })
   .strict()
@@ -205,11 +227,7 @@ const rectangleNodeSchema = z
   .object({
     type: z.literal('RECTANGLE'),
     ...baseNodeFields,
-    cornerRadius: z.number().optional().describe('圆角半径(px),四角统一'),
-    topLeftRadius: z.number().optional().describe('左上圆角(px)'),
-    topRightRadius: z.number().optional().describe('右上圆角(px)'),
-    bottomLeftRadius: z.number().optional().describe('左下圆角(px)'),
-    bottomRightRadius: z.number().optional().describe('右下圆角(px)'),
+    ...cornerFields,
     ...visualFields,
   })
   .strict()

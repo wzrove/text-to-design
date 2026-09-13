@@ -9,8 +9,8 @@ import { toolRegistrars } from './tools';
 
 /** initialize 时下发给客户端模型的使用纪律(与 AGENTS.md 保持同源) */
 const INSTRUCTIONS = `操作设计画布的工具集。一个操作对应一个 jsd_* 工具,无 op 分发;聚合入口 jsd_manage_nodes / jsd_manage_components 仅用于批量/混合结构操作。调用纪律:
-- 建节点用 per-type 工具:jsd_create_frame / jsd_create_rectangle / jsd_create_text 等,每个工具只建一类节点;多根/复杂嵌套树用 jsd_batch 编排多个建节点步骤。建完再 jsd_reparent_nodes 归组;auto-layout(layoutMode/itemSpacing/padding* 等)最后用 jsd_set_layout 单独设置。
-- 改属性用专责工具:填充 jsd_set_fill_color、描边 jsd_set_stroke、圆角 jsd_set_cornerRadius、文本 jsd_set_text、位置 jsd_move_node、尺寸 jsd_resize_node、布局 jsd_set_layout、效果 jsd_set_effects、显隐 jsd_set_visibility、改名 jsd_rename_node、形状 jsd_set_shape。
+- 建节点用 per-type 工具:jsd_create_frame / jsd_create_rectangle / jsd_create_text 等,每个工具只建一类节点;多根/复杂嵌套树用 jsd_batch 编排多个建节点步骤。建完再 jsd_reparent_nodes 归组(**parentId 显式传目标容器 id**;跨父级移动后节点坐标按新父相对系解释,用 jsd_resize_node 传 x/y 一次改尺寸并定位,或 jsd_move_node 修正);auto-layout(layoutMode/itemSpacing/padding* 等)最后用 jsd_set_layout 单独设置。
+- 改属性用专责工具:填充 jsd_set_fill_color、描边 jsd_set_stroke、圆角 jsd_set_cornerRadius、文本 jsd_set_text、位置 jsd_move_node、尺寸 jsd_resize_node(可同时传 x/y)、布局 jsd_set_layout、效果 jsd_set_effects、显隐 jsd_set_visibility、改名 jsd_rename_node、形状 jsd_set_shape。
 - 跨工具多步流程用 jsd_batch 编排:双花括号占位符(步骤id.字段路径)引用上步结果,中间 id 不回传模型。
 - ok=false 或「没找到 X 节点」:先 jsd_find 复核 id 是否已失效(可能被连坐删除),必要时 jsd_repair_nodes 清理后重试。`;
 

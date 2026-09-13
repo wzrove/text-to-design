@@ -37,6 +37,31 @@ export const transformPropsSchema = z.object({
   locked: z.boolean().optional(),
 });
 
+/**
+ * resize 工具的尺寸字段。
+ *
+ * 单独一份(不直接引用 transformPropsSchema.shape.width/height):resize 允许
+ * **零轴**(横线 height=0 / 竖线 width=0),引擎侧由 core/update.ts 的 LINE 零轴
+ * 豁免兜底过校验;而插入新节点时 width/height 不预置、零轴只在 LINE 上合法,
+ * 两边约束不同,故分开描述,避免调用方以为 resize 也要 >= 0.01。
+ */
+export const resizePropsSchema = z.object({
+  width: z
+    .number()
+    .min(0)
+    .optional()
+    .describe(
+      '宽度(px)。横线(高度为 0 的 LINE)传 0;其他类型最低 0.01(引擎 resize 校验),低于会明确报错',
+    ),
+  height: z
+    .number()
+    .min(0)
+    .optional()
+    .describe(
+      '高度(px)。竖线(宽度为 0 的 LINE)传 0;其他类型最低 0.01(引擎 resize 校验),低于会明确报错',
+    ),
+});
+
 /** 多边形/星形形状参数 */
 export const shapePropsSchema = z.object({
   pointCount: z

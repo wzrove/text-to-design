@@ -122,7 +122,9 @@ export const manageNodesSchema = z
     index: z
       .number()
       .optional()
-      .describe('仅 reparent:插入位置,缺省追加到末尾;置底用 0'),
+      .describe(
+        '仅 reparent:插入位置 = children 下标(0 = 最底层,末位 = 最上层,即序列化里的 z);缺省追加到末尾(最上层)。节点已在该父级下时用它调层序;auto-layout 容器同样支持',
+      ),
   })
   .superRefine((v, ctx) => {
     const missing = (field: string): void => {

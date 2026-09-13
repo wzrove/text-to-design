@@ -17,6 +17,15 @@ import { bridgeTool, type ToolHandle } from '../core/registry';
 import { propUpdateTool } from './update-common';
 
 /**
+ * INSTANCE 内子节点的样式覆盖有平台风险(P7 实测 fills/fontName 回显是新值、
+ * 渲染仍走组件原样式)。统一挂到样式类工具描述尾部,避免逐条重复长文案;
+ * 写时命中会在结果里带 warnings,且告警**直接给出主组件里对应子节点的 id**
+ * (见 shared/src/core/update.ts 的 instanceStyleFixHint),调用方拿到就能改主组件。
+ */
+const INSTANCE_STYLE_WARN =
+  '⚠ 对位于 INSTANCE 内的子节点改样式有平台风险:回显是新值,渲染却可能仍是组件原样式(实测 fills/fontName,其余样式同类风险);命中时本次结果会带 warnings 并给出主组件里对应子节点的 id —— 改它即所有实例继承,只要单个实例不同则先 jsd_detach_instance 再改';
+
+/**
  * 属性操作:从 jsd_update_node 的 50 键大表拆出的单职责工具,每个只负责一组字段。
  * 聚合入口 jsd_update_node 已删除;原长尾字段(pointCount/innerRadius)由 jsd_set_shape 承接。
  * 每个工具结果带 followUp 引导下一步(参照 server.ts)。
@@ -29,7 +38,7 @@ export function registerPropTools(
     propUpdateTool({
       name: 'jsd_set_fill_color',
       title: '设置填充',
-      description: `设置填充色/渐变(fills 为 Paint 数组,整体替换非合并,需保留的现有填充项要一并传入)、混合模式与团队库填充样式。⚠ 已知平台缺陷(实测):对 INSTANCE 子文字节点(Instance:<实例id>;<原id>)改 fills 时,返回回显是新值但画布/导出渲染仍是组件原样式(引擎静默丢弃);需要实例级文字颜色差异时用静态节点重建`,
+      description: `设置填充色/渐变(fills 为 Paint 数组,整体替换非合并,需保留的现有填充项要一并传入)、混合模式与团队库填充样式。${INSTANCE_STYLE_WARN}`,
       method: 'set_fill',
       inputSchema: setFillColorSchema,
       annotations: { readOnlyHint: false, destructiveHint: false },
@@ -43,7 +52,8 @@ export function registerPropTools(
       name: 'jsd_set_stroke',
       title: '设置描边',
       description:
-        '设置描边列表、宽度(可四边分开)、对齐/端点/连接、虚线模式与团队库描边样式。strokes 整体替换非合并。把描边烘焙成矢量用 jsd_outline_stroke',
+        '设置描边列表、宽度(可四边分开)、对齐/端点/连接、虚线模式与团队库描边样式。strokes 整体替换非合并。把描边烘焙成矢量用 jsd_outline_stroke。' +
+        INSTANCE_STYLE_WARN,
       method: 'set_stroke',
       inputSchema: setStrokeSchema,
       annotations: { readOnlyHint: false, destructiveHint: false },
@@ -57,7 +67,8 @@ export function registerPropTools(
       name: 'jsd_set_cornerRadius',
       title: '设置圆角',
       description:
-        '设置圆角半径(corners 四角可分开)与圆角平滑度。仅 FRAME/RECTANGLE/ELLIPSE/POLYGON/STAR/VECTOR/BOOLEAN_OPERATION 生效,LINE/TEXT 无圆角',
+        '设置圆角半径(corners 四角可分开)与圆角平滑度。仅 FRAME/RECTANGLE/ELLIPSE/POLYGON/STAR/VECTOR/BOOLEAN_OPERATION 生效,LINE/TEXT 无圆角。' +
+        INSTANCE_STYLE_WARN,
       method: 'set_corner_radius',
       inputSchema: setCornerRadiusSchema,
       annotations: { readOnlyHint: false, destructiveHint: false },
@@ -70,7 +81,7 @@ export function registerPropTools(
     propUpdateTool({
       name: 'jsd_set_text',
       title: '修改文本',
-      description: `修改文本内容与排版(仅 TEXT 节点生效):characters/fontSize/fontName/对齐/自适应/大小写/装饰/行高/字距,以及 Figma 的截断与最大行数。字体需精确匹配,建议先 jsd_list_fonts 查可用字体(不可用时静默回退默认)。⚠ 已知平台缺陷(实测):对 INSTANCE 子文字节点改 fontName 时返回回显是新值但渲染仍是组件原样式;characters 内容覆盖正常`,
+      description: `修改文本内容与排版(仅 TEXT 节点生效):characters/fontSize/fontName/对齐/自适应/大小写/装饰/行高/字距,以及 Figma 的截断与最大行数。字体需精确匹配,建议先 jsd_list_fonts 查可用字体(不可用时静默回退默认)。${INSTANCE_STYLE_WARN};characters 内容覆盖在实例内也是正常生效的`,
       method: 'set_text',
       inputSchema: setTextSchema,
       annotations: { readOnlyHint: false, destructiveHint: false },
@@ -98,7 +109,7 @@ export function registerPropTools(
       name: 'jsd_resize_node',
       title: '调整节点尺寸',
       description:
-        '设置节点 width/height。TEXT 默认自适应(WIDTH_AND_HEIGHT)时会覆盖显式尺寸,要固定文本框先 jsd_set_text 设 textAutoResize=NONE',
+        '设置节点 width/height,并可同时传 x/y 一步完成「改尺寸 + 定位」(跨父级移动后摆回原位、按坐标布局时常用,避免分两次调用让中间态被引擎自动尺寸/约束改写)。TEXT 默认自适应(WIDTH_AND_HEIGHT)时会覆盖显式尺寸,要固定文本框先 jsd_set_text 设 textAutoResize=NONE。横线/竖线用 LINE:零轴会被兜到 0.01 过引擎校验(存回读仍是 0);其他类型低于 0.01 会明确报错(引擎 resize 下限)',
       method: 'resize',
       inputSchema: resizeNodeSchema,
       annotations: { readOnlyHint: false, destructiveHint: false },
@@ -126,7 +137,8 @@ export function registerPropTools(
       name: 'jsd_set_effects',
       title: '设置效果与高级属性',
       description:
-        '设置阴影/模糊效果(可多层叠加,整体替换)、团队库效果样式、溢出裁剪、布局网格(参考线)与椭圆环形参数(仅 ELLIPSE)',
+        '设置阴影/模糊效果(可多层叠加,整体替换)、团队库效果样式、溢出裁剪、布局网格(参考线)与椭圆环形参数(仅 ELLIPSE)。' +
+        INSTANCE_STYLE_WARN,
       method: 'set_effects',
       inputSchema: setEffectsSchema,
       annotations: { readOnlyHint: false, destructiveHint: false },

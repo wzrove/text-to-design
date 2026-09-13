@@ -3,6 +3,7 @@ import { z } from 'zod';
 import {
   autoLayoutPropsSchema,
   cornerPropsSchema,
+  resizePropsSchema,
   shapePropsSchema,
   strokePropsSchema,
   textPropsSchema,
@@ -126,9 +127,14 @@ export const reparentNodesSchema = z
       .string()
       .optional()
       .describe(
-        '目标父节点 id,缺省用当前选中第一个节点。移动后节点坐标按新父相对系解释,通常需再 jsd_move_node 修正 x/y',
+        '目标父节点 id。**强烈建议显式传**:只给 index 不给 parentId 时,缺省父级取「当前选中里第一个不是被移动节点的节点」——当前选中为空或不含父容器时该值不可靠(历史上因此报过「没有找到目标父节点」,或把节点误移进另一个被选中的节点下)。不传 parentId 的可用姿势:①先用 jsd_select_nodes 选中目标容器;②只给 index 且 ids 里含被调整节点本身 → 按被调整节点的原父级在此处调层序。跨父级移动后坐标按新父相对系解释,需用 jsd_resize_node 传 x/y 或 jsd_move_node 修正',
       ),
-    index: z.number().optional().describe('插入位置,缺省追加到末尾;置底用 0'),
+    index: z
+      .number()
+      .optional()
+      .describe(
+        '目标在父节点 children 数组里的最终下标;缺省追加到末尾。语义 = 绘制顺序(也就是序列化里的 z):0 是最底层,末位是最上层。节点已在该父级下时,本参数用于调整层序(不传则原地不动);auto-layout 容器同样支持(内部临时关掉布局插入后恢复),若引擎没落位会明确报错',
+      ),
   })
   .strict();
 
@@ -253,8 +259,13 @@ const moveNodeProps = {
 };
 
 const resizeNodeProps = {
-  width: transformPropsSchema.shape.width,
-  height: transformPropsSchema.shape.height,
+  ...resizePropsSchema.shape,
+  // 尺寸 + 位置常常一起改(典型场景:节点从页面级移进容器后一次摆回原位)。
+  // 拆两次调用除多一轮往返外,中间态还会被引擎的自动尺寸/约束改写。
+  // x/y 由本方法直接拥有,故引擎白名单与工具入参天然放行;move 仍是 x/y 的
+  // 语义归属方法,字段同源(transformPropsSchema),不存在两套定义漂移。
+  x: transformPropsSchema.shape.x,
+  y: transformPropsSchema.shape.y,
 };
 
 const setLayoutProps = {

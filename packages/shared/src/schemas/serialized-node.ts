@@ -40,6 +40,12 @@ export interface SerializedNode {
   visible?: boolean;
   locked?: boolean;
   parentId?: string;
+  /**
+   * 该节点在父级 children 数组里的下标 = 绘制顺序(0 = 最底层,末位 = 最上层)。
+   * 平台语义「children 顺序即绘制顺序」由此字段直接给出:判断谁遮谁读 z 即可,
+   * 不必去记数组方向。顶层节点也回传(其父级是当前页)。
+   */
+  z?: number;
   fills?: Paint[];
   strokes?: Paint[];
   strokeWeight?: number;
@@ -119,6 +125,12 @@ export const serializedNodeSchema: z.ZodType<SerializedNode> = z.lazy(() =>
     visible: z.boolean().optional(),
     locked: z.boolean().optional(),
     parentId: z.string().optional(),
+    z: z
+      .number()
+      .optional()
+      .describe(
+        '在父级 children 里的下标 = 绘制顺序,0 = 最底层、数值越大越靠上;判断遮挡读它,不用记数组方向',
+      ),
     fills: z.array(paintSchema).optional(),
     strokes: z.array(paintSchema).optional(),
     strokeWeight: z.number().optional(),
