@@ -267,6 +267,36 @@ const INSTANCE_RISKY_PROPS = new Set([
 const INSTANCE_WARN_SAMPLE = 3;
 
 /**
+ * 容器自身被改时**肉眼看得见**的字段(P26:给 24×24 图标 FRAME 传 recursive 刷
+ * 描边,12 个图标外框全被套上 strokeWeight:1 的方框)。只有 includeSelf=true 且
+ * 命中这些字段时才提示 —— 布局/可见性/命名类改自身是正常预期,提示会刷屏。
+ */
+const CONTAINER_SELF_VISIBLE_PROPS = new Set([
+  'fills',
+  'strokes',
+  'strokeWeight',
+  'strokeTopWeight',
+  'strokeBottomWeight',
+  'strokeLeftWeight',
+  'strokeRightWeight',
+  'strokeAlign',
+  'strokeCap',
+  'strokeJoin',
+  'dashPattern',
+  'blendMode',
+  'effects',
+  'cornerRadius',
+  'topLeftRadius',
+  'topRightRadius',
+  'bottomLeftRadius',
+  'bottomRightRadius',
+  'cornerSmoothing',
+  'clipsContent',
+  'layoutGrids',
+  'arcData',
+]);
+
+/**
  * 平台超集字段:仅对应平台运行时存在(如 Figma 的截断/样式 id,见 schemas/platform.ts
  * 的 hostCapabilitySchema)。当前平台没有这些属性时,`'in'` 守卫会**静默跳过**,
  * 调用方看到回显成功却不知道根本没生效。这里显式点名 —— 也就是把「能力判断看
@@ -329,6 +359,8 @@ export async function updateSelection(
     ids?: string[];
     matchName?: string;
     recursive?: boolean;
+    /** recursive=true 时是否连目标节点自身一起改(默认 false,见 collectTargets) */
+    includeSelf?: boolean;
     props: UpdateNodeProps;
   },
   /** 属性引擎方法名;给定则按该方法的字段白名单拦截越界字段 */
@@ -365,6 +397,8 @@ export async function updateSelection(
     base,
     params.matchName,
     params.recursive ?? false,
+    [],
+    { includeSelf: params.includeSelf ?? false },
   );
   if (targets.length === 0) {
     throw new Error(
@@ -372,14 +406,32 @@ export async function updateSelection(
     );
   }
   const warnings: string[] = [];
+  const baseIds = new Set(base.map((n) => n.id));
   const riskyTargets: { label: string; hint: string | null }[] = [];
   const riskyProps = new Set<string>();
   const ignoredSuperset = new Set<string>();
+  const selfMutated: string[] = [];
+  const selfMutatedProps = new Set<string>();
   for (const node of targets) {
     // 平台超集字段:当前平台没有该属性,'in' 守卫会静默跳过 → 先记下来点名
     for (const key of Object.keys(props)) {
       if (isUnsupportedSupersetProp(key, node)) {
         ignoredSuperset.add(key);
+      }
+    }
+    // P26:includeSelf=true 时容器自身也在 targets 里,描边/填充会直接画在容器上
+    if (
+      params.recursive === true &&
+      params.includeSelf === true &&
+      baseIds.has(node.id)
+    ) {
+      const kids = 'children' in node ? (node.children?.length ?? 0) : 0;
+      const hit = Object.keys(props).filter((k) =>
+        CONTAINER_SELF_VISIBLE_PROPS.has(k),
+      );
+      if (kids > 0 && hit.length > 0) {
+        selfMutated.push(`${node.name}(${node.id})`);
+        for (const k of hit) selfMutatedProps.add(k);
       }
     }
     await applyProps(host, node, props);
@@ -417,6 +469,21 @@ export async function updateSelection(
           : '可靠改法 —— 改该实例的主组件对应子节点(所有实例一起继承);',
         '若只需要这一个实例不一样,先 jsd_detach_instance 把它脱离组件(变静态节点)再改;',
         '完成后用 jsd_export 导小图目检确认(回显不等于生效)。',
+      ].join(''),
+    );
+  }
+  if (selfMutated.length > 0) {
+    const sample = selfMutated.slice(0, INSTANCE_WARN_SAMPLE);
+    const rest =
+      selfMutated.length > INSTANCE_WARN_SAMPLE
+        ? ` 等 ${selfMutated.length} 个节点`
+        : '';
+    warnings.push(
+      [
+        `recursive + includeSelf:目标容器自身也被修改:${sample.join('、')}${rest}。`,
+        '容器(FRAME/GROUP/COMPONENT/INSTANCE)自身加描边会渲染成矩形框、加填充会成底色;',
+        '只想改后代就别传 includeSelf(recursive 默认只作用于后代,不含目标自身)。',
+        `本次命中字段:${[...selfMutatedProps].join(', ')};完成后用 jsd_export 导小图目检。`,
       ].join(''),
     );
   }

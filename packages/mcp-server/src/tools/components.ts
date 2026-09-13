@@ -133,13 +133,14 @@ export function registerComponentTools(
       name: 'jsd_combine_as_variants',
       title: '合并为变体集',
       description:
-        '把多个组件合并为变体集(分量)。必须传 COMPONENT 节点,实例不能直接合成。⚠ 已知平台缺陷(实测):引擎存在内部崩溃,工具会依次尝试「克隆并入当前页 / 克隆移入当前页后合并 / 原节点直接合并(原组件会被卷入组件集)」三种姿势,全部失败时汇总报错(请附报错上报)',
+        '把多个组件合并为变体集(分量)。必须传 COMPONENT 节点,实例不能直接合成。⚠ 平台缺陷 P24(实测):本引擎版本必然失败(引擎内部把节点按 BOOLEAN_OPERATION 取属性 → get_booleanOperation: Value is not a string,与组件结构无关)。工具会依次尝试「克隆并入当前页 / 克隆移入当前页后合并 / 原节点直接合并(原组件会被卷入组件集)」三种姿势,全败时返回可执行出口 —— 别再重试、也别去改组件结构。变体集的替代做法:每个状态各做一个 COMPONENT,按「族名 / 状态」命名(如 Nav / Inbox、Nav / Me),调用方按名字取用;确需变体语义就手工在画布上合并。「一个主件 + 每屏改子节点颜色」这条捷径同样不通(实例子节点样式 override 不保证渲染生效)',
       inputSchema: combineAsVariantsSchema,
       annotations: { readOnlyHint: false, destructiveHint: true },
       followUp: {
         type: 'tool',
-        tool: 'jsd_set_instance_properties',
-        description: '为变体集成员设置变体属性',
+        tool: 'jsd_create_component',
+        description:
+          '按「族名 / 状态」逐个建独立主件(变体集不可用时的替代方案)',
       },
     }),
     opTool('copy_overrides', {

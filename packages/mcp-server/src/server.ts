@@ -9,9 +9,11 @@ import { toolRegistrars } from './tools';
 
 /** initialize 时下发给客户端模型的使用纪律(与 AGENTS.md 保持同源) */
 const INSTRUCTIONS = `操作设计画布的工具集。一个操作对应一个 jsd_* 工具,无 op 分发;聚合入口 jsd_manage_nodes / jsd_manage_components 仅用于批量/混合结构操作。调用纪律:
-- 建节点用 per-type 工具:jsd_create_frame / jsd_create_rectangle / jsd_create_text 等,每个工具只建一类节点;多根/复杂嵌套树用 jsd_batch 编排多个建节点步骤。建完再 jsd_reparent_nodes 归组(**parentId 显式传目标容器 id**;跨父级移动后节点坐标按新父相对系解释,用 jsd_resize_node 传 x/y 一次改尺寸并定位,或 jsd_move_node 修正);auto-layout(layoutMode/itemSpacing/padding* 等)最后用 jsd_set_layout 单独设置。
+- 建节点用 per-type 工具:jsd_create_frame / jsd_create_rectangle / jsd_create_text 等,每个工具只建一类节点;多根/复杂嵌套树用 jsd_batch 编排多个建节点步骤。建完再 jsd_reparent_nodes 归组(**parentId 显式传目标容器 id**;跨父级移动会保持节点绝对位置,内部自动换算新父下的 x/y,不用手动摆回,移入 auto-layout 容器时位置由布局接管);auto-layout(layoutMode/itemSpacing/padding* 等)最后用 jsd_set_layout 单独设置。
 - 改属性用专责工具:填充 jsd_set_fill_color、描边 jsd_set_stroke、圆角 jsd_set_cornerRadius、文本 jsd_set_text、位置 jsd_move_node、尺寸 jsd_resize_node(可同时传 x/y)、布局 jsd_set_layout、效果 jsd_set_effects、显隐 jsd_set_visibility、改名 jsd_rename_node、形状 jsd_set_shape。
-- 跨工具多步流程用 jsd_batch 编排:双花括号占位符(步骤id.字段路径)引用上步结果,中间 id 不回传模型。
+- 跨工具多步流程用 jsd_batch 编排:双花括号占位符(步骤id.字段路径)引用上步结果,中间 id 不回传模型;步骤回显已做摘要裁剪(节点只留 id/name/type/x/y),含图标/矢量的批次(jsd_create_icon / jsd_clone_node)另配一次 jsd_export 目视验收 —— 回显不等于生效。
+- 批量刷样式用 ids 一次下发:recursive=true 只作用于**后代**,不含目标节点自身(给一组图标容器刷描边,容器自己不会被套上方框);要连容器自身一起改才传 includeSelf=true。
+- 实例子节点(位于 INSTANCE 内)的样式覆盖平台不保证渲染生效,命中时结果 warnings 直接给出主组件里对应子节点的 id —— 改主组件即所有实例继承。
 - ok=false 或「没找到 X 节点」:先 jsd_find 复核 id 是否已失效(可能被连坐删除),必要时 jsd_repair_nodes 清理后重试。`;
 
 /** 存活中的 MCP 会话(daemon 常驻,多个 AI 会话共享同一 Bridge) */

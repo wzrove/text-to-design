@@ -18,7 +18,7 @@ import {
 // node_op / component_op / update_node,只是把 op 字面量与字段子集固化到工具定义里;
 // jsd_update_node 已删除,其长尾字段(pointCount/innerRadius)由 jsd_set_shape 承接。
 
-/** 属性类小工具的节点定位字段(update_node 的 ids/matchName/recursive) */
+/** 属性类小工具的节点定位字段(属性操作的 ids/matchName/recursive/includeSelf) */
 export const updateTargetFields = {
   ids: z
     .array(z.string())
@@ -33,7 +33,13 @@ export const updateTargetFields = {
     .boolean()
     .optional()
     .describe(
-      '是否递归应用到子树,默认 false;目标为大容器时慎用(会连坐修改全部后代)',
+      '是否递归应用到子树,默认 false。recursive 只作用于**后代**,不含目标节点自身:给容器 FRAME 传它刷色,容器自己不会被改(容器自身加描边会渲染成方框)。目标是无子节点的叶子时,自身即整棵子树,仍会改。要把容器自己也算进去再传 includeSelf=true',
+    ),
+  includeSelf: z
+    .boolean()
+    .optional()
+    .describe(
+      '仅 recursive=true 时有意义:是否连目标节点自身一起改,默认 false。传 true 且目标是容器时结果会带 warnings 点名「容器自身也被修改」',
     ),
 };
 
@@ -127,7 +133,7 @@ export const reparentNodesSchema = z
       .string()
       .optional()
       .describe(
-        '目标父节点 id。**强烈建议显式传**:只给 index 不给 parentId 时,缺省父级取「当前选中里第一个不是被移动节点的节点」——当前选中为空或不含父容器时该值不可靠(历史上因此报过「没有找到目标父节点」,或把节点误移进另一个被选中的节点下)。不传 parentId 的可用姿势:①先用 jsd_select_nodes 选中目标容器;②只给 index 且 ids 里含被调整节点本身 → 按被调整节点的原父级在此处调层序。跨父级移动后坐标按新父相对系解释,需用 jsd_resize_node 传 x/y 或 jsd_move_node 修正',
+        '目标父节点 id。**强烈建议显式传**:只给 index 不给 parentId 时,缺省父级取「当前选中里第一个不是被移动节点的节点」——当前选中为空或不含父容器时该值不可靠(历史上因此报过「没有找到目标父节点」,或把节点误移进另一个被选中的节点下)。不传 parentId 的可用姿势:①先用 jsd_select_nodes 选中目标容器;②只给 index 且 ids 里含被调整节点本身 → 按被调整节点的原父级在此处调层序。跨父级移动**保持节点绝对位置**:内部按页面系记账并自动换算成新父下的 x/y,不要按「相对系重解释」手动摆回(那会把节点推走)。唯一例外是移入 auto-layout 容器 —— 位置由布局接管,要调排布改 itemSpacing / 对齐',
       ),
     index: z
       .number()

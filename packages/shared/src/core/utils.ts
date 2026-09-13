@@ -51,16 +51,37 @@ export async function loadFont(
   }
 }
 
+export interface CollectTargetsOptions {
+  /**
+   * recursive=true 时是否连目标节点自身一起改,默认 false(P26)。
+   * 历史行为是「自身 + 全部后代」,照字面理解「子树/后代」的调用方会中招:
+   * 给 12 个图标 FRAME 传 recursive 刷描边,容器自己也被套上 strokeWeight:1 的
+   * 矩形框(渲染成「每个图标一个方框」)。现在默认只作用于后代,要连自身一起改
+   * 必须显式传 true。
+   */
+  includeSelf?: boolean;
+}
+
 export function collectTargets(
   base: readonly NodeSkeleton[],
   matchName: string | undefined,
   recursive: boolean,
   out: NodeSkeleton[] = [],
+  options: CollectTargetsOptions = {},
 ): NodeSkeleton[] {
   for (const node of base) {
-    if (matchName == null || node.name === matchName) out.push(node);
-    if (recursive && 'children' in node) {
-      collectTargets(node.children ?? [], matchName, recursive, out);
+    const children = 'children' in node ? (node.children ?? []) : null;
+    // 叶子节点(无子节点)例外:此时「自身」就是整棵子树,跳过会让 recursive 变成
+    // 空操作,调用方的合理请求会被回一句「没有命中」。
+    const includeSelf =
+      !recursive ||
+      options.includeSelf === true ||
+      (children?.length ?? 0) === 0;
+    if (includeSelf && (matchName == null || node.name === matchName)) {
+      out.push(node);
+    }
+    if (recursive && children != null) {
+      collectTargets(children, matchName, recursive, out, options);
     }
   }
   return out;

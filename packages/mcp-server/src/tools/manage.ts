@@ -20,7 +20,8 @@ export function registerManageTools(
   const manageNodes = bridgeTool({
     name: 'jsd_manage_nodes',
     title: '节点结构操作(聚合)',
-    description: `按 op 分发的节点结构操作聚合入口:select|remove|clone|group|ungroup|flatten|outline_stroke|reparent|repair。单次单操作请优先用对应小工具:jsd_select_nodes / jsd_delete_node / jsd_clone_node / jsd_group_nodes / jsd_ungroup_nodes / jsd_flatten_nodes / jsd_outline_stroke / jsd_reparent_nodes / jsd_repair_nodes(描述含平台缺陷与正确流程)。属性修改用 jsd_set_* 系列(含 jsd_set_shape);组件/实例操作用 jsd_manage_components 或 jsd_create_component / jsd_sync_overrides 等,两工具 op 不通用`,
+    description: `按 op 分发的节点结构操作聚合入口:select|remove|clone|group|ungroup|flatten|outline_stroke|reparent|repair。单次单操作请优先用对应小工具:jsd_select_nodes / jsd_delete_node / jsd_clone_node / jsd_group_nodes / jsd_ungroup_nodes / jsd_flatten_nodes / jsd_outline_stroke / jsd_reparent_nodes / jsd_repair_nodes(描述含平台缺陷与正确流程)。属性修改用 jsd_set_* 系列(含 jsd_set_shape);组件/实例操作用 jsd_manage_components 或 jsd_create_component / jsd_sync_overrides 等,两工具 op 不通用。
+各 op 的返回键(在 jsd_batch 里用占位符引用时才不会写错,写错会中止整批):select→selected[](id 字符串)、remove→removed[](id 字符串)、clone/group/flatten/outline_stroke→created[]、ungroup→ungrouped[](id 字符串)、reparent→moved[](同时附 updated[],两者同一份数组)、repair→cleaned[](id 字符串)。id 字符串数组取 {{步骤id.selected[0]}},节点数组取 {{步骤id.created[0].id}}。`,
     method: 'node_op',
     inputSchema: manageNodesSchema,
     outputSchema: manageNodesResultSchema,

@@ -118,6 +118,15 @@ export function updateFeedback(
   return blocks;
 }
 
+/**
+ * P26:recursive 历史上是「自身 + 全部后代」,给容器 FRAME 传它刷描边会连容器自己
+ * 一起套上方框。现在默认只作用于后代,这条语义变化必须随工具描述一起下发 ——
+ * 否则调用方按旧文档理解会以为「容器自身没改」是失败。统一在 propUpdateTool 里
+ * 追加,11 个属性工具一处维护、不逐条抄。
+ */
+const RECURSIVE_SELF_NOTE =
+  '⚠ recursive=true 只作用于**后代**,不含目标节点自身(给图标/容器传 recursive 刷色,容器自己不再被印上方框);无子节点的叶子自身即整棵子树,仍会改。要把容器自己也算上才显式传 includeSelf=true,那时结果会带 warnings 点名「容器自身也被修改」。';
+
 /** 属性类小工具定义:声明属性引擎方法名与对应入参 schema */
 export interface PropToolDef {
   name: string;
@@ -148,17 +157,18 @@ export function propUpdateTool(def: PropToolDef): BridgeToolDef {
   return {
     name: def.name,
     title: def.title,
-    description: def.description,
+    description: def.description + RECURSIVE_SELF_NOTE,
     inputSchema: def.inputSchema,
     outputSchema: updatedResultSchema,
     annotations: def.annotations,
     method: def.method,
     payload: (args) => {
-      const { ids, matchName, recursive, ...props } = args;
+      const { ids, matchName, recursive, includeSelf, ...props } = args;
       const out: Record<string, unknown> = { props };
       if (ids !== undefined) out.ids = ids;
       if (matchName !== undefined) out.matchName = matchName;
       if (recursive !== undefined) out.recursive = recursive;
+      if (includeSelf !== undefined) out.includeSelf = includeSelf;
       return out;
     },
     ...(def.followUp !== undefined ? { followUp: def.followUp } : {}),

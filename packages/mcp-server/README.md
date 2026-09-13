@@ -98,7 +98,7 @@ pkill -f text-to-design-mcp
 
 ### 完整工具清单
 
-**一个操作对应一个工具**,没有 op 分发;三个聚合入口(`jsd_manage_nodes` / `jsd_manage_components` / `jsd_update_node`)仅用于批量或一次改多组字段。所有写工具都支持 `ids`(缺省作用于当前选中)。
+**一个操作对应一个工具**,没有 op 分发;两个聚合入口(`jsd_manage_nodes` / `jsd_manage_components`)仅用于批量或一次改多组字段。所有写工具都支持 `ids`(缺省作用于当前选中);属性类工具(及 `jsd_set_*`)的 `recursive` 只作用于**后代**,不含目标节点自身(给一组图标容器刷色时容器不会被套上方框),要连容器自身一起改才传 `includeSelf=true`。
 
 | 工具 | 用途 |
 | --- | --- |
@@ -127,21 +127,21 @@ pkill -f text-to-design-mcp
 | `jsd_ungroup_nodes` | 解组 |
 | `jsd_flatten_nodes` | 至少 2 个节点合并为单一矢量 |
 | `jsd_outline_stroke` | 描边转轮廓矢量(几何被烘焙) |
-| `jsd_reparent_nodes` | 移入父节点成为其子节点(parentId 建议显式传;跨父级后需修正 x/y) |
+| `jsd_reparent_nodes` | 移入父节点成为其子节点(parentId 建议显式传;跨父级移动保持绝对位置,内部自动换算,移入 auto-layout 容器时位置由布局接管) |
 | `jsd_repair_nodes` | 清理引擎残留的损坏/失效节点 |
-| `jsd_manage_nodes` | 聚合入口,op 含 select/remove/clone/group/ungroup/flatten/outline_stroke/reparent/repair |
+| `jsd_manage_nodes` | 聚合入口,op 含 select/remove/clone/group/ungroup/flatten/outline_stroke/reparent/repair;各 op 返回键不同(select→`selected` / remove→`removed` / ungroup→`ungrouped` / repair→`cleaned` 为 id 字符串数组;clone/group/flatten/outline_stroke→`created`;reparent→`moved`,同时附同义的 `updated`) |
 | `jsd_create_component` | 建「空壳」组件:先 resize 再 reparent 归入子节点,最后删除原容器 |
 | `jsd_create_instance` | 按 COMPONENT 生成实例 |
 | `jsd_detach_instance` | 取消实例链接,得到可自由编辑的普通节点 |
 | `jsd_import_component` | 按 key 从团队库导入组件 |
 | `jsd_swap_component` | 换绑组件(丢弃目标既有覆盖) |
 | `jsd_set_instance_properties` | 设置变体属性(属性名需与 variantGroupProperties 完全匹配) |
-| `jsd_combine_as_variants` | 合并为变体集(仅 COMPONENT,实例不能直接合成) |
+| `jsd_combine_as_variants` | 合并为变体集(仅 COMPONENT,实例不能直接合成)。⚠ 本引擎必然失败(平台缺陷),全败时返回可执行出口:改用「族名 / 状态」命名的多个独立主件 |
 | `jsd_copy_overrides` | 复制源实例覆盖为快照,返回 snapshotId(缓存) |
 | `jsd_apply_overrides` | 按 snapshotId 批量套用,可 swapToSource |
 | `jsd_sync_overrides` | 无状态一次性「复制+套用」,适合 jsd_batch |
 | `jsd_manage_components` | 聚合入口,op 含 create_component/create_instance/detach_instance/import_component/swap_component/set_instance_properties/combine_as_variants/copy_overrides/apply_overrides/sync_overrides |
-| `jsd_batch` | 批量编排器:一次请求顺序执行多个 jsd_* 步骤,双花括号占位符串起中间值 |
+| `jsd_batch` | 批量编排器:一次请求顺序执行多个 jsd_* 步骤,双花括号占位符串起中间值;步骤回显做摘要裁剪(节点只留 id/name/type/x/y,丢 vectorPaths 等大字段,超预算降级为 id 清单),占位符解析用完整数据;含图标的批次另配一次 `jsd_export` 目视验收;含删除/移父的批次自动复核同层几何漂移(结果 `warnings`,`checkDrift:false` 可关) |
 | `jsd_export` | 导出节点为 PNG/JPG/SVG/PDF(导出失败的 id 在文本里点名) |
 | `jsd_list_fonts` | 列出可用字体 |
 | `jsd_list_styles` | 列出本地样式(PAINT/TEXT/EFFECT/GRID) |

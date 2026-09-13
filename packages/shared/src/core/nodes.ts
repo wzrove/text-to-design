@@ -497,7 +497,7 @@ export function reparentNodes(
     parentId?: string;
     index?: number;
   },
-): { moved: SerializedNode[] } {
+): { moved: SerializedNode[]; updated: SerializedNode[] } {
   const nodes = findNode(host, params.ids);
   if (nodes.length === 0) {
     throw new Error('没有找到要移动的节点');
@@ -599,7 +599,12 @@ export function reparentNodes(
       );
     }
   }
-  return { moved: nodes.map((n) => serializeNode(n)) };
+  // P23:同一聚合入口(jsd_manage_nodes)下各 op 的返回键互不相同 —— reparent 回
+  // moved,而 batch 里最顺手的写法是 {{步骤id.updated[0].id}}。调用方按 updated 写
+  // 就报「无法解析占位符引用」,节点其实已经移好了(状态与回显不一致,整批还会被
+  // stopOnError 掐断)。这里让两个键同时出现:同一份数组,习惯用哪个都能解析。
+  const moved = nodes.map((n) => serializeNode(n));
+  return { moved, updated: moved };
 }
 
 /** 节点在父级 children 里的实际下标;读不到返回 -1 */

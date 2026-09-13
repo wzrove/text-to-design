@@ -326,6 +326,25 @@ const cases: Array<
     'set_stroke',
     { ids: ['1:2'], props: { strokeWeight: 2 } },
   ],
+  // P26:recursive / includeSelf 是定位字段,原样下发且不得漏进 props(引擎方法
+  // 白名单会拒 —— 「方法 set_stroke 不接受字段: includeSelf」)
+  [
+    'jsd_set_stroke',
+    { ids: ['1:2'], strokeWeight: 2, recursive: true },
+    'set_stroke',
+    { ids: ['1:2'], recursive: true, props: { strokeWeight: 2 } },
+  ],
+  [
+    'jsd_set_stroke',
+    { ids: ['1:2'], strokeWeight: 2, recursive: true, includeSelf: true },
+    'set_stroke',
+    {
+      ids: ['1:2'],
+      recursive: true,
+      includeSelf: true,
+      props: { strokeWeight: 2 },
+    },
+  ],
   [
     'jsd_set_cornerRadius',
     { ids: ['1:2'], cornerRadius: 8 },
@@ -507,6 +526,97 @@ bridge.request = async (m, p) => {
 };
 const fb2 = await invoke('jsd_set_layout', { ids: ['1:2'], itemSpacing: 12 });
 console.log('反馈(矩形设布局→应点名):', fb2.text.slice(0, 240));
+
+// ---- P22:batch 步骤回显摘要裁剪(图标的 vectorPaths 不再撑爆整批结果) ----
+bridge.request = async (m, p) => {
+  calls.push({ method: m, params: p });
+  if (m === 'execute') {
+    return {
+      created: {
+        ...RECT,
+        id: '9:9',
+        width: 24,
+        height: 24,
+        vectorPaths: [
+          { windingRule: 'NONZERO', data: 'M0 0L24 24 '.repeat(60) },
+        ],
+      },
+    };
+  }
+  return {};
+};
+const batchEcho = await invoke('jsd_batch', {
+  calls: [
+    { id: 'ic', tool: 'jsd_create_rectangle', args: { width: 24, height: 24 } },
+  ],
+});
+const echoKeptId = batchEcho.text.includes('"9:9"');
+const echoDroppedPaths = !batchEcho.text.includes('vectorPaths');
+if (batchEcho.isError || !echoKeptId || !echoDroppedPaths) {
+  fail++;
+  console.log(
+    `✗ batch 回显裁剪异常: isError=${batchEcho.isError} 保留 id=${echoKeptId} 丢弃 vectorPaths=${echoDroppedPaths}\n  ${batchEcho.text.slice(0, 300)}`,
+  );
+}
+console.log(
+  `batch 回显裁剪: 保留 id/坐标=${echoKeptId} 丢 vectorPaths=${echoDroppedPaths} echoTrimmed 标记=${batchEcho.text.includes('echoTrimmed')}`,
+);
+
+// 裁剪后仍超预算(20K)→ 再降一级为 id 清单,绝不把整批结果撑出上下文
+bridge.request = async (m, p) => {
+  calls.push({ method: m, params: p });
+  if (m === 'find') {
+    return {
+      total: 600,
+      nodes: Array.from({ length: 600 }, (_, i) => ({
+        ...RECT,
+        id: `9:${i}`,
+        name: `图标${i}`,
+        vectorPaths: [
+          { windingRule: 'NONZERO', data: 'M0 0L24 24 '.repeat(40) },
+        ],
+      })),
+    };
+  }
+  return {};
+};
+const batchHuge = await invoke('jsd_batch', {
+  calls: [{ id: 't', tool: 'jsd_find', args: { ids: ['1:2'] } }],
+});
+const omitted = batchHuge.text.includes('echoOmitted');
+const keptIdOnly =
+  batchHuge.text.includes('9:0') && batchHuge.text.includes('9:599');
+if (batchHuge.isError || !omitted || !keptIdOnly) {
+  fail++;
+  console.log(
+    `✗ batch 超预算降级异常: isError=${batchHuge.isError} echoOmitted=${omitted} 保留 id 清单=${keptIdOnly}\n  ${batchHuge.text.slice(0, 300)}`,
+  );
+}
+console.log(
+  `batch 超预算降级: echoOmitted=${omitted} 保留 id 清单=${keptIdOnly} 长度=${batchHuge.text.length}`,
+);
+
+// ---- P25-B:batch 入参支持 checkDrift(默认开);关掉时不做任何额外读数 ----
+bridge.request = async (m, p) => {
+  calls.push({ method: m, params: p });
+  if (m === 'node_op' && (p as { op?: string }).op === 'remove') {
+    return { removed: ['1:2'] };
+  }
+  return {};
+};
+const batchNoDrift = await invoke('jsd_batch', {
+  calls: [{ id: 'del', tool: 'jsd_delete_node', args: { ids: ['1:2'] } }],
+  checkDrift: false,
+});
+if (batchNoDrift.isError || calls.length !== 1) {
+  fail++;
+  console.log(
+    `✗ batch checkDrift=false 异常: isError=${batchNoDrift.isError} 插件调用次数=${calls.length}(应恰为 1)`,
+  );
+}
+console.log(
+  `batch checkDrift 开关: 接受=false 时不做额外读数(${calls.length === 1 ? '是' : `否,${calls.length} 次`})`,
+);
 
 // ---- followUp 引导:结果带 followUp 指向下一步(参照 server.ts) ----
 bridge.request = async (m, p) => {

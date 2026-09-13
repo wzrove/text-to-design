@@ -109,7 +109,7 @@ export function registerPropTools(
       name: 'jsd_resize_node',
       title: '调整节点尺寸',
       description:
-        '设置节点 width/height,并可同时传 x/y 一步完成「改尺寸 + 定位」(跨父级移动后摆回原位、按坐标布局时常用,避免分两次调用让中间态被引擎自动尺寸/约束改写)。TEXT 默认自适应(WIDTH_AND_HEIGHT)时会覆盖显式尺寸,要固定文本框先 jsd_set_text 设 textAutoResize=NONE。横线/竖线用 LINE:零轴会被兜到 0.01 过引擎校验(存回读仍是 0);其他类型低于 0.01 会明确报错(引擎 resize 下限)',
+        '设置节点 width/height,并可同时传 x/y 一步完成「改尺寸 + 定位」(按坐标排布、批量摆位时常用,避免分两次调用让中间态被引擎自动尺寸/约束改写;reparent 已自动保持绝对位置,不需要用本工具摆回)。TEXT 默认自适应(WIDTH_AND_HEIGHT)时会覆盖显式尺寸,要固定文本框先 jsd_set_text 设 textAutoResize=NONE。横线/竖线用 LINE:零轴会被兜到 0.01 过引擎校验(存回读仍是 0);其他类型低于 0.01 会明确报错(引擎 resize 下限)',
       method: 'resize',
       inputSchema: resizeNodeSchema,
       annotations: { readOnlyHint: false, destructiveHint: false },

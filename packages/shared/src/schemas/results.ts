@@ -46,6 +46,11 @@ export const manageNodesResultSchema = z.object({
   removed: z.array(z.string()).optional(),
   ungrouped: z.array(z.string()).optional(),
   moved: z.array(serializedNodeSchema).optional(),
+  /**
+   * reparent 与 moved 同义(同一份数组):该 op 历史上只回 moved,而占位符最常见
+   * 写法是 {{id.updated[0].id}},两个键同时在,写哪个都能解析(P23)。
+   */
+  updated: z.array(serializedNodeSchema).optional(),
   cleaned: z.array(z.string()).optional(),
   created: z
     .union([serializedNodeSchema, z.array(serializedNodeSchema)])

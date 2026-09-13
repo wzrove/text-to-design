@@ -180,8 +180,22 @@ export function combineAsVariantsNodes(
   }
 
   if (set == null) {
+    // 平台缺陷(P24):本引擎版本的 combineAsVariants 在合并路径里把节点按
+    // BOOLEAN_OPERATION 取属性(get_booleanOperation: Value is not a string),
+    // 与组件结构无关、三种姿势必然全败(实测三个同尺寸同层级的合规 COMPONENT
+    // 同样必败)。所以这里不能只回一句「失败」—— 那是让人反复重试、怀疑组件
+    // 结构的信号;直接把可执行出口写在报错里。
+    const names = components.map((c) => `${c.name}(${c.id})`).join('、');
     throw new Error(
-      `combine_as_variants 三种姿势均失败,疑似引擎缺陷(建议附以下报错上报):${errors.join(';')}`,
+      [
+        `combine_as_variants 三种姿势均失败:本引擎版本的变体集做不出来(平台缺陷 P24,建议附下面的报错上报)。`,
+        `引擎报错:${errors.join(';')}。`,
+        `本次涉及的组件:${names}。`,
+        '不要在结构上找原因,也别重试(合规组件同样必败)。',
+        '可执行出口:①每个状态各做一个独立 COMPONENT,按「族名 / 状态」命名(如 Nav / Face-to-Face、Nav / Inbox、Nav / Me),调用方按名字取用;',
+        '②确需变体语义时在画布上手工合并,或换到支持该能力的引擎(如 Figma)执行。',
+        '⚠ 「一个主件 + 每屏改子节点颜色」这条捷径同样不通:实例子节点的样式 override 平台不保证渲染生效(见平台缺陷 P7),多状态只能靠多主件。',
+      ].join(''),
     );
   }
   if (params.name != null) set.name = params.name;

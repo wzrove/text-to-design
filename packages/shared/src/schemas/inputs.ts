@@ -117,7 +117,7 @@ export const manageNodesSchema = z
       .string()
       .optional()
       .describe(
-        '仅 reparent:目标父节点 id,缺省用当前选中第一个节点。reparent 后节点坐标按新父相对系解释,通常需手动修正 x/y',
+        '仅 reparent:目标父节点 id,缺省用当前选中第一个节点。跨父级移动保持节点绝对位置(内部自动换算成新父下的 x/y),无需手动修正;移入 auto-layout 容器时位置由布局接管',
       ),
     index: z
       .number()
