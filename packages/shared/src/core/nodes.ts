@@ -11,7 +11,7 @@ import type {
   PageSkeleton,
 } from './host';
 import { serializeNode, trySerialize } from './serialize';
-import { findNode } from './utils';
+import { ensureLayoutMode, findNode, type LayoutMode } from './utils';
 
 /**
  * 节点在页面坐标系里的原点(绝对坐标)。
@@ -99,6 +99,83 @@ function restoreLayout(container: ContainerSkeleton, snap: LayoutRecord): void {
 }
 
 /**
+ * 快照写回后**再回读一遍**,不一致的重压一次(P32)。
+ *
+ * 实测:`layoutMode` 的 NONE ↔ 方向 往返会让引擎重进 auto-layout,这期间写回去的
+ * 属性只是「回显是新值」——`primaryAxisSizingMode` 回读先显示 `FIXED`(正是我们写的
+ * 那个值),再做一次布局操作就变回 `AUTO`,容器当场按内容撑开:显式 `height: 400`
+ * 的容器插进一个 1px 子节点后**塌成 `height: 1`**。
+ * 对照组:同一容器改走 `appendChild`(不触发这段往返)尺寸完好 —— 所以问题在
+ * 「恢复写入不生效」,不在插入本身。
+ */
+function restoreLayoutVerified(
+  container: ContainerSkeleton,
+  snap: LayoutRecord,
+): void {
+  restoreLayout(container, snap);
+  const dst = container as unknown as LayoutRecord;
+  for (const [key, value] of Object.entries(snap)) {
+    if (dst[key] === value) continue;
+    try {
+      dst[key] = value;
+    } catch {
+      // 同上:单属性失败不影响其余
+    }
+  }
+}
+
+/** 显式定过尺寸的轴(仅该轴 sizingMode 在快照里是 FIXED 时才记,否则尊重调用方 hug) */
+interface PinnedSize {
+  width?: number;
+  height?: number;
+}
+
+function pinnedSizeOf(
+  container: ContainerSkeleton,
+  snap: LayoutRecord,
+  mode: LayoutMode,
+): PinnedSize {
+  const src = container as unknown as { width?: number; height?: number };
+  const out: PinnedSize = {};
+  // 主轴随方向变:VERTICAL 时主轴是高,HORIZONTAL 时主轴是宽
+  const primaryIsWidth = mode === 'HORIZONTAL';
+  const primaryFixed = snap.primaryAxisSizingMode === 'FIXED';
+  const counterFixed = snap.counterAxisSizingMode === 'FIXED';
+  const fixedWidth = primaryIsWidth ? primaryFixed : counterFixed;
+  const fixedHeight = primaryIsWidth ? counterFixed : primaryFixed;
+  if (
+    fixedWidth &&
+    typeof src.width === 'number' &&
+    Number.isFinite(src.width)
+  ) {
+    out.width = src.width;
+  }
+  if (
+    fixedHeight &&
+    typeof src.height === 'number' &&
+    Number.isFinite(src.height)
+  ) {
+    out.height = src.height;
+  }
+  return out;
+}
+
+/** 把被引擎吃掉的显式尺寸压回去(尺寸最后写,免得又被方向/尺寸模式的写入带走) */
+function applyPinnedSize(container: ContainerSkeleton, size: PinnedSize): void {
+  if (size.width == null && size.height == null) return;
+  const n = container as unknown as {
+    width?: number;
+    height?: number;
+    resize?: (w: number, h: number) => void;
+  };
+  if (typeof n.resize !== 'function') return;
+  const w = size.width ?? n.width;
+  const h = size.height ?? n.height;
+  if (typeof w !== 'number' || typeof h !== 'number') return;
+  n.resize(w, h);
+}
+
+/**
  * 把节点按 index 插到 parent 下(index = children 下标 = 绘制顺序,0 = 最底层)。
  *
  * 非 auto-layout 容器直接 `insertChild`。
@@ -117,15 +194,28 @@ function insertChildAt(
     parent.insertChild(index, node);
     return;
   }
-  const owner = parent as ContainerSkeleton & { layoutMode?: 'NONE' };
-  const mode = owner.layoutMode ?? 'NONE';
+  const owner = parent as ContainerSkeleton & { layoutMode?: LayoutMode };
+  const mode: LayoutMode = owner.layoutMode ?? 'NONE';
   const snap = snapshotLayout(parent);
+  const pinned = pinnedSizeOf(parent, snap, mode);
   try {
     owner.layoutMode = 'NONE';
     parent.insertChild(index, node);
   } finally {
+    // 顺序要紧:方向 → 其余布局属性 → 尺寸。引擎在写方向时会把尺寸模式翻成 AUTO,
+    // 尺寸放最后写才不会被它带走(见 P32 实测)。
     owner.layoutMode = mode;
-    restoreLayout(parent, snap);
+    restoreLayoutVerified(parent, snap);
+    applyPinnedSize(parent, pinned);
+  }
+  // 方向最后回读校验(P31):写方向会翻 sizing,所以它排在尺寸之后。这一次校验**真的**
+  // 重写了方向时,属性与尺寸可能又被这记写入带走,再补一遍。
+  // 压不住不静默:本函数没有 warnings 通道,交由调用方后续读数发现(节点是同一引用,
+  // 不会谎报成功)。
+  if ((parent as { layoutMode?: LayoutMode }).layoutMode !== mode) {
+    ensureLayoutMode(parent, mode);
+    restoreLayoutVerified(parent, snap);
+    applyPinnedSize(parent, pinned);
   }
 }
 

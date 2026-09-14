@@ -8,7 +8,13 @@ import {
   normalizePaints,
 } from './normalize';
 import { serializeNode } from './serialize';
-import { collectTargets, findNode, loadFont, MIN_RESIZE_SIZE } from './utils';
+import {
+  collectTargets,
+  ensureLayoutMode,
+  findNode,
+  loadFont,
+  MIN_RESIZE_SIZE,
+} from './utils';
 
 async function applyProps(
   host: DesignHost,
@@ -412,6 +418,7 @@ export async function updateSelection(
   const ignoredSuperset = new Set<string>();
   const selfMutated: string[] = [];
   const selfMutatedProps = new Set<string>();
+  const layoutModeMissed: string[] = [];
   for (const node of targets) {
     // 平台超集字段:当前平台没有该属性,'in' 守卫会静默跳过 → 先记下来点名
     for (const key of Object.keys(props)) {
@@ -435,6 +442,14 @@ export async function updateSelection(
       }
     }
     await applyProps(host, node, props);
+    // 平台缺陷:布局重算会回写容器方向,写进去的 layoutMode 可能不是最终值(P31)。
+    // applyProps 里 layoutMode 先写、padding/对齐/伸缩后写,正好落在会触发重算的
+    // 那一段之后,所以这里回读一次:不一致就再压一次,压不住就点名(下方 warnings)。
+    if (props.layoutMode != null && node.type === 'FRAME') {
+      if (!ensureLayoutMode(node, props.layoutMode)) {
+        layoutModeMissed.push(`${node.name}(${node.id})`);
+      }
+    }
     // 平台缺陷:实例子节点的样式覆盖回显成功但渲染不生效 → 写时点名,别让调用方以为改成了
     const instance = enclosingInstance(node);
     if (instance != null) {
@@ -490,6 +505,17 @@ export async function updateSelection(
   if (ignoredSuperset.size > 0) {
     warnings.push(
       `以下字段是平台超集能力,当前平台运行时不支持,已忽略:${[...ignoredSuperset].join(', ')};哪些能力可用看 jsd_ping 的 capabilities(只列平台差异项,jsDesign 通常只有 styles)`,
+    );
+  }
+  if (layoutModeMissed.length > 0) {
+    warnings.push(
+      [
+        `layoutMode 未能生效:${layoutModeMissed.join('、')} 回读后仍不是请求的方向(已重试写入一次)。`,
+        '平台在布局重算后会回写容器方向,同一调用里后写的 padding/对齐/伸缩都可能把它带偏;',
+        '子节点会按**回读到的**方向排布(方向错了会全叠在同一点,回显却一切正常)。',
+        '处理:用 jsd_find 复核该容器的 layoutMode,再单独调一次 jsd_set_layout(只传 layoutMode)重设;',
+        '设完用 jsd_export 导小图目检确认。',
+      ].join(''),
     );
   }
   return {

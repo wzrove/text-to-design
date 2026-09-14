@@ -8,7 +8,7 @@ import {
   normalizePaints,
   normalizeVectorPaths,
 } from './normalize';
-import { loadFont, MIN_RESIZE_SIZE } from './utils';
+import { ensureLayoutMode, loadFont, MIN_RESIZE_SIZE } from './utils';
 
 /**
  * 按 spec 的 width/height 定尺寸;只给了一维时另一维沿用当前值。
@@ -290,6 +290,10 @@ async function buildNode(
       node.primaryAxisSizingMode = spec.primaryAxisSizingMode;
     if (spec.counterAxisSizingMode != null)
       node.counterAxisSizingMode = spec.counterAxisSizingMode;
+    // 方向也要回读校验(P31):上面的 applySize 会触发引擎布局重算,实测能把刚写的
+    // layoutMode 回写成另一方向(传 HORIZONTAL、回读 VERTICAL),子节点随后全叠在
+    // 同一点,而回显一切正常。sizingMode 已有再压一次的先例,方向补上同等待遇。
+    ensureLayoutMode(node, spec.layoutMode);
   }
 
   // 平台特有超集字段(仅对应平台生效,'in' 守卫在无此字段的平台跳过)

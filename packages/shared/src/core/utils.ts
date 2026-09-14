@@ -51,6 +51,28 @@ export async function loadFont(
   }
 }
 
+/** 容器布局方向三态(各文件不再各写一份字面量联合) */
+export type LayoutMode = 'NONE' | 'HORIZONTAL' | 'VERTICAL';
+
+/**
+ * 写 `layoutMode` 并**回读校验**(P31,与 P14 / P19 补丁同族:布局属性写完不能假定它还在)。
+ *
+ * 实测:引擎在布局重算之后会回写容器方向 —— 出现「显式传 `HORIZONTAL`、回读却是
+ * `VERTICAL`」,子节点于是按垂直方向排布、全叠在同一点(两个导航按钮叠在 (16,8),
+ * 渲染上只看得见一个,极易误判成样式或 z-order 问题)。
+ * 触发点不确定(切方向 / 改尺寸 / 往 auto-layout 容器插子节点都可能命中),所以不赌
+ * 是哪一次写丢了:统一「写 → 回读 → 不一致再压一次」。
+ *
+ * @returns 最终是否与 `expected` 一致。`false` = 压不住,调用方必须点名
+ * (进 `warnings` 或报错),不允许「回显成功实则没生效」。
+ */
+export function ensureLayoutMode(node: object, expected: LayoutMode): boolean {
+  const target = node as { layoutMode?: LayoutMode };
+  if (!('layoutMode' in target)) return true;
+  if (target.layoutMode !== expected) target.layoutMode = expected;
+  return target.layoutMode === expected;
+}
+
 export interface CollectTargetsOptions {
   /**
    * recursive=true 时是否连目标节点自身一起改,默认 false(P26)。

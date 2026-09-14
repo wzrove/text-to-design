@@ -25,4 +25,6 @@ dist-ssr
 
 .opencode
 
+# skill 触发率评测的产物（查询集与脚本要提交，运行结果不提交）
+.mcp.json
 .agents
