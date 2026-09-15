@@ -1,4 +1,5 @@
 import type { z } from 'zod';
+import type { BooleanOperation } from '../dicts/boolean-operation';
 import type * as shared from '../schemas';
 
 /**
@@ -70,7 +71,7 @@ export interface NodeSkeleton extends ContainerSkeleton {
   pointCount?: number;
   innerRadius?: number;
   vectorPaths?: shared.VectorPath[];
-  booleanOperation?: 'UNION' | 'SUBTRACT' | 'INTERSECT' | 'EXCLUDE';
+  booleanOperation?: BooleanOperation;
   isMask?: boolean;
   arcData?: { startingAngle: number; endingAngle: number; innerRadius: number };
 

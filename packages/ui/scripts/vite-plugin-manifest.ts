@@ -6,10 +6,9 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { resolve } from 'node:path';
+import type { PluginPlatform } from 'text-to-design-shared';
 
-type Platform = 'jsdesign' | 'figma';
-
-export default function manifestPlugin(platform: Platform) {
+export default function manifestPlugin(platform: PluginPlatform) {
   const root = resolve(process.cwd(), '../..');
   const outDir = resolve(process.cwd(), 'dist', platform);
   return {

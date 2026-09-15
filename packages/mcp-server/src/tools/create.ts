@@ -1,6 +1,8 @@
 import type { McpServer } from '@modelcontextprotocol/server';
 import {
+  BOOLEAN_OPERATION_LIST,
   booleanOperationNodeSchema,
+  type CreatableNodeType,
   createdResultSchema,
   createIconSchema,
   createSvgSchema,
@@ -27,26 +29,13 @@ import {
 import { htmlToSvg } from '../htmlToDesign';
 import { findIcon, iconToSvg, suggestIcons } from '../icons';
 
-type CreateNodeKind =
-  | 'FRAME'
-  | 'RECTANGLE'
-  | 'ELLIPSE'
-  | 'LINE'
-  | 'POLYGON'
-  | 'STAR'
-  | 'VECTOR'
-  | 'TEXT'
-  | 'GROUP'
-  | 'BOOLEAN_OPERATION';
-
-/**
- * 各节点类型的 per-type 子 schema(取 shape 去掉 type 字面量,再挂 placement)。
- * 类型只用到 .shape 重建同形 object,故只声明 shape 这一必需成员,避免 any 逃逸类型检查;
- * 子 schema 带 refine/strict 包装,不能收窄成 z.ZodObject。
+/** 各节点类型的 per-type 子 schema(取 shape 去掉 type 字面量,再挂 placement)。
+ *  类型只用到 .shape 重建同形 object,故只声明 shape 这一必需成员,避免 any 逃逸类型检查;
+ *  子 schema 带 refine/strict 包装,不能收窄成 z.ZodObject。
  */
 type PerTypeNodeSchema = { shape: Record<string, z.ZodType> };
 
-const PER_TYPE_NODE_SCHEMA: Record<CreateNodeKind, PerTypeNodeSchema> = {
+const PER_TYPE_NODE_SCHEMA: Record<CreatableNodeType, PerTypeNodeSchema> = {
   FRAME: frameNodeSchema,
   RECTANGLE: rectangleNodeSchema,
   ELLIPSE: ellipseNodeSchema,
@@ -65,7 +54,7 @@ const PER_TYPE_NODE_SCHEMA: Record<CreateNodeKind, PerTypeNodeSchema> = {
  * 原样保留,strict 拒绝越界字段。zod4 的 .omit 不支持含 refine 的 object,故用
  * shape 重建。
  */
-function nodeCreateInputSchema(type: CreateNodeKind): z.ZodType {
+function nodeCreateInputSchema(type: CreatableNodeType): z.ZodType {
   const shape: Record<string, unknown> = {
     ...PER_TYPE_NODE_SCHEMA[type].shape,
   };
@@ -84,7 +73,7 @@ type CreateNodeDef = Pick<
  * type 字面量与字段子集固化到工具定义里。共享 createdResultSchema 输出。
  */
 function createNodeTool(
-  type: CreateNodeKind,
+  type: CreatableNodeType,
   def: CreateNodeDef,
 ): BridgeToolDef {
   return {
@@ -180,7 +169,7 @@ export function registerCreateTools(
     createNodeTool('BOOLEAN_OPERATION', {
       name: 'jsd_create_boolean_operation',
       title: '创建布尔运算节点',
-      description: `创建单个 BOOLEAN_OPERATION 布尔运算节点,booleanOperation 运算方式(UNION/SUBTRACT/INTERSECT/EXCLUDE)与 children 必填且至少 2 个合并子节点。本工具只建一个根布尔节点;建多个根节点/复杂树用 jsd_batch 编排`,
+      description: `创建单个 BOOLEAN_OPERATION 布尔运算节点,booleanOperation 运算方式(${BOOLEAN_OPERATION_LIST})与 children 必填且至少 2 个合并子节点。本工具只建一个根布尔节点;建多个根节点/复杂树用 jsd_batch 编排`,
       followUp: CREATE_BATCH_FOLLOWUP,
     }),
   ];

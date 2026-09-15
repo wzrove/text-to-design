@@ -1,7 +1,8 @@
 import { z } from 'zod';
+import { PLATFORMS } from '../dicts/platform';
 
-/** 平台枚举:当前支持即时设计/Figma,未来新增平台在此加值 */
-export const pluginPlatformSchema = z.enum(['jsdesign', 'figma']);
+/** 平台枚举:当前支持即时设计/Figma,未来新增平台在 ../dicts/platform.ts 加值 */
+export const pluginPlatformSchema = z.enum(PLATFORMS);
 export type PluginPlatform = z.infer<typeof pluginPlatformSchema>;
 
 /** 平台能力枚举:adapter 声明当前平台支持哪些超集能力(供 ping/capabilities 上报) */

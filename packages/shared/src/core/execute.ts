@@ -1,20 +1,11 @@
+import {
+  CREATABLE_NODE_TYPES,
+  type CreatableNodeType,
+} from '../dicts/node-type';
 import type { ExecuteOp, SerializedNode } from '../schemas';
 import buildNode from './buildNode';
 import type { DesignHost, NodeSkeleton } from './host';
 import { serializeNode } from './serialize';
-
-const TYPES = [
-  'FRAME',
-  'RECTANGLE',
-  'ELLIPSE',
-  'LINE',
-  'POLYGON',
-  'STAR',
-  'VECTOR',
-  'BOOLEAN_OPERATION',
-  'TEXT',
-  'GROUP',
-] as const;
 
 function coerceSpec(raw: unknown): ExecuteOp {
   if (typeof raw !== 'object' || raw === null) {
@@ -23,8 +14,13 @@ function coerceSpec(raw: unknown): ExecuteOp {
     );
   }
   const type = (raw as { type?: string }).type;
-  if (type !== undefined && !TYPES.includes(type as (typeof TYPES)[number])) {
-    throw new Error(`无效的 type: "${type}"(支持 ${TYPES.join('|')})`);
+  if (
+    type !== undefined &&
+    !CREATABLE_NODE_TYPES.includes(type as CreatableNodeType)
+  ) {
+    throw new Error(
+      `无效的 type: "${type}"(支持 ${CREATABLE_NODE_TYPES.join('|')})`,
+    );
   }
   return raw as ExecuteOp;
 }

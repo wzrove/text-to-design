@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { NODE_TYPES } from '../dicts/node-type';
 
 export const findSchema = z.object({
   ids: z.array(z.string()).optional().describe('按节点 id 精确查找,优先级最高'),
@@ -6,9 +7,7 @@ export const findSchema = z.object({
   type: z
     .string()
     .optional()
-    .describe(
-      '节点类型过滤,支持:SLICE/FRAME/GROUP/COMPONENT_SET/COMPONENT/INSTANCE/BOOLEAN_OPERATION/VECTOR/STAR/LINE/ELLIPSE/POLYGON/RECTANGLE/TEXT',
-    ),
+    .describe(`节点类型过滤,支持:${NODE_TYPES.join('/')}`),
   recursive: z.boolean().optional().describe('是否递归查找(默认 true)'),
   depth: z
     .number()

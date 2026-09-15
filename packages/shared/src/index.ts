@@ -1,19 +1,13 @@
 import type { z } from 'zod';
+import type { LogLevel } from './dicts/log';
 import type * as s from './schemas';
 
 export const WS_PORT = 47812;
 
-/** 日志级别(daemon logger 与插件面板日志面板共用) */
-export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
-export const LOG_LEVEL_ORDER: Record<LogLevel, number> = {
-  debug: 0,
-  info: 1,
-  warn: 2,
-  error: 3,
-};
-
 /* 平台无关核心逻辑(DesignHost 接口 + 序列化/建节点/组件/更新,无平台 typings 依赖) */
 export * from './core';
+/* 跨侧字典数据(节点类型/平台/日志级别/布尔运算的取值与文案真源) */
+export * from './dicts';
 /* 重新导出 zod schemas(唯一真源,供 MCP 运行时校验复用) */
 export * from './schemas';
 

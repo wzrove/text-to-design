@@ -1,4 +1,8 @@
 import { z } from 'zod';
+import {
+  BOOLEAN_OPERATIONS,
+  type BooleanOperation,
+} from '../dicts/boolean-operation';
 import type {
   BlendMode,
   ConstraintType,
@@ -96,7 +100,7 @@ export interface SerializedNode {
   lineHeight?: LineHeight;
   letterSpacing?: LetterSpacing;
   vectorPaths?: VectorPath[];
-  booleanOperation?: 'UNION' | 'SUBTRACT' | 'INTERSECT' | 'EXCLUDE';
+  booleanOperation?: BooleanOperation;
   isMask?: boolean;
   variantProperties?: Record<string, string>;
   mainComponentId?: string;
@@ -202,9 +206,7 @@ export const serializedNodeSchema: z.ZodType<SerializedNode> = z.lazy(() =>
     lineHeight: lineHeightSchema.optional(),
     letterSpacing: letterSpacingSchema.optional(),
     vectorPaths: z.array(vectorPathSchema).optional(),
-    booleanOperation: z
-      .enum(['UNION', 'SUBTRACT', 'INTERSECT', 'EXCLUDE'])
-      .optional(),
+    booleanOperation: z.enum(BOOLEAN_OPERATIONS).optional(),
     isMask: z.boolean().optional(),
     variantProperties: z.record(z.string(), z.string()).optional(),
     mainComponentId: z.string().optional(),

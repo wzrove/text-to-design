@@ -1,3 +1,4 @@
+import { PLATFORM_LABEL } from 'text-to-design-shared';
 import { version } from '../package.json' with { type: 'json' };
 
 export const PORT = Number(process.env.TEXT_TO_DESIGN_MCP_PORT ?? 47812);
@@ -32,9 +33,10 @@ export const MAX_INLINE_DATA_URL_BYTES = Number(
 /** jsd_batch 整批上限:每步仍受自身 timeout 约束,此处只封顶整次编排 */
 export const BATCH_TIMEOUT_MS = 120_000;
 
-/** 设计客户端厂商:当前即时设计,扩展其他客户端(如 Figma)时替换此配置即可 */
+/** 设计客户端厂商:当前即时设计,扩展其他客户端(如 Figma)时替换此配置即可。
+ *  显示名取自 shared 平台字典,与插件 UI 徽章同源 */
 export const CLIENT = {
-  label: '即时设计',
+  label: PLATFORM_LABEL.jsdesign,
   runtime: 'jsDesign',
   toolPrefix: 'jsd',
 } as const;
