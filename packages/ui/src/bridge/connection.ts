@@ -213,6 +213,11 @@ export class ConnectionManager {
     }
   }
 
+  /**
+   * 状态推进的唯一出口。如实上报,不做时间维度的修饰 —— `connecting` 的
+   * 「进行时」语义由徽章自己表达(转圈),面板结构不为它改变,所以这里
+   * 不需要为了防闪烁去延迟或吞掉任何一次状态推进。
+   */
   private setStatus(status: BridgeStatus, force = false): void {
     if (!force && status === this.status) return;
     this.status = status;

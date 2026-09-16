@@ -20,7 +20,7 @@ function Shell() {
         <StatusBadge />
         <button
           type="button"
-          class="btn btn-ghost btn-xs text-base-content/60 disabled:text-gray-500 disabled:cursor-not-allowed"
+          class="btn btn-ghost  hover:bg-white btn-xs text-base-content disabled:text-gray-500 disabled:cursor-not-allowed"
           title={
             status() === 'superseded'
               ? '夺回被另一个插件面板占用的通道'

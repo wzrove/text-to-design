@@ -1,4 +1,5 @@
 import { createMemo, createSignal } from 'solid-js';
+import type { BridgeStatus } from '../bridge/BridgeSocket';
 import { useBridge } from '../bridge/useBridge';
 import { copyText } from '../utils/clipboard';
 
@@ -29,9 +30,39 @@ const GITHUB_URL = 'https://github.com/wzrove/text-to-design';
 
 type CopyKind = 'ai' | 'daemon';
 
-/** 连接引导:未连接给两条可执行路径;连接中轻提示;已连接给使用引导 */
+/**
+ * 提示条形态只有三种。
+ *
+ * 「连接中」**不是**其中一种:它是时间维度上的进行时,反馈落在 StatusBadge 的
+ * 转圈上,不需要提示条换脸 —— 连接期间「后台服务尚未连接」依然是事实,引导卡上
+ * 那两条路径也依然可执行,没有换掉的理由。status 如实上报,不在此处做时间修饰。
+ */
+type Variant = 'connected' | 'superseded' | 'disconnected';
+
+/**
+ * 卡片外观:每个形态给一整串(描边/底色/内边距),不做多串叠加 —— 叠加时
+ * px-2.5 与 p-2.5 谁生效取决于生成顺序,不可控。文字色由内层元素各带各的。
+ */
+const CARD: Record<Variant, string> = {
+  connected:
+    'px-2.5 py-1.5 border-[var(--component-hint-ok-border)] bg-[var(--component-hint-ok-bg)]',
+  superseded:
+    'px-2.5 py-1.5 border-[var(--component-status-chip-waiting-border)] bg-[var(--component-status-chip-waiting-bg)]',
+  disconnected:
+    'p-2.5 border-[var(--component-hint-warn-border)] bg-[var(--component-hint-warn-bg)]',
+};
+
+/** live region 播报文案:按真实 status 取(含 connecting),压到一行,不念整张引导卡 */
+const ANNOUNCE: Record<BridgeStatus, string> = {
+  connected: '已连接后台服务',
+  connecting: '正在连接后台服务',
+  superseded: '通道已被另一个插件面板接管',
+  disconnected: '尚未连接后台服务',
+};
+
+/** 连接引导:未连接给两条可执行路径;已连接给使用引导;被顶替给夺回动作 */
 export default function ConnectionHint() {
-  const { status, port } = useBridge();
+  const { status } = useBridge();
   const [copied, setCopied] = createSignal<CopyKind | null>(null);
 
   const copy = (kind: CopyKind, text: string) => {
@@ -40,96 +71,97 @@ export default function ConnectionHint() {
     window.setTimeout(() => setCopied((c) => (c === kind ? null : c)), 1500);
   };
 
-  // memo 派生:display 变化返回对应提示条;元素内表达式惰性求值,
-  // copied 反馈走细粒度更新,不会重建整个提示条
-  const hint = createMemo(() => {
+  const variant = createMemo<Variant>(() => {
     const s = status();
-
-    if (s === 'connected') {
-      return (
-        <div class="hint-enter rounded-lg border border-[var(--component-hint-ok-border)] bg-[var(--component-hint-ok-bg)] px-2.5 py-1.5 text-xs text-success-content/90">
-          已连接。选中画布节点后点「复制」,把内容发给 AI
-          助手——例如:「按这个节点样式帮我再做一张卡片」
-        </div>
-      );
-    }
-
-    // 连接中:与 StatusBadge「连接中…」同源同色,不再重复安装教程
-    // (历史 bug:connecting 曾被当成「尚未连接」,与徽章文案自相矛盾)
-    if (s === 'connecting') {
-      return (
-        <div class="hint-enter rounded-lg border border-[var(--component-status-chip-connecting-border)] bg-[var(--component-status-chip-connecting-bg)] px-2.5 py-1.5 text-xs text-info-content/90">
-          正在连接后台服务(ws://localhost:{port()}
-          ),等待服务确认。若长时间停在此处,点右上角「重试」。
-        </div>
-      );
-    }
-
-    // 被顶替:daemon 在、通道被另一个面板占用。这条不自动重连(否则两个面板
-    // 会互相顶替),只给一个手动动作
-    if (s === 'superseded') {
-      return (
-        <div class="hint-enter rounded-lg border border-[var(--component-status-chip-waiting-border)] bg-[var(--component-status-chip-waiting-bg)] px-2.5 py-1.5 text-xs text-warning-content/90">
-          通道已被另一个插件面板接管(同一时刻只服务一个面板)
-          ,自动重连已停止。点右上角「夺回」切回本面板。
-        </div>
-      );
-    }
-
-    // 未连接/错误:两条可执行路径,而不是重复一遍安装教程
-    return (
-      <div class="hint-enter rounded-lg border border-[var(--component-hint-warn-border)] bg-[var(--component-hint-warn-bg)] p-2.5 text-xs">
-        <div class="flex items-center gap-2">
-          <span class="font-bold text-warning-content">尚未连接后台服务</span>
-          <a
-            href={GITHUB_URL}
-            target="_blank"
-            rel="noreferrer"
-            class="ml-auto shrink-0 text-warning-content/70 underline"
-          >
-            安装教程
-          </a>
-        </div>
-
-        <div class="mt-2 flex flex-wrap items-center gap-1.5">
-          <button
-            type="button"
-            class={`btn btn-xs btn-outline ${copied() === 'ai' ? 'text-success' : ''}`}
-            onClick={() => copy('ai', WAKE_CMD)}
-          >
-            {copied() === 'ai' ? '✓ 已复制' : '① 复制给 AI 助手'}
-          </button>
-          <span class="text-warning-content/80">
-            发给 AI,让它调用 jsd_ping 唤醒后台服务
-          </span>
-        </div>
-
-        <div class="mt-1.5 flex flex-wrap items-center gap-1.5">
-          <button
-            type="button"
-            class={`btn btn-xs btn-outline ${copied() === 'daemon' ? 'text-success' : ''}`}
-            onClick={() => copy('daemon', DAEMON_CMD)}
-          >
-            {copied() === 'daemon' ? '✓ 已复制' : '② 复制启动命令'}
-          </button>
-          <code
-            class="min-w-0 truncate rounded bg-base-100/60 px-1 py-0.5 font-mono text-[10px] text-warning-content/80"
-            title={DAEMON_CMD}
-          >
-            {DAEMON_CMD}
-          </code>
-        </div>
-        <p class="mt-1 text-warning-content/70">
-          在本机终端执行即常驻到下次重启;重复执行安全(已有实例会自动跳过)。
-        </p>
-      </div>
-    );
+    if (s === 'connected' || s === 'superseded') return s;
+    // connecting 与 disconnected 同属「还没连上」,共用引导卡
+    return 'disconnected';
   });
 
-  // 连接状态是关键上下文:切换时经 polite live region 播报,不打断当前朗读
+  /* 单行形态文案:节点常驻,切换时只换文本 + 文字色 */
+  const line = createMemo(() => {
+    switch (variant()) {
+      case 'connected':
+        return {
+          cls: 'text-success-content/90',
+          text: '已连接。选中画布节点后点「复制」,把内容发给 AI 助手——例如:「按这个节点样式帮我再做一张卡片」',
+        };
+      case 'superseded':
+        return {
+          cls: 'text-warning-content/90',
+          text: '通道已被另一个插件面板接管(同一时刻只服务一个面板),自动重连已停止。点右上角「夺回」切回本面板。',
+        };
+      default:
+        // 断开态:这一行让位给下面的引导卡,自身隐藏留白
+        return { cls: 'hidden', text: '' };
+    }
+  });
+
+  // 连接状态是关键上下文:形态变化时播报;live region 节点常驻,故另起一处
+  // sr-only 载体 —— 可见部分只改显隐,屏读器不会播报显隐变化
   return (
-    <div role="status" aria-live="polite">
-      {hint()}
+    <div>
+      <div role="status" aria-live="polite" class="sr-only">
+        {ANNOUNCE[status()]}
+      </div>
+
+      {/*
+        形态切换只改显隐,不重建 DOM:掉线与被顶替会让形态来回切,而一旦按形态
+        返回新 JSX,整块提示条就被卸载重建 —— hint-enter 重播、按钮焦点与
+        「已复制」反馈尽失,看起来就是「组件在重载」
+
+        连接期间此处刻意保持引导卡:徽章那边转圈说明「正在连」,这边说的是
+        「还没连上」—— 两句都真,且引导卡的两条路径此刻依然可执行
+      */}
+      <div class={`hint-enter rounded-lg border text-xs ${CARD[variant()]}`}>
+        <p class={line().cls}>{line().text}</p>
+
+        <div classList={{ hidden: variant() !== 'disconnected' }}>
+          <div class="flex items-center gap-2">
+            <span class="font-bold text-warning-content">尚未连接后台服务</span>
+            <a
+              href={GITHUB_URL}
+              target="_blank"
+              rel="noreferrer"
+              class="ml-auto shrink-0 text-warning-content/70 underline"
+            >
+              安装教程
+            </a>
+          </div>
+
+          <div class="mt-2 flex flex-wrap items-center gap-1.5">
+            <button
+              type="button"
+              class={`btn btn-xs btn-outline ${copied() === 'ai' ? 'text-success' : ''}`}
+              onClick={() => copy('ai', WAKE_CMD)}
+            >
+              {copied() === 'ai' ? '✓ 已复制' : '① 复制给 AI 助手'}
+            </button>
+            <span class="text-warning-content/80">
+              发给 AI,让它调用 jsd_ping 唤醒后台服务
+            </span>
+          </div>
+
+          <div class="mt-1.5 flex flex-wrap items-center gap-1.5">
+            <button
+              type="button"
+              class={`btn btn-xs btn-outline ${copied() === 'daemon' ? 'text-success' : ''}`}
+              onClick={() => copy('daemon', DAEMON_CMD)}
+            >
+              {copied() === 'daemon' ? '✓ 已复制' : '② 复制启动命令'}
+            </button>
+            <code
+              class="min-w-0 truncate rounded bg-base-100/60 px-1 py-0.5 font-mono text-[10px] text-warning-content/80"
+              title={DAEMON_CMD}
+            >
+              {DAEMON_CMD}
+            </code>
+          </div>
+          <p class="mt-1 text-warning-content/70">
+            在本机终端执行即常驻到下次重启;重复执行安全(已有实例会自动跳过)。
+          </p>
+        </div>
+      </div>
     </div>
   );
 }

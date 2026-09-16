@@ -42,6 +42,17 @@
   }
 }
 
+/* 连接中的进行时反馈:只转这个小圈,不牵动面板结构 */
+.badge-spin {
+  animation: badgeSpin 900ms linear infinite;
+}
+
+@keyframes badgeSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 /* 动效可达性:系统开启「减少动态效果」时压缩所有过渡/动画 */
 @media (prefers-reduced-motion: reduce) {
   *,
