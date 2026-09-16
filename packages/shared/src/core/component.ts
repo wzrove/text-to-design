@@ -3,6 +3,7 @@ import type {
   SerializedNode,
   UpdateNodeProps,
 } from '../schemas';
+import { hostCapabilityState } from './capabilities';
 import { type DesignHost, MIXED, type NodeSkeleton } from './host';
 import { serializeNode } from './serialize';
 import { updateSelection } from './update';
@@ -133,81 +134,98 @@ export function combineAsVariantsNodes(
     e instanceof Error ? e.message : String(e);
 
   // 引擎 combineAsVariants 实测存在内部崩溃(get_booleanOperation: Value is not
-  // a string),按副作用从小到大依次尝试三种姿势;全部失败时汇总报错便于定位引擎缺陷。
+  // a string),这里把三种姿势做成「按平台能力排序的尝试列表」,全部失败时汇总报错。
+  //
+  // **平台差异(这正是两平台行为不同的根源)**:
+  // - Figma 的原生 combineAsVariants 就是**原位合并** —— 并入集合的就是实例所指的
+  //   那些 COMPONENT 本身,已有实例链接不断;克隆姿势在它上面纯属副作用(留下
+  //   「原件 + 集合内克隆」两份,实例继续指向原件,变体集与实例脱钩)。
+  // - jsDesign 没有这个语义(该路径随 P24 一起崩),只能靠克隆兜底。
+  //
+  // 故声明了 inPlaceVariants 能力的平台优先走原位,其余保持历史顺序(克隆优先)。
   let set: NodeSkeleton | undefined;
   const errors: string[] = [];
 
-  // 姿势 1:克隆并入当前页(默认姿势,原组件保留)。
-  // P30:jsDesign 上 host.combineAsVariants 可能返回一个非空 set,但任何对它的
-  // 属性访问(set.name / 后续 serializeNode)都会触发引擎内部 getter 崩
-  // (get_booleanOperation / get_name: Value is not a string)。该崩不在调用
-  // 内部抛出,一路冒到 plugin 外层 try,把引擎原文回给调用方,富出口文案错过。
-  // 修法:把 name 赋值 + serializeNode(序列化时同样会触发内部 getter)都纳入同
-  // 一个 try,任何姿势中间崩都重置 set 为 undefined,错误归并到 errors[];
-  // 全部姿势失败时统一抛富出口文案。
-  const clones = components.map((c) => c.clone());
-  try {
-    const s = host.combineAsVariants(clones, page);
+  // 原位合并:原组件被卷入组件集、不再单独存在。唯一不破坏实例链接的姿势。
+  const combineInPlace = (): NodeSkeleton | undefined => {
+    const s = host.combineAsVariants(components, components[0].parent ?? page);
     if (params.name != null && s != null) s.name = params.name;
     if (s != null) serializeNode(s); // 探活:任何引擎 getter 抛都归本姿势
-    set = s ?? undefined;
-  } catch (e) {
-    errors.push(`克隆并入当前页: ${errText(e)}`);
-    set = undefined;
-    for (const c of clones) {
+    return s ?? undefined;
+  };
+
+  // 克隆后合并:原组件保留。P30:jsDesign 上 host.combineAsVariants 可能返回一个
+  // 非空 set,但任何对它的属性访问(set.name / 后续 serializeNode)都会触发引擎内部
+  // getter 崩(get_booleanOperation / get_name: Value is not a string)。该崩不在
+  // 调用内部抛出,一路冒到 plugin 外层 try,把引擎原文回给调用方,富出口文案错过。
+  // 修法:把 name 赋值 + serializeNode 都纳入同一个 try,任何姿势中间崩都重置 set
+  // 为 undefined,错误归并到 errors[];全部姿势失败时统一抛富出口文案。
+  const combineClones =
+    (appendToPage: boolean) => (): NodeSkeleton | undefined => {
+      const clones = components.map((c) => c.clone());
       try {
-        c.remove();
-      } catch {
-        // 半途被引擎卷走/已失效,忽略
-      }
-    }
-  }
-
-  // 姿势 2:克隆先移入目标父级再合并(引擎可能要求节点已在目标父级内)
-  if (set == null) {
-    const moved = components.map((c) => c.clone());
-    try {
-      for (const c of moved) page.appendChild(c);
-      const s = host.combineAsVariants(moved, page);
-      if (params.name != null && s != null) s.name = params.name;
-      if (s != null) serializeNode(s);
-      set = s ?? undefined;
-    } catch (e) {
-      errors.push(`克隆移入当前页后合并: ${errText(e)}`);
-      set = undefined;
-      for (const c of moved) {
-        try {
-          c.remove();
-        } catch {
-          // 忽略
+        if (appendToPage) for (const c of clones) page.appendChild(c);
+        const s = host.combineAsVariants(clones, page);
+        if (params.name != null && s != null) s.name = params.name;
+        if (s != null) serializeNode(s);
+        return s ?? undefined;
+      } catch (e) {
+        for (const c of clones) {
+          try {
+            c.remove();
+          } catch {
+            // 半途被引擎卷走/已失效,忽略
+          }
         }
+        throw e;
       }
-    }
-  }
+    };
 
-  // 姿势 3:原节点在其所在父级直接合并(原组件会被卷入组件集,不再保留)
-  if (set == null) {
+  const inPlaceAttempt = { label: '原节点直接合并(原位)', run: combineInPlace };
+  const cloneToPageAttempt = {
+    label: '克隆并入当前页',
+    run: combineClones(true),
+  };
+  const cloneThenCombineAttempt = {
+    label: '克隆移入当前页后合并',
+    run: combineClones(false),
+  };
+  // 能力表未注入(null)时不猜平台语义,保持历史顺序(行为与绑定前一致)
+  const supportsInPlace = hostCapabilityState('inPlaceVariants') === true;
+  const attempts = supportsInPlace
+    ? [inPlaceAttempt, cloneToPageAttempt, cloneThenCombineAttempt]
+    : [cloneToPageAttempt, cloneThenCombineAttempt, inPlaceAttempt];
+
+  for (const attempt of attempts) {
     try {
-      const s = host.combineAsVariants(
-        components,
-        components[0].parent ?? page,
-      );
-      if (params.name != null && s != null) s.name = params.name;
-      if (s != null) serializeNode(s);
-      set = s ?? undefined;
+      set = attempt.run();
     } catch (e) {
-      errors.push(`原节点直接合并: ${errText(e)}`);
+      errors.push(`${attempt.label}: ${errText(e)}`);
       set = undefined;
     }
+    if (set != null) break;
   }
 
+  // name 已在各姿势的 try 内赋值并跟同姿势一起作废处理,这里无需再设。
   if (set == null) {
+    const names = components.map((c) => `${c.name}(${c.id})`).join('、');
+    if (supportsInPlace) {
+      // 平台声明了原位合并能力却仍全败:与 jsDesign 的 P24 不是一回事,先按调用
+      // 与节点状态排查 —— 别让调用方套用「引擎做不出来」的结论去改组件结构。
+      throw new Error(
+        [
+          'combine_as_variants 失败:本平台声明支持原位合并(inPlaceVariants),三种姿势仍全败,按调用与节点状态排查(不要套用 jsDesign 的 P24 结论)。',
+          `引擎报错:${errors.join(';')}。`,
+          `本次涉及的组件:${names}。`,
+          '排查方向:①组件是否跨页 / 跨父级;②是否已被并入别的组件集;③组件是否处于错误状态(可先 jsd_repair_nodes 清理);④组件名是否符合「属性=值」、多属性用 ", " 分隔。',
+        ].join(''),
+      );
+    }
     // 平台缺陷(P24):本引擎版本的 combineAsVariants 在合并路径里把节点按
     // BOOLEAN_OPERATION 取属性(get_booleanOperation: Value is not a string),
-    // 与组件结构无关、三种姿势必然全败(实测三个同尺寸同层级的合规 COMPONENT
+    // 与组件结构无关、克隆兜底路径同样必败(实测三个同尺寸同层级的合规 COMPONENT
     // 同样必败)。所以这里不能只回一句「失败」—— 那是让人反复重试、怀疑组件
     // 结构的信号;直接把可执行出口写在报错里。
-    const names = components.map((c) => `${c.name}(${c.id})`).join('、');
     throw new Error(
       [
         `combine_as_variants 三种姿势均失败:本引擎版本的变体集做不出来(平台缺陷 P24,建议附下面的报错上报)。`,
@@ -220,7 +238,6 @@ export function combineAsVariantsNodes(
       ].join(''),
     );
   }
-  // name 已在三种姿势各自的 try 内赋值并跟同姿势一起作废处理,这里无需再设。
   host.viewport.scrollAndZoomIntoView([set]);
   return { created: serializeNode(set) };
 }

@@ -85,7 +85,7 @@ text-to-design 能让 AI 助手(比如 opencode、Claude)直接在你的设计�
 
 | 工具 | 说明 |
 | --- | --- |
-| `jsd_ping` | 检查插件是否在线 |
+| `jsd_ping` | 检查插件是否在线,返回核心能力 / 平台差异能力 / 平台特有 op 三张表 |
 | `jsd_get_selection` / `jsd_find` | 读取当前选中 / 按名称类型 id 查找节点 |
 | `jsd_create_nodes` | 执行声明式设计指令(frame/rect/text/... 节点树) |
 | `jsd_create_svg` / `jsd_create_icon` / `jsd_html_to_design` | 导入 SVG / 插入内置图标 / HTML 转设计节点 |
@@ -98,7 +98,7 @@ text-to-design 能让 AI 助手(比如 opencode、Claude)直接在你的设计�
 | `jsd_batch` | 一次请求顺序执行多步,双花括号占位符串起中间值 |
 | `jsd_export` | 导出节点为 PNG/JPG/SVG/PDF |
 | `jsd_list_fonts` / `jsd_fill_image` | 列出可用字体 / 用本地图片填充节点 |
-| `jsd_platform_op` | 平台特有能力通用通道,先看 `jsd_ping` 的 capabilities |
+| `jsd_platform_op` | 平台特有能力通用通道(Figma 变量/样式/组件属性),先读 `jsd_ping` 的 `platformOps` 名单;平台不适用时由服务端直接拦截并给替代路径 |
 
 完整工具清单见 [`packages/mcp-server/README.md`](packages/mcp-server/README.md) 末尾。
 
@@ -118,7 +118,8 @@ TEXT_TO_DESIGN_MCP_LOG_LEVEL=debug    # 更细落盘:WS 帧级收发(只影响�
 ```
 
 插件面板自带状态与日志:服务端日志实时推送(档位切到「全部」可见 debug 帧级明细),
-插件离线期间的日志先缓冲、上线时按顺序回放。
+插件离线期间的日志先缓冲、上线时按顺序回放;另有可折叠的「能力」区块,列出核心能力、
+当前平台可用的差异能力(如 Figma 的变量/组件属性)与平台特有 op 名单。
 
 ### 构建与开发
 

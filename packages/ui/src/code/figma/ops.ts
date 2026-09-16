@@ -65,50 +65,94 @@ function createVariables(
     }[];
   };
   if (!p.variables?.length) throw new Error('变量列表为空');
-  const collection = figma.variables.createVariableCollection(
-    p.collectionName ?? 'Variables',
-  );
+  const collectionName = p.collectionName ?? 'Variables';
+  // 同名集合复用:否则每次调用都新建一个重名集合
+  const existing = figma.variables
+    .getLocalVariableCollections()
+    .find((c) => c.name === collectionName);
+  const collection =
+    existing ?? figma.variables.createVariableCollection(collectionName);
   const modeId = collection.defaultModeId;
   try {
     const created: { id: string; name: string }[] = [];
     for (const v of p.variables) {
-      const variable = figma.variables.createVariable(
-        v.name,
-        collection.id,
-        v.type,
-      );
+      // 同名同类型变量就地更新值(幂等补值),避免重复建变量
+      const same = existing
+        ? figma.variables
+            .getLocalVariables(v.type)
+            .find(
+              (x) =>
+                x.name === v.name && x.variableCollectionId === collection.id,
+            )
+        : undefined;
+      const variable =
+        same ?? figma.variables.createVariable(v.name, collection.id, v.type);
+      // 必须走 setValueForMode:直接写 valuesByMode 在插件运行时是空操作,
+      // 变量会停在新建默认值(COLOR 默认纯白),绑定后整片渲染成白色
       if (v.value !== undefined)
-        variable.valuesByMode[modeId] = v.value as VariableValue;
+        variable.setValueForMode(modeId, v.value as VariableValue);
       created.push({ id: variable.id, name: variable.name });
     }
     return { collectionId: collection.id, variables: created };
   } catch (e) {
-    // 原子性:任一变量创建失败即删除整个集合回滚,不留半成品
-    collection.remove();
+    // 只回滚本次新建的集合;复用既有集合时不删,避免连坐删掉用户变量
+    if (!existing) collection.remove();
     throw e;
   }
 }
 
+/** paints 类字段:引擎要求变量绑在 paint 自身,节点级 setBoundVariable 会抛
+ * 「fills and strokes variable bindings must be set on paints directly」 */
+const PAINT_BOUND_FIELDS = new Set(['fills', 'strokes', 'backgrounds']);
+
 function applyVariables(
   host: DesignHost,
   params: unknown,
-): { applied: string[] } {
+): { applied: string[]; failed: string[] } {
   const p = params as {
     nodeIds: string[];
     boundProperty: string;
     variableId: string;
   };
+  const variable = figma.variables.getVariableById(p.variableId);
+  if (variable == null) throw new Error(`没有找到变量: ${p.variableId}`);
   const nodes = p.nodeIds
     .map((id) => host.getNodeById(id))
     .filter((n): n is NonNullable<typeof n> => n != null);
   if (nodes.length === 0) throw new Error('没有找到要绑定变量的节点');
-  const bound = nodes as unknown as {
-    setBoundVariable(property: string, variableId: string | null): void;
-  }[];
-  for (const n of bound) {
-    n.setBoundVariable(p.boundProperty, p.variableId);
+  const isPaintField = PAINT_BOUND_FIELDS.has(p.boundProperty);
+  const paintField = p.boundProperty as 'fills' | 'strokes' | 'backgrounds';
+  const applied: string[] = [];
+  const failed: string[] = [];
+  for (const n of nodes) {
+    const target = n as unknown as Record<string, unknown>;
+    if (isPaintField) {
+      const paints = target[paintField];
+      if (!Array.isArray(paints) || paints.length === 0) {
+        failed.push(n.id);
+        continue;
+      }
+      // 只对 SOLID 端绑 color(SOLID 的可绑字段就叫 color);渐变等其余 paint 原样保留
+      target[paintField] = (paints as Paint[]).map((paint) =>
+        paint.type === 'SOLID'
+          ? figma.variables.setBoundVariableForPaint(paint, 'color', variable)
+          : paint,
+      );
+      applied.push(n.id);
+      continue;
+    }
+    try {
+      (
+        n as unknown as {
+          setBoundVariable(property: string, variable: Variable | null): void;
+        }
+      ).setBoundVariable(p.boundProperty, variable);
+      applied.push(n.id);
+    } catch {
+      failed.push(n.id);
+    }
   }
-  return { applied: nodes.map((n) => n.id) };
+  return { applied, failed };
 }
 
 /** 本地样式查找:精确名优先,退化到 trim + 忽略大小写 */

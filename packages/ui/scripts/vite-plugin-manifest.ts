@@ -42,8 +42,11 @@ export default function manifestPlugin(platform: PluginPlatform) {
                 ],
                 reasoning:
                   '该插件需要连接本地API服务以同步处理数据，若不开放localhost访问则核心功能将无法运行。',
-                documentAccess: 'dynamic-page',
               },
+              // 不写 documentAccess(=legacy 模式)。写了 'dynamic-page' 后,core 里
+              // 同步读取 node.mainComponent 的路径(INSTANCE 序列化、create_instance
+              // 回包)会直接抛 "Cannot call with documentAccess: dynamic-page",
+              // 组件实例化整条链路失效。
             }
           : JSON.parse(readFileSync(resolve(root, 'manifest.json'), 'utf8'));
       const manifest = { ...base, main: 'code.js', ui: 'ui.html' };

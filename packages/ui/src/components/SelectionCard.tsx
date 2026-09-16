@@ -13,6 +13,8 @@ interface SelectedNode {
 // 类型色点:引用 design-tokens.json 生成的组件层 token(src/styles/tokens.css),
 // 换色只改 JSON 后重新生成,组件零改动;类型名始终有文字呈现,颜色仅辅助。
 // 键集按 shared 节点类型字典穷举(Record<NodeType,…>)——字典新增类型这里会编译报错,不会静默漏色。
+// Figma 独有的只读类型(SECTION/STICKY/TABLE…)没有专属色点,走 dotClass 的灰色兜底:
+// 灰=本仓未建模、只能看不能建,与「建模过的 14 类」在视觉上就区分开。
 const TYPE_DOT: Record<NodeType, string> = {
   SLICE: 'bg-[var(--component-type-dot-slice)]',
   FRAME: 'bg-[var(--component-type-dot-frame)]',

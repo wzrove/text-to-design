@@ -6,7 +6,7 @@ import {
 import type { Bridge } from '../bridge';
 import { bridgeTool, type ToolHandle } from '../core/registry';
 
-/** 平台特有操作:通用通道,op 名与参数由 ping.capabilities + op.description 引导 */
+/** 平台特有操作:通用通道;op 名单与参数形状由 ping 的 platformOps 下发(不再靠猜) */
 export function registerPlatformTools(
   server: McpServer,
   bridge: Bridge,
@@ -14,7 +14,12 @@ export function registerPlatformTools(
   const platformOp = bridgeTool({
     name: 'jsd_platform_op',
     title: '平台特有操作',
-    description: `执行平台特有能力(Figma 变量/本地样式/组件属性等)。CRITICAL: 不要凭空猜测 op 名与参数——必须先取 jsd_ping 的 capabilities 确认当前平台支持的操作名与入参结构(随平台而异),params 随 op 而定;平台不支持时返回错误`,
+    description: `执行平台特有能力(Figma 变量/本地样式/组件属性等)。CRITICAL: 不要凭空猜测 op 名与参数——先 jsd_ping 读 platformOps 名单(含每个 op 的参数形状说明)与 capabilities,再按名单里的名字调用;平台不支持或 op 名写错时返回错误并列出当前平台支持的 op`,
+    // 平台归属:当前只有 Figma 实现了 op(jsDesign 的 meta.platformOps 为空数组),
+    // 平台已知时 daemon 直接拦截,不必等插件侧报「平台不支持」
+    platforms: ['figma'],
+    platformNote:
+      '(仅 Figma 有平台特有操作;jsDesign 没有对应 op,本地样式改用 jsd_list_styles 或读 jsd://styles,组件属性用 jsd_set_instance_properties)',
     method: 'platform_op',
     inputSchema: platformOpParamsSchema,
     outputSchema: platformOpResultSchema,

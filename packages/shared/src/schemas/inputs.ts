@@ -1,5 +1,8 @@
 import { z } from 'zod';
-import { NODE_TYPES } from '../dicts/node-type';
+import { NODE_TYPES, OBSERVED_NODE_TYPES } from '../dicts/node-type';
+
+/** Figma 独有的只读类型,单独拼串,免得把 34 类一次糊在描述里 */
+const READ_ONLY_TYPES = OBSERVED_NODE_TYPES.slice(NODE_TYPES.length).join('/');
 
 export const findSchema = z.object({
   ids: z.array(z.string()).optional().describe('按节点 id 精确查找,优先级最高'),
@@ -7,7 +10,9 @@ export const findSchema = z.object({
   type: z
     .string()
     .optional()
-    .describe(`节点类型过滤,支持:${NODE_TYPES.join('/')}`),
+    .describe(
+      `节点类型过滤,支持:${NODE_TYPES.join('/')};Figma 下还可按画布里本来就有的只读类型筛(${READ_ONLY_TYPES}),这些类型能读不能建`,
+    ),
   recursive: z.boolean().optional().describe('是否递归查找(默认 true)'),
   depth: z
     .number()
@@ -308,12 +313,12 @@ export const fillImageSchema = z.object({
 });
 export type FillImageParams = z.infer<typeof fillImageSchema>;
 
-/** 平台特有操作(platform_op)入参:通用通道,op 名由 ping.capabilities 告知 */
+/** 平台特有操作(platform_op)入参:通用通道,op 名与参数形状由 ping.platformOps 下发 */
 export const platformOpParamsSchema = z.object({
   op: z
     .string()
     .describe(
-      '平台特有操作名(如 figma_variables_create)。先 jsd_ping 看 capabilities 与平台支持列表',
+      '平台特有操作名(如 figma_variables_create)。先 jsd_ping 读 platformOps 名单,照名单里的名字传,不要猜',
     ),
   params: z
     .record(z.string(), z.unknown())

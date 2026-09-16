@@ -74,6 +74,7 @@
 ## 常见问题
 
 - **AI 说连不上插件**:看即时设计里的插件面板是不是「已连接」,没有就重新运行插件,再重启 AI 会话
+- **AI 说某工具/某字段「平台不支持」**:当前插件平台没有这项能力。面板可折叠的「能力」区块、`jsd_ping` 回包、`jsd://platform/state` 三处看到的是同一份能力表(即时设计侧只有本地样式;变量 / 组件属性 / 文本截断是 Figma 侧才有的差异能力)
 - **改了配置没反应**:重启 AI 工具会话
 - **想深入排查**:看文末「给开发者看」的日志部分
 - **旧版升级见下方「升级」**
@@ -102,7 +103,7 @@ pkill -f text-to-design-mcp
 
 | 工具 | 用途 |
 | --- | --- |
-| `jsd_ping` | 检查插件是否在线,并返回平台 capabilities |
+| `jsd_ping` | 检查插件是否在线,返回三张能力表(核心能力 / 平台差异能力 / 平台特有 op 名单);回包被 daemon 缓存,后续可读 `jsd://platform/state` |
 | `jsd_get_selection` | 读取画布当前选中的节点 |
 | `jsd_find` | 按名称/类型/id 查找节点 |
 | `jsd_create_nodes` | 按描述创建节点(frame/rect/text 等,支持阴影/描边/渐变/文本样式) |
@@ -146,7 +147,7 @@ pkill -f text-to-design-mcp
 | `jsd_list_fonts` | 列出可用字体 |
 | `jsd_list_styles` | 列出本地样式(PAINT/TEXT/EFFECT/GRID) |
 | `jsd_fill_image` | 用本地图片填充节点 |
-| `jsd_platform_op` | 平台特有能力通用通道(Figma 变量等),先看 jsd_ping 的 capabilities |
+| `jsd_platform_op` | 平台特有能力的通用通道(Figma 变量/本地样式/组件属性)。先读 `jsd_ping` 的 `platformOps` 名单再传 op 名;插件平台不适用(如即时设计)时由 daemon 直接拦截并给出替代路径,不发插件往返 |
 
 ### 配方 prompt(`prompts/list`)
 
@@ -163,7 +164,9 @@ pkill -f text-to-design-mcp
 
 ### 只读资源(`resources/list`)
 
-按需实时读取画布状态,模型可直接作为上下文(插件离线时随连接门控隐藏)。
+按需读取画布与平台状态,模型可直接作为上下文。**资源目录恒定列出,不随连接门控隐藏**:
+插件离线时调用会快速失败并返回「插件未连接」的明确提示,而不是把整张目录藏起来
+(隐藏式门控依赖客户端处理 `listChanged`,多数客户端不处理,会话若在插件离线时建立就会永久看不到资源)。
 
 | resource | 内容 |
 | --- | --- |
@@ -172,6 +175,7 @@ pkill -f text-to-design-mcp
 | `jsd://styles` | 当前文档可复用本地样式(PAINT/TEXT/EFFECT/GRID,按名应用样式前先读这里) |
 | `jsd://page` | 当前页顶层节点轻量摘要(名称/类型/位置/尺寸/子节点数,从头设计整页前先读) |
 | `jsd://node/{id}` | 按 id 读节点序列化结构 |
+| `jsd://platform/state` | 插件平台状态与能力表(platform / capabilities / coreCapabilities / platformOps)。读 daemon 本地缓存,**不发插件请求**;插件上线时 daemon 自动探测一次,断开即清空,未探测时为空 |
 
 ### 工作原理(简版)
 
@@ -194,6 +198,7 @@ pkill -f text-to-design-mcp
 - 看日志:`tail -f /tmp/text-to-design-mcp.log`(请求/响应耗时、HTTP 状态码、插件连接、二进制组装都会记)
 - 要更细的连接日志,启动时设 `TEXT_TO_DESIGN_MCP_LOG_LEVEL=debug`(默认 info);该开关只减落盘量,面板推送不受限制
 - 插件面板自带连接状态和日志:服务端日志实时推送,档位默认隐藏 debug,切「全部」可见帧级明细;插件离线期间的日志会先缓冲,上线后按顺序回放
+- 面板还有可折叠的「能力」区块:核心能力(两平台一致)、当前平台可用的差异能力、平台特有 op 名单 —— 数据与 MCP 侧 `capabilities` / `platformOps` 同源
 
 ### 构建与开发
 

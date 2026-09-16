@@ -68,3 +68,47 @@ export const CREATABLE_NODE_TYPES = [
 ] as const satisfies readonly NodeTypeKey[];
 
 export type CreatableNodeType = (typeof CREATABLE_NODE_TYPES)[number];
+
+/**
+ * Figma 运行时独有、本仓**写路径未建模**的节点类型(20 类)。
+ *
+ * 背景:@figma/plugin-typings 的 SceneNode 是 34 类,而我们的 NODE_TYPES 只覆盖
+ * jsDesign 的 14 类。读路径(Figma 画布上本来就存在的 SECTION/STICKY/TABLE…)若按
+ * nodeTypeSchema 校验会整条结果判非法 —— MCP 侧 structured() 会退化成空结构 +
+ * isError,调用方看不到任何节点。故读路径单独放宽到 observedNodeTypeSchema:
+ * 这 20 类**只读透传**(能看到、能读属性),创建/修改仍只支持 CREATABLE_NODE_TYPES,
+ * 传进来会在写路径被拒。
+ *
+ * 与 typings 的一致性由两平台各自的 sync-guarantee.ts 编译期断言维护:
+ * 这份名单必须恰好等于 Exclude<SceneNode['type'], NodeType>。
+ */
+export const FIGMA_ONLY_NODE_TYPES = [
+  'TEXT_PATH',
+  'TRANSFORM_GROUP',
+  'STICKY',
+  'CONNECTOR',
+  'SHAPE_WITH_TEXT',
+  'CODE_BLOCK',
+  'STAMP',
+  'WIDGET',
+  'EMBED',
+  'LINK_UNFURL',
+  'MEDIA',
+  'SECTION',
+  'HIGHLIGHT',
+  'WASHI_TAPE',
+  'TABLE',
+  'SLIDE',
+  'SLIDE_ROW',
+  'SLIDE_GRID',
+  'SLOT',
+  'INTERACTIVE_SLIDE_ELEMENT',
+] as const satisfies readonly string[];
+
+export type FigmaOnlyNodeType = (typeof FIGMA_ONLY_NODE_TYPES)[number];
+
+/** 读路径可观察到的全类型集(含平台独有只读类型) */
+export const OBSERVED_NODE_TYPES = [
+  ...NODE_TYPES,
+  ...FIGMA_ONLY_NODE_TYPES,
+] as const;

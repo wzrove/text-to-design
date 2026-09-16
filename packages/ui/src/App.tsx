@@ -1,4 +1,5 @@
 import { BridgeProvider, useBridge } from './bridge/useBridge';
+import CapabilityCard from './components/CapabilityCard';
 import ConnectionHint from './components/ConnectionHint';
 import EnvironmentBadge from './components/EnvironmentBadge';
 import Logo from './components/Logo';
@@ -28,6 +29,8 @@ function Shell() {
       <ConnectionHint />
 
       <SelectionCard data={selection()} />
+
+      <CapabilityCard />
 
       <LogPanel entries={log()} />
     </div>

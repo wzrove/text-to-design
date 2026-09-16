@@ -32,6 +32,7 @@ import {
   removeNodes,
   repairNodes,
   reparentNodes,
+  setHostCapabilities,
   setInstanceProperties,
   setSelection,
   swapComponents,
@@ -48,6 +49,9 @@ export function registerPlugin(
   platform: PluginPlatform,
   meta: PlatformMeta,
 ): void {
+  // 把平台能力表注入 core:core 的「字段是否生效」判定与 ping 上报的能力表从此同源
+  // (此前 core 自己手写 PLATFORM_SUPERSET_PROPS,与 meta.capabilities 是两套事实)
+  setHostCapabilities(meta.capabilities);
   try {
     if (__html__ || (typeof __html__ === 'string' && __html__.trim() !== '')) {
       host.showUI(__html__, UI_OPTIONS);
@@ -130,6 +134,14 @@ export function registerPlugin(
             // 核心能力两平台一致,直接回传共享常量,避免调用方从 capabilities 里误判
             capabilities: meta.capabilities,
             coreCapabilities: CORE_CAPABILITIES,
+            // op 名单随 ping 下发:调用方不必猜 op 名(schema 本体不进线格式,参数形状在 description 里)
+            platformOps: meta.platformOps.map(
+              ({ name, title, description }) => ({
+                name,
+                title,
+                description,
+              }),
+            ),
           });
           break;
         case 'get_selection':

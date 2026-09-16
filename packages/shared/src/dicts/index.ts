@@ -5,6 +5,7 @@
  * 取值与顺序时才收进来;单侧专有的展示文案(面板样式类名、单侧业务词表)留在各自包内。
  */
 export * from './boolean-operation';
+export * from './capability';
 export * from './log';
 export * from './node-type';
 export * from './platform';
