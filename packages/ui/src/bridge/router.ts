@@ -3,10 +3,11 @@ import type {
   PluginRequest,
   PluginResponse,
   ServerPush,
+  ServerStatusFrame,
 } from 'text-to-design-shared';
+import { UI_FORWARD_TIMEOUT_MS } from 'text-to-design-shared';
 import { extractBytes, stripBytes } from './binary';
 import type { Conn, LogLevel, Pending } from './types';
-import { TIMEOUT } from './types';
 
 /** 请求/响应关联:转发挂超时定时器,code 回包直接回发 WS;localPending 仅存定时器/ping 等待 */
 export class Router {
@@ -21,9 +22,16 @@ export class Router {
   /** 插件主动推送的当前平台(jsdesign/figma) */
   onPlatform: ((platform: PluginPlatform) => void) | null = null;
 
-  /** daemon 主动下发的连接状态确认 */
-  onServerStatus: ((msg: { state: string; version?: string }) => void) | null =
-    null;
+  /** daemon 主动下发的连接状态帧(ready / superseded),连接相位的唯一权威来源 */
+  onServerStatus: ((frame: ServerStatusFrame) => void) | null = null;
+
+  /**
+   * daemon 对 UI 主动 ping 的 pong 回包。
+   *
+   * 单独成回调而不再塞进 onServerStatus:一个是**推送**、一个是**应答**,
+   * 语义不同 —— 混用会让「谁在什么时候把状态改成 connected」无从追查。
+   */
+  onServerPong: (() => void) | null = null;
 
   constructor(conn: Conn, log: (level: LogLevel, line: string) => void) {
     this.conn = conn;
@@ -71,8 +79,8 @@ export class Router {
       msg.ok &&
       (msg.data as { pong?: boolean } | undefined)?.pong
     ) {
-      // daemon 对 ping 探测的自动回包,视为连接确认
-      this.onServerStatus?.({ state: 'connected' });
+      // daemon 对 ping 探测的自动回包 → 双向可达
+      this.onServerPong?.();
       return;
     }
     if (msg.type === 'request') {
@@ -124,7 +132,7 @@ export class Router {
         this.log('error', `转发到插件超时: ${msg.method}`);
         this.sendResponseOverWs(conn, msg.id, false, undefined, '插件响应超时');
       }
-    }, TIMEOUT);
+    }, UI_FORWARD_TIMEOUT_MS);
     this.localPending.set(msg.id, { timer });
     parent.postMessage({ pluginMessage: msg }, '*');
   }
@@ -218,7 +226,7 @@ export class Router {
         timer: window.setTimeout(() => {
           if (this.localPending.delete(request.id))
             reject(new Error('插件响应超时'));
-        }, TIMEOUT),
+        }, UI_FORWARD_TIMEOUT_MS),
       });
     });
     parent.postMessage({ pluginMessage: request }, '*');

@@ -8,6 +8,13 @@ export const HTTP_PORT = Number(
 export const SERVER_NAME = 'text-to-design-mcp-server';
 export const SERVER_VERSION = version;
 
+/**
+ * 本进程启动时刻。随 /health 上报,供后来者判断「常驻实例是否跑在旧构建上」:
+ * 版本自检只比版本号,而开发期反复重建不改版本号,这个盲区会让「改了代码、
+ * 重启了会话、改动却不生效」静默发生(见 probe.warnIfDaemonStale)。
+ */
+export const STARTED_AT = Date.now();
+
 /** shim 等待 daemon 就绪的总预算(冷启动 + 版本替换叠加时的上限) */
 export const DAEMON_WAIT_MS = 15000;
 export const DAEMON_POLL_MS = 250;

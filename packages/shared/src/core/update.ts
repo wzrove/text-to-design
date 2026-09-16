@@ -1,4 +1,5 @@
 import { CAPABILITY_OF_GATED_PROP } from '../dicts/capability';
+import { propAppliesTo } from '../dicts/prop-applicability';
 import type { PropMethod, SerializedNode, UpdateNodeProps } from '../schemas';
 import { PROP_METHOD_FIELDS } from '../schemas';
 import { isGatedPropUnsupported } from './capabilities';
@@ -90,7 +91,11 @@ async function applyProps(
     node.constraints = props.constraints;
   if (props.layoutGrids != null && 'layoutGrids' in node)
     node.layoutGrids = normalizeLayoutGrids(props.layoutGrids);
-  if (node.type === 'ELLIPSE' && props.arcData != null && 'arcData' in node) {
+  if (
+    propAppliesTo('arcData', node.type) &&
+    props.arcData != null &&
+    'arcData' in node
+  ) {
     node.arcData = props.arcData;
   }
   if (effects != null && 'effects' in node) node.effects = effects;
@@ -107,16 +112,16 @@ async function applyProps(
       node.bottomRightRadius = props.bottomRightRadius;
   }
 
-  if (
-    props.pointCount != null &&
-    (node.type === 'POLYGON' || node.type === 'STAR')
-  ) {
+  if (props.pointCount != null && propAppliesTo('pointCount', node.type)) {
     node.pointCount = props.pointCount;
   }
-  if (node.type === 'STAR' && props.innerRadius != null) {
+  if (propAppliesTo('innerRadius', node.type) && props.innerRadius != null) {
     node.innerRadius = props.innerRadius;
   }
 
+  // 这一块是「文本节点的整体写入流程」而非单属性 gate:字体加载必须先于逐属性
+  // 赋值,所以按节点类型整体进入。块内各属性在 dicts/prop-applicability 里都登记
+  // 为 TEXT 专属 —— 新增文本属性时两处一起改(表用于「未生效」点名,这里用于赋值)。
   if (node.type === 'TEXT') {
     const needLoad =
       props.characters != null ||
@@ -152,50 +157,50 @@ async function applyProps(
   }
 
   if (
-    node.type === 'FRAME' &&
+    propAppliesTo('layoutMode', node.type) &&
     props.layoutMode != null &&
     'layoutMode' in node
   ) {
     node.layoutMode = props.layoutMode;
   }
   if (
-    node.type === 'FRAME' &&
+    propAppliesTo('itemSpacing', node.type) &&
     props.itemSpacing != null &&
     'itemSpacing' in node
   ) {
     node.itemSpacing = props.itemSpacing;
   }
-  if (node.type === 'FRAME' && props.paddingTop != null)
+  if (propAppliesTo('paddingTop', node.type) && props.paddingTop != null)
     node.paddingTop = props.paddingTop;
-  if (node.type === 'FRAME' && props.paddingRight != null)
+  if (propAppliesTo('paddingRight', node.type) && props.paddingRight != null)
     node.paddingRight = props.paddingRight;
-  if (node.type === 'FRAME' && props.paddingBottom != null)
+  if (propAppliesTo('paddingBottom', node.type) && props.paddingBottom != null)
     node.paddingBottom = props.paddingBottom;
-  if (node.type === 'FRAME' && props.paddingLeft != null)
+  if (propAppliesTo('paddingLeft', node.type) && props.paddingLeft != null)
     node.paddingLeft = props.paddingLeft;
   if (
-    node.type === 'FRAME' &&
+    propAppliesTo('primaryAxisSizingMode', node.type) &&
     props.primaryAxisSizingMode != null &&
     'primaryAxisSizingMode' in node
   ) {
     node.primaryAxisSizingMode = props.primaryAxisSizingMode;
   }
   if (
-    node.type === 'FRAME' &&
+    propAppliesTo('counterAxisSizingMode', node.type) &&
     props.counterAxisSizingMode != null &&
     'counterAxisSizingMode' in node
   ) {
     node.counterAxisSizingMode = props.counterAxisSizingMode;
   }
   if (
-    node.type === 'FRAME' &&
+    propAppliesTo('primaryAxisAlignItems', node.type) &&
     props.primaryAxisAlignItems != null &&
     'primaryAxisAlignItems' in node
   ) {
     node.primaryAxisAlignItems = props.primaryAxisAlignItems;
   }
   if (
-    node.type === 'FRAME' &&
+    propAppliesTo('counterAxisAlignItems', node.type) &&
     props.counterAxisAlignItems != null &&
     'counterAxisAlignItems' in node
   ) {
@@ -422,7 +427,7 @@ export async function updateSelection(
     // 平台缺陷:布局重算会回写容器方向,写进去的 layoutMode 可能不是最终值(P31)。
     // applyProps 里 layoutMode 先写、padding/对齐/伸缩后写,正好落在会触发重算的
     // 那一段之后,所以这里回读一次:不一致就再压一次,压不住就点名(下方 warnings)。
-    if (props.layoutMode != null && node.type === 'FRAME') {
+    if (props.layoutMode != null && propAppliesTo('layoutMode', node.type)) {
       if (!ensureLayoutMode(node, props.layoutMode)) {
         layoutModeMissed.push(`${node.name}(${node.id})`);
       }

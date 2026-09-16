@@ -1,9 +1,10 @@
 import type { z } from 'zod';
+import type { ServerStatusFrame } from './connection';
 import type { LogLevel } from './dicts/log';
 import type * as s from './schemas';
 
-export const WS_PORT = 47812;
-
+/* 连接层协议(端口/握手帧/重连节奏):daemon 与插件 UI 的唯一真源 */
+export * from './connection';
 /* 平台无关核心逻辑(DesignHost 接口 + 序列化/建节点/组件/更新,无平台 typings 依赖) */
 export * from './core';
 /* 跨侧字典数据(节点类型/平台/日志级别/布尔运算的取值与文案真源) */
@@ -113,7 +114,7 @@ export type RequestParams<M extends PluginMethod> = M extends 'ping'
                           ? GetPageStructureParams
                           : ListFontsParams;
 
-export type PluginRequest = (
+export type PluginRequest =
   | { type: 'request'; id: string; method: 'ping'; params: PingParams }
   | {
       type: 'request';
@@ -203,11 +204,7 @@ export type PluginRequest = (
       id: string;
       method: 'platform_op';
       params: s.PlatformOpParams;
-    }
-) & {
-  /** 目标 MCP server 端口;缺省时路由到第一个已连接 server */
-  server?: number;
-};
+    };
 
 export type PluginResponse<D = unknown> = {
   type: 'response';
@@ -222,7 +219,7 @@ export type PluginResponse<D = unknown> = {
 /** 服务器主动下发的推送帧(daemon → 插件 UI,单向通知,无需回包) */
 export type ServerPush =
   | { type: 'log'; level: LogLevel; line: string }
-  | { type: 'status'; state: string; version?: string };
+  | ServerStatusFrame;
 export function makeResponse<D>(
   id: string,
   ok: boolean,

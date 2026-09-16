@@ -3,7 +3,6 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
-  "packageManager": "pnpm",
   "scripts": {
     "postinstall": "lefthook install",
     "dev": "pnpm --filter text-to-design-ui watch",

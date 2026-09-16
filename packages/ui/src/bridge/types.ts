@@ -21,11 +21,18 @@ export type CapabilitySnapshot = {
   platformOps: readonly PlatformOpInfo[];
 };
 
+/**
+ * 面板连接相位(四态,与 daemon 下发的状态帧一一对应)。
+ *
+ * `superseded` 单列而不并入 `disconnected`,因为它表示「daemon 在、但这条通道被
+ * 另一个面板顶替了」—— 处置方式与掉线相反:掉线要**自动重连**,被顶替则
+ * **不能**自动重连(两个面板会互相顶替,形成无限拉锯),只能等用户手动夺回。
+ */
 export type BridgeStatus =
   | 'disconnected'
   | 'connecting'
   | 'connected'
-  | 'error';
+  | 'superseded';
 
 export type BridgeEvent =
   | { type: 'status'; status: BridgeStatus }
@@ -48,9 +55,3 @@ export type Pending = {
   reject?: (err: Error) => void;
   timer: number;
 };
-
-/** UI 侧超时必须小于服务器侧(30s),保证 UI 先超时先回错误包,不留孤儿 */
-export const TIMEOUT = 25000;
-export const SCAN_INTERVAL = 1000;
-/** 重连退避封顶 */
-export const MAX_SCAN_INTERVAL = 10000;

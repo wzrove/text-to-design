@@ -11,12 +11,22 @@ const STYLE = {
     'border border-[var(--component-status-chip-connecting-border)] bg-[var(--component-status-chip-connecting-bg)] text-info',
   waiting:
     'border border-[var(--component-status-chip-waiting-border)] bg-[var(--component-status-chip-waiting-bg)] text-warning',
+  superseded:
+    'border border-[var(--component-status-chip-waiting-border)] bg-[var(--component-status-chip-waiting-bg)] text-warning',
 } as const;
 
 const LABEL = {
   connected: '已连接',
   connecting: '连接中…',
   waiting: '等待服务',
+  superseded: '已被接管',
+} as const;
+
+const TITLE = {
+  connected: '服务在线,插件与 AI 会话已连通',
+  connecting: '已连上后台服务,等待它确认这条通道',
+  waiting: '服务离线时无需手动操作,AI 调用会自动拉起',
+  superseded: '另一个插件面板占用了通道;点「夺回」可切回本面板',
 } as const;
 
 type BadgeKey = keyof typeof LABEL;
@@ -30,7 +40,9 @@ export default function StatusBadge() {
         ? 'connected'
         : s === 'connecting'
           ? 'connecting'
-          : 'waiting';
+          : s === 'superseded'
+            ? 'superseded'
+            : 'waiting';
     return k;
   });
   return (
@@ -38,7 +50,7 @@ export default function StatusBadge() {
       role="status"
       aria-atomic="true"
       class={`badge badge-sm gap-1 ${STYLE[key()]}`}
-      title="服务离线时无需手动操作,AI 调用会自动拉起"
+      title={TITLE[key()]}
     >
       <span class="text-[0.5rem] leading-none">●</span>
       {LABEL[key()]}

@@ -1,5 +1,5 @@
 import {
-  type NodeType,
+  PROP_APPLICABILITY,
   PROP_METHOD_FIELDS,
   type PropMethod,
   updatedResultSchema,
@@ -8,60 +8,10 @@ import type { z } from 'zod';
 import type { BridgeToolDef, FollowUp, ToolHints } from '../core/registry';
 
 /**
- * runtime 会按节点类型静默跳过的字段 → 适用类型(与 core/update.ts 的显式类型
- * gate 保持同步;取值来自 shared 节点类型字典,写错类型名会在此报类型错)。
- * 仅收录类型 gate 字段;'in' 守卫类字段各类型普遍存在,不收录,
- * 避免误报"未生效"。用于把「请求了但没生效」的属性点名给调用方。
+ * 「属性 → 适用节点类型」表已收敛到 shared 字典(dicts/prop-applicability):
+ * 写路径 core/update.ts 的 per-prop 类型 gate 与这里的「未生效属性点名」共用
+ * 同一份数据,不再靠人手工同步。此处只消费,不再维护副本。
  */
-export const PROP_APPLICABILITY: Record<string, readonly NodeType[]> = {
-  pointCount: ['POLYGON', 'STAR'],
-  innerRadius: ['STAR'],
-  arcData: ['ELLIPSE'],
-  characters: ['TEXT'],
-  fontSize: ['TEXT'],
-  fontName: ['TEXT'],
-  textAlignHorizontal: ['TEXT'],
-  textAlignVertical: ['TEXT'],
-  textAutoResize: ['TEXT'],
-  textCase: ['TEXT'],
-  textDecoration: ['TEXT'],
-  lineHeight: ['TEXT'],
-  letterSpacing: ['TEXT'],
-  textTruncation: ['TEXT'],
-  maxLines: ['TEXT'],
-  layoutMode: ['FRAME'],
-  itemSpacing: ['FRAME'],
-  paddingTop: ['FRAME'],
-  paddingRight: ['FRAME'],
-  paddingBottom: ['FRAME'],
-  paddingLeft: ['FRAME'],
-  primaryAxisSizingMode: ['FRAME'],
-  counterAxisSizingMode: ['FRAME'],
-  primaryAxisAlignItems: ['FRAME'],
-  counterAxisAlignItems: ['FRAME'],
-  cornerRadius: [
-    'FRAME',
-    'RECTANGLE',
-    'ELLIPSE',
-    'POLYGON',
-    'STAR',
-    'VECTOR',
-    'BOOLEAN_OPERATION',
-  ],
-  cornerSmoothing: [
-    'FRAME',
-    'RECTANGLE',
-    'ELLIPSE',
-    'POLYGON',
-    'STAR',
-    'VECTOR',
-    'BOOLEAN_OPERATION',
-  ],
-  topLeftRadius: ['FRAME', 'RECTANGLE'],
-  topRightRadius: ['FRAME', 'RECTANGLE'],
-  bottomLeftRadius: ['FRAME', 'RECTANGLE'],
-  bottomRightRadius: ['FRAME', 'RECTANGLE'],
-};
 
 type UpdateData = {
   updated: { id: string; type?: string }[];

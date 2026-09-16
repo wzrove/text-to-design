@@ -1,3 +1,4 @@
+import { statSync } from 'node:fs';
 import {
   Client,
   StreamableHTTPClientTransport,
@@ -8,25 +9,69 @@ import {
   HTTP_PORT,
   SERVER_VERSION,
 } from '../config';
-import { log } from '../logger';
+import { log, warn } from '../logger';
 
 /** GET daemon /health;无 /health 端点(旧版/外来服务/未启动)或失败 → null */
 export async function fetchDaemonHealth(): Promise<{
   name: string;
   version: string;
+  /** 该实例的启动时刻(旧版无此字段);用于识别「跑在旧构建上」 */
+  startedAt?: number;
 } | null> {
   try {
     const res = await fetch(`http://127.0.0.1:${HTTP_PORT}/health`, {
       signal: AbortSignal.timeout(800),
     });
     if (!res.ok) return null;
-    const body = (await res.json()) as { name?: string; version?: string };
+    const body = (await res.json()) as {
+      name?: string;
+      version?: string;
+      startedAt?: number;
+    };
     return body.name && body.version
-      ? { name: body.name, version: body.version }
+      ? {
+          name: body.name,
+          version: body.version,
+          ...(typeof body.startedAt === 'number'
+            ? { startedAt: body.startedAt }
+            : {}),
+        }
       : null;
   } catch {
     return null;
   }
+}
+
+let staleWarned = false;
+
+/**
+ * 构建陈旧告警(每次进程只报一次,且只告警不自动替换)。
+ *
+ * 为什么需要:版本自检比的是 `version`,而开发期反复 `pnpm build` 不改版本号,
+ * 于是「改了服务端代码 → 重启 AI 会话 → 改动不生效」会静默发生 —— 新 shim 探到
+ * 同版本的旧 daemon,直接当上游用。这里用「daemon 启动时刻 < 本地产物 mtime」
+ * 把盲区变成一条明确告警。
+ *
+ * 为什么不自动替换:不同来源的两个同版本构建(仓库 dist 与 npx 缓存)会互相
+ * 判定对方陈旧,替换成环。替换只由用户显式动作触发。
+ */
+export async function warnIfDaemonStale(): Promise<void> {
+  if (staleWarned) return;
+  staleWarned = true;
+  const entry = process.argv[1];
+  if (!entry) return;
+  let mtime: number;
+  try {
+    mtime = statSync(entry).mtimeMs;
+  } catch {
+    return; // 读不到产物 mtime(打包进快照等)就跳过
+  }
+  const health = await fetchDaemonHealth();
+  if (health?.startedAt == null || health.startedAt >= mtime) return;
+  warn(
+    `常驻 daemon 跑在旧构建上(daemon 启动 ${new Date(health.startedAt).toISOString()} < 产物 ${new Date(mtime).toISOString()}),本次代码改动未生效。` +
+      `收掉它:curl -X POST http://127.0.0.1:${HTTP_PORT}/shutdown,再重新拉起`,
+  );
 }
 
 /**

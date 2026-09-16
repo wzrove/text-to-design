@@ -71,6 +71,11 @@ text-to-design 能让 AI 助手(比如 opencode、Claude)直接在你的设计�
 
 - **AI 说连不上插件**:先看即时设计里的插件面板是否显示「已连接」,没有就重新运行插件,然后重启 AI 会话。
 - **改完配置不生效**:重启 AI 工具会话。
+- **AI 会话没开,插件面板一直「等待服务」**:后台服务默认由 AI 会话拉起。想让它随时在线,二选一:
+  - 手动常驻:`npx -y text-to-design-mcp@latest daemon`(命令幂等,重复执行安全;常驻到下次重启)
+  - 开机自启:`npx -y text-to-design-mcp@latest install-service`(用户级 launchd / systemd --user / 计划任务;
+    注销用 `uninstall-service`;想先看计划加 `--dry-run`)。开发态(tsx 跑 TS 源码)或 npx 缓存路径会被拒绝注册,
+    需先全局安装;`--force` 可跳过该检查。
 - **想深入排查**:看文末「给开发者看」的调试部分。
 
 ---

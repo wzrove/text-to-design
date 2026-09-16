@@ -13,17 +13,65 @@ import {
   PORT,
   SERVER_NAME,
   SERVER_VERSION,
+  STARTED_AT,
 } from '../config';
 import { debug, error, log } from '../logger';
 import { buildServer } from '../server';
-import { delay, probeUpstream } from './probe';
+import {
+  delay,
+  fetchDaemonHealth,
+  probeUpstream,
+  warnIfDaemonStale,
+} from './probe';
 import { serveProxy } from './proxy';
 import { spawnDaemon } from './spawn';
 
 export { spawnDaemon };
 
+/**
+ * 幂等守卫:已有 daemon 持有端口就没必要再起一个。
+ *
+ * 背景:`daemon` 子命令要能被反复执行(开机脚本 / 用户手动唤醒 / shim 与
+ * 重连兜底并发 spawn),重复启动旧行为是撞端口直接抛错 —— 用户分不清
+ * 「已经跑着」和「起不来」。此处按归属区分:
+ *
+ * - `proxy` / `starting` —— 本项目的 daemon 已在(或正在)监听 → 静默跳过
+ * - `foreign`             —— 端口被外来 MCP 服务占用 → 明确报错退出
+ * - `none`                —— 无人监听(含旧版刚被替换掉) → 继续正常启动
+ */
+async function ensureSoleDaemon(): Promise<boolean> {
+  const deadline = Date.now() + DAEMON_WAIT_MS;
+  do {
+    const probe = await probeUpstream();
+    if (probe.state === 'proxy') {
+      await probe.client.close().catch(() => {});
+      log('已有 daemon 在运行,本次启动跳过');
+      return false;
+    }
+    if (probe.state === 'foreign') {
+      error(`端口 ${HTTP_PORT} 被非 text-to-design MCP 服务占用,请先释放`);
+      process.exit(1);
+    }
+    if (probe.state === 'none') return true;
+    // starting:旧版在退/新版在起,等它把端口交出来
+    await delay(DAEMON_POLL_MS);
+  } while (Date.now() < deadline);
+
+  // 超时仍可探到 health:端口确有人在听,别再去撞端口
+  if ((await fetchDaemonHealth()) !== null) {
+    log('已有 daemon 持有端口,本次启动跳过');
+    return false;
+  }
+  return true;
+}
+
 /** daemon 模式:WS 桥(插件) + HTTP MCP(各会话 shim 连接),无 stdio,常驻 */
 export async function runDaemon(bridge: Bridge): Promise<void> {
+  if (!(await ensureSoleDaemon())) {
+    // 本次启动被跳过 = 端口上已有实例,同样要提醒它可能是旧构建
+    await warnIfDaemonStale();
+    return;
+  }
   await bridge.start(PORT);
   log(`daemon: 插件 WS ws://localhost:${bridge.port}`);
 
@@ -60,6 +108,7 @@ export async function runDaemon(bridge: Bridge): Promise<void> {
             name: SERVER_NAME,
             version: SERVER_VERSION,
             pid: process.pid,
+            startedAt: STARTED_AT,
           }),
         );
         return;
@@ -84,6 +133,9 @@ export async function runDaemon(bridge: Bridge): Promise<void> {
 
 /** shim 模式:探测 daemon;无则拉起并等待就绪 */
 export async function runShim(): Promise<void> {
+  // 先看一眼常驻实例是不是跑在旧构建上:同版本号会让版本自检放行,
+  // 这个盲区正是「改了代码却不生效」的来源
+  await warnIfDaemonStale();
   const probe = await probeUpstream();
   if (probe.state === 'foreign') {
     error(`端口 ${HTTP_PORT} 被非 text-to-design MCP 服务占用,请先释放`);

@@ -3,6 +3,7 @@ import type {
   PluginRequest,
   PluginResponse,
 } from 'text-to-design-shared';
+import { PLUGIN_TIMEOUT_MS } from 'text-to-design-shared';
 import { error, log, warn } from './logger';
 
 export type { PluginMethod };
@@ -24,7 +25,8 @@ type Pending = {
   abort?: { signal: AbortSignal; listener: () => void };
 };
 
-const DEFAULT_TIMEOUT = 30000;
+/** 默认超时与 UI 转发侧同源登记在 shared(不变式:UI 侧更短,先由 UI 回超时) */
+const DEFAULT_TIMEOUT = PLUGIN_TIMEOUT_MS;
 
 /** 单次桥接请求选项 */
 export interface RequestOptions {

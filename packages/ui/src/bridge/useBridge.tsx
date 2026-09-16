@@ -102,8 +102,11 @@ export function BridgeProvider(props: ParentProps) {
     b.subscribe((e) => {
       if (e.type === 'status') {
         setStatus(() => e.status);
-        // 掉线即清空能力快照:留着旧平台的能力表会与当前连接不符
-        if (e.status === 'disconnected') setCapability(() => null);
+        // 掉线即清空能力快照:留着旧平台的能力表会与当前连接不符。
+        // 被顶替同样要清 —— 面板已不再持有通道,快照不再代表任何真实连接
+        if (e.status === 'disconnected' || e.status === 'superseded') {
+          setCapability(() => null);
+        }
       } else if (e.type === 'selection') setSelection(() => e.data);
       else if (e.type === 'platform') {
         setPlatform(() => e.platform);
