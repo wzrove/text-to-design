@@ -10,17 +10,34 @@ import { z } from 'zod';
 import { SERVER_NAME, SERVER_VERSION } from '../config';
 import { log, warn } from '../logger';
 import { friendlyInputSchema } from './friendly-schema';
-import { delay, probeUpstream } from './probe';
+import { delay, fetchDaemonHealth, probeUpstream } from './probe';
 import { spawnDaemon } from './spawn';
 
 const RECONNECT_DELAY_MS = 1500;
 /** 重连总预算:超时后放弃本次恢复,把错误交还客户端 */
 const RECONNECT_BUDGET_MS = 20000;
 
-/** 目录同步节奏:启动/重连后的快速档尽快收敛,稳态转入慢速档省流 */
-const POLL_FAST_MS = 2000;
-const POLL_FAST_WINDOW_MS = 20000;
-const POLL_SLOW_MS = 15000;
+/**
+ * 目录新鲜度节奏。**不再是「快速档 / 慢速档」** —— 那个设计的前提已经不成立。
+ *
+ * 原设计假设「插件上下线会改变上游工具目录」,所以启动/重连后 20s 内按 2s 轮询
+ * 抢在目录变化时尽快收敛。但 daemon 早已把目录与连接状态解耦(见 server.ts
+ * syncToolAvailability:工具目录保持稳定,可用性下沉到运行时判定),而
+ * toolRegistrars 本身是固定清单、平台门控发生在调用时(core/registry.ts)——
+ * 也就是说**同一 daemon 版本下目录根本不会变**,2s 轮询每轮都在重拉一份完全
+ * 相同的清单然后 diff 出「无变化」。
+ *
+ * 代价还不止请求数:listTools 单次回包 ~1.27 MB(53 个工具,其中 80% 是各工具
+ * 重复的 outputSchema),于是快速档 ≈ 38 MB/分钟、稳态 ≈ 5 MB/分钟,每个会话
+ * 各一份。
+ *
+ * 现在的策略:
+ * - 常态只做一次廉价的 `/health` 版本自检(1 个 GET,几百字节);
+ * - 只有「上游被换成了别的版本」才全量 resync;
+ * - 另留一条极慢的全量兜底,防将来出现条件注册(目录真会变时有个保险)。
+ */
+const HEALTH_POLL_MS = 60_000;
+const FULL_RESYNC_MS = 600_000;
 
 /** 可移除的注册句柄(兼容 RegisteredTool/Prompt/Resource 的最小面) */
 interface RemovableHandle {
@@ -45,12 +62,16 @@ function isTransportError(e: unknown): boolean {
 /**
  * shim 模式:stdio 与 daemon 之间的 MCP 代理(McpServer 动态重注册)。
  *
- * 本地注册表只承担「目录」职责,工具调用始终实时转发 daemon;目录新鲜度
- * 由四重机制保证(按到达顺序):
- * ① 下游握手时全量同步 ② 上游 listChanged 通知触发(若可达)
- * ③ 重连成功后补偿同步 ④ 3s 周期轮询兜底(stateless 下通知不可达时的
- * 最终保障)。registerTool/remove 自带下游 listChanged 广播,
- * 规范客户端会自动刷新工具清单。
+ * 本地注册表只承担「目录」职责,工具调用始终实时转发 daemon;目录新鲜度由三重
+ * 机制保证(按可靠性排序):
+ * ① 下游握手时全量同步;
+ * ② 上游重连成功后补偿同步(断连期间错过的变更);
+ * ③ 常态只做 `/health` 版本自检,版本变化才全量 resync;另有一条极慢的全量兜底。
+ *
+ * 注意 ③ 不再是「定时重拉清单」:上游目录在同一 daemon 版本下是静态的
+ * (固定注册清单 + 调用时平台门控),定时重拉只会反复取回同一份 1.27 MB 的清单。
+ * 历史实现的 2s/15s 轮询在快速档下每分钟拉 38 MB,纯属浪费 —— 见下方节奏常量注释。
+ * registerTool/remove 自带下游 listChanged 广播,规范客户端会自动刷新。
  */
 export async function serveProxy(initialClient: Client): Promise<void> {
   let upstream: Client = initialClient;
@@ -270,7 +291,6 @@ export async function serveProxy(initialClient: Client): Promise<void> {
           if (p.state === 'proxy') {
             upstream = p.client;
             wireUpstream(upstream);
-            enterFastPoll(); // 重连后回到快速档,尽快收敛清单
             log('shim: 上游已恢复');
             await resyncAll(); // 补齐断连期间错过的变更
             return;
@@ -324,33 +344,55 @@ export async function serveProxy(initialClient: Client): Promise<void> {
   wireUpstream(upstream);
 
   const stdioHandle = serveStdio(async () => {
-    await resyncAll(); // 下游握手前先对齐一次清单(尽力而为,失败留待轮询补偿)
+    await resyncAll(); // 下游握手前先对齐一次清单(尽力而为,失败留待兜底轮询补偿)
     return mcp;
   });
-  // 新鲜度兜底:stateless 上游的变更通知不可达时,靠轮询收敛。
-  // 自适应节奏:启动/重连后 20s 内走快速档(尽快发现插件上线),
-  // 稳态转慢速档。registerTool/remove 自带下游 listChanged 广播,
-  // 客户端会自动刷新。
-  let fastUntil = Date.now() + POLL_FAST_WINDOW_MS;
-  let pollTimer: NodeJS.Timeout | null = null;
-  const schedulePoll = (): void => {
+
+  // ---- 新鲜度:廉价版本自检 + 极慢全量兜底 ----
+  //
+  // 目录在同一 daemon 版本下是静态的,所以常态不重拉清单,只问一次 /health:
+  // 版本没变就什么都不做。上游被换成别的版本时(多来源安装、手动重启)才全量 resync。
+  // 另一个入口是 withUpstream 的传输层错误路径 —— 上游断连会走 ensureReconnect,
+  // 成功后本来就会 resyncAll,那条路不依赖这里的轮询。
+  let syncedVersion: string | null = SERVER_VERSION;
+  let healthTimer: NodeJS.Timeout | null = null;
+  let fullTimer: NodeJS.Timeout | null = null;
+
+  const pollHealth = async (): Promise<void> => {
+    const health = await fetchDaemonHealth();
+    // 探不到(daemon 不在)什么都不做:真需要目录时 withUpstream 会失败并触发重连
+    if (health == null) return;
+    if (health.version === syncedVersion) return;
+    log(`上游版本变化(${syncedVersion} → ${health.version}),全量重同步目录`);
+    syncedVersion = health.version;
+    await resyncAll();
+  };
+
+  const scheduleHealth = (): void => {
     if (shuttingDown) return;
-    const delayMs = Date.now() < fastUntil ? POLL_FAST_MS : POLL_SLOW_MS;
-    pollTimer = setTimeout(() => {
+    healthTimer = setTimeout(() => {
       if (shuttingDown) return;
-      void resyncAll();
-      schedulePoll();
-    }, delayMs);
-    pollTimer.unref();
+      void pollHealth().finally(scheduleHealth);
+    }, HEALTH_POLL_MS);
+    healthTimer.unref();
   };
-  const enterFastPoll = (): void => {
-    fastUntil = Date.now() + POLL_FAST_WINDOW_MS;
+
+  const scheduleFullResync = (): void => {
+    if (shuttingDown) return;
+    fullTimer = setTimeout(() => {
+      if (shuttingDown) return;
+      void resyncAll().finally(scheduleFullResync);
+    }, FULL_RESYNC_MS);
+    fullTimer.unref();
   };
-  schedulePoll();
+
+  scheduleHealth();
+  scheduleFullResync();
   log('shim 模式: stdio → 动态同步,共享 daemon');
   process.on('SIGINT', async () => {
     shuttingDown = true;
-    if (pollTimer) clearTimeout(pollTimer);
+    if (healthTimer) clearTimeout(healthTimer);
+    if (fullTimer) clearTimeout(fullTimer);
     await stdioHandle.close();
     await upstream.close().catch(() => {});
     process.exit(0);
