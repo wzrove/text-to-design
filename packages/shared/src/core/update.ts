@@ -1,5 +1,7 @@
+import { CAPABILITY_OF_GATED_PROP } from '../dicts/capability';
 import type { PropMethod, SerializedNode, UpdateNodeProps } from '../schemas';
 import { PROP_METHOD_FIELDS } from '../schemas';
+import { isGatedPropUnsupported } from './capabilities';
 import type { DesignHost, NodeSkeleton } from './host';
 import { MIXED } from './host';
 import {
@@ -303,31 +305,6 @@ const CONTAINER_SELF_VISIBLE_PROPS = new Set([
 ]);
 
 /**
- * 平台超集字段:仅对应平台运行时存在(如 Figma 的截断/样式 id,见 schemas/platform.ts
- * 的 hostCapabilitySchema)。当前平台没有这些属性时,`'in'` 守卫会**静默跳过**,
- * 调用方看到回显成功却不知道根本没生效。这里显式点名 —— 也就是把「能力判断看
- * jsd_ping」这条语义从提示词下沉到代码,别再靠模型自觉。
- */
-const PLATFORM_SUPERSET_PROPS = new Set([
-  'textTruncation',
-  'maxLines',
-  'fillStyleId',
-  'strokeStyleId',
-  'textStyleId',
-  'effectStyleId',
-]);
-
-/** 仅 TEXT 适用的超集字段:其他类型传了属于「类型不匹配」,不该报成「平台不支持」 */
-const TEXT_ONLY_SUPERSET_PROPS = new Set(['textTruncation', 'maxLines']);
-
-/** 该字段是否因当前平台运行时不具备而会被静默跳过 */
-function isUnsupportedSupersetProp(key: string, node: NodeSkeleton): boolean {
-  if (!PLATFORM_SUPERSET_PROPS.has(key)) return false;
-  if (TEXT_ONLY_SUPERSET_PROPS.has(key) && node.type !== 'TEXT') return false;
-  return !(key in node);
-}
-
-/**
  * 实例子节点样式改不动的**可执行出口**:顺着名字路径在实例的主组件里定位同源
  * 子节点,把它的 id 直接算出来。调用方拿到就能改主组件(所有实例一起继承),
  * 不必自己再翻组件树。名字对不上(改过名 / 结构不一致)返回 null,
@@ -420,9 +397,9 @@ export async function updateSelection(
   const selfMutatedProps = new Set<string>();
   const layoutModeMissed: string[] = [];
   for (const node of targets) {
-    // 平台超集字段:当前平台没有该属性,'in' 守卫会静默跳过 → 先记下来点名
+    // 能力门控字段:平台不具备该能力(或运行时不长这个属性)时,引擎赋值会静默跳过 → 先记下来点名
     for (const key of Object.keys(props)) {
-      if (isUnsupportedSupersetProp(key, node)) {
+      if (isGatedPropUnsupported(key, node)) {
         ignoredSuperset.add(key);
       }
     }
@@ -503,8 +480,14 @@ export async function updateSelection(
     );
   }
   if (ignoredSuperset.size > 0) {
+    const detail = [...ignoredSuperset]
+      .map((key) => {
+        const cap = CAPABILITY_OF_GATED_PROP[key];
+        return cap != null ? `${key}(需 ${cap} 能力)` : key;
+      })
+      .join('、');
     warnings.push(
-      `以下字段是平台超集能力,当前平台运行时不支持,已忽略:${[...ignoredSuperset].join(', ')};哪些能力可用看 jsd_ping 的 capabilities(只列平台差异项,jsDesign 通常只有 styles)`,
+      `以下字段由平台能力门控,当前平台运行时不具备,已忽略:${detail};当前平台的能力表见 jsd_ping 的 capabilities(core 判定与该表同源,均取自 shared/dicts/capability.ts)`,
     );
   }
   if (layoutModeMissed.length > 0) {

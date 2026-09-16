@@ -1,4 +1,5 @@
 import {
+  type NodeType,
   PROP_METHOD_FIELDS,
   type PropMethod,
   updatedResultSchema,
@@ -8,10 +9,11 @@ import type { BridgeToolDef, FollowUp, ToolHints } from '../core/registry';
 
 /**
  * runtime 会按节点类型静默跳过的字段 → 适用类型(与 core/update.ts 的显式类型
- * gate 保持同步)。仅收录类型 gate 字段;'in' 守卫类字段各类型普遍存在,不收录,
+ * gate 保持同步;取值来自 shared 节点类型字典,写错类型名会在此报类型错)。
+ * 仅收录类型 gate 字段;'in' 守卫类字段各类型普遍存在,不收录,
  * 避免误报"未生效"。用于把「请求了但没生效」的属性点名给调用方。
  */
-export const PROP_APPLICABILITY: Record<string, readonly string[]> = {
+export const PROP_APPLICABILITY: Record<string, readonly NodeType[]> = {
   pointCount: ['POLYGON', 'STAR'],
   innerRadius: ['STAR'],
   arcData: ['ELLIPSE'],
@@ -99,7 +101,9 @@ export function updateFeedback(
       const applicable = PROP_APPLICABILITY[k];
       return (
         applicable != null &&
-        !updated.some((n) => n.type != null && applicable.includes(n.type))
+        !updated.some(
+          (n) => n.type != null && applicable.some((t) => t === n.type),
+        )
       );
     });
     if (skipped.length > 0) {

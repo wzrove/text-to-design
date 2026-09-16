@@ -1,4 +1,5 @@
 import { createEffect, createMemo, createSignal, For, Show } from 'solid-js';
+import type { NodeType } from 'text-to-design-shared';
 import { copyText } from '../utils/clipboard';
 
 interface SelectedNode {
@@ -10,26 +11,29 @@ interface SelectedNode {
 }
 
 // 类型色点:引用 design-tokens.json 生成的组件层 token(src/styles/tokens.css),
-// 换色只改 JSON 后重新生成,组件零改动;类型名始终有文字呈现,颜色仅辅助
-const TYPE_DOT: Record<string, string> = {
+// 换色只改 JSON 后重新生成,组件零改动;类型名始终有文字呈现,颜色仅辅助。
+// 键集按 shared 节点类型字典穷举(Record<NodeType,…>)——字典新增类型这里会编译报错,不会静默漏色。
+// Figma 独有的只读类型(SECTION/STICKY/TABLE…)没有专属色点,走 dotClass 的灰色兜底:
+// 灰=本仓未建模、只能看不能建,与「建模过的 14 类」在视觉上就区分开。
+const TYPE_DOT: Record<NodeType, string> = {
+  SLICE: 'bg-[var(--component-type-dot-slice)]',
   FRAME: 'bg-[var(--component-type-dot-frame)]',
   GROUP: 'bg-[var(--component-type-dot-group)]',
-  RECTANGLE: 'bg-[var(--component-type-dot-rectangle)]',
-  ELLIPSE: 'bg-[var(--component-type-dot-ellipse)]',
-  LINE: 'bg-[var(--component-type-dot-line)]',
-  POLYGON: 'bg-[var(--component-type-dot-polygon)]',
-  STAR: 'bg-[var(--component-type-dot-star)]',
-  VECTOR: 'bg-[var(--component-type-dot-vector)]',
-  TEXT: 'bg-[var(--component-type-dot-text)]',
-  COMPONENT: 'bg-[var(--component-type-dot-component)]',
   COMPONENT_SET: 'bg-[var(--component-type-dot-component-set)]',
+  COMPONENT: 'bg-[var(--component-type-dot-component)]',
   INSTANCE: 'bg-[var(--component-type-dot-instance)]',
   BOOLEAN_OPERATION: 'bg-[var(--component-type-dot-boolean-operation)]',
-  SLICE: 'bg-[var(--component-type-dot-slice)]',
+  VECTOR: 'bg-[var(--component-type-dot-vector)]',
+  STAR: 'bg-[var(--component-type-dot-star)]',
+  LINE: 'bg-[var(--component-type-dot-line)]',
+  ELLIPSE: 'bg-[var(--component-type-dot-ellipse)]',
+  POLYGON: 'bg-[var(--component-type-dot-polygon)]',
+  RECTANGLE: 'bg-[var(--component-type-dot-rectangle)]',
+  TEXT: 'bg-[var(--component-type-dot-text)]',
 };
 
 function dotClass(type: string): string {
-  return TYPE_DOT[type] ?? 'bg-base-300';
+  return (TYPE_DOT as Record<string, string>)[type] ?? 'bg-base-300';
 }
 
 /** 超过该数量的选中列表自动收起,给日志面板让位;手动展开/收起随时可切 */

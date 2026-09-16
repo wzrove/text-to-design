@@ -1,3 +1,7 @@
+import {
+  BOOLEAN_OPERATIONS,
+  type BooleanOperation,
+} from '../dicts/boolean-operation';
 import type { Effect, LayoutGrid, Paint, VectorPath } from '../schemas';
 import { parseHexColor } from '../schemas';
 
@@ -7,13 +11,6 @@ import { parseHexColor } from '../schemas';
  * 把常见的「引擎会拒收」的形状修好,修不了就抛带路径的中文错误,避免引擎抛出
  * "in set_fills / in set_effects" 这类难懂错误。
  */
-
-const BOOLEAN_OPERATIONS = [
-  'UNION',
-  'SUBTRACT',
-  'INTERSECT',
-  'EXCLUDE',
-] as const;
 
 function normChannel(v: unknown, path: string, key: string): number {
   if (typeof v !== 'number' || Number.isNaN(v)) {
@@ -249,14 +246,12 @@ export function normalizeVectorPaths(paths: unknown): VectorPath[] {
 }
 
 /** BOOLEAN_OPERATION 运算类型白名单校验,防止非法值在 combine[op] 处触发 "not a function" */
-export function assertBooleanOperation(
-  op: unknown,
-): 'UNION' | 'SUBTRACT' | 'INTERSECT' | 'EXCLUDE' {
+export function assertBooleanOperation(op: unknown): BooleanOperation {
   if (
     typeof op === 'string' &&
     (BOOLEAN_OPERATIONS as readonly string[]).includes(op)
   ) {
-    return op as 'UNION' | 'SUBTRACT' | 'INTERSECT' | 'EXCLUDE';
+    return op as BooleanOperation;
   }
   throw new Error(
     `不支持的布尔运算: ${String(op)}(支持 ${BOOLEAN_OPERATIONS.join('|')})`,

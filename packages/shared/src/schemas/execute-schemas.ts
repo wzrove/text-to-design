@@ -1,6 +1,10 @@
 import { z } from 'zod';
 
 import {
+  BOOLEAN_OPERATION_DESCRIBE,
+  BOOLEAN_OPERATIONS,
+} from '../dicts/boolean-operation';
+import {
   blendModeSchema,
   constraintTypeSchema,
   effectSchema,
@@ -432,10 +436,8 @@ const booleanOperationNodeSchema = z
     type: z.literal('BOOLEAN_OPERATION'),
     ...baseNodeFields,
     booleanOperation: z
-      .enum(['UNION', 'SUBTRACT', 'INTERSECT', 'EXCLUDE'])
-      .describe(
-        '布尔运算:UNION=合并,SUBTRACT=减去,INTERSECT=相交,EXCLUDE=排除',
-      ),
+      .enum(BOOLEAN_OPERATIONS)
+      .describe(BOOLEAN_OPERATION_DESCRIBE),
     children: z
       .array(childNodeSchema)
       .min(2)

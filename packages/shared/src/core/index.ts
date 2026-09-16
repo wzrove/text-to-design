@@ -1,4 +1,5 @@
 export { default as buildNode } from './buildNode';
+export { hostCapabilityState, setHostCapabilities } from './capabilities';
 export {
   applyCachedOverrides,
   combineAsVariantsNodes,

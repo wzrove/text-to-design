@@ -1,9 +1,10 @@
 import type { McpServer } from '@modelcontextprotocol/server';
-import type { PluginMethod } from 'text-to-design-shared';
+import type { PluginMethod, PluginPlatform } from 'text-to-design-shared';
 import type { z } from 'zod';
 import type { Bridge } from '../bridge';
 import { error } from '../logger';
 import type { RequestOptions } from '../pending';
+import { describePlatformGate } from '../platform-state';
 import { err, structured } from './response';
 
 /** 注册函数返回的工具句柄(结构化最小类型,兼容 SDK RegisteredTool/Prompt/Resource) */
@@ -70,6 +71,13 @@ export interface BridgeToolDef {
   timeout?: number;
   /** 语义标记:该工具在插件离线时也应可用(如 jsd_ping);目录已不随连接门控 */
   alwaysEnabled?: boolean;
+  /**
+   * 适用平台(缺省=两平台通用)。平台状态已缓存且不含当前平台时,调用直接返回
+   * 结构化错误,不向插件发起往返(目录仍保持全量,见 server.ts 的目录稳定说明)。
+   */
+  platforms?: readonly PluginPlatform[];
+  /** 平台差异说明:注册时拼进描述末尾;平台不适用时也用作替代路径提示 */
+  platformNote?: string;
   /** args → 插件 params 映射;缺省恒等透传 */
   payload?: (args: Record<string, unknown>) => unknown;
   /**
@@ -119,6 +127,13 @@ export function bridgeTool(
     // 可编程执行体:MCP 回调与 jsd_batch 编排共用(统一兜底/超时/取消传播)
     const executeTool: ToolExecutor = async (args, signal) => {
       try {
+        // 平台门控:平台状态已缓存且本工具不适用时,直接给结构化错误(含替代路径),
+        // 不向插件发起往返 —— 插件侧同样会拒绝,但报错更晚也更含糊。平台未知放行。
+        const gate = describePlatformGate(def);
+        if (gate != null) {
+          error(`工具 ${def.name} 在当前平台不可用,已拦截`);
+          return err(new Error(gate), def.outputSchema, def.followUp);
+        }
         // 入参 schema 校验:直接 MCP 调用已由 SDK validateToolInput 校验过(幂等,
         // 成本可忽略),这里补齐 jsd_batch 直调 executor 的路径——内层工具的
         // inputSchema 不生效,坏载荷(颜色带 a / 0-255 / 渐变带 color / 缺
@@ -173,7 +188,12 @@ export function bridgeTool(
       def.name,
       {
         title: def.title,
-        description: def.description,
+        // platformNote 静态拼进描述:注册只在 buildServer 时执行一次,不随平台变化,
+        // 具体"当前平台是否适用"由上面的执行期拦截与结果 warnings 表达
+        description:
+          def.platformNote != null
+            ? `${def.description}${def.platformNote}`
+            : def.description,
         ...(def.inputSchema ? { inputSchema: def.inputSchema } : {}),
         outputSchema: def.outputSchema,
         ...(def.annotations ? { annotations: def.annotations } : {}),

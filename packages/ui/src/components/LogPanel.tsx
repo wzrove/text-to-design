@@ -1,4 +1,5 @@
 import { createEffect, createSignal, For, onCleanup, Show } from 'solid-js';
+import { LOG_LEVEL_ORDER } from 'text-to-design-shared';
 import type { LogLevel } from '../bridge/types';
 import { type LogEntry, useBridge } from '../bridge/useBridge';
 import { copyText } from '../utils/clipboard';
@@ -6,12 +7,16 @@ import { copyText } from '../utils/clipboard';
 /** 过滤档位与级别排序:all=不过滤,其余为「该级别及以上」 */
 type FilterKey = 'all' | LogLevel;
 
+/**
+ * 档位权重:序号取自 shared 日志级别字典(与服务端落盘门槛同一份顺序),
+ * UI 只额外给 'all' 留 0 号位,避免两侧各维护一张序号表。
+ */
 const RANK: Record<FilterKey, number> = {
   all: 0,
-  debug: 1,
-  info: 2,
-  warn: 3,
-  error: 4,
+  debug: LOG_LEVEL_ORDER.debug + 1,
+  info: LOG_LEVEL_ORDER.info + 1,
+  warn: LOG_LEVEL_ORDER.warn + 1,
+  error: LOG_LEVEL_ORDER.error + 1,
 };
 
 // 级别文字用主题语义色(warning=#b45309 / error=#dc2626,见 tailwind.config.js);

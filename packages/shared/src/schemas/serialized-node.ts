@@ -1,4 +1,8 @@
 import { z } from 'zod';
+import {
+  BOOLEAN_OPERATIONS,
+  type BooleanOperation,
+} from '../dicts/boolean-operation';
 import type {
   BlendMode,
   ConstraintType,
@@ -21,8 +25,8 @@ import {
   paintSchema,
   vectorPathSchema,
 } from './base';
-import type { NodeType } from './node-type';
-import { nodeTypeSchema } from './node-type';
+import type { ObservedNodeType } from './node-type';
+import { observedNodeTypeSchema } from './node-type';
 import type { ComponentPropertyValue } from './platform';
 import { componentPropertyValueSchema } from './platform';
 
@@ -30,7 +34,8 @@ import { componentPropertyValueSchema } from './platform';
 export interface SerializedNode {
   id: string;
   name: string;
-  type: NodeType;
+  /** 读路径类型:含 Figma 独有只读类型(写路径仍只认 NodeType 的 14 类) */
+  type: ObservedNodeType;
   x: number;
   y: number;
   width?: number;
@@ -96,7 +101,7 @@ export interface SerializedNode {
   lineHeight?: LineHeight;
   letterSpacing?: LetterSpacing;
   vectorPaths?: VectorPath[];
-  booleanOperation?: 'UNION' | 'SUBTRACT' | 'INTERSECT' | 'EXCLUDE';
+  booleanOperation?: BooleanOperation;
   isMask?: boolean;
   variantProperties?: Record<string, string>;
   mainComponentId?: string;
@@ -115,7 +120,7 @@ export const serializedNodeSchema: z.ZodType<SerializedNode> = z.lazy(() =>
   z.object({
     id: z.string(),
     name: z.string(),
-    type: nodeTypeSchema,
+    type: observedNodeTypeSchema,
     x: z.number(),
     y: z.number(),
     width: z.number().optional(),
@@ -202,9 +207,7 @@ export const serializedNodeSchema: z.ZodType<SerializedNode> = z.lazy(() =>
     lineHeight: lineHeightSchema.optional(),
     letterSpacing: letterSpacingSchema.optional(),
     vectorPaths: z.array(vectorPathSchema).optional(),
-    booleanOperation: z
-      .enum(['UNION', 'SUBTRACT', 'INTERSECT', 'EXCLUDE'])
-      .optional(),
+    booleanOperation: z.enum(BOOLEAN_OPERATIONS).optional(),
     isMask: z.boolean().optional(),
     variantProperties: z.record(z.string(), z.string()).optional(),
     mainComponentId: z.string().optional(),

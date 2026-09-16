@@ -1,9 +1,10 @@
 import { z } from 'zod';
-import { nodeTypeSchema } from './node-type';
+import { observedNodeTypeSchema } from './node-type';
 import {
   componentPropertyValueSchema,
   coreCapabilitySchema,
   hostCapabilitySchema,
+  platformOpInfoSchema,
   pluginPlatformSchema,
 } from './platform';
 import { serializedNodeSchema } from './serialized-node';
@@ -11,6 +12,8 @@ import { serializedNodeSchema } from './serialized-node';
 // ---- 结果 schema ----
 export const createdResultSchema = z.object({
   created: z.union([serializedNodeSchema, z.array(serializedNodeSchema)]),
+  /** 写时检测到的平台已知问题(如能力门控字段被跳过:创建的节点没带上截断/样式 id) */
+  warnings: z.array(z.string()).optional(),
 });
 export const updatedResultSchema = z.object({
   updated: z.array(serializedNodeSchema),
@@ -30,6 +33,12 @@ export const pingResultSchema = z.object({
     .optional()
     .describe(
       '所有平台都具备的核心能力(create/modify/structure/component/export/image),不随平台变化',
+    ),
+  platformOps: z
+    .array(platformOpInfoSchema)
+    .optional()
+    .describe(
+      '当前平台可用的特有操作名单(名/标题/参数说明)。调用 jsd_platform_op 前先看这里,不要猜 op 名',
     ),
   error: z.string().optional(),
 });
@@ -116,7 +125,7 @@ export const pageStructureResultSchema = z.object({
     z.object({
       id: z.string(),
       name: z.string(),
-      type: nodeTypeSchema,
+      type: observedNodeTypeSchema,
       x: z.number(),
       y: z.number(),
       /** 在页面 children 里的下标 = 绘制顺序,0 = 最底层(顶层节点同理) */

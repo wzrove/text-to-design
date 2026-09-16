@@ -1,6 +1,7 @@
 import { type McpServer, ResourceTemplate } from '@modelcontextprotocol/server';
 import type { Bridge } from '../bridge';
 import type { ToolHandle } from '../core/registry';
+import { getPlatformState } from '../platform-state';
 
 function jsonContents(
   uri: string | URL,
@@ -104,6 +105,26 @@ export function registerResources(
     },
   );
 
+  // 平台状态走本地缓存(不触发插件请求):插件上线时 daemon 已自动探测过一次
+  const platformState = server.registerResource(
+    'platform-state',
+    'jsd://platform/state',
+    {
+      title: '平台状态与能力表',
+      description:
+        'daemon 缓存的插件平台状态(platform / capabilities / coreCapabilities / platformOps),取自最近一次 jsd_ping 回包;插件离线或尚未探测到平台时为空(此时先调 jsd_ping)。读缓存不发插件请求 —— 用它判断「当前平台支持什么、有哪些特有 op」比每次 ping 便宜',
+      mimeType: 'application/json',
+    },
+    async () =>
+      jsonContents(
+        'jsd://platform/state',
+        getPlatformState() ?? {
+          platform: null,
+          note: '尚未探测到平台(插件未连接或刚重连),请先调用 jsd_ping',
+        },
+      ),
+  );
+
   // 资源依赖插件在线:可用性由 Bridge.request 运行时兜底,不随连接隐藏
-  return [selection, fonts, styles, page, nodeTemplate];
+  return [selection, fonts, styles, page, nodeTemplate, platformState];
 }

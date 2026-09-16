@@ -15,7 +15,7 @@ export function registerSessionTools(
   const ping = bridgeTool({
     name: 'jsd_ping',
     title: `检查 ${CLIENT.runtime} 插件连接`,
-    description: `检查插件是否在线(需先启动 ${CLIENT.runtime} 插件并保持运行)。返回两个能力表:coreCapabilities 为核心能力(create/modify/structure/component/export/image,两平台一致);capabilities 只列平台差异超集(如 variables/componentProperties/textTruncation),jsDesign 通常只有 styles`,
+    description: `检查插件是否在线(需先启动 ${CLIENT.runtime} 插件并保持运行)。返回三个能力表:coreCapabilities 为核心能力(create/modify/structure/component/export/image,两平台一致);capabilities 只列平台差异超集(如 variables/componentProperties/textTruncation),jsDesign 通常只有 styles;platformOps 列当前平台可用的特有操作(名/标题/参数说明),调 jsd_platform_op 前先读它。回包会被 daemon 缓存,后续可直接读 jsd://platform/state(不必重复 ping)`,
     outputSchema: pingResultSchema,
     annotations: { readOnlyHint: true },
     alwaysEnabled: true,
@@ -36,12 +36,14 @@ export function registerSessionTools(
           platform?: unknown;
           capabilities?: unknown;
           coreCapabilities?: unknown;
+          platformOps?: unknown;
         };
         return {
           connected: true,
           platform: data?.platform,
           capabilities: data?.capabilities,
           coreCapabilities: data?.coreCapabilities,
+          platformOps: data?.platformOps,
         };
       } catch (e) {
         return {

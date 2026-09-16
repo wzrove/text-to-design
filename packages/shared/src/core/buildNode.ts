@@ -1,4 +1,5 @@
 import type { ExecuteOp } from '../schemas';
+import { isGatedPropUnsupported } from './capabilities';
 import type { ContainerSkeleton, DesignHost, NodeSkeleton } from './host';
 import { MIXED } from './host';
 import {
@@ -32,10 +33,22 @@ function applySize(node: NodeSkeleton, spec: ExecuteOp): void {
   }
 }
 
+/** 创建路径上受平台能力门控的 spec 字段(与 dicts/capability.ts 的属性表对应) */
+const GATED_SPEC_KEYS = [
+  'fillStyleId',
+  'strokeStyleId',
+  'textStyleId',
+  'effectStyleId',
+  'textTruncation',
+  'maxLines',
+] as const satisfies readonly (keyof ExecuteOp)[];
+
 async function buildNode(
   host: DesignHost,
   spec: ExecuteOp,
   parent: ContainerSkeleton,
+  /** 收集「平台不具备、被静默跳过」的门控字段(由 executeOps 汇总进结果 warnings) */
+  skipped?: Set<string>,
 ): Promise<NodeSkeleton> {
   const type = spec.type;
   let node: NodeSkeleton;
@@ -296,7 +309,14 @@ async function buildNode(
     ensureLayoutMode(node, spec.layoutMode);
   }
 
-  // 平台特有超集字段(仅对应平台生效,'in' 守卫在无此字段的平台跳过)
+  // 平台能力门控字段:判定与修改路径同源(core/capabilities.ts),不具备时不再静默跳过 ——
+  // 记进 skipped 由 executeOps 汇总成 warnings 点名,否则调用方以为建的时候就带上截断/样式了
+  for (const key of GATED_SPEC_KEYS) {
+    if (spec[key] == null) continue;
+    if (!isGatedPropUnsupported(key, node)) continue;
+    skipped?.add(key);
+  }
+
   if (spec.fillStyleId != null && 'fillStyleId' in node)
     node.fillStyleId = spec.fillStyleId;
   if (spec.strokeStyleId != null && 'strokeStyleId' in node)

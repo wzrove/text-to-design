@@ -1,6 +1,6 @@
 import type { z } from 'zod';
 import type { findSchema } from './inputs';
-import type { nodeTypeSchema } from './node-type';
+import type { observedNodeTypeSchema } from './node-type';
 import type {
   findResultSchema,
   listFontsResultSchema,
@@ -23,7 +23,7 @@ import type {
 
 // ---- 由 schema 推导的领域类型(core 与 index.ts 复用,唯一真源) ----
 
-export type SerializedNodeType = z.infer<typeof nodeTypeSchema>;
+export type SerializedNodeType = z.infer<typeof observedNodeTypeSchema>;
 export type FindParams = z.infer<typeof findSchema>;
 export type FindResult = z.infer<typeof findResultSchema>;
 // 引擎赋值函数(applyProps)按字段逐个判空,入参需容纳全部 11 个方法的字段;

@@ -1,6 +1,7 @@
 import type {
   FindParams,
   FindResult,
+  ObservedNodeType,
   PageStructureResult,
   SerializedNode,
 } from '../schemas';
@@ -226,8 +227,10 @@ export function findNodes(host: DesignHost, params: FindParams): FindResult {
   if (params.ids != null && params.ids.length > 0) {
     nodes = findNode(host, params.ids);
   } else if (params.type != null) {
+    // 类型名由调用方给(读路径全表):本仓建模的 14 类 + Figma 独有只读类型都能筛,
+    // 未知类型名由引擎返回空集,不必在此拦
     nodes = page.findAllWithCriteria({
-      types: [params.type as NodeSkeleton['type']],
+      types: [params.type as ObservedNodeType],
     });
   } else {
     nodes = page.findAll();
@@ -338,6 +341,27 @@ export function cloneNodes(
   return { created: created.map((n) => serializeNode(n)) };
 }
 
+/**
+ * 真正执行一次解组,返回是否成功。
+ *
+ * ⚠ typings 缺口(详见 host.ts):Figma 官方入口是 `PluginAPI.ungroup(node)`,
+ * @figma/plugin-typings 的 GroupNode 只有 clone(),**没有**节点级 ungroup();
+ * jsDesign typings 两级都没有。故按「平台级 → 节点级」探测,都不可用返回 false
+ * 交上层报错 —— 绝不能静默当成功:此前写的是 `g.ungroup?.()`,在 Figma 上恒为
+ * no-op,结果却回显 `ungrouped: [id]`,与 P7「回显不等于生效」同一类坑。
+ */
+function ungroupNode(host: DesignHost, node: NodeSkeleton): boolean {
+  if (typeof host.ungroup === 'function') {
+    host.ungroup(node);
+    return true;
+  }
+  if (typeof node.ungroup === 'function') {
+    node.ungroup();
+    return true;
+  }
+  return false;
+}
+
 export function groupNodes(
   host: DesignHost,
   params: {
@@ -361,14 +385,29 @@ export function groupNodes(
     const grouped = nodes.filter(
       (n) => n.type === 'GROUP' || n.type === 'FRAME',
     );
+    const ungrouped: string[] = [];
+    const stuck: string[] = [];
     for (const g of grouped) {
+      // 自动布局容器:关掉布局即等于解散布局,不拆容器(保留原语义)
       if (g.type === 'FRAME' && 'layoutMode' in g && g.layoutMode !== 'NONE') {
         g.layoutMode = 'NONE';
-      } else {
-        g.ungroup?.();
+        ungrouped.push(g.id);
+        continue;
       }
+      if (ungroupNode(host, g)) ungrouped.push(g.id);
+      else stuck.push(`${g.name}(${g.id})`);
     }
-    return { ungrouped: grouped.map((n) => n.id) };
+    if (stuck.length > 0) {
+      throw new Error(
+        [
+          `解组失败:${stuck.join('、')} 仍是分组状态,子节点没有回到原父级。`,
+          '原因是当前平台运行时未提供解组 API(PluginAPI.ungroup 与节点级 ungroup 都不可用,见 host.ts 的 typings 缺口说明)。',
+          '可执行出口:①删掉分组容器,再用 jsd_reparent_nodes 把原来的子节点移出到目标父级(parentId 显式传,坐标不漂);',
+          '②或在设计工具里手工解组后继续。',
+        ].join(''),
+      );
+    }
+    return { ungrouped };
   }
   const nodes = findNode(host, params.ids);
   if (nodes.length < 2) {

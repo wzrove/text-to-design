@@ -201,7 +201,7 @@ function designStrategyRecipe(screen?: string): string {
 5) 间距与字号阶梯:主标题 > 正文标签 > 按钮文本 > 辅助说明;同级元素间距一致,用 itemSpacing 统一控制,不靠手调坐标凑。
 6) 视觉顺序:自上而下按阅读顺序排布,主操作按钮放在输入项之后,次要链接(忘记密码/注册)放最后。
 7) 层序与遮挡:序列化里每个节点都带 \`z\`(= 父级 children 下标 = 绘制顺序,0 = 最底层,越大越靠上),判断谁压谁直接读 z。要调层序用 jsd_reparent_nodes + index(= 目标 z);auto-layout 容器同样支持,若引擎没落位会明确报错,那就改 itemSpacing / 对齐。别靠「新建一个节点压上去」改遮挡。
-8) 样式落点:纯描边图形只传 strokes 就行(fills 会被自动置空,不会变灰块);批量刷色给 ids + recursive(recursive 只作用于后代,容器自己不会被套上方框,要给容器也上色才传 includeSelf=true);实例子节点(位于 INSTANCE 内)的样式覆盖不保证渲染生效 —— 命中时结果的 warnings 会直接给出主组件里对应子节点的 id,改主组件即所有实例继承,只要单实例不同就先 jsd_detach_instance。多状态组件只能用「多主件」实现:每个状态各做一个 COMPONENT 并按「族名 / 状态」命名(如 Nav / Inbox、Nav / Me),别指望变体集(jsd_combine_as_variants 在本引擎必然失败)或「一个主件 + 每屏改子节点颜色」(实例子节点样式 override 不生效)。
+8) 样式落点:纯描边图形只传 strokes 就行(fills 会被自动置空,不会变灰块);批量刷色给 ids + recursive(recursive 只作用于后代,容器自己不会被套上方框,要给容器也上色才传 includeSelf=true);实例子节点(位于 INSTANCE 内)的样式覆盖不保证渲染生效 —— 命中时结果的 warnings 会直接给出主组件里对应子节点的 id,改主组件即所有实例继承,只要单实例不同就先 jsd_detach_instance。多状态组件怎么做看平台能力位 \`inPlaceVariants\`:声明了它的平台(如 Figma,原生 combineAsVariants 即原位合并、已有实例链接不断、无冗余原件)直接用 jsd_combine_as_variants 做变体集;未声明的平台(jsDesign,该路径随 P24 必败)只能靠「多主件」—— 每个状态各做一个 COMPONENT 并按「族名 / 状态」命名(如 Nav / Inbox、Nav / Me)。注意 jsDesign 上若走克隆兜底成功,页面会同时留下原件与集合内克隆,需自行 swap 实例到克隆变体后再删原件。「一个主件 + 每屏改子节点颜色」这条捷径两平台都不通(实例子节点样式 override 不生效)。
 9) 批量回显都做了摘要裁剪(jsd_batch 的节点只留 id/name/type/x/y):含图标/矢量克隆的批次要另配一次 jsd_export 目视验收,别拿回显当验收证据。
 10) 出错回滚:ok=false 或「没找到 X 节点」→ jsd_find 复核 id 是否已失效(可能被连坐删除),必要时 jsd_repair_nodes 清理后重试。含删除/移父的批次务必读结果 warnings —— 引擎会把没碰到的兄弟节点静默挪走(同层几何漂移),照 warnings 给的原值回填,别把它当样式问题排查。
 11) 收敛复核:整批做完只做一次 jsd_get_selection(depth=1),或 jsd_export({ids:[要看的节点id], scale:0.5}) 导小图看效果(ids 为必填数组);**关键视觉改动靠导图目检,回显不等于生效**,不要每步都读一遍。

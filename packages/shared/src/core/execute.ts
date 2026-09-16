@@ -1,20 +1,12 @@
+import { CAPABILITY_OF_GATED_PROP } from '../dicts/capability';
+import {
+  CREATABLE_NODE_TYPES,
+  type CreatableNodeType,
+} from '../dicts/node-type';
 import type { ExecuteOp, SerializedNode } from '../schemas';
 import buildNode from './buildNode';
 import type { DesignHost, NodeSkeleton } from './host';
 import { serializeNode } from './serialize';
-
-const TYPES = [
-  'FRAME',
-  'RECTANGLE',
-  'ELLIPSE',
-  'LINE',
-  'POLYGON',
-  'STAR',
-  'VECTOR',
-  'BOOLEAN_OPERATION',
-  'TEXT',
-  'GROUP',
-] as const;
 
 function coerceSpec(raw: unknown): ExecuteOp {
   if (typeof raw !== 'object' || raw === null) {
@@ -23,8 +15,13 @@ function coerceSpec(raw: unknown): ExecuteOp {
     );
   }
   const type = (raw as { type?: string }).type;
-  if (type !== undefined && !TYPES.includes(type as (typeof TYPES)[number])) {
-    throw new Error(`无效的 type: "${type}"(支持 ${TYPES.join('|')})`);
+  if (
+    type !== undefined &&
+    !CREATABLE_NODE_TYPES.includes(type as CreatableNodeType)
+  ) {
+    throw new Error(
+      `无效的 type: "${type}"(支持 ${CREATABLE_NODE_TYPES.join('|')})`,
+    );
   }
   return raw as ExecuteOp;
 }
@@ -45,14 +42,16 @@ export async function executeOps(
     x?: number;
     y?: number;
   },
-): Promise<{ created: SerializedNode[] }> {
+): Promise<{ created: SerializedNode[]; warnings?: string[] }> {
   const specs = coerceSpecs(ops);
   const page = host.currentPage;
   const mode = placement?.mode ?? 'center';
   const created: NodeSkeleton[] = [];
+  // 能力门控字段被跳过时点名(创建路径此前完全静默:调用方以为带上了截断/样式 id)
+  const skipped = new Set<string>();
   try {
     for (const spec of specs) {
-      const node = await buildNode(host, spec, page);
+      const node = await buildNode(host, spec, page, skipped);
       if (mode === 'center') {
         const center = host.viewport.center;
         const dx = center.x - node.x - node.width / 2;
@@ -76,7 +75,25 @@ export async function executeOps(
     throw e;
   }
   host.viewport.scrollAndZoomIntoView(created);
-  return { created: created.map((n) => serializeNode(n)) };
+  const warnings =
+    skipped.size > 0
+      ? [
+          `以下字段由平台能力门控,当前平台运行时不具备,创建时已忽略:${[
+            ...skipped,
+          ]
+            .map((key) => {
+              const cap = CAPABILITY_OF_GATED_PROP[key];
+              return cap != null ? `${key}(需 ${cap} 能力)` : key;
+            })
+            .join(
+              '、',
+            )};当前平台的能力表见 jsd_ping 的 capabilities(core 判定与该表同源)`,
+        ]
+      : undefined;
+  return {
+    created: created.map((n) => serializeNode(n)),
+    ...(warnings != null ? { warnings } : {}),
+  };
 }
 
 export function createSvgNode(

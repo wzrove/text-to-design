@@ -4,7 +4,7 @@ import type { PluginPlatform } from 'text-to-design-shared';
 import { WS_PORT } from 'text-to-design-shared';
 import type { BridgeStatus } from './BridgeSocket';
 import { BridgeSocket } from './BridgeSocket';
-import type { LogLevel } from './types';
+import type { CapabilitySnapshot, LogLevel } from './types';
 
 export interface LogEntry {
   /** 日志级别(默认 info) */
@@ -21,10 +21,13 @@ export interface BridgeStore {
   log: Accessor<LogEntry[]>;
   selection: Accessor<unknown>;
   platform: Accessor<PluginPlatform | null>;
+  /** 插件能力表快照(核心/平台差异能力 + 特有 op 名单);未取到时为 null */
+  capability: Accessor<CapabilitySnapshot | null>;
   connect: () => void;
   disconnect: () => void;
   rescan: () => void;
   ping: () => void;
+  refreshCapabilities: () => void;
   clearLog: () => void;
 }
 
@@ -35,6 +38,9 @@ export function BridgeProvider(props: ParentProps) {
   const [log, setLog] = createSignal<LogEntry[]>([]);
   const [selection, setSelection] = createSignal<unknown>(null);
   const [platform, setPlatform] = createSignal<PluginPlatform | null>(null);
+  const [capability, setCapability] = createSignal<CapabilitySnapshot | null>(
+    null,
+  );
 
   let bridge: BridgeSocket | undefined;
   let subscribed = false;
@@ -58,16 +64,51 @@ export function BridgeProvider(props: ParentProps) {
     return bridge;
   };
 
+  /** 把插件 ping 回包收成能力快照;形状不符或缺 platform 时返回 null(面板显示空态) */
+  const toSnapshot = (raw: unknown): CapabilitySnapshot | null => {
+    const d = raw as Partial<CapabilitySnapshot> | null | undefined;
+    if (d == null || typeof d !== 'object' || d.platform == null) return null;
+    return {
+      platform: d.platform,
+      capabilities: d.capabilities ?? [],
+      coreCapabilities: d.coreCapabilities ?? [],
+      platformOps: d.platformOps ?? [],
+    };
+  };
+
+  /**
+   * 拉一次能力表:插件推送 platform 后自动触发(不必额外加推送帧),
+   * 失败只落 debug 日志 —— 面板显示空态即可,不打断别的功能。
+   */
+  const refreshCapabilities = async (): Promise<void> => {
+    getBridge().connect();
+    try {
+      const snap = toSnapshot(await getBridge().pingPlugin());
+      setCapability(() => snap);
+      if (snap == null) pushLog('能力表回包异常(缺 platform)', 'debug');
+    } catch (e) {
+      pushLog(
+        `能力表获取失败: ${e instanceof Error ? e.message : String(e)}`,
+        'debug',
+      );
+    }
+  };
+
   onMount(() => {
     if (subscribed) return;
     subscribed = true;
     const b = getBridge();
     b.connect();
     b.subscribe((e) => {
-      if (e.type === 'status') setStatus(() => e.status);
-      else if (e.type === 'selection') setSelection(() => e.data);
-      else if (e.type === 'platform') setPlatform(() => e.platform);
-      else if (e.type === 'log') pushLog(e.line, e.level);
+      if (e.type === 'status') {
+        setStatus(() => e.status);
+        // 掉线即清空能力快照:留着旧平台的能力表会与当前连接不符
+        if (e.status === 'disconnected') setCapability(() => null);
+      } else if (e.type === 'selection') setSelection(() => e.data);
+      else if (e.type === 'platform') {
+        setPlatform(() => e.platform);
+        void refreshCapabilities();
+      } else if (e.type === 'log') pushLog(e.line, e.level);
     });
   });
 
@@ -77,14 +118,17 @@ export function BridgeProvider(props: ParentProps) {
     log,
     selection,
     platform,
+    capability,
     connect: () => getBridge().connect(),
     disconnect: () => getBridge().disconnect(),
     rescan: () => getBridge().rescan(),
+    refreshCapabilities: () => void refreshCapabilities(),
     clearLog: () => setLog([]),
     ping: async () => {
       getBridge().connect();
       try {
         const data = await getBridge().pingPlugin();
+        setCapability(() => toSnapshot(data));
         pushLog(`ping 插件成功: ${JSON.stringify(data)}`, 'debug');
       } catch (e) {
         pushLog(

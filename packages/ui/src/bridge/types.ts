@@ -1,11 +1,25 @@
 // 日志级别唯一真源在 shared,这里再导出维持既有导入路径
 import type {
+  CoreCapability,
+  HostCapability,
   LogLevel,
+  PlatformOpInfo,
   PluginPlatform,
   PluginRequest,
 } from 'text-to-design-shared';
 
 export type { LogLevel };
+
+/**
+ * 面板显示用的能力快照:UI 主动向插件 code 侧 ping 拿到的回包
+ * (与 daemon 侧 platform-state 同源同形状,但 UI 只读展示、不做可用性判定)。
+ */
+export type CapabilitySnapshot = {
+  platform: PluginPlatform;
+  capabilities: readonly HostCapability[];
+  coreCapabilities: readonly CoreCapability[];
+  platformOps: readonly PlatformOpInfo[];
+};
 
 export type BridgeStatus =
   | 'disconnected'

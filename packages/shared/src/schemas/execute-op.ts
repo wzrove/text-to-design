@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import type { BooleanOperation } from '../dicts/boolean-operation';
 import type {
   BlendMode,
   ConstraintType,
@@ -33,7 +34,7 @@ export interface ExecuteOp {
   innerRadius?: number;
   children?: ExecuteOp[];
   vectorPaths?: VectorPath[];
-  booleanOperation?: 'UNION' | 'SUBTRACT' | 'INTERSECT' | 'EXCLUDE';
+  booleanOperation?: BooleanOperation;
   isMask?: boolean;
   x?: number;
   y?: number;

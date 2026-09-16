@@ -6,10 +6,9 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { resolve } from 'node:path';
+import type { PluginPlatform } from 'text-to-design-shared';
 
-type Platform = 'jsdesign' | 'figma';
-
-export default function manifestPlugin(platform: Platform) {
+export default function manifestPlugin(platform: PluginPlatform) {
   const root = resolve(process.cwd(), '../..');
   const outDir = resolve(process.cwd(), 'dist', platform);
   return {
@@ -22,6 +21,7 @@ export default function manifestPlugin(platform: Platform) {
               api: '1.0.0',
               editorType: ['figma'],
               permissions: ['activeusers'],
+              id: '1681227053598939040',
               // 不设 documentAccess: 保持 legacy 访问模式。core 引擎与 adapter
               // 大量使用同步 API(getNodeById/getLocal*Styles),Figma 在
               // 'dynamic-page' 模式下会让这些同步 API 直接抛异常。
@@ -43,6 +43,10 @@ export default function manifestPlugin(platform: Platform) {
                 reasoning:
                   '该插件需要连接本地API服务以同步处理数据，若不开放localhost访问则核心功能将无法运行。',
               },
+              // 不写 documentAccess(=legacy 模式)。写了 'dynamic-page' 后,core 里
+              // 同步读取 node.mainComponent 的路径(INSTANCE 序列化、create_instance
+              // 回包)会直接抛 "Cannot call with documentAccess: dynamic-page",
+              // 组件实例化整条链路失效。
             }
           : JSON.parse(readFileSync(resolve(root, 'manifest.json'), 'utf8'));
       const manifest = { ...base, main: 'code.js', ui: 'ui.html' };

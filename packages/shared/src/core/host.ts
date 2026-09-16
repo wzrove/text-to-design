@@ -1,4 +1,5 @@
 import type { z } from 'zod';
+import type { BooleanOperation } from '../dicts/boolean-operation';
 import type * as shared from '../schemas';
 
 /**
@@ -70,7 +71,7 @@ export interface NodeSkeleton extends ContainerSkeleton {
   pointCount?: number;
   innerRadius?: number;
   vectorPaths?: shared.VectorPath[];
-  booleanOperation?: 'UNION' | 'SUBTRACT' | 'INTERSECT' | 'EXCLUDE';
+  booleanOperation?: BooleanOperation;
   isMask?: boolean;
   arcData?: { startingAngle: number; endingAngle: number; innerRadius: number };
 
@@ -112,7 +113,12 @@ export interface NodeSkeleton extends ContainerSkeleton {
     properties: Record<string, string | shared.ComponentPropertyValue>,
   ): void;
   outlineStroke(): NodeSkeleton | null;
-  ungroup(): void;
+  /**
+   * 节点级解组。⚠ typings 缺口:@figma/plugin-typings 的 GroupNode 只有 clone(),
+   * 官方入口是 PluginAPI.ungroup(node);jsDesign typings 两者都没有。故此处为可选,
+   * core 解组优先走 DesignHost.ungroup,再回退本方法,都无则报错(不静默 no-op)。
+   */
+  ungroup?(): void;
 
   /** ---- 平台特有超集(仅对应平台运行时存在,如 Figma;其他平台恒 undefined) ---- */
   textTruncation?: 'DISABLED' | 'ENDING';
@@ -122,7 +128,6 @@ export interface NodeSkeleton extends ContainerSkeleton {
   textStyleId?: string;
   effectStyleId?: string;
   componentProperties?: Record<string, shared.ComponentPropertyValue>;
-  getMainComponentAsync?(): Promise<NodeSkeleton>;
   resetOverrides?(): void;
   removeOverrides?(): void;
 }
@@ -140,8 +145,12 @@ export interface PageSkeleton extends ContainerSkeleton {
   children: readonly NodeSkeleton[];
   findOne(fn: (node: NodeSkeleton) => boolean): NodeSkeleton | null;
   findAll(): NodeSkeleton[];
+  /**
+   * 按类型查节点(引擎原生过滤)。类型名取读路径全表:除本仓建模的 14 类外,
+   * Figma 独有只读类型(SECTION/STICKY…)也能筛 —— 能查到不等于能建/能改。
+   */
   findAllWithCriteria(options: {
-    types: readonly shared.NodeType[];
+    types: readonly shared.ObservedNodeType[];
   }): NodeSkeleton[];
 }
 
@@ -191,6 +200,13 @@ export interface DesignHost {
     parent: ContainerSkeleton,
   ): NodeSkeleton;
   importComponentByKeyAsync(key: string): Promise<NodeSkeleton>;
+
+  /**
+   * 解组:把 GROUP/FRAME 拆掉、子节点回到原父级(对应 Figma 的
+   * `figma.ungroup(node)`;jsDesign typings 未声明,运行时缺失时由 core 报错)。
+   * 返回解组后回到原父级的子节点,供 core 统计。
+   */
+  ungroup?(node: NodeSkeleton): readonly NodeSkeleton[];
 
   getNodeById(id: string): NodeSkeleton | null;
   loadFontAsync(font: shared.FontName): Promise<void>;
