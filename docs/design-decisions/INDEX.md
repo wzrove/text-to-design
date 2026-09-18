@@ -9,6 +9,7 @@
 | [0003](0003-工具级-after-钩子加-tags-取代-batch-内嵌-DriftWatch.md) | 工具级 after 钩子加 tags 取代 batch 内嵌 DriftWatch | 已采纳 | `tools/drift-watch.ts`、`tools/batch.ts`、`tools/nodes.ts` | 2026-09-18 |
 | [0004](0004-写后校验用固定顺序-Pipeline-而非责任链.md) | 写后校验用固定顺序 Pipeline 而非责任链 | 已采纳 | `shared/core/update.ts`、`tools/props.ts`、`dicts/capability.ts` | 2026-09-18 |
 | [0005](0005-事实一致性用-Vitest-不变式测试加-CI-门禁，不引入事件类架构.md) | 事实一致性用 Vitest 不变式测试加 CI 门禁，不引入事件类架构 | 已采纳 | 根 `package.json`、`.github/workflows/`、全仓 | 2026-09-18 |
+| [0006](0006-工具目录体积用单点投影收敛，不引入模式.md) | 工具目录体积用单点投影收敛，不引入模式 | 已采纳 | `daemon/proxy.ts`、`daemon/compact-schema.ts`、`server.ts`、`__tests__/catalog-budget.test.ts` | 2026-09-18 |
 
 ## 依赖关系
 
@@ -16,6 +17,7 @@
 0005 (Vitest + CI)  ── 全部前置：没有它，其余结论无法验收
 0002 (RuntimeContext) ── 0001 的可测性地基
 0003 (tags + after)  ── 独立，可与任意批次并行
+0006 (目录投影)      ── 独立；原则取自 0003（不手抄清单）
 0001 (PropWriter)    ── 依赖 0002
 0004 (Pipeline)      ── 与 0001 同批；纠正早前评审的「责任链」说法
 ```

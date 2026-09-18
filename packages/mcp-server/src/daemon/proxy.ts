@@ -9,6 +9,7 @@ import { serveStdio } from '@modelcontextprotocol/server/stdio';
 import { z } from 'zod';
 import { SERVER_NAME, SERVER_VERSION } from '../config';
 import { log, warn } from '../logger';
+import { compactOutputSchema } from './compact-schema';
 import { friendlyInputSchema } from './friendly-schema';
 import { delay, fetchDaemonHealth, probeUpstream } from './probe';
 import { spawnDaemon } from './spawn';
@@ -38,6 +39,57 @@ const RECONNECT_BUDGET_MS = 20000;
  */
 const HEALTH_POLL_MS = 60_000;
 const FULL_RESYNC_MS = 600_000;
+
+/**
+ * 下游目录体积护栏。
+ *
+ * 为什么需要:目录体积不是"省点带宽"的美化项 —— 下游(宿主)拿它当工具索引的
+ * 输入,超预算的直接后果是**工具查不到、调不通**。2026-09-18 实测:1.64 MB 的
+ * 目录让 53 个工具里只有 4 个可被检索。投影(./compact-schema.ts)把出参声明从
+ * 892 KB 压到 96 KB、下游目录落到约 0.46 MB,这几个数值是回归护栏:越过就打
+ * WARN,不阻断(目录仍可用,只是下游可能开始丢工具,得让人在日志里看见)。
+ *
+ * 整体上限取 500 KB 而不是更紧:剩下的大头是**入参** schema(约 300 KB,尚未
+ * 收敛,是这块的地板,见 docs/design-decisions/0006 的第三阶段)。出参与整体
+ * 分开设限,是为了看清涨的是谁 —— 出参才是投影自己拥有的那部分。
+ */
+const CATALOG_WARN_BYTES = 500_000;
+const OUTPUT_SCHEMA_WARN_BYTES = 5_000;
+
+interface CatalogSize {
+  name: string;
+  /** 单个工具下发形态的总字节(含入参 schema) */
+  bytes: number;
+  /** 其中出参声明的字节(投影负责的部分) */
+  outputBytes: number;
+}
+
+/** 目录体积读数:一次全量 sync 打一行,越预算额外 WARN */
+function reportCatalogSize(sizes: CatalogSize[]): void {
+  if (sizes.length === 0) return;
+  const total = sizes.reduce((sum, s) => sum + s.bytes, 0);
+  const heaviestOutput = sizes.reduce((a, b) =>
+    b.outputBytes > a.outputBytes ? b : a,
+  );
+  log(
+    `目录体积: ${sizes.length} 个工具 / ${(total / 1024).toFixed(0)} KB(出参最大 ${heaviestOutput.name} ${(heaviestOutput.outputBytes / 1024).toFixed(1)} KB)`,
+  );
+  const overBudget = [
+    ...(total > CATALOG_WARN_BYTES
+      ? [
+          `合计 ${(total / 1024).toFixed(0)} KB > ${CATALOG_WARN_BYTES / 1024} KB`,
+        ]
+      : []),
+    ...sizes
+      .filter((s) => s.outputBytes > OUTPUT_SCHEMA_WARN_BYTES)
+      .map((s) => `出参 ${s.name} ${(s.outputBytes / 1024).toFixed(1)} KB`),
+  ];
+  if (overBudget.length > 0) {
+    warn(
+      `目录体积超预算(${overBudget.join(' / ')}):下游可能丢工具,检查 compact-schema 的投影深度与工具定义`,
+    );
+  }
+}
 
 /** 可移除的注册句柄(兼容 RegisteredTool/Prompt/Resource 的最小面) */
 interface RemovableHandle {
@@ -113,9 +165,46 @@ export async function serveProxy(initialClient: Client): Promise<void> {
   async function syncTools(): Promise<void> {
     const { tools } = await withUpstream((c) => c.listTools());
     const seen = new Set<string>();
+    const sizes: CatalogSize[] = [];
     for (const t of tools) {
       seen.add(t.name);
-      const raw = JSON.stringify(t);
+      // 指纹与体积都从 **JSON Schema 本体** 算,不从转换后的注册对象算:
+      // fromJsonSchema 返回的东西带函数,JSON.stringify 量不出真实体积
+      // (实测会少读一个数量级),也感知不到投影规则的变化。投影规则一改,
+      // raw 就变 → 已连接的会话下一轮 sync 自动重注册,不必等 shim 重启。
+      const projectedOutput = t.outputSchema
+        ? compactOutputSchema(t.outputSchema)
+        : undefined;
+      const wire: Record<string, unknown> = {
+        title: t.title,
+        description: t.description,
+        annotations: t.annotations,
+        ...(t.inputSchema
+          ? // 入参失败信息走友好化改写(回显入参+联合分支清单),
+            // 避免 ajv 对 oneOf 平铺出的超长报错误导调用方
+            { inputSchema: friendlyInputSchema(t.inputSchema as never) }
+          : {}),
+        ...(projectedOutput === undefined
+          ? {}
+          : // 出参只投影到「键名 + 类型」级:声明比事实大 25 倍的原样目录会把
+            // 下游工具索引撑爆,详见 ./compact-schema.ts
+            { outputSchema: fromJsonSchema(projectedOutput as never) }),
+      };
+      const raw = JSON.stringify({
+        title: t.title,
+        description: t.description,
+        annotations: t.annotations,
+        inputSchema: t.inputSchema,
+        outputSchema: projectedOutput,
+      });
+      sizes.push({
+        name: t.name,
+        bytes: raw.length,
+        outputBytes:
+          projectedOutput === undefined
+            ? 0
+            : JSON.stringify(projectedOutput).length,
+      });
       const known = toolHandles.get(t.name);
       if (known && known.raw === raw) continue;
       known?.handle.remove();
@@ -126,28 +215,13 @@ export async function serveProxy(initialClient: Client): Promise<void> {
         cb: (args: Record<string, unknown>) => Promise<unknown>,
       ) => RemovableHandle;
       try {
-        const handle = register(
-          t.name,
-          {
-            title: t.title,
-            description: t.description,
-            annotations: t.annotations,
-            ...(t.inputSchema
-              ? // 入参失败信息走友好化改写(回显入参+联合分支清单),
-                // 避免 ajv 对 oneOf 平铺出的超长报错误导调用方
-                { inputSchema: friendlyInputSchema(t.inputSchema as never) }
-              : {}),
-            ...(t.outputSchema
-              ? { outputSchema: fromJsonSchema(t.outputSchema as never) }
-              : {}),
-          },
-          async (args) =>
-            withUpstream((c) =>
-              c.callTool({
-                name: t.name,
-                arguments: (args ?? {}) as Record<string, unknown>,
-              }),
-            ),
+        const handle = register(t.name, wire, async (args) =>
+          withUpstream((c) =>
+            c.callTool({
+              name: t.name,
+              arguments: (args ?? {}) as Record<string, unknown>,
+            }),
+          ),
         );
         toolHandles.set(t.name, { handle, raw });
       } catch (e) {
@@ -157,6 +231,7 @@ export async function serveProxy(initialClient: Client): Promise<void> {
         );
       }
     }
+    reportCatalogSize(sizes);
     for (const [name, entry] of [...toolHandles]) {
       if (!seen.has(name)) {
         entry.handle.remove();

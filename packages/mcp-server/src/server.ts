@@ -14,6 +14,7 @@ const INSTRUCTIONS = `操作设计画布的工具集。一个操作对应一个 
 - 跨工具多步流程用 jsd_batch 编排:双花括号占位符(步骤id.字段路径)引用上步结果,中间 id 不回传模型;步骤回显已做摘要裁剪(节点只留 id/name/type/x/y),含图标/矢量的批次(jsd_create_icon / jsd_clone_node)另配一次 jsd_export 目视验收 —— 回显不等于生效。
 - 批量刷样式用 ids 一次下发:recursive=true 只作用于**后代**,不含目标节点自身(给一组图标容器刷描边,容器自己不会被套上方框);要连容器自身一起改才传 includeSelf=true。
 - 实例子节点(位于 INSTANCE 内)的样式覆盖平台不保证渲染生效,命中时结果 warnings 直接给出主组件里对应子节点的 id —— 改主组件即所有实例继承。
+- 结果键约定(写 jsd_batch 占位符靠这份,不靠 outputSchema —— 出参 schema 只投影到「键名+类型」级,见 daemon/compact-schema.ts):节点类结果 created 是单对象或数组,updated / moved / swapped 是对象数组(键:id/name/type/x/y/width/height/z/parentId);id 清单类 selected / removed / ungrouped / cleaned 是字符串数组;jsd_find 回 nodes + total,jsd_get_selection 回 selection + pageName,jsd_export 回 exports(含 path / dataUrl)。占位符形如 {{上一步id.updated[0].id}}。
 - ok=false 或「没找到 X 节点」:先 jsd_find 复核 id 是否已失效(可能被连坐删除),必要时 jsd_repair_nodes 清理后重试。`;
 
 /** 存活中的 MCP 会话(daemon 常驻,多个 AI 会话共享同一 Bridge) */
