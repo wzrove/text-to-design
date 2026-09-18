@@ -142,7 +142,7 @@ pkill -f text-to-design-mcp
 | `jsd_apply_overrides` | 按 snapshotId 批量套用,可 swapToSource |
 | `jsd_sync_overrides` | 无状态一次性「复制+套用」,适合 jsd_batch |
 | `jsd_manage_components` | 聚合入口,op 含 create_component/create_instance/detach_instance/import_component/swap_component/set_instance_properties/combine_as_variants/copy_overrides/apply_overrides/sync_overrides |
-| `jsd_batch` | 批量编排器:一次请求顺序执行多个 jsd_* 步骤,双花括号占位符串起中间值;步骤回显做摘要裁剪(节点只留 id/name/type/x/y,丢 vectorPaths 等大字段,超预算降级为 id 清单),占位符解析用完整数据;含图标的批次另配一次 `jsd_export` 目视验收;含删除/移父的批次自动复核同层几何漂移(结果 `warnings`,`checkDrift:false` 可关) |
+| `jsd_batch` | 批量编排器:一次请求顺序执行多个 jsd_* 步骤,双花括号占位符串起中间值;步骤回显做摘要裁剪(节点只留 id/name/type/x/y,丢 vectorPaths 等大字段,超预算降级为 id 清单),占位符解析用完整数据;含图标的批次另配一次 `jsd_export` 目视验收;含删除/移父的步骤自动复核同层几何漂移(结果 `warnings`,`checkDrift:false` 可关;单工具调用同样会复核) |
 | `jsd_export` | 导出节点为 PNG/JPG/SVG/PDF(导出失败的 id 在文本里点名) |
 | `jsd_list_fonts` | 列出可用字体 |
 | `jsd_list_styles` | 列出本地样式(PAINT/TEXT/EFFECT/GRID) |

@@ -348,8 +348,10 @@ export const PROP_METHOD_FIELDS: Record<PropMethod, readonly string[]> = {
 };
 
 // ---- 引擎侧线格式:每个方法一份 schema/类型,不再共用一张 50 键大表 ----
-// params.props 只含本方法白名单内的字段;11 组字段零重叠(见 smoke-split 断言),
-// 因此引擎内部的 UpdateNodeProps 由 11 份 Partial 交集导出,仍是同一来源、不手工维护。
+// ⚠ 这句早期注释是错的:x/y 由 move 与 resize 两个方法共有(见下方 resizeNodeProps
+// 注释)。互斥性由 packages/shared/src/__tests__/prop-method-parity.test.ts 用
+// 「显式共享登记表」守卫 —— 加共享字段必须显式登记,不许悄悄破坏分组前提。
+// UpdateNodeProps 由下面各方法的 props 派生,仍是同一来源、不手工维护。
 function propParamsSchema<T extends Record<string, z.ZodType>>(fields: T) {
   return z
     .object({

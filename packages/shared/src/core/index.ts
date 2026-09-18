@@ -1,5 +1,5 @@
 export { default as buildNode } from './buildNode';
-export { hostCapabilityState, setHostCapabilities } from './capabilities';
+export { hostCapabilityState } from './capabilities';
 export {
   applyCachedOverrides,
   combineAsVariantsNodes,
@@ -34,6 +34,25 @@ export {
   normalizePaints,
   normalizeVectorPaths,
 } from './normalize';
+export {
+  CONTAINER_SELF_VISIBLE_PROPS,
+  INSTANCE_STYLE_RISK_PROPS,
+  instanceStyleFixHint,
+  instanceStyleRiskNotice,
+  SHARED_STYLE_PROPS,
+  WARN_SAMPLE,
+} from './props/risk';
+export {
+  emptyOutcome,
+  type PropWriter,
+  type WriteCtx,
+  type WriteOutcome,
+} from './props/types';
+export {
+  NO_CAPABILITIES,
+  type RuntimeContext,
+  runtimeContext,
+} from './runtime';
 export { MAX_SERIALIZE_DEPTH, serializeNode, trySerialize } from './serialize';
 export { updateSelection } from './update';
 export {

@@ -6,6 +6,7 @@ import {
 import type { ExecuteOp, SerializedNode } from '../schemas';
 import buildNode from './buildNode';
 import type { DesignHost, NodeSkeleton } from './host';
+import type { RuntimeContext } from './runtime';
 import { serializeNode } from './serialize';
 
 function coerceSpec(raw: unknown): ExecuteOp {
@@ -36,6 +37,7 @@ function coerceSpecs(ops: unknown): ExecuteOp[] {
 
 export async function executeOps(
   host: DesignHost,
+  ctx: RuntimeContext,
   ops: unknown,
   placement?: {
     mode?: 'center' | 'manual' | 'absolute';
@@ -51,7 +53,7 @@ export async function executeOps(
   const skipped = new Set<string>();
   try {
     for (const spec of specs) {
-      const node = await buildNode(host, spec, page, skipped);
+      const node = await buildNode(host, ctx, spec, page, skipped);
       if (mode === 'center') {
         const center = host.viewport.center;
         const dx = center.x - node.x - node.width / 2;

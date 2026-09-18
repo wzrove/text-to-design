@@ -1,0 +1,28 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# 此前 CI 只有 release.yml:类型检查只跑在 lefthook pre-commit 里,而 CI 自己设了
+# LEFTHOOK=0 —— 等于合并进主干的代码从来没有被强制校验过。
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    env:
+      LEFTHOOK: "0"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: 类型检查
+        run: pnpm typecheck
+      - name: 不变式测试
+        run: pnpm test
+      - name: 格式与 lint
+        run: pnpm lint

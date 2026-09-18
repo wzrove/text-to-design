@@ -1,3 +1,4 @@
+import type { ToolHook, ToolHookFactory } from '../core/registry';
 import { lookupExecutor } from '../core/registry';
 
 /** 当前页顶层 children 在图里的伪层键 */
@@ -17,40 +18,32 @@ interface Geo {
   y: number;
 }
 
-/** 结构变更类步骤:批量删除/移父之后引擎可能重算同层约束,把没碰到的兄弟挪走 */
-export function isDriftRisky(
-  tool: string,
-  args: Record<string, unknown>,
-): boolean {
-  switch (tool) {
-    case 'jsd_delete_node':
-    case 'jsd_reparent_nodes':
-    case 'jsd_group_nodes':
-    case 'jsd_ungroup_nodes':
-    case 'jsd_flatten_nodes':
-    case 'jsd_repair_nodes':
-      return true;
-    case 'jsd_manage_nodes': {
-      const op = args.op;
-      return (
-        op === 'remove' ||
-        op === 'reparent' ||
-        op === 'group' ||
-        op === 'ungroup' ||
-        op === 'flatten' ||
-        op === 'repair'
-      );
-    }
-    default:
-      return false;
-  }
+/**
+ * 结构变更类 node_op:删除/移父之后引擎可能重算同层约束,把没碰到的兄弟挪走。
+ *
+ * 这份名单是**唯一真源**:tools/nodes.ts 的 opTool 用它给工具打 `structural` tag
+ * 并挂上漂移复核钩子,聚合入口 jsd_manage_nodes 也用它按 op 判断。此前
+ * `isDriftRisky` 手抄 6 个工具名 + 6 个 op 名,与 opTool 的清单是两份事实 ——
+ * 加一个结构类工具忘了改那边,就静默失去复核。
+ */
+export const STRUCTURAL_NODE_OPS = new Set([
+  'remove',
+  'reparent',
+  'group',
+  'ungroup',
+  'flatten',
+  'repair',
+]);
+
+/** 该次调用的 op 是否属于结构变更(聚合入口按入参判断) */
+function isStructuralArgs(args: Record<string, unknown>): boolean {
+  const op = args.op;
+  return typeof op === 'string' && STRUCTURAL_NODE_OPS.has(op);
 }
 
-function isReparent(tool: string, args: Record<string, unknown>): boolean {
-  return (
-    tool === 'jsd_reparent_nodes' ||
-    (tool === 'jsd_manage_nodes' && args.op === 'reparent')
-  );
+/** reparent 需要额外盯住目标父级(它多了个孩子,原有兄弟同样可能被重算) */
+function isReparentArgs(args: Record<string, unknown>): boolean {
+  return args.op === 'reparent';
 }
 
 /** 从步骤入参里捡出会被结构变更影响的节点 id */
@@ -151,12 +144,18 @@ async function readLayer(layer: string): Promise<Map<string, Geo> | null> {
  * 树,当前协议没有这种读法 —— 漂移发生在别的层时查不到,这一点在批次描述里写明。
  * 任何一步读失败只意味着「这次不查」,绝不影响批次成败。
  */
-export class DriftWatch {
-  private readonly before = new Map<string, Map<string, Geo>>();
+export class DriftWatch implements ToolHook {
+  private readonly snapshots = new Map<string, Map<string, Geo>>();
   private readonly dead = new Set<string>();
+  /** 本次调用是否真的做了快照;非结构变更的调用不该产生任何复核动作 */
+  private engaged = false;
 
-  /** 结构变更步骤执行前调用:确定受影响父层并记下它们的几何 */
-  async observe(tool: string, args: Record<string, unknown>): Promise<void> {
+  /** ToolHook.before:执行前确定受影响父层并记下它们的几何 */
+  async before(args: Record<string, unknown>): Promise<void> {
+    // 固定 op 的工具在注册时已按 tag 挂上钩子,这里只过滤聚合入口的 op
+    const op = args.op;
+    if (op !== undefined && !isStructuralArgs(args)) return;
+    this.engaged = true;
     try {
       const ids = new Set<string>();
       collectArgIds(args, ids);
@@ -173,13 +172,13 @@ export class DriftWatch {
         else layers.add(pid);
       }
       // reparent 的目标父级也要看:它多了个孩子,原有兄弟同样可能被重算
-      if (isReparent(tool, args) && typeof args.parentId === 'string') {
+      if (isReparentArgs(args) && typeof args.parentId === 'string') {
         layers.add(args.parentId);
       }
       if (pageLevel) layers.add(PAGE_KEY);
       for (const layer of layers) {
-        if (this.before.has(layer) || this.dead.has(layer)) continue;
-        if (this.before.size >= MAX_LAYERS) {
+        if (this.snapshots.has(layer) || this.dead.has(layer)) continue;
+        if (this.snapshots.size >= MAX_LAYERS) {
           this.dead.add(layer);
           continue;
         }
@@ -188,22 +187,23 @@ export class DriftWatch {
           this.dead.add(layer);
           continue;
         }
-        this.before.set(layer, snap);
+        this.snapshots.set(layer, snap);
       }
     } catch {
       // 复核能力是尽力而为,不能因为读不到画布就把批次搞挂
     }
   }
 
-  /** 批次收尾调用:返回漂移告警(空数组 = 没查或没漂移) */
-  async verify(): Promise<string[]> {
+  /** ToolHook.after:返回漂移告警(空数组 = 没查或没漂移) */
+  async after(): Promise<string[]> {
+    if (!this.engaged) return [];
     const warnings: string[] = [];
-    for (const [layer, before] of this.before) {
+    for (const [layer, snapshot] of this.snapshots) {
       try {
         const after = await readLayer(layer);
         if (after == null) continue;
         const drifted: { from: Geo; to: Geo }[] = [];
-        for (const [id, b] of before) {
+        for (const [id, b] of snapshot) {
           const a = after.get(id);
           if (a == null) continue;
           if (a.x !== b.x || a.y !== b.y) drifted.push({ from: b, to: a });
@@ -227,9 +227,18 @@ export class DriftWatch {
           ].join(''),
         );
       } catch {
-        // 同 observe:复核失败静默跳过
+        // 同 before:复核失败静默跳过
       }
     }
     return warnings;
   }
 }
+
+/**
+ * 漂移复核钩子。
+ *
+ * 挂在工具定义上而不是写在 `jsd_batch` 里:同一个平台缺陷,走 batch 的步骤有复核、
+ * 直接调 `jsd_delete_node` 却没有 —— 那是覆盖面漏洞,不是编排细节。
+ * 现在任何调用路径(单工具 / 编排)都会经过 `bridgeTool` 的钩子槽。
+ */
+export const driftWatch: ToolHookFactory = () => new DriftWatch();

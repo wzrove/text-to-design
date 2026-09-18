@@ -5,6 +5,7 @@ import type {
 } from '../schemas';
 import { hostCapabilityState } from './capabilities';
 import { type DesignHost, MIXED, type NodeSkeleton } from './host';
+import type { RuntimeContext } from './runtime';
 import { serializeNode } from './serialize';
 import { updateSelection } from './update';
 import { findNode } from './utils';
@@ -121,6 +122,7 @@ export async function importComponentNodes(
 
 export function combineAsVariantsNodes(
   host: DesignHost,
+  ctx: RuntimeContext,
   params: { ids: string[]; name?: string },
 ): { created: SerializedNode } {
   const components = findNode(host, params.ids).filter(
@@ -191,7 +193,7 @@ export function combineAsVariantsNodes(
     run: combineClones(false),
   };
   // 能力表未注入(null)时不猜平台语义,保持历史顺序(行为与绑定前一致)
-  const supportsInPlace = hostCapabilityState('inPlaceVariants') === true;
+  const supportsInPlace = hostCapabilityState(ctx, 'inPlaceVariants') === true;
   const attempts = supportsInPlace
     ? [inPlaceAttempt, cloneToPageAttempt, cloneThenCombineAttempt]
     : [cloneToPageAttempt, cloneThenCombineAttempt, inPlaceAttempt];
@@ -466,6 +468,7 @@ function captureOverrideSnapshot(
 /** 把快照套用到目标实例:可选 swap → 变体/组件属性 → 可见属性。逐条 try/catch */
 async function applyOverrideSnapshot(
   host: DesignHost,
+  ctx: RuntimeContext,
   snapshot: OverrideSnapshot,
   ids: string[],
   swapToSource: boolean,
@@ -524,7 +527,7 @@ async function applyOverrideSnapshot(
       }
       if (snapshot.props != null && Object.keys(snapshot.props).length > 0) {
         // 复用 updateSelection:含 TEXT 的 loadFont 等边界处理
-        await updateSelection(host, {
+        await updateSelection(host, ctx, {
           ids: [targetId],
           props: snapshot.props,
         });
@@ -557,6 +560,7 @@ async function applyOverrideSnapshot(
 /** 无状态一次性「复制+套用」:不写缓存,适合 jsd_batch 流水 */
 export async function syncInstanceOverrides(
   host: DesignHost,
+  ctx: RuntimeContext,
   params: {
     sourceId: string;
     ids: string[];
@@ -575,6 +579,7 @@ export async function syncInstanceOverrides(
   );
   return applyOverrideSnapshot(
     host,
+    ctx,
     snapshot,
     params.ids,
     params.swapToSource ?? false,
@@ -606,6 +611,7 @@ export function copyInstanceOverrides(
 /** 两段式第二段:按 sourceId 从缓存取快照套用到目标实例;miss 报错提示先 copy */
 export async function applyCachedOverrides(
   host: DesignHost,
+  ctx: RuntimeContext,
   params: { sourceId: string; ids: string[]; swapToSource?: boolean },
 ): Promise<{
   applied: AppliedOverride[];
@@ -620,6 +626,7 @@ export async function applyCachedOverrides(
   }
   return applyOverrideSnapshot(
     host,
+    ctx,
     snapshot,
     params.ids,
     params.swapToSource ?? false,

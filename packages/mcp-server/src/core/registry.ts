@@ -2,7 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/server';
 import type { PluginMethod, PluginPlatform } from 'text-to-design-shared';
 import type { z } from 'zod';
 import type { Bridge } from '../bridge';
-import { error } from '../logger';
+import { error, warn } from '../logger';
 import type { RequestOptions } from '../pending';
 import { describePlatformGate } from '../platform-state';
 import { err, structured } from './response';
@@ -14,6 +14,32 @@ export interface ToolHandle {
   /** 语义标记:该工具在插件离线时也应可用(如 jsd_ping);目录已不随连接门控 */
   alwaysEnabled?: boolean;
 }
+
+/**
+ * 工具语义标记。横切逻辑(如结构变更后的漂移复核)按 tag 决定是否生效,
+ * 不再各处手抄工具名清单 —— 那份清单与 tools/nodes.ts 的 opTool 是两份事实。
+ */
+export type ToolTag = 'structural' | 'destructive';
+
+/**
+ * 工具级横切钩子:**每次调用新建一份**,因此钩子内部可以持有本次调用的状态
+ * (典型如「变更前的快照」)。不是单例 —— 单例会把上一次调用的状态带给下一次。
+ *
+ * 钩子抛错只能降级为一行 warning,绝不能让工具本身失败:它是尽力而为的复核,
+ * 不是业务步骤。
+ */
+export interface ToolHook {
+  /** 派发到插件之前 */
+  before?(args: Record<string, unknown>): Promise<void> | void;
+  /** 派发成功之后;返回追加到结果里的文本块 */
+  after?(
+    args: Record<string, unknown>,
+    data: unknown,
+  ): Promise<string[]> | string[];
+}
+
+/** 钩子工厂:每次调用产出一个新实例 */
+export type ToolHookFactory = () => ToolHook;
 
 /** MCP ToolAnnotations 的子集(hint 均为可选) */
 export interface ToolHints {
@@ -36,6 +62,11 @@ export interface ToolCtx {
   mcpReq: { signal: AbortSignal };
 }
 
+/** 单次调用的选项:目前只有「本次不跑横切钩子」(jsd_batch 的 checkDrift=false) */
+export interface ExecutorOptions {
+  skipHooks?: boolean;
+}
+
 /**
  * 可编程执行体签名:给定已解析的入参直接执行工具(含统一 try/catch 兜底)。
  * MCP 工具回调内部委托它;jsd_batch 编排按键直调,绕开 MCP 往返。
@@ -43,6 +74,7 @@ export interface ToolCtx {
 export type ToolExecutor = (
   args: Record<string, unknown>,
   signal: AbortSignal | undefined,
+  opts?: ExecutorOptions,
 ) => Promise<unknown>;
 
 /** 工具名 → 执行体(daemon 单进程多会话共享;重复注册以后者为准,行为一致) */
@@ -99,6 +131,10 @@ export interface BridgeToolDef {
   ) => { type: 'text'; text: string }[];
   /** 工具结果的 followUp 引导(指向推荐的下一个工具/prompt);有则注入结果 followUp 字段 */
   followUp?: FollowUp;
+  /** 语义标记(见 ToolTag):横切逻辑据此决定是否对该工具生效 */
+  tags?: readonly ToolTag[];
+  /** 横切钩子工厂;每次调用新建实例(见 ToolHook) */
+  hook?: ToolHookFactory;
 }
 
 /**
@@ -125,7 +161,7 @@ export function bridgeTool(
     ) => ToolHandle;
     const register = server.registerTool.bind(server) as unknown as RegisterFn;
     // 可编程执行体:MCP 回调与 jsd_batch 编排共用(统一兜底/超时/取消传播)
-    const executeTool: ToolExecutor = async (args, signal) => {
+    const executeTool: ToolExecutor = async (args, signal, opts) => {
       try {
         // 平台门控:平台状态已缓存且本工具不适用时,直接给结构化错误(含替代路径),
         // 不向插件发起往返 —— 插件侧同样会拒绝,但报错更晚也更含糊。平台未知放行。
@@ -148,10 +184,24 @@ export function bridgeTool(
           }
           args = parsed.data as Record<string, unknown>;
         }
-        const opts: RequestOptions = {
+        const requestOpts: RequestOptions = {
           ...(signal != null ? { signal } : {}),
           ...(def.timeout != null ? { timeout: def.timeout } : {}),
         };
+        // 横切钩子:每次调用新建一份(钩子内部要按本次调用记账)。
+        // 钩子只做尽力而为的复核,抛错一律降级为 warning,不能让工具失败。
+        // checkDrift=false 之类的「本次不复核」是**按调用**生效的:钩子工厂本身
+        // 仍在 def 上,只是这一次不实例化 —— 不是把开关塞进全局。
+        const hook = opts?.skipHooks === true ? undefined : def.hook?.();
+        if (hook?.before != null) {
+          try {
+            await hook.before(args);
+          } catch (e) {
+            warn(
+              `工具 ${def.name} 的前置钩子失败(已忽略): ${e instanceof Error ? e.message : String(e)}`,
+            );
+          }
+        }
         let data: unknown;
         if (def.run) {
           data = await def.run(
@@ -163,15 +213,34 @@ export function bridgeTool(
           data = await bridge.request(
             def.method as PluginMethod,
             def.payload ? def.payload(args) : args,
-            opts,
+            requestOpts,
           );
         }
-        return structured(
+        const extra = def.extraContent ? def.extraContent(data, args) : [];
+        // 钩子产出的告警同时走两条通道:① 人读文本块(单工具调用时直接可见);
+        // ② 结果上的 warnings 字段 —— jsd_batch 逐步骤收集后汇总,否则编排里
+        // 只看 structuredContent,这些告警会被静默丢掉。
+        const warnings: string[] = [];
+        if (hook?.after != null) {
+          try {
+            const lines = (await hook.after(args, data)) ?? [];
+            for (const line of lines) {
+              warnings.push(line);
+              extra.push({ type: 'text', text: line });
+            }
+          } catch (e) {
+            const line = `⚠ 工具 ${def.name} 的后置钩子失败(不影响本次结果): ${e instanceof Error ? e.message : String(e)}`;
+            warnings.push(line);
+            extra.push({ type: 'text', text: line });
+          }
+        }
+        const result = structured(
           data,
           def.outputSchema,
-          def.extraContent ? def.extraContent(data, args) : undefined,
+          extra.length > 0 ? extra : undefined,
           def.followUp,
         );
+        return warnings.length > 0 ? { ...result, warnings } : result;
       } catch (e) {
         // 可观测性:插件执行期错误(如引擎校验失败)落日志,便于排查。
         // 注意:入参 schema 校验失败发生在 SDK 内部(validateToolInput),

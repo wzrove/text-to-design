@@ -1,5 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/server';
 import {
+  instanceStyleRiskNotice,
   moveNodeSchema,
   renameNodeSchema,
   resizeNodeSchema,
@@ -22,8 +23,7 @@ import { propUpdateTool } from './update-common';
  * 写时命中会在结果里带 warnings,且告警**直接给出主组件里对应子节点的 id**
  * (见 shared/src/core/update.ts 的 instanceStyleFixHint),调用方拿到就能改主组件。
  */
-const INSTANCE_STYLE_WARN =
-  '⚠ 对位于 INSTANCE 内的子节点改样式有平台风险:回显是新值,渲染却可能仍是组件原样式(实测 fills/fontName,其余样式同类风险);命中时本次结果会带 warnings 并给出主组件里对应子节点的 id —— 改它即所有实例继承,只要单个实例不同则先 jsd_detach_instance 再改';
+const INSTANCE_STYLE_WARN = instanceStyleRiskNotice();
 
 /**
  * 属性操作:从 jsd_update_node 的 50 键大表拆出的单职责工具,每个只负责一组字段。

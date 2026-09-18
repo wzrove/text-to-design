@@ -9,9 +9,11 @@
     "dev": "pnpm --filter text-to-design-ui watch",
     "dev:ui": "pnpm --filter text-to-design-ui dev",
     "build": "pnpm --filter text-to-design-ui build && pnpm --filter text-to-design-mcp build",
-    "typecheck": "pnpm -r run typecheck",
+    "typecheck": "pnpm -r run typecheck && tsc -p tsconfig.json",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "release": "pnpm build && node scripts/publish.mjs",
     "chset": "node scripts/new-changeset.mjs",
     "mcp": "pnpm --filter text-to-design-mcp start:dev"
@@ -25,7 +27,8 @@
     "@types/node": "catalog:",
     "concurrently": "catalog:",
     "lefthook": "^2.1.12",
-    "typescript": "catalog:"
+    "typescript": "catalog:",
+    "vitest": "catalog:"
   },
   "commitlint": {
     "extends": [

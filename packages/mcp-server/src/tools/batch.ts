@@ -13,7 +13,6 @@ import {
   lookupExecutor,
   type ToolHandle,
 } from '../core/registry';
-import { DriftWatch, isDriftRisky } from './drift-watch';
 
 /** 按点分路径(含 a[0].b 下标段)从步骤结果根对象取值;任一段不可达视为失败 */
 function getPath(
@@ -204,7 +203,7 @@ export function registerBatchTools(
 · jsd_manage_nodes 各 op:select→selected[](id 字符串)、remove→removed[](id 字符串)、clone/group/flatten/outline_stroke→created[]、ungroup→ungrouped[](id 字符串)、reparent→moved[](与 updated[] 同义,两个键都回)、repair→cleaned[](id 字符串)—— id 字符串数组取 {{id.selected[0]}},节点数组取 {{id.created[0].id}}
 · jsd_manage_components 各 op:create_component/create_instance/detach_instance/import_component/combine_as_variants→created(detach_instance 是数组,不是 updated)、swap_component→swapped[]、set_instance_properties→updated[]、copy_overrides→snapshotId、apply_overrides/sync_overrides→applied[]
 · 拿不准某步的返回结构时,先单独调它一次看回显再拼进 batch —— 猜错会连带整批中止。
-结构变更复核(默认开,checkDrift=false 可关):批次里含 remove/reparent/group/ungroup/flatten/repair 时,变更前记下受影响父层(含 reparent 的目标父级与当前页顶层)的子节点坐标,收尾再读一次比对 —— 引擎在删改结构后会把**没碰到**的兄弟节点静默挪走(实测 (24,720)→(28,618):无报错、回显正常,渲染上像样式问题,极易走错排查方向)。漂移写进结果 warnings 并给出原值,照原值用 jsd_move_node 回填即可;覆盖面仅限本次操作触及的父层(协议没有整树读法,别的层漂移查不到)。`,
+结构变更复核(默认开,checkDrift=false 可关):步骤里含 remove/reparent/group/ungroup/flatten/repair 时,变更前记下受影响父层(含 reparent 的目标父级与当前页顶层)的子节点坐标,收尾再读一次比对 —— 引擎在删改结构后会把**没碰到**的兄弟节点静默挪走(实测 (24,720)→(28,618):无报错、回显正常,渲染上像样式问题,极易走错排查方向)。漂移写进结果 warnings 并给出原值,照原值用 jsd_move_node 回填即可;覆盖面仅限本次操作触及的父层(协议没有整树读法,别的层漂移查不到)。`,
     inputSchema: batchSchema,
     outputSchema: batchResultSchema,
     // calls 里可能带 remove/flatten 等破坏性 op,如实标注
@@ -220,11 +219,12 @@ export function registerBatchTools(
       const steps = new Map<string, unknown>();
       const results: BatchResult['results'] = [];
       let echoTrimmed = false;
-      // P25-B:含结构变更(remove/reparent/group/flatten…)时自动做一次同层几何
-      // 复核 —— 引擎会把没碰到的兄弟节点静默挪走。checkDrift=false 可关掉(省
-      // 掉「变更前每层一次读 + 收尾一次读」的往返)。
-      const drift = new DriftWatch();
-      const driftEnabled = checkDrift !== false;
+      // P25-B 复核不再由 batch 自己做:结构变更类工具在注册时就挂了漂移复核钩子,
+      // 单工具调用与编排内调用走同一条路(此前只有 batch 内的步骤有复核)。
+      // checkDrift=false 时按「本次调用不实例化钩子」传给执行体 —— 开关是按调用的,
+      // 不是全局开关,也不是把钩子从 def 上摘掉。
+      const skipHooks = checkDrift === false;
+      const stepWarnings: string[] = [];
       for (let i = 0; i < calls.length; i++) {
         const call = calls[i];
         const id =
@@ -255,14 +255,11 @@ export function registerBatchTools(
           break;
         }
         // ---- 执行期:受 stopOnError/continueOnError 控制 ----
-        if (driftEnabled && isDriftRisky(call.tool, resolvedArgs)) {
-          // 结构变更前记下受影响父层的几何(内部读不到就跳过,不阻断批次)
-          await drift.observe(call.tool, resolvedArgs);
-        }
-        const out = (await executor(resolvedArgs, signal)) as {
+        const out = (await executor(resolvedArgs, signal, { skipHooks })) as {
           isError?: boolean;
           structuredContent?: unknown;
           content?: { type: string; text?: string }[];
+          warnings?: string[];
         };
         if (out.isError === true) {
           const text =
@@ -276,6 +273,7 @@ export function registerBatchTools(
         const echo = echoStep(out.structuredContent);
         if (echo.trimmed) echoTrimmed = true;
         steps.set(id, out.structuredContent);
+        if (out.warnings != null) stepWarnings.push(...out.warnings);
         results.push({
           id,
           tool: call.tool,
@@ -284,7 +282,7 @@ export function registerBatchTools(
         });
       }
       const complete = results.length === calls.length;
-      const warnings = driftEnabled ? await drift.verify() : [];
+      const warnings = stepWarnings;
       return {
         ok: complete && results.every((r) => r.ok),
         executed: results.length,

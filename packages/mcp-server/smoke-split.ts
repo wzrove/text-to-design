@@ -1,5 +1,9 @@
 import type { PluginMethod, PropMethod } from 'text-to-design-shared';
-import { PROP_METHOD_FIELDS, updateSelection } from 'text-to-design-shared';
+import {
+  NO_CAPABILITIES,
+  PROP_METHOD_FIELDS,
+  updateSelection,
+} from 'text-to-design-shared';
 import { Bridge } from './src/bridge';
 import { toolRegistrars } from './src/tools';
 
@@ -59,7 +63,12 @@ let guardFail = 0;
 for (const [method, props, wantOk] of guardCases) {
   let threw = false;
   try {
-    await updateSelection(FAKE_HOST, { ids: ['1:2'], props }, method);
+    await updateSelection(
+      FAKE_HOST,
+      NO_CAPABILITIES,
+      { ids: ['1:2'], props },
+      method,
+    );
   } catch {
     threw = true;
   }
@@ -596,7 +605,10 @@ console.log(
   `batch 超预算降级: echoOmitted=${omitted} 保留 id 清单=${keptIdOnly} 长度=${batchHuge.text.length}`,
 );
 
-// ---- P25-B:batch 入参支持 checkDrift(默认开);关掉时不做任何额外读数 ----
+// ---- P25-B:结构变更步骤自带漂移复核(编排内与单工具调用同一条路) ----
+const delBatch = {
+  calls: [{ id: 'del', tool: 'jsd_delete_node', args: { ids: ['1:2'] } }],
+};
 bridge.request = async (m, p) => {
   calls.push({ method: m, params: p });
   if (m === 'node_op' && (p as { op?: string }).op === 'remove') {
@@ -604,8 +616,21 @@ bridge.request = async (m, p) => {
   }
   return {};
 };
+calls.length = 0;
+const batchDrift = await invoke('jsd_batch', delBatch);
+if (batchDrift.isError || calls.length <= 1) {
+  fail++;
+  console.log(
+    `✗ batch 结构变更复核异常: isError=${batchDrift.isError} 插件调用次数=${calls.length}(应 > 1,即复核读数已发生)`,
+  );
+}
+console.log(
+  `batch 结构变更复核(默认开): 单步删除触发额外读数 ${calls.length - 1} 次`,
+);
+
+calls.length = 0;
 const batchNoDrift = await invoke('jsd_batch', {
-  calls: [{ id: 'del', tool: 'jsd_delete_node', args: { ids: ['1:2'] } }],
+  ...delBatch,
   checkDrift: false,
 });
 if (batchNoDrift.isError || calls.length !== 1) {
@@ -615,7 +640,7 @@ if (batchNoDrift.isError || calls.length !== 1) {
   );
 }
 console.log(
-  `batch checkDrift 开关: 接受=false 时不做额外读数(${calls.length === 1 ? '是' : `否,${calls.length} 次`})`,
+  `batch checkDrift=false: 不做额外读数(${calls.length === 1 ? '是' : `否,${calls.length} 次`})`,
 );
 
 // ---- followUp 引导:结果带 followUp 指向下一步(参照 server.ts) ----

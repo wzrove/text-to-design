@@ -1,233 +1,41 @@
 import { CAPABILITY_OF_GATED_PROP } from '../dicts/capability';
-import { propAppliesTo } from '../dicts/prop-applicability';
 import type { PropMethod, SerializedNode, UpdateNodeProps } from '../schemas';
 import { PROP_METHOD_FIELDS } from '../schemas';
 import { isGatedPropUnsupported } from './capabilities';
 import type { DesignHost, NodeSkeleton } from './host';
-import { MIXED } from './host';
 import {
-  normalizeEffects,
-  normalizeLayoutGrids,
-  normalizePaints,
-} from './normalize';
+  CONTAINER_SELF_VISIBLE_PROPS,
+  INSTANCE_STYLE_RISK_PROPS,
+  instanceStyleFixHint,
+  WARN_SAMPLE,
+} from './props/risk';
+import { runWriters } from './props/run';
+import { emptyOutcome, type WriteOutcome } from './props/types';
+import { UPDATE_WRITERS } from './props/writers';
+import type { RuntimeContext } from './runtime';
 import { serializeNode } from './serialize';
-import {
-  collectTargets,
-  ensureLayoutMode,
-  findNode,
-  loadFont,
-  MIN_RESIZE_SIZE,
-} from './utils';
+import { collectTargets, findNode } from './utils';
 
 async function applyProps(
   host: DesignHost,
+  ctx: RuntimeContext,
   node: NodeSkeleton,
-  // 放宽为局部扩展:x/y 与 width/height 可能来自两个不同方法组的入参(见 updateSelection)
   props: UpdateNodeProps & { x?: number; y?: number },
+  outcome: WriteOutcome,
 ): Promise<void> {
-  // 先整体归一化一次(多目标节点复用同一份合法数据),引擎赋值前兜底
-  const fills =
-    props.fills != null ? normalizePaints(props.fills, 'fills') : undefined;
-  const strokes =
-    props.strokes != null
-      ? normalizePaints(props.strokes, 'strokes')
-      : undefined;
-  const effects =
-    props.effects != null ? normalizeEffects(props.effects) : undefined;
-  if (props.name != null) node.name = props.name;
-  if (props.x != null) node.x = props.x;
-  if (props.y != null) node.y = props.y;
-  if (props.visible != null) node.visible = props.visible;
-  if (props.rotation != null) node.rotation = props.rotation;
-  if (props.opacity != null && 'opacity' in node) node.opacity = props.opacity;
-  if (props.locked != null) node.locked = props.locked;
-  if (props.width != null || props.height != null) {
-    const w = props.width ?? node.width;
-    const h = props.height ?? node.height;
-    if ('resize' in node) {
-      if (node.type === 'LINE') {
-        // 与创建路径同源(P9):LINE 的「线长 + 零厚」合法,但引擎 resize 校验
-        // 要求两维 >= 0.01,直接传 0 会被拒。这里复用同一条零轴豁免,
-        // 让 jsd_resize_node 也能把横/竖线改成 0 → 1px 以外的尺寸。
-        node.resize(Math.max(w, MIN_RESIZE_SIZE), Math.max(h, MIN_RESIZE_SIZE));
-      } else if (w < MIN_RESIZE_SIZE || h < MIN_RESIZE_SIZE) {
-        // 不再让引擎断言原样冒泡(「in resize: Expected "width" to have value >= 0.01」
-        // 读起来看不出该怎么办)。明确说清限制与替代做法。
-        throw new Error(
-          `${node.type} 的 width/height 最小为 ${MIN_RESIZE_SIZE}(引擎 resize 校验);要画横线/竖线请改用 LINE 并把一维传 0`,
-        );
-      } else {
-        node.resize(w, h);
-      }
-    }
-  }
-  if (fills != null && 'fills' in node) node.fills = fills;
-  if (props.strokeWeight != null && 'strokeWeight' in node)
-    node.strokeWeight = props.strokeWeight;
-  if (props.strokeTopWeight != null && 'strokeTopWeight' in node)
-    node.strokeTopWeight = props.strokeTopWeight;
-  if (props.strokeBottomWeight != null && 'strokeBottomWeight' in node)
-    node.strokeBottomWeight = props.strokeBottomWeight;
-  if (props.strokeLeftWeight != null && 'strokeLeftWeight' in node)
-    node.strokeLeftWeight = props.strokeLeftWeight;
-  if (props.strokeRightWeight != null && 'strokeRightWeight' in node)
-    node.strokeRightWeight = props.strokeRightWeight;
-  if (strokes != null && 'strokes' in node) node.strokes = strokes;
-  if (props.strokeAlign != null && 'strokeAlign' in node)
-    node.strokeAlign = props.strokeAlign;
-  if (props.strokeCap != null && 'strokeCap' in node)
-    node.strokeCap = props.strokeCap;
-  if (props.strokeJoin != null && 'strokeJoin' in node)
-    node.strokeJoin = props.strokeJoin;
-  if (props.dashPattern != null && 'dashPattern' in node)
-    node.dashPattern = props.dashPattern;
-  if (props.blendMode != null && 'blendMode' in node)
-    node.blendMode = props.blendMode;
-  if (props.cornerSmoothing != null && 'cornerSmoothing' in node)
-    node.cornerSmoothing = props.cornerSmoothing;
-  if (props.clipsContent != null && 'clipsContent' in node)
-    node.clipsContent = props.clipsContent;
-  if (props.constraints != null && 'constraints' in node)
-    node.constraints = props.constraints;
-  if (props.layoutGrids != null && 'layoutGrids' in node)
-    node.layoutGrids = normalizeLayoutGrids(props.layoutGrids);
-  if (
-    propAppliesTo('arcData', node.type) &&
-    props.arcData != null &&
-    'arcData' in node
-  ) {
-    node.arcData = props.arcData;
-  }
-  if (effects != null && 'effects' in node) node.effects = effects;
-
-  if (props.cornerRadius != null && 'cornerRadius' in node)
-    node.cornerRadius = props.cornerRadius;
-  if ('topLeftRadius' in node) {
-    if (props.topLeftRadius != null) node.topLeftRadius = props.topLeftRadius;
-    if (props.topRightRadius != null)
-      node.topRightRadius = props.topRightRadius;
-    if (props.bottomLeftRadius != null)
-      node.bottomLeftRadius = props.bottomLeftRadius;
-    if (props.bottomRightRadius != null)
-      node.bottomRightRadius = props.bottomRightRadius;
-  }
-
-  if (props.pointCount != null && propAppliesTo('pointCount', node.type)) {
-    node.pointCount = props.pointCount;
-  }
-  if (propAppliesTo('innerRadius', node.type) && props.innerRadius != null) {
-    node.innerRadius = props.innerRadius;
-  }
-
-  // 这一块是「文本节点的整体写入流程」而非单属性 gate:字体加载必须先于逐属性
-  // 赋值,所以按节点类型整体进入。块内各属性在 dicts/prop-applicability 里都登记
-  // 为 TEXT 专属 —— 新增文本属性时两处一起改(表用于「未生效」点名,这里用于赋值)。
-  if (node.type === 'TEXT') {
-    const needLoad =
-      props.characters != null ||
-      props.fontSize != null ||
-      props.fontName != null;
-    if (needLoad) {
-      const family =
-        props.fontName?.family ??
-        (node.fontName as { family: string } | undefined)?.family ??
-        'PingFang SC';
-      const style =
-        props.fontName?.style ??
-        (node.fontName as { style: string } | undefined)?.style ??
-        'Regular';
-      if (node.fontName !== MIXED) {
-        await loadFont(host, family, style);
-        node.fontName = { family, style };
-      }
-    }
-    if (props.characters != null) node.characters = props.characters;
-    if (props.fontSize != null) node.fontSize = props.fontSize;
-    if (props.textAlignHorizontal != null)
-      node.textAlignHorizontal = props.textAlignHorizontal;
-    if (props.textAlignVertical != null)
-      node.textAlignVertical = props.textAlignVertical;
-    if (props.textAutoResize != null)
-      node.textAutoResize = props.textAutoResize;
-    if (props.textCase != null) node.textCase = props.textCase;
-    if (props.textDecoration != null)
-      node.textDecoration = props.textDecoration;
-    if (props.lineHeight != null) node.lineHeight = props.lineHeight;
-    if (props.letterSpacing != null) node.letterSpacing = props.letterSpacing;
-  }
-
-  if (
-    propAppliesTo('layoutMode', node.type) &&
-    props.layoutMode != null &&
-    'layoutMode' in node
-  ) {
-    node.layoutMode = props.layoutMode;
-  }
-  if (
-    propAppliesTo('itemSpacing', node.type) &&
-    props.itemSpacing != null &&
-    'itemSpacing' in node
-  ) {
-    node.itemSpacing = props.itemSpacing;
-  }
-  if (propAppliesTo('paddingTop', node.type) && props.paddingTop != null)
-    node.paddingTop = props.paddingTop;
-  if (propAppliesTo('paddingRight', node.type) && props.paddingRight != null)
-    node.paddingRight = props.paddingRight;
-  if (propAppliesTo('paddingBottom', node.type) && props.paddingBottom != null)
-    node.paddingBottom = props.paddingBottom;
-  if (propAppliesTo('paddingLeft', node.type) && props.paddingLeft != null)
-    node.paddingLeft = props.paddingLeft;
-  if (
-    propAppliesTo('primaryAxisSizingMode', node.type) &&
-    props.primaryAxisSizingMode != null &&
-    'primaryAxisSizingMode' in node
-  ) {
-    node.primaryAxisSizingMode = props.primaryAxisSizingMode;
-  }
-  if (
-    propAppliesTo('counterAxisSizingMode', node.type) &&
-    props.counterAxisSizingMode != null &&
-    'counterAxisSizingMode' in node
-  ) {
-    node.counterAxisSizingMode = props.counterAxisSizingMode;
-  }
-  if (
-    propAppliesTo('primaryAxisAlignItems', node.type) &&
-    props.primaryAxisAlignItems != null &&
-    'primaryAxisAlignItems' in node
-  ) {
-    node.primaryAxisAlignItems = props.primaryAxisAlignItems;
-  }
-  if (
-    propAppliesTo('counterAxisAlignItems', node.type) &&
-    props.counterAxisAlignItems != null &&
-    'counterAxisAlignItems' in node
-  ) {
-    node.counterAxisAlignItems = props.counterAxisAlignItems;
-  }
-  if (props.layoutGrow != null && 'layoutGrow' in node) {
-    node.layoutGrow = props.layoutGrow;
-  }
-  if (props.layoutAlign != null && 'layoutAlign' in node) {
-    node.layoutAlign = props.layoutAlign;
-  }
-
-  // 平台特有超集字段(仅对应平台生效,'in' 守卫在无此字段的平台跳过)
-  if (props.fillStyleId != null && 'fillStyleId' in node)
-    node.fillStyleId = props.fillStyleId;
-  if (props.strokeStyleId != null && 'strokeStyleId' in node)
-    node.strokeStyleId = props.strokeStyleId;
-  if (props.textStyleId != null && 'textStyleId' in node)
-    node.textStyleId = props.textStyleId;
-  if (props.effectStyleId != null && 'effectStyleId' in node)
-    node.effectStyleId = props.effectStyleId;
-  if (node.type === 'TEXT') {
-    if (props.textTruncation != null && 'textTruncation' in node)
-      node.textTruncation = props.textTruncation;
-    if (props.maxLines != null && 'maxLines' in node)
-      node.maxLines = props.maxLines;
-  }
+  // 两条写路径共用同一批 writer(见 core/props/writers.ts):创建路径带默认值与
+  // 推断,修改路径是纯增量覆盖 —— 差异由 create:false 显式表达,不再是两份代码。
+  await runWriters(
+    {
+      host,
+      node,
+      ctx,
+      create: false,
+      src: props as Readonly<Record<string, unknown>>,
+      outcome,
+    },
+    UPDATE_WRITERS,
+  );
 }
 
 /** 沿父链找最近的 INSTANCE 祖先(实例子节点样式覆盖的平台缺陷只出现在这类节点上) */
@@ -240,109 +48,13 @@ function enclosingInstance(node: NodeSkeleton): NodeSkeleton | null {
   return null;
 }
 
-/**
- * 样式类字段:写在 INSTANCE 内的子节点上时,平台不保证渲染生效
- * (P7 实测 fills / fontName 回显是新值、渲染仍是组件原样式;其余样式同类风险)。
- * 几何/结构/命名类字段(x/y/width/height/name/visible/locked/布局)不在其列 ——
- * 那些在实例上是正常生效的覆盖,不该报风险。
- */
-const INSTANCE_RISKY_PROPS = new Set([
-  'fills',
-  'strokes',
-  'strokeWeight',
-  'strokeTopWeight',
-  'strokeBottomWeight',
-  'strokeLeftWeight',
-  'strokeRightWeight',
-  'strokeAlign',
-  'strokeCap',
-  'strokeJoin',
-  'dashPattern',
-  'blendMode',
-  'effects',
-  'cornerRadius',
-  'topLeftRadius',
-  'topRightRadius',
-  'bottomLeftRadius',
-  'bottomRightRadius',
-  'cornerSmoothing',
-  'fontName',
-  'fontSize',
-  'lineHeight',
-  'letterSpacing',
-  'textCase',
-  'textDecoration',
-  'textAlignHorizontal',
-  'textAlignVertical',
-]);
-
-/** 风险提示里最多点名几个节点,其余折叠成计数,免得递归批量时刷屏 */
-const INSTANCE_WARN_SAMPLE = 3;
-
-/**
- * 容器自身被改时**肉眼看得见**的字段(P26:给 24×24 图标 FRAME 传 recursive 刷
- * 描边,12 个图标外框全被套上 strokeWeight:1 的方框)。只有 includeSelf=true 且
- * 命中这些字段时才提示 —— 布局/可见性/命名类改自身是正常预期,提示会刷屏。
- */
-const CONTAINER_SELF_VISIBLE_PROPS = new Set([
-  'fills',
-  'strokes',
-  'strokeWeight',
-  'strokeTopWeight',
-  'strokeBottomWeight',
-  'strokeLeftWeight',
-  'strokeRightWeight',
-  'strokeAlign',
-  'strokeCap',
-  'strokeJoin',
-  'dashPattern',
-  'blendMode',
-  'effects',
-  'cornerRadius',
-  'topLeftRadius',
-  'topRightRadius',
-  'bottomLeftRadius',
-  'bottomRightRadius',
-  'cornerSmoothing',
-  'clipsContent',
-  'layoutGrids',
-  'arcData',
-]);
-
-/**
- * 实例子节点样式改不动的**可执行出口**:顺着名字路径在实例的主组件里定位同源
- * 子节点,把它的 id 直接算出来。调用方拿到就能改主组件(所有实例一起继承),
- * 不必自己再翻组件树。名字对不上(改过名 / 结构不一致)返回 null,
- * 由告警文案回落为「改主组件或 detach」。
- */
-function instanceStyleFixHint(
-  instance: NodeSkeleton,
-  node: NodeSkeleton,
-): string | null {
-  try {
-    const main = instance.mainComponent ?? null;
-    if (main == null) return null;
-    const path: string[] = [];
-    let cur: NodeSkeleton | null = node;
-    while (cur != null && cur.id !== instance.id) {
-      path.unshift(cur.name);
-      cur = cur.parent;
-    }
-    if (path.length === 0) return null;
-    let target: NodeSkeleton = main;
-    for (const name of path) {
-      const next = (target.children ?? []).find((c) => c.name === name);
-      if (next == null) return null;
-      target = next;
-    }
-    return `主组件(${main.id})里的「${node.name}」(${target.id})`;
-  } catch {
-    return null;
-  }
-}
+// 两个「样式类字段」集合与风险文案的唯一真源,见 core/props/risk.ts。
+// 此前这里一份、mcp-server/tools/props.ts 的文案里第三份描述同一集合 ——
+// 改一处漏一处就变成「用户拿到改成功了但没渲染的结果,还没有提示」。
 
 export async function updateSelection(
   host: DesignHost,
+  ctx: RuntimeContext,
   params: {
     ids?: string[];
     matchName?: string;
@@ -394,6 +106,8 @@ export async function updateSelection(
     );
   }
   const warnings: string[] = [];
+  // 写后反馈收集器:writer 与检查链共用同一份,避免各写一套「为什么没生效」
+  const outcome: WriteOutcome = emptyOutcome();
   const baseIds = new Set(base.map((n) => n.id));
   const riskyTargets: { label: string; hint: string | null }[] = [];
   const riskyProps = new Set<string>();
@@ -404,7 +118,7 @@ export async function updateSelection(
   for (const node of targets) {
     // 能力门控字段:平台不具备该能力(或运行时不长这个属性)时,引擎赋值会静默跳过 → 先记下来点名
     for (const key of Object.keys(props)) {
-      if (isGatedPropUnsupported(key, node)) {
+      if (isGatedPropUnsupported(ctx, key, node)) {
         ignoredSuperset.add(key);
       }
     }
@@ -423,12 +137,12 @@ export async function updateSelection(
         for (const k of hit) selfMutatedProps.add(k);
       }
     }
-    await applyProps(host, node, props);
-    // 平台缺陷:布局重算会回写容器方向,写进去的 layoutMode 可能不是最终值(P31)。
-    // applyProps 里 layoutMode 先写、padding/对齐/伸缩后写,正好落在会触发重算的
-    // 那一段之后,所以这里回读一次:不一致就再压一次,压不住就点名(下方 warnings)。
-    if (props.layoutMode != null && propAppliesTo('layoutMode', node.type)) {
-      if (!ensureLayoutMode(node, props.layoutMode)) {
+    const readbackMark = outcome.readback.length;
+    await applyProps(host, ctx, node, props, outcome);
+    // P31 的方向回读现在由 layoutWriter.settle 统一做(见 core/props/writers),
+    // 创建与修改两条路径共用同一份判定;压不住的结果经 outcome.readback 回收点名。
+    for (const r of outcome.readback.slice(readbackMark)) {
+      if (r.key === 'layoutMode' && r.ok === false) {
         layoutModeMissed.push(`${node.name}(${node.id})`);
       }
     }
@@ -436,7 +150,7 @@ export async function updateSelection(
     const instance = enclosingInstance(node);
     if (instance != null) {
       for (const key of Object.keys(props)) {
-        if (INSTANCE_RISKY_PROPS.has(key)) {
+        if (INSTANCE_STYLE_RISK_PROPS.has(key)) {
           riskyProps.add(key);
           riskyTargets.push({
             label: `${node.name}(${node.id})`,
@@ -448,9 +162,9 @@ export async function updateSelection(
     }
   }
   if (riskyTargets.length > 0) {
-    const sample = riskyTargets.slice(0, INSTANCE_WARN_SAMPLE);
+    const sample = riskyTargets.slice(0, WARN_SAMPLE);
     const rest =
-      riskyTargets.length > INSTANCE_WARN_SAMPLE
+      riskyTargets.length > WARN_SAMPLE
         ? ` 等 ${riskyTargets.length} 个节点`
         : '';
     const hints = sample
@@ -470,9 +184,9 @@ export async function updateSelection(
     );
   }
   if (selfMutated.length > 0) {
-    const sample = selfMutated.slice(0, INSTANCE_WARN_SAMPLE);
+    const sample = selfMutated.slice(0, WARN_SAMPLE);
     const rest =
-      selfMutated.length > INSTANCE_WARN_SAMPLE
+      selfMutated.length > WARN_SAMPLE
         ? ` 等 ${selfMutated.length} 个节点`
         : '';
     warnings.push(
