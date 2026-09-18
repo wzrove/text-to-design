@@ -1,6 +1,7 @@
 # 修复剧本
 
-阶段 2 用。目标:拿到一个指纹 + 骨架文案,定位到该改哪个文件、按什么标准改。
+> 何时读：闭环第 3–4 步（定位 / 改）用。目标:拿到一个指纹 + 骨架文案,
+> 定位到该改哪个文件、按什么标准改。
 
 ## 分层地图
 
@@ -39,6 +40,7 @@
 | `set_fill` / `set_stroke` / `set_effects` / `set_layout` … `失败` | ⑤ | `plugin.ts` 对应 case → `shared/src/core/update.ts` |
 | `没有找到…的节点` / `没有要…的节点` | ⑤ | 文案里那个 op 的实现处(核心是**空集合前置校验**) |
 | `请求超时: <id> <method> 耗时=<n>ms` | ④ | 默认 30s,见 `pending.ts` 与 `bridgeTool` 的 `timeout` |
+| `<method> 失败: not a function`(**创建类工具正常**) | ⑤ | 引擎沙箱缺 ES2020+ API(产物 `target: es6` 无 polyfill):查 `ui/src/code/plugin.ts` 的方法判定口等引擎侧代码,用手写替代;`tests/engine-api-compat.test.ts` 是这类 API 的禁止清单 |
 | `请求被拒(插件未连接)` | ④ | `bridge.ts` |
 | `端口 <n> 被非 text-to-design MCP 服务占用` / `daemon 启动超时` | ④ | `daemon/run.ts` |
 | Figma 专有 API 抛错(`Cannot call with documentAccess: dynamic-page` 等) | ⑤ | `ui/src/code/figma/` + `ui/scripts/vite-plugin-manifest.ts` |
@@ -77,7 +79,7 @@
 
 ## 工作样例:documentAccess
 
-真实发生过的一轮,完整对应本 skill 的五步。
+真实发生过的一轮,完整对应本 skill 的闭环(记录 → 定位 → 改 → 回归 → 记账)。
 
 **症状**(日志历史,现已闭环)
 

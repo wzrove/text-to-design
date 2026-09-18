@@ -1,5 +1,5 @@
 {
-  "_purpose": "校准 SKILL.md 的 description 触发率。20 条查询,10 应触发 / 10 不应触发;不应触发的一半是近似干扰项(与技能共享关键词但实际需要别的东西)。split 固定不滚动,训练集用来改 description,验证集只用来判断改动是否泛化。",
+  "_purpose": "校准 SKILL.md 的 description 触发率。正样例覆盖两类能力:①设计任务中调用 jsd_* 并记账;②改动验证 / 生效判定 / 连接排查。负样例是近似干扰项(共享关键词但实际不需要本技能)。split 固定不滚动,训练集用来改 description,验证集只用来判断改动是否泛化。",
   "_how_to_run": "每条查询跑 3 次,统计触发率;应触发的高于 0.5 算通过,不应触发的低于 0.5 算通过。改完 description 只看 train 结果;选最终版本时比 validation 通过率 —— 最优版可能不是最后一版。",
   "_detection": "宿主加载了本技能的 SKILL.md 即算触发。用宿主自己的可观测手段(工具调用记录 / verbose 日志)判定。",
   "queries": [
@@ -65,6 +65,37 @@
     },
 
     {
+      "query": "我改了 shared 里的编组计算,怎么确认即时设计那边用的就是新代码?",
+      "should_trigger": true,
+      "split": "train",
+      "why": "生效判定(build + 重载插件),本题材的核心正向场景"
+    },
+    {
+      "query": "jsd_ping 显示没连接,插件面板我刚打开过了,帮我看看怎么回事",
+      "should_trigger": true,
+      "split": "train",
+      "why": "连接层排查,走 diagnose.sh"
+    },
+    {
+      "query": "这个报错跟修复前一模一样,是不是我改的地方根本没生效?",
+      "should_trigger": true,
+      "split": "validation",
+      "why": "一字不差 = 插件跑旧产物,已有闭环里记录过"
+    },
+    {
+      "query": "刚动过 update.ts,帮我确认下改动真的生效了没",
+      "should_trigger": true,
+      "split": "validation",
+      "why": "无技能关键词,只表达验证意图"
+    },
+    {
+      "query": "daemon 起不来,说端口 47812 被占用了,怎么办",
+      "should_trigger": true,
+      "split": "train",
+      "why": "连接层排查;verdict 判 environment,不改代码但仍走本技能"
+    },
+
+    {
       "query": "把 packages/shared/src/core/nodes.ts 里的分组逻辑重构一下,不用跑设计软件",
       "should_trigger": false,
       "split": "train",
@@ -95,10 +126,10 @@
       "why": "近似干扰:包含 '测试' 与 MCP,但任务是写测试代码,不是跑设计任务"
     },
     {
-      "query": "daemon 起不来,说端口 47812 被占用了,怎么办",
+      "query": "package.json 里 build 的顺序调一下,想先构建 ui 再构建 mcp-server",
       "should_trigger": false,
       "split": "train",
-      "why": "近似干扰:属于 environment 类,但用户只要解决方案,不需要开台账"
+      "why": "近似干扰:共享 build / ui 关键词,但只是改构建脚本,不做验证也不记台账"
     },
     {
       "query": "即时设计的插件怎么导入?我换电脑了",

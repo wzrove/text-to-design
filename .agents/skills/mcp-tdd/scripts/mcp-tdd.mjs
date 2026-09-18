@@ -182,9 +182,19 @@ const LEDGER_README = `# MCP 报错台账(mcp-tdd)
 由 \`.agents/skills/mcp-tdd\` 维护。**改台账请走 CLI,不要手改 jsonl** —— 指纹与状态
 由脚本维护,手改会破坏去重。
 
+本台账是 jsDesign MCP 报错的**唯一记账通道**(技能合并后不再维护手写 md)。合并前的
+历史归档已冻结在 \`.agents/skills/mcp-tdd/archive/\`,只读查阅;字段对照表见该技能的
+\`references/bookkeeping.md\`。
+
+**整个目录不入库**(仓库根 \`.gitignore\` 里写着 \`docs/mcp-errors/\`):台账是本机数据 ——
+事件流随任务无限增长,闭环库 / 用例 / run 元信息只对跑过它的那台机器有意义。新克隆的
+仓库不需要它 —— \`init\`(以及任何命令)会自动重建目录与本 README。
+
+文件构成:
+
 | 文件 | 作用 | 可否手改 |
 | --- | --- | --- |
-| \`errors.jsonl\` | 追加式事件流,每条 = 一次报错观察 | 否(只由 \`record\`/\`scan-log\` 追加) |
+| \`errors.jsonl\` | 追加式事件流,每条 = 一次报错观察(**本机日志,不入库**) | 否(只由 \`record\`/\`scan-log\` 追加) |
 | \`handled.json\` | 已闭环指纹库,= 去重闸门 | 否(用 \`handle\`/\`unhandle\`) |
 | \`cases/<caseId>.json\` | 可重放的设计任务用例(回归依据) | 可(用例本身是测试资产) |
 | \`runs/<runId>.json\` | 一次设计任务的元信息 | 否 |

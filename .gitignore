@@ -27,3 +27,9 @@ dist-ssr
 
 # skill 触发率评测的产物（查询集与脚本要提交，运行结果不提交）
 .mcp.json
+
+# MCP 报错台账：本机数据，不进仓库。
+# 事件流（errors.jsonl）会随任务无限增长；闭环库 / 用例 / run 元信息只对跑过它的那台机器有意义。
+# CLI 首用时自动重建目录与 README（见 .agents/skills/mcp-tdd/scripts/mcp-tdd.mjs 的 init/ensure），
+# 所以新克隆的仓库不需要它也能正常工作。
+docs/mcp-errors/

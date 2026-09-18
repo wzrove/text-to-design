@@ -55,7 +55,11 @@ const UI_OPTIONS = { width: 360, height: 520 };
  * 一致性由 tests/plugin-prop-dispatch.test.ts 守住:这里再出现 case 就测试失败。
  */
 function isPropMethod(method: PluginRequest['method']): boolean {
-  return Object.hasOwn(PROP_METHOD_FIELDS, method);
+  // 不能用 Object.hasOwn(ES2022):插件产物 target=es6 只降语法、不注入 API polyfill,
+  // 而设计宿主沙箱的运行时没有它 —— 报错是「not a function」,且因为这里是所有属性类
+  // 请求的必经判定口,症状是**全部** jsd_set_*/move/resize 集体失败(创建类工具正常)。
+  //
+  return Object.prototype.hasOwnProperty.call(PROP_METHOD_FIELDS, method);
 }
 
 /** 属性类请求的收窄视图:多例(run)时 isPropMethod 已确认方法名在字段表内 */
