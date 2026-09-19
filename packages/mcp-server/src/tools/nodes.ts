@@ -20,6 +20,7 @@ import {
   type ToolHandle,
   type ToolHints,
 } from '../core/registry';
+import { driftWatch, STRUCTURAL_NODE_OPS } from './drift-watch';
 
 type NodeOpKind = z.infer<typeof manageNodesSchema>['op'];
 
@@ -30,12 +31,19 @@ type NodeOpDef = Pick<
   annotations?: ToolHints;
 };
 
-/** 构造「固定 op」工具定义:args 原样透传并注入 op 字面量,插件协议不变 */
+/**
+ * 构造「固定 op」工具定义:args 原样透传并注入 op 字面量,插件协议不变。
+ *
+ * 结构变更类 op 自动带上 `structural` tag 与漂移复核钩子 —— tag 与钩子的判定都来自
+ * drift-watch 的 STRUCTURAL_NODE_OPS,这里不手抄名单。
+ */
 function opTool(op: NodeOpKind, rest: NodeOpDef): BridgeToolDef {
+  const structural = STRUCTURAL_NODE_OPS.has(op);
   return {
     method: 'node_op',
     outputSchema: manageNodesResultSchema,
     payload: (args) => ({ op, ...args }),
+    ...(structural ? { tags: ['structural'] as const, hook: driftWatch } : {}),
     ...rest,
   };
 }

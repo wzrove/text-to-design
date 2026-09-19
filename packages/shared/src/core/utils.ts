@@ -51,11 +51,71 @@ export async function loadFont(
   }
 }
 
+/**
+ * family 的归一键:`jsd_list_fonts` 的清单里形如 `SourceHanSansCN_family`,
+ * 引擎解析成功后落库是短名 `SourceHanSansCN` —— 判等时两边都去掉这个后缀。
+ */
+export function fontFamilyKey(family: unknown): string {
+  return typeof family === 'string'
+    ? family
+        .trim()
+        .toLowerCase()
+        .replace(/_family$/, '')
+    : '';
+}
+
+/**
+ * `fontName` 是否**真的被引擎解析**。
+ *
+ * ⚠️ 必须用**结果里序列化后的** fontName 判,不能用写/结算时刻回读的值:实测
+ * (2026-09-19,jsDesign 0.8.0 插件)写入瞬间读回的是**原样回显**(请求什么读什么),
+ * 引擎的规范化要等到后续读取才可见 —— 拿写后立刻回读的值判,会把合法写法误报成
+ * 「未生效」(上一轮实测踩过这个坑,见 docs/design-decisions/0007)。
+ * 结果里的 fontName 已是引擎落库形态,判据于是稳定(四组实测):
+ *
+ * | 请求 family | 请求 style | 回读 family | 实际 |
+ * |---|---|---|---|
+ * | `SourceHanSansCN_family` | `SourceHanSansCN-Bold` | `SourceHanSansCN` | 解析成功 |
+ * | `SourceHanSansCN` | `Bold` | `SourceHanSansCN` | 解析成功 |
+ * | `SourceHanSansCN_family` | `Bold`(简称) | `SourceHanSansCN_family` | **未解析** |
+ * | `NoSuchFontXYZ_family` | `NoSuchFontXYZ-Bold` | 被换成别的字面 | **未解析** |
+ *
+ * 即:请求带 `_family` 却回读**仍带** `_family` ⇒ 没被解析(这正是「style 写成简称」
+ * 的失败形态);回读的族与请求不是同一个族 ⇒ 整族回退。反之放行 —— 判不出来时
+ * **宁可漏报**(family 不带 `_family` 的少数族无法用这个信号)。
+ *
+ * @returns null = 本次字形请求成立;否则给一句「为什么没成立」
+ * (修法文案由 `dicts/unapplied-prop.ts` 提供,两条写路径共用)
+ */
+export function fontNotResolved(
+  want: { family?: unknown; style?: unknown },
+  got: unknown,
+): string | null {
+  if (typeof got !== 'object' || got === null) return null;
+  const wantFamily = typeof want.family === 'string' ? want.family.trim() : '';
+  if (wantFamily === '') return null;
+  const gotFamily = (got as { family?: unknown }).family;
+  const gotStyle = (got as { style?: unknown }).style;
+  // 引擎对解析不了的组合会用 `@@` 前缀的哨兵字面(实测 style 落成 "@@Regular")
+  if (typeof gotStyle === 'string' && gotStyle.startsWith('@@')) {
+    return `回读的字型是哨兵值「${gotStyle}」,引擎没有解析这个 family/style`;
+  }
+  if (fontFamilyKey(gotFamily) !== fontFamilyKey(wantFamily)) {
+    return `回读的族是「${String(gotFamily)}」,与请求的「${wantFamily}」不同(整族回退)`;
+  }
+  const isListForm = (v: unknown): boolean =>
+    typeof v === 'string' && /_family$/.test(v.trim());
+  if (isListForm(wantFamily) && isListForm(gotFamily)) {
+    return `回读仍是清单形态「${String(gotFamily)}」,说明该 family/style 组合没被解析`;
+  }
+  return null;
+}
+
 /** 容器布局方向三态(各文件不再各写一份字面量联合) */
 export type LayoutMode = 'NONE' | 'HORIZONTAL' | 'VERTICAL';
 
 /**
- * 写 `layoutMode` 并**回读校验**(P31,与 P14 / P19 补丁同族:布局属性写完不能假定它还在)。
+ * 写 `layoutMode` 并**回读校验**(与既有的布局回读补丁同族:布局属性写完不能假定它还在)。
  *
  * 实测:引擎在布局重算之后会回写容器方向 —— 出现「显式传 `HORIZONTAL`、回读却是
  * `VERTICAL`」,子节点于是按垂直方向排布、全叠在同一点(两个导航按钮叠在 (16,8),
@@ -75,7 +135,7 @@ export function ensureLayoutMode(node: object, expected: LayoutMode): boolean {
 
 export interface CollectTargetsOptions {
   /**
-   * recursive=true 时是否连目标节点自身一起改,默认 false(P26)。
+   * recursive=true 时是否连目标节点自身一起改,默认 false。
    * 历史行为是「自身 + 全部后代」,照字面理解「子树/后代」的调用方会中招:
    * 给 12 个图标 FRAME 传 recursive 刷描边,容器自己也被套上 strokeWeight:1 的
    * 矩形框(渲染成「每个图标一个方框」)。现在默认只作用于后代,要连自身一起改

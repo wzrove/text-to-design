@@ -1,0 +1,44 @@
+{
+  "_说明": "可重放用例模板。优先用 case-new / case-step 生成,手写复杂用例时按此字段填充。",
+  "id": "case-YYYYMMDD-NNNN",
+  "title": "一句话描述这个设计任务",
+  "intent": "用户的原话,保留口语表述,便于日后理解意图",
+  "expect": "可观察的成功标准,例如「画布出现一个名为 发布页 的 FRAME,尺寸 300x200」",
+  "createdAt": "2026-09-18T02:30:44.623Z",
+  "platform": "jsdesign",
+  "status": "active",
+  "tags": ["frame", "fill"],
+  "steps": [
+    {
+      "n": 1,
+      "tool": "jsd_ping",
+      "args": {},
+      "note": "前置:确认插件在线并读取 platform / platformOps"
+    },
+    {
+      "n": 2,
+      "tool": "jsd_create_frame",
+      "args": {
+        "name": "发布页",
+        "x": 100,
+        "y": 100,
+        "width": 300,
+        "height": 200
+      },
+      "note": "步骤入参照抄,不要顺手改写 —— 改写后就不是同一条用例了"
+    },
+    {
+      "n": 3,
+      "tool": "jsd_set_fill_color",
+      "args": {
+        "nodeId": "<上一步返回的 id>",
+        "color": "#EEEEEE"
+      },
+      "note": "占位符注明来源。重放时用本次实际返回的 id 替换。"
+    }
+  ],
+  "_status_取值": {
+    "active": "可重放",
+    "stale": "原环境已不可复现,保留作历史,不再用于回归"
+  }
+}

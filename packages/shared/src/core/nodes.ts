@@ -25,7 +25,7 @@ import { ensureLayoutMode, findNode, type LayoutMode } from './utils';
  *    父级若为异常代理对象其 x/y 可能 undefined,每一步都要校验。
  *
  * 用于 reparent / groupNodes 前后对齐坐标:放置类操作一律以「页面系」为基准,
- * 不依赖引擎是否自动换算(实测同一父级会换算、深层容器不换算,见 P17)。
+ * 不依赖引擎是否自动换算(实测同一父级会换算、深层容器不换算)。
  */
 function absoluteOrigin(node: NodeSkeleton): { x: number; y: number } {
   const abs = node.absolutePosition;
@@ -48,7 +48,7 @@ function absoluteOrigin(node: NodeSkeleton): { x: number; y: number } {
 /**
  * 容器是否开启 auto-layout。auto-layout 容器的子节点次序/坐标由布局接管:
  * 走 `insertChild` 会触发引擎布局重算路径读取子节点 layoutGrow,而插件侧节点
- * 代理在 jsDesign 上该读取会崩(实测 `get_layoutGrow: ... reading 'jsGet'`,见 P8)。
+ * 代理在 jsDesign 上该读取会崩(实测 `get_layoutGrow: ... reading 'jsGet'`)。
  */
 function isAutoLayoutContainer(node: ContainerSkeleton): boolean {
   return (
@@ -59,7 +59,7 @@ function isAutoLayoutContainer(node: ContainerSkeleton): boolean {
 }
 
 /**
- * 临时关掉 auto-layout 时会被引擎连带重置的布局属性(P14)。
+ * 临时关掉 auto-layout 时会被引擎连带重置的布局属性。
  *
  * 实测:只恢复 layoutMode 是不够的 —— 引擎在 layoutMode → NONE 时会把
  * primaryAxisSizingMode / counterAxisSizingMode 重置成另一组默认(AUTO↔FIXED 对调),
@@ -100,7 +100,7 @@ function restoreLayout(container: ContainerSkeleton, snap: LayoutRecord): void {
 }
 
 /**
- * 快照写回后**再回读一遍**,不一致的重压一次(P32)。
+ * 快照写回后**再回读一遍**,不一致的重压一次。
  *
  * 实测:`layoutMode` 的 NONE ↔ 方向 往返会让引擎重进 auto-layout,这期间写回去的
  * 属性只是「回显是新值」——`primaryAxisSizingMode` 回读先显示 `FIXED`(正是我们写的
@@ -181,7 +181,7 @@ function applyPinnedSize(container: ContainerSkeleton, size: PinnedSize): void {
  *
  * 非 auto-layout 容器直接 `insertChild`。
  * auto-layout 容器**临时**把 layoutMode 置 NONE、插好再恢复:插入本身不再是布局
- * 操作,从而绕过 P8 那条会崩的布局重算路径;恢复后引擎按新的 children 顺序重排,
+ * 操作,从而绕过那条会崩的布局重算路径;恢复后引擎按新的 children 顺序重排,
  * index 因此在 auto-layout 容器上也能生效(此前只能报错)。
  * 恢复时连同布局属性一起还原(见 LAYOUT_PRESERVE_KEYS),异常一律在 finally 里恢复,
  * 不留半残状态。
@@ -204,12 +204,12 @@ function insertChildAt(
     parent.insertChild(index, node);
   } finally {
     // 顺序要紧:方向 → 其余布局属性 → 尺寸。引擎在写方向时会把尺寸模式翻成 AUTO,
-    // 尺寸放最后写才不会被它带走(见 P32 实测)。
+    // 尺寸放最后写才不会被它带走。
     owner.layoutMode = mode;
     restoreLayoutVerified(parent, snap);
     applyPinnedSize(parent, pinned);
   }
-  // 方向最后回读校验(P31):写方向会翻 sizing,所以它排在尺寸之后。这一次校验**真的**
+  // 方向最后回读校验:写方向会翻 sizing,所以它排在尺寸之后。这一次校验**真的**
   // 重写了方向时,属性与尺寸可能又被这记写入带走,再补一遍。
   // 压不住不静默:本函数没有 warnings 通道,交由调用方后续读数发现(节点是同一引用,
   // 不会谎报成功)。
@@ -348,7 +348,7 @@ export function cloneNodes(
  * @figma/plugin-typings 的 GroupNode 只有 clone(),**没有**节点级 ungroup();
  * jsDesign typings 两级都没有。故按「平台级 → 节点级」探测,都不可用返回 false
  * 交上层报错 —— 绝不能静默当成功:此前写的是 `g.ungroup?.()`,在 Figma 上恒为
- * no-op,结果却回显 `ungrouped: [id]`,与 P7「回显不等于生效」同一类坑。
+ * no-op,结果却回显 `ungrouped: [id]`,「回显不等于生效」同一类坑。
  */
 function ungroupNode(host: DesignHost, node: NodeSkeleton): boolean {
   if (typeof host.ungroup === 'function') {
@@ -489,7 +489,7 @@ export function groupNodes(
     ? parentChildren.findIndex((c) => c.id === nodes[0].id)
     : -1;
   if (firstIndex >= 0) {
-    // 走 insertChildAt:目标父级若是 auto-layout 容器,直接 insertChild 会崩(P8),
+    // 走 insertChildAt:目标父级若是 auto-layout 容器,直接 insertChild 会崩,
     // 这里内部临时关掉布局插入再恢复,原索引位与 z-order 都能保住。
     insertChildAt(parent, firstIndex, frame);
   } else {
@@ -680,13 +680,13 @@ export function reparentNodes(
     if (alreadyChild && params.index == null) continue;
 
     if (alreadyChild) {
-      // 同父级 = 只调层序(P11:旧实现在这里直接 continue,
+      // 同父级 = 只调层序(旧实现在这里直接 continue,
       // 导致「用 reparent 调层序」静默失效)
       reorderChild(host, parent, n, params.index ?? 0);
       continue;
     }
 
-    // 移动前的绝对原点(P17):引擎是否自动换算坐标**不稳定**
+    // 移动前的绝对原点:引擎是否自动换算坐标**不稳定**
     // (实测同父级的一层容器会换算,嵌在 auto-layout 里的深层容器不换算,
     // 后者会让节点保留旧相对 x/y 而飞出画布)。这里自页面系记账,移动后统一还原。
     const origin = absoluteOrigin(n);
@@ -728,7 +728,7 @@ export function reparentNodes(
       );
     }
   }
-  // P23:同一聚合入口(jsd_manage_nodes)下各 op 的返回键互不相同 —— reparent 回
+  // 同一聚合入口(jsd_manage_nodes)下各 op 的返回键互不相同 —— reparent 回
   // moved,而 batch 里最顺手的写法是 {{步骤id.updated[0].id}}。调用方按 updated 写
   // 就报「无法解析占位符引用」,节点其实已经移好了(状态与回显不一致,整批还会被
   // stopOnError 掐断)。这里让两个键同时出现:同一份数组,习惯用哪个都能解析。
@@ -753,7 +753,7 @@ function clampIndex(parent: ContainerSkeleton, index: number): number {
 }
 
 /**
- * 同父级调层序(P11)。
+ * 同父级调层序。
  *
  * `index` 语义 = 目标在父节点 `children` 数组里的最终下标,
  * 而 `children` 是**绘制顺序**(下标 0 = 最底层,末位 = 最上层)。

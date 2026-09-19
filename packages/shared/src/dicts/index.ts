@@ -10,3 +10,4 @@ export * from './log';
 export * from './node-type';
 export * from './platform';
 export * from './prop-applicability';
+export * from './unapplied-prop';

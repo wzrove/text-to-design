@@ -46,7 +46,7 @@ export const batchSchema = z.object({
     .boolean()
     .optional()
     .describe(
-      '是否自动复核同层几何漂移,默认 true。批次里含 remove/reparent/group/flatten/repair 时会:变更前记下受影响父层的子节点坐标,收尾再读一次比对,漂移写进结果 warnings(P25-B:引擎会把没碰到的兄弟静默挪走)。代价是每层多一次读数;不需要时传 false',
+      '是否对结构变更步骤做同层几何漂移复核,默认 true。步骤里含 remove/reparent/group/ungroup/flatten/repair 时:变更前记下受影响父层的子节点坐标,该步结束后再读一次比对,漂移写进结果 warnings(引擎会把没碰到的兄弟静默挪走)。代价是每步多两次读数;确定不需要时传 false',
     ),
 });
 export type BatchParams = z.infer<typeof batchSchema>;
@@ -74,13 +74,13 @@ export const batchResultSchema = z.object({
     )
     .describe('各步骤结果,顺序与入参一致;被中止而未执行的步骤不出现在此列表'),
   /**
-   * P22:回显里的节点只留摘要字段、丢 vectorPaths 等大字段;裁剪后仍超预算的步骤
+   * 回显里的节点只留摘要字段、丢 vectorPaths 等大字段;裁剪后仍超预算的步骤
    * 降级为 id 清单。置 true 时说明有步骤的回显被压缩过 —— 需要细节请把该工具单独
    * 调用一次(占位符解析不受影响,内部用的是完整数据)。
    */
   echoTrimmed: z.boolean().optional(),
   /**
-   * P25-B:结构变更类批次收尾的同层几何复核结果。引擎在批量删除/移父后会重算同层
+   * 结构变更类批次收尾的同层几何复核结果。引擎在批量删除/移父后会重算同层
    * 约束,把本次操作没触及的节点静默挪走(无报错、回显正常),这里点名并给出原值。
    */
   warnings: z.array(z.string()).optional(),

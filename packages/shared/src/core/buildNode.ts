@@ -1,37 +1,18 @@
 import type { ExecuteOp } from '../schemas';
 import { isGatedPropUnsupported } from './capabilities';
 import type { ContainerSkeleton, DesignHost, NodeSkeleton } from './host';
-import { MIXED } from './host';
+import { assertBooleanOperation, normalizeVectorPaths } from './normalize';
+import { type CreateNotes, harvestOutcome, nodeLabel } from './props/outcome';
+import { settleWriters, writePhase } from './props/run';
+import { emptyOutcome, type WriteCtx } from './props/types';
 import {
-  assertBooleanOperation,
-  normalizeEffects,
-  normalizeLayoutGrids,
-  normalizePaints,
-  normalizeVectorPaths,
-} from './normalize';
-import { ensureLayoutMode, loadFont, MIN_RESIZE_SIZE } from './utils';
-
-/**
- * 按 spec 的 width/height 定尺寸;只给了一维时另一维沿用当前值。
- *
- * LINE 例外:允许某一维为 0(横线/竖线,画布上已有 LINE 序列化即为 height:0),
- * 但引擎 resize 校验要求 >= 0.01(实测 P9,直接传 0 会报
- * `in resize: Expected "width" to have value >= 0.01`),这里把零轴抬到引擎
- * 可接受的最小值,视觉上仍是一条直线。
- */
-function applySize(node: NodeSkeleton, spec: ExecuteOp): void {
-  if (spec.width == null || !('resize' in node)) return;
-  const targetW = spec.width;
-  const targetH = spec.height ?? node.height;
-  if (node.type === 'LINE') {
-    node.resize(
-      Math.max(targetW, MIN_RESIZE_SIZE),
-      Math.max(targetH, MIN_RESIZE_SIZE),
-    );
-  } else {
-    node.resize(targetW, targetH);
-  }
-}
+  CREATE_WRITERS,
+  createStabilizeWriter,
+  geometryWriter,
+  layoutWriter,
+  textStabilizeWriter,
+} from './props/writers';
+import type { RuntimeContext } from './runtime';
 
 /** 创建路径上受平台能力门控的 spec 字段(与 dicts/capability.ts 的属性表对应) */
 const GATED_SPEC_KEYS = [
@@ -43,12 +24,19 @@ const GATED_SPEC_KEYS = [
   'maxLines',
 ] as const satisfies readonly (keyof ExecuteOp)[];
 
+/**
+ * 尺寸回读的容差:引擎会把尺寸夹到整数/做亚像素取整,1px 内的差异不算被改写。
+ * 命中它的一般是「显式给了 width,却被 auto-resize 按内容撑开」这类真事件。
+ */
+const SIZE_TOLERANCE = 0.5;
+
 async function buildNode(
   host: DesignHost,
+  ctx: RuntimeContext,
   spec: ExecuteOp,
   parent: ContainerSkeleton,
-  /** 收集「平台不具备、被静默跳过」的门控字段(由 executeOps 汇总进结果 warnings) */
-  skipped?: Set<string>,
+  /** 写后回收袋(见 core/props/outcome):门控字段、回读不一致、writer 自述告警 */
+  notes?: CreateNotes,
 ): Promise<NodeSkeleton> {
   const type = spec.type;
   let node: NodeSkeleton;
@@ -82,7 +70,7 @@ async function buildNode(
       const tmp = host.createFrame();
       parent.appendChild(tmp);
       for (const child of children) {
-        await buildNode(host, child, tmp);
+        await buildNode(host, ctx, child, tmp);
       }
       const combine: Record<
         string,
@@ -109,7 +97,7 @@ async function buildNode(
       const tmp = host.createFrame();
       parent.appendChild(tmp);
       for (const child of children) {
-        await buildNode(host, child, tmp);
+        await buildNode(host, ctx, child, tmp);
       }
       node = tmp;
       break;
@@ -118,102 +106,19 @@ async function buildNode(
       node = host.createFrame();
   }
 
-  node.name = spec.name ?? 'node';
-  node.x = spec.x ?? 0;
-  node.y = spec.y ?? 0;
+  const wctx: WriteCtx = {
+    host,
+    ctx,
+    node,
+    src: spec as unknown as Readonly<Record<string, unknown>>,
+    outcome: emptyOutcome(),
+    create: true,
+  };
 
-  applySize(node, spec);
-  if (spec.rotation != null) node.rotation = spec.rotation;
-  if (spec.opacity != null && 'opacity' in node) node.opacity = spec.opacity;
-  if (spec.locked != null) node.locked = spec.locked;
-  if (spec.visible != null && 'visible' in node) node.visible = spec.visible;
-
-  if (spec.fills != null && 'fills' in node) {
-    node.fills = normalizePaints(spec.fills, 'fills');
-  } else if (spec.strokes != null && 'fills' in node && node.type !== 'FRAME') {
-    // 只给了描边、没给填充:引擎会给图形自动塞 #CCCCCC 灰底(P10),
-    // 纯描边图标就成了灰块。这里显式清空填充。
-    // 例外 FRAME:容器按文档走引擎默认白底,不在此改动。
-    node.fills = [];
-  }
-  if (spec.strokes != null && 'strokes' in node)
-    node.strokes = normalizePaints(spec.strokes, 'strokes');
-
-  if (spec.strokeWeight != null && 'strokeWeight' in node)
-    node.strokeWeight = spec.strokeWeight;
-  if (spec.strokeTopWeight != null && 'strokeTopWeight' in node)
-    node.strokeTopWeight = spec.strokeTopWeight;
-  if (spec.strokeBottomWeight != null && 'strokeBottomWeight' in node)
-    node.strokeBottomWeight = spec.strokeBottomWeight;
-  if (spec.strokeLeftWeight != null && 'strokeLeftWeight' in node)
-    node.strokeLeftWeight = spec.strokeLeftWeight;
-  if (spec.strokeRightWeight != null && 'strokeRightWeight' in node)
-    node.strokeRightWeight = spec.strokeRightWeight;
-  if (spec.strokeAlign != null && 'strokeAlign' in node)
-    node.strokeAlign = spec.strokeAlign;
-  if (spec.strokeCap != null && 'strokeCap' in node)
-    node.strokeCap = spec.strokeCap;
-  if (spec.strokeJoin != null && 'strokeJoin' in node)
-    node.strokeJoin = spec.strokeJoin;
-  if (spec.dashPattern != null && 'dashPattern' in node)
-    node.dashPattern = spec.dashPattern;
-  if (spec.blendMode != null && 'blendMode' in node)
-    node.blendMode = spec.blendMode;
-  if (spec.cornerSmoothing != null && 'cornerSmoothing' in node)
-    node.cornerSmoothing = spec.cornerSmoothing;
-  if (spec.constraints != null && 'constraints' in node)
-    node.constraints = spec.constraints;
-  if (spec.clipsContent != null && 'clipsContent' in node)
-    node.clipsContent = spec.clipsContent;
-  if (spec.layoutGrids != null && 'layoutGrids' in node)
-    node.layoutGrids = normalizeLayoutGrids(spec.layoutGrids);
-
-  if (spec.effects != null && 'effects' in node)
-    node.effects = normalizeEffects(spec.effects);
-
-  if ('cornerRadius' in node) {
-    if (spec.cornerRadius != null) node.cornerRadius = spec.cornerRadius;
-    if ('topLeftRadius' in node) {
-      if (spec.topLeftRadius != null) node.topLeftRadius = spec.topLeftRadius;
-      if (spec.topRightRadius != null)
-        node.topRightRadius = spec.topRightRadius;
-      if (spec.bottomLeftRadius != null)
-        node.bottomLeftRadius = spec.bottomLeftRadius;
-      if (spec.bottomRightRadius != null)
-        node.bottomRightRadius = spec.bottomRightRadius;
-    }
-  }
-
-  if (
-    (node.type === 'POLYGON' || node.type === 'STAR') &&
-    spec.pointCount != null
-  ) {
-    node.pointCount = spec.pointCount;
-  }
-  if (node.type === 'STAR' && spec.innerRadius != null) {
-    node.innerRadius = spec.innerRadius;
-  }
-  if (node.type === 'ELLIPSE' && spec.arcData != null && 'arcData' in node) {
-    node.arcData = spec.arcData;
-  }
-
-  if (node.type === 'TEXT') {
-    if (spec.fontName && node.fontName !== MIXED) {
-      await loadFont(host, spec.fontName.family, spec.fontName.style);
-      node.fontName = spec.fontName;
-    }
-    node.characters = spec.characters ?? 'text';
-    node.fontSize = spec.fontSize ?? 16;
-    if (spec.textAlignHorizontal != null)
-      node.textAlignHorizontal = spec.textAlignHorizontal;
-    if (spec.textAlignVertical != null)
-      node.textAlignVertical = spec.textAlignVertical;
-    if (spec.textAutoResize != null) node.textAutoResize = spec.textAutoResize;
-    if (spec.textCase != null) node.textCase = spec.textCase;
-    if (spec.textDecoration != null) node.textDecoration = spec.textDecoration;
-    if (spec.lineHeight != null) node.lineHeight = spec.lineHeight;
-    if (spec.letterSpacing != null) node.letterSpacing = spec.letterSpacing;
-  }
+  // ---- 属性写入:与修改路径共用同一批 writer(见 core/props/writers) ----
+  // 创建路径的默认值与推断(清灰底 / TEXT 默认字 / padding 归零 + sizingMode
+  // 推断)都在 writer 里由 ctx.create 显式触发,不再是这里另写一份 200 行。
+  await writePhase(wctx, CREATE_WRITERS);
 
   parent.appendChild(node);
   if (spec.type === 'BOOLEAN_OPERATION') {
@@ -226,111 +131,67 @@ async function buildNode(
     ) as typeof spec.vectorPaths;
   }
   for (const child of spec.children ?? []) {
-    await buildNode(host, child, node);
+    await buildNode(host, ctx, child, node);
   }
 
-  if (
-    node.type === 'FRAME' &&
-    spec.layoutMode != null &&
-    'layoutMode' in node
-  ) {
-    node.layoutMode = spec.layoutMode;
-    // itemSpacing 一贯缺省 0;padding 必须与它同口径:
-    // 引擎在开启 auto-layout 时会把四边 padding 默认置 10(实测 P18),
-    // 调用方没传就显式归 0,免得「没写 padding 却莫名多出 10px 内边距」。
-    node.itemSpacing = spec.itemSpacing ?? 0;
-    node.paddingTop = spec.paddingTop ?? 0;
-    node.paddingRight = spec.paddingRight ?? 0;
-    node.paddingBottom = spec.paddingBottom ?? 0;
-    node.paddingLeft = spec.paddingLeft ?? 0;
-    if (spec.primaryAxisSizingMode != null)
-      node.primaryAxisSizingMode = spec.primaryAxisSizingMode;
-    if (spec.counterAxisSizingMode != null)
-      node.counterAxisSizingMode = spec.counterAxisSizingMode;
-    if (spec.primaryAxisAlignItems != null)
-      node.primaryAxisAlignItems = spec.primaryAxisAlignItems;
-    if (spec.counterAxisAlignItems != null)
-      node.counterAxisAlignItems = spec.counterAxisAlignItems;
+  // ---- 自动布局必须在子节点插完之后写 ----
+  // 引擎会在插入子节点时按内容重算容器尺寸与方向,写在前面会被覆盖 —— 这正是尺寸被吃掉的
+  // 根因(实测:传 690×210 带嵌套 children,返回 630×160)。
+  await writePhase(wctx, [layoutWriter]);
 
-    // 显式给了尺寸、却没声明该轴的 sizingMode → 该轴钉成 FIXED。
-    // 引擎开启 auto-layout 时默认按内容撑开(AUTO),会把调用方给的尺寸悄悄吃掉:
-    // 实测传 width:690,height:210 带嵌套 children,返回 630×160(P18)。
-    // 调用方显式声明过 sizingMode 的一律尊重,不抢。
-    const widthIsPrimary = spec.layoutMode === 'HORIZONTAL';
-    if (
-      spec.width != null &&
-      spec.primaryAxisSizingMode == null &&
-      widthIsPrimary
-    )
-      node.primaryAxisSizingMode = 'FIXED';
-    if (
-      spec.width != null &&
-      spec.counterAxisSizingMode == null &&
-      !widthIsPrimary
-    )
-      node.counterAxisSizingMode = 'FIXED';
-    if (
-      spec.height != null &&
-      spec.primaryAxisSizingMode == null &&
-      !widthIsPrimary
-    )
-      node.primaryAxisSizingMode = 'FIXED';
-    if (
-      spec.height != null &&
-      spec.counterAxisSizingMode == null &&
-      widthIsPrimary
-    )
-      node.counterAxisSizingMode = 'FIXED';
-  }
-  if (spec.layoutGrow != null && 'layoutGrow' in node) {
-    node.layoutGrow = spec.layoutGrow;
-  }
-  if (spec.layoutAlign != null && 'layoutAlign' in node) {
-    node.layoutAlign = spec.layoutAlign;
-  }
-
-  // 尺寸最后再定一次(P18):开启 auto-layout 会触发引擎按子项重算容器尺寸,
-  // 把建节点早期那次 resize 覆盖掉 —— 实测传 width:690,height:210 带嵌套
-  // children 建卡片,返回却是 630×122。显式给了尺寸就以调用方为准再压一遍。
-  applySize(node, spec);
-
-  // resize 会把显式声明的 AUTO 悄悄改回 FIXED(实测:声明 primaryAxis/
-  // counterAxis 都是 AUTO 并给 width:500,height:80,压完尺寸后两个轴都变成
-  // FIXED)。所以压完尺寸要把调用方**声明过**的 sizingMode 再写一次,
-  // 否则上一行的 resize 就等于抢了调用方的显式意图 —— 说了要 hug 却给固定尺寸。
-  if (node.type === 'FRAME' && spec.layoutMode != null) {
-    if (spec.primaryAxisSizingMode != null)
-      node.primaryAxisSizingMode = spec.primaryAxisSizingMode;
-    if (spec.counterAxisSizingMode != null)
-      node.counterAxisSizingMode = spec.counterAxisSizingMode;
-    // 方向也要回读校验(P31):上面的 applySize 会触发引擎布局重算,实测能把刚写的
-    // layoutMode 回写成另一方向(传 HORIZONTAL、回读 VERTICAL),子节点随后全叠在
-    // 同一点,而回显一切正常。sizingMode 已有再压一次的先例,方向补上同等待遇。
-    ensureLayoutMode(node, spec.layoutMode);
-  }
+  // ---- 稳定化(顺序固定:尺寸 → 文本自适应 → sizingMode → 方向) ----
+  // ① 尺寸:再压一次,显式给了尺寸就以调用方为准;
+  // ② textAutoResize:`resize()` 会把它重置为 NONE,声明过的必须在尺寸之后压回;
+  // ③ sizingMode:resize 会把显式声明的 AUTO 悄悄改回 FIXED,声明过的再写回去;
+  // ④ 方向:布局重算可能把刚写的 layoutMode 回写成另一方向,回读修正。
+  await settleWriters(wctx, [
+    geometryWriter,
+    textStabilizeWriter,
+    createStabilizeWriter,
+    layoutWriter,
+  ]);
 
   // 平台能力门控字段:判定与修改路径同源(core/capabilities.ts),不具备时不再静默跳过 ——
-  // 记进 skipped 由 executeOps 汇总成 warnings 点名,否则调用方以为建的时候就带上截断/样式了
+  // 记进 notes 由 executeOps 汇总成 warnings 点名,否则调用方以为建的时候就带上截断/样式了
   for (const key of GATED_SPEC_KEYS) {
     if (spec[key] == null) continue;
-    if (!isGatedPropUnsupported(key, node)) continue;
-    skipped?.add(key);
+    if (!isGatedPropUnsupported(ctx, key, node)) continue;
+    notes?.skipped.add(key);
   }
 
-  if (spec.fillStyleId != null && 'fillStyleId' in node)
-    node.fillStyleId = spec.fillStyleId;
-  if (spec.strokeStyleId != null && 'strokeStyleId' in node)
-    node.strokeStyleId = spec.strokeStyleId;
-  if (spec.textStyleId != null && 'textStyleId' in node)
-    node.textStyleId = spec.textStyleId;
-  if (spec.effectStyleId != null && 'effectStyleId' in node)
-    node.effectStyleId = spec.effectStyleId;
-  if (node.type === 'TEXT') {
-    if (spec.textTruncation != null && 'textTruncation' in node)
-      node.textTruncation = spec.textTruncation;
-    if (spec.maxLines != null && 'maxLines' in node)
-      node.maxLines = spec.maxLines;
+  // ---- 写后回读回收(0007) ----
+  // 0004 把「某个字段为什么没生效」统一到 WriteOutcome,但当时只有修改路径回收它:
+  // 创建路径只回收能力门控,readback.ok === false(方向、字体)与
+  // outcome.warnings 被静默丢弃 —— 同一个平台缺陷「建的时候」不点名、「改的时候」才点名。
+  harvestOutcome(wctx.outcome, nodeLabel(node), notes);
+
+  // TEXT 的尺寸与自适应模式回读 —— 只记「请求 vs 回读」这份事实,
+  // 修法文案集中在 dicts/unapplied-prop.ts;引擎真按请求落了值就一条都不报。
+  if (spec.type === 'TEXT') {
+    for (const key of ['width', 'height'] as const) {
+      const want = spec[key];
+      if (typeof want !== 'number') continue;
+      const got = (node as unknown as Record<string, unknown>)[key];
+      if (typeof got !== 'number') continue;
+      if (Math.abs(got - want) <= SIZE_TOLERANCE) continue;
+      notes?.unapplied.push({ key, label: nodeLabel(node) });
+    }
+    // 实测:给了 width/height 但没声明 textAutoResize 时,引擎的 resize 会把缺省的
+    // WIDTH_AND_HEIGHT 置成 NONE —— 文本仍会换行(导图证实),但文本框高度不再随内容
+    // 重算(实测 200 宽长文本渲染 4 行、height 回读仍是 15),父容器按 15 算就会裁切。
+    const autoResize = (node as unknown as { textAutoResize?: unknown })
+      .textAutoResize;
+    if (spec.textAutoResize == null && autoResize === 'NONE') {
+      const sized = spec.width != null || spec.height != null;
+      if (sized) {
+        notes?.unapplied.push({
+          key: 'textAutoResize',
+          label: nodeLabel(node),
+        });
+      }
+    }
   }
+
   return node;
 }
 

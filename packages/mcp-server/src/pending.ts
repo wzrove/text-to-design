@@ -242,8 +242,14 @@ export class PendingManager {
   }
 }
 
-/** 把二进制帧回填进 meta 结构(按帧序与插入序一一对应),兜底返回裸 Buffer */
-function mergeBytes(data: unknown, buffers: Buffer[]): unknown {
+/**
+ * 把二进制帧回填进 meta 结构(按帧序与插入序一一对应),兜底返回裸 Buffer。
+ *
+ * 与 `ui/src/bridge/binary.ts` 的 `stripBytes` / `extractBytes` 是一对互逆编码,
+ * 分居两个包、任何一侧漂移都表现为「导出图是空的」这种极难定位的症状。
+ * 导出是为了让跨包 roundtrip 测试(仓库根 tests/)能直接对握手,别单点改名。
+ */
+export function mergeBytes(data: unknown, buffers: Buffer[]): unknown {
   const single = buffers.length === 1 ? buffers[0] : buffers;
   if (!data || typeof data !== 'object') return single;
   const d = data as Record<string, unknown>;

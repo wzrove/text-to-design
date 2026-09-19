@@ -5,6 +5,7 @@ import type {
 } from '../schemas';
 import { hostCapabilityState } from './capabilities';
 import { type DesignHost, MIXED, type NodeSkeleton } from './host';
+import type { RuntimeContext } from './runtime';
 import { serializeNode } from './serialize';
 import { updateSelection } from './update';
 import { findNode } from './utils';
@@ -121,6 +122,7 @@ export async function importComponentNodes(
 
 export function combineAsVariantsNodes(
   host: DesignHost,
+  ctx: RuntimeContext,
   params: { ids: string[]; name?: string },
 ): { created: SerializedNode } {
   const components = findNode(host, params.ids).filter(
@@ -140,7 +142,7 @@ export function combineAsVariantsNodes(
   // - Figma 的原生 combineAsVariants 就是**原位合并** —— 并入集合的就是实例所指的
   //   那些 COMPONENT 本身,已有实例链接不断;克隆姿势在它上面纯属副作用(留下
   //   「原件 + 集合内克隆」两份,实例继续指向原件,变体集与实例脱钩)。
-  // - jsDesign 没有这个语义(该路径随 P24 一起崩),只能靠克隆兜底。
+  // - jsDesign 没有这个语义(该路径必然崩),只能靠克隆兜底。
   //
   // 故声明了 inPlaceVariants 能力的平台优先走原位,其余保持历史顺序(克隆优先)。
   let set: NodeSkeleton | undefined;
@@ -154,7 +156,7 @@ export function combineAsVariantsNodes(
     return s ?? undefined;
   };
 
-  // 克隆后合并:原组件保留。P30:jsDesign 上 host.combineAsVariants 可能返回一个
+  // 克隆后合并:原组件保留。jsDesign 上 host.combineAsVariants 可能返回一个
   // 非空 set,但任何对它的属性访问(set.name / 后续 serializeNode)都会触发引擎内部
   // getter 崩(get_booleanOperation / get_name: Value is not a string)。该崩不在
   // 调用内部抛出,一路冒到 plugin 外层 try,把引擎原文回给调用方,富出口文案错过。
@@ -191,7 +193,7 @@ export function combineAsVariantsNodes(
     run: combineClones(false),
   };
   // 能力表未注入(null)时不猜平台语义,保持历史顺序(行为与绑定前一致)
-  const supportsInPlace = hostCapabilityState('inPlaceVariants') === true;
+  const supportsInPlace = hostCapabilityState(ctx, 'inPlaceVariants') === true;
   const attempts = supportsInPlace
     ? [inPlaceAttempt, cloneToPageAttempt, cloneThenCombineAttempt]
     : [cloneToPageAttempt, cloneThenCombineAttempt, inPlaceAttempt];
@@ -210,31 +212,31 @@ export function combineAsVariantsNodes(
   if (set == null) {
     const names = components.map((c) => `${c.name}(${c.id})`).join('、');
     if (supportsInPlace) {
-      // 平台声明了原位合并能力却仍全败:与 jsDesign 的 P24 不是一回事,先按调用
+      // 平台声明了原位合并能力却仍全败:与 jsDesign 的 不是一回事,先按调用
       // 与节点状态排查 —— 别让调用方套用「引擎做不出来」的结论去改组件结构。
       throw new Error(
         [
-          'combine_as_variants 失败:本平台声明支持原位合并(inPlaceVariants),三种姿势仍全败,按调用与节点状态排查(不要套用 jsDesign 的 P24 结论)。',
+          'combine_as_variants 失败:本平台声明支持原位合并(inPlaceVariants),三种姿势仍全败,按调用与节点状态排查(不要套用 jsDesign 的结论)。',
           `引擎报错:${errors.join(';')}。`,
           `本次涉及的组件:${names}。`,
           '排查方向:①组件是否跨页 / 跨父级;②是否已被并入别的组件集;③组件是否处于错误状态(可先 jsd_repair_nodes 清理);④组件名是否符合「属性=值」、多属性用 ", " 分隔。',
         ].join(''),
       );
     }
-    // 平台缺陷(P24):本引擎版本的 combineAsVariants 在合并路径里把节点按
+    // 平台缺陷:本引擎版本的 combineAsVariants 在合并路径里把节点按
     // BOOLEAN_OPERATION 取属性(get_booleanOperation: Value is not a string),
     // 与组件结构无关、克隆兜底路径同样必败(实测三个同尺寸同层级的合规 COMPONENT
     // 同样必败)。所以这里不能只回一句「失败」—— 那是让人反复重试、怀疑组件
     // 结构的信号;直接把可执行出口写在报错里。
     throw new Error(
       [
-        `combine_as_variants 三种姿势均失败:本引擎版本的变体集做不出来(平台缺陷 P24,建议附下面的报错上报)。`,
+        `combine_as_variants 三种姿势均失败:本引擎版本的变体集做不出来(平台缺陷,建议附下面的报错上报)。`,
         `引擎报错:${errors.join(';')}。`,
         `本次涉及的组件:${names}。`,
         '不要在结构上找原因,也别重试(合规组件同样必败)。',
         '可执行出口:①每个状态各做一个独立 COMPONENT,按「族名 / 状态」命名(如 Nav / Face-to-Face、Nav / Inbox、Nav / Me),调用方按名字取用;',
         '②确需变体语义时在画布上手工合并,或换到支持该能力的引擎(如 Figma)执行。',
-        '⚠ 「一个主件 + 每屏改子节点颜色」这条捷径同样不通:实例子节点的样式 override 平台不保证渲染生效(见平台缺陷 P7),多状态只能靠多主件。',
+        '⚠ 「一个主件 + 每屏改子节点颜色」这条捷径同样不通:实例子节点的样式 override 平台不保证渲染生效(见平台缺陷),多状态只能靠多主件。',
       ].join(''),
     );
   }
@@ -466,6 +468,7 @@ function captureOverrideSnapshot(
 /** 把快照套用到目标实例:可选 swap → 变体/组件属性 → 可见属性。逐条 try/catch */
 async function applyOverrideSnapshot(
   host: DesignHost,
+  ctx: RuntimeContext,
   snapshot: OverrideSnapshot,
   ids: string[],
   swapToSource: boolean,
@@ -524,7 +527,7 @@ async function applyOverrideSnapshot(
       }
       if (snapshot.props != null && Object.keys(snapshot.props).length > 0) {
         // 复用 updateSelection:含 TEXT 的 loadFont 等边界处理
-        await updateSelection(host, {
+        await updateSelection(host, ctx, {
           ids: [targetId],
           props: snapshot.props,
         });
@@ -557,6 +560,7 @@ async function applyOverrideSnapshot(
 /** 无状态一次性「复制+套用」:不写缓存,适合 jsd_batch 流水 */
 export async function syncInstanceOverrides(
   host: DesignHost,
+  ctx: RuntimeContext,
   params: {
     sourceId: string;
     ids: string[];
@@ -575,6 +579,7 @@ export async function syncInstanceOverrides(
   );
   return applyOverrideSnapshot(
     host,
+    ctx,
     snapshot,
     params.ids,
     params.swapToSource ?? false,
@@ -606,6 +611,7 @@ export function copyInstanceOverrides(
 /** 两段式第二段:按 sourceId 从缓存取快照套用到目标实例;miss 报错提示先 copy */
 export async function applyCachedOverrides(
   host: DesignHost,
+  ctx: RuntimeContext,
   params: { sourceId: string; ids: string[]; swapToSource?: boolean },
 ): Promise<{
   applied: AppliedOverride[];
@@ -620,6 +626,7 @@ export async function applyCachedOverrides(
   }
   return applyOverrideSnapshot(
     host,
+    ctx,
     snapshot,
     params.ids,
     params.swapToSource ?? false,

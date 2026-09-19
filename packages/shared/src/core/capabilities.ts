@@ -2,25 +2,18 @@ import {
   CAPABILITY_OF_GATED_PROP,
   type HostCapabilityKey,
 } from '../dicts/capability';
+import type { RuntimeContext } from './runtime';
 
 /**
- * 当前平台能力表的进程内注入点。
+ * 平台能力判定。
  *
- * core 是平台无关层,只拿到 host(运行时全局),拿不到 adapter 的 meta;
- * 而「字段会不会生效」的判定又必须以同一份能力事实为依据。故由插件入口
- * (ui/code/plugin.ts 的 registerPlugin)在装配时注入一次 —— 与 logger.setLogSink
- * 同模式:core 保持零 adapter 依赖,事实由入口组装。
+ * core 是平台无关层,只拿到 host(运行时全局),拿不到 adapter 的 meta;而「字段会
+ * 不会生效」的判定又必须以同一份能力事实为依据。事实来源现在是入口传入的
+ * {@link RuntimeContext} —— 显式、只读、可并行构造不同平台的实例,
+ * 不再是模块级可变变量(那東西谁都能改,而且改了之后无从追查)。
  *
  * 未注入时返回 null(fail-open):退回运行时属性存在性探测,不误报。
  */
-let injected: readonly HostCapabilityKey[] | null = null;
-
-/** 注入当前平台能力表(插件入口调用;传 null 可清空,便于单测) */
-export function setHostCapabilities(
-  caps: readonly HostCapabilityKey[] | null,
-): void {
-  injected = caps;
-}
 
 /**
  * 当前平台是否声明支持某能力。
@@ -28,9 +21,12 @@ export function setHostCapabilities(
  * - false:声明不支持(权威判定,直接算不生效)
  * - null:未注入,未知
  */
-export function hostCapabilityState(cap: HostCapabilityKey): boolean | null {
-  if (injected == null) return null;
-  return injected.includes(cap);
+export function hostCapabilityState(
+  ctx: RuntimeContext,
+  cap: HostCapabilityKey,
+): boolean | null {
+  if (ctx.capabilities == null) return null;
+  return ctx.capabilities.includes(cap);
 }
 
 /** 仅 TEXT 适用的门控字段:其他类型传了属于「类型不匹配」,不该报成「平台不支持」 */
@@ -45,12 +41,13 @@ const TEXT_ONLY_GATED_PROPS = new Set(['textTruncation', 'maxLines']);
  * 未注入能力表时只走 ③(fail-open,行为与绑定前一致)。
  */
 export function isGatedPropUnsupported(
+  ctx: RuntimeContext,
   key: string,
   node: { type: string },
 ): boolean {
   const capability = CAPABILITY_OF_GATED_PROP[key];
   if (capability == null) return false;
   if (TEXT_ONLY_GATED_PROPS.has(key) && node.type !== 'TEXT') return false;
-  if (hostCapabilityState(capability) === false) return true;
+  if (hostCapabilityState(ctx, capability) === false) return true;
   return !(key in node);
 }

@@ -5,6 +5,7 @@ import type {
   PlatformMeta,
   PluginPlatform,
   PluginRequest,
+  PropMethod,
   SerializedNode,
 } from 'text-to-design-shared';
 import {
@@ -29,10 +30,11 @@ import {
   listStyles,
   makeResponse,
   outlineStrokeNodes,
+  PROP_METHOD_FIELDS,
   removeNodes,
   repairNodes,
   reparentNodes,
-  setHostCapabilities,
+  runtimeContext,
   setInstanceProperties,
   setSelection,
   swapComponents,
@@ -43,15 +45,36 @@ import {
 
 const UI_OPTIONS = { width: 360, height: 520 };
 
+/**
+ * 属性引擎方法判定:方法名是否存在于字段表。
+ *
+ * 早先这里把 11 个 prop-method 逐个写成 switch case,那是同一份名单的第 4 份手抄
+ * (另外三份在 schemas/split-ops 的 PropMethod、index 的 PropParamsByMethod 与
+ * PluginRequest)。新增属性方法要记得改四处,漏这里的症状是「工具注册成功、
+ * 校验通过、插件回未知方法」。判定改走 shared 的字段表后,加方法只需改那份表。
+ * 一致性由 tests/plugin-prop-dispatch.test.ts 守住:这里再出现 case 就测试失败。
+ */
+function isPropMethod(method: PluginRequest['method']): boolean {
+  // 不能用 Object.hasOwn(ES2022):插件产物 target=es6 只降语法、不注入 API polyfill,
+  // 而设计宿主沙箱的运行时没有它 —— 报错是「not a function」,且因为这里是所有属性类
+  // 请求的必经判定口,症状是**全部** jsd_set_*/move/resize 集体失败(创建类工具正常)。
+  //
+  return Object.prototype.hasOwnProperty.call(PROP_METHOD_FIELDS, method);
+}
+
+/** 属性类请求的收窄视图:多例(run)时 isPropMethod 已确认方法名在字段表内 */
+type PropRequest = Extract<PluginRequest, { method: PropMethod }>;
+
 /** 平台无关插件外壳:注入平台 host,接插件生命周期与消息路由 */
 export function registerPlugin(
   host: DesignHost,
   platform: PluginPlatform,
   meta: PlatformMeta,
 ): void {
-  // 把平台能力表注入 core:core 的「字段是否生效」判定与 ping 上报的能力表从此同源
-  // (此前 core 自己手写 PLATFORM_SUPERSET_PROPS,与 meta.capabilities 是两套事实)
-  setHostCapabilities(meta.capabilities);
+  // 一次运行的显式上下文:core 的「字段是否生效」判定与 ping 上报的能力表同源,
+  // 由这里组装成对象沿着调用链传下去(此前是模块级可变全局 setHostCapabilities,
+  // 谁都能改、改完无从追查,也无法同时存在两个平台的实例)
+  const ctx = runtimeContext(meta.capabilities);
   try {
     if (__html__ || (typeof __html__ === 'string' && __html__.trim() !== '')) {
       host.showUI(__html__, UI_OPTIONS);
@@ -150,6 +173,7 @@ export function registerPlugin(
         case 'execute': {
           const r = await executeOps(
             host,
+            ctx,
             msg.params.ops,
             msg.params.placement,
           );
@@ -161,22 +185,8 @@ export function registerPlugin(
           send(id, true, r);
           break;
         }
-        // 属性引擎方法:方法名即字段分组,updateSelection 按 PROP_METHOD_FIELDS 拦截越界字段
-        case 'set_fill':
-        case 'set_stroke':
-        case 'set_corner_radius':
-        case 'set_text':
-        case 'move':
-        case 'resize':
-        case 'set_layout':
-        case 'set_effects':
-        case 'set_visibility':
-        case 'rename':
-        case 'set_shape': {
-          const r = await updateSelection(host, msg.params, msg.method);
-          send(id, true, r);
-          break;
-        }
+        // 属性引擎方法走表驱动(见 isPropMethod),方法名即字段分组,
+        // 越界字段由 updateSelection 按同一份 PROP_METHOD_FIELDS 拦截。
         case 'find': {
           const r = findNodes(host, msg.params);
           send(id, true, r);
@@ -308,7 +318,7 @@ export function registerPlugin(
               send(
                 id,
                 true,
-                combineAsVariantsNodes(host, {
+                combineAsVariantsNodes(host, ctx, {
                   ids: p.ids ?? [],
                   name: p.name,
                 }),
@@ -327,7 +337,7 @@ export function registerPlugin(
               send(
                 id,
                 true,
-                await applyCachedOverrides(host, {
+                await applyCachedOverrides(host, ctx, {
                   sourceId: p.sourceId ?? '',
                   ids: p.ids ?? [],
                   swapToSource: p.swapToSource ?? false,
@@ -338,7 +348,7 @@ export function registerPlugin(
               send(
                 id,
                 true,
-                await syncInstanceOverrides(host, {
+                await syncInstanceOverrides(host, ctx, {
                   sourceId: p.sourceId ?? '',
                   ids: p.ids ?? [],
                   swapToSource: p.swapToSource ?? false,
@@ -409,6 +419,17 @@ export function registerPlugin(
           break;
         }
         default:
+          // 属性引擎方法(见 isPropMethod):走到这里说明它不在上面任何一个显式
+          // case 里 —— 合格则按孤儿中断处理,不合格才是未知方法。
+          if (isPropMethod(msg.method)) {
+            const req = msg as PropRequest;
+            send(
+              id,
+              true,
+              await updateSelection(host, ctx, req.params, req.method),
+            );
+            break;
+          }
           send(
             id,
             false,

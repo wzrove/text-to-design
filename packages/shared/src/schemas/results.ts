@@ -57,7 +57,7 @@ export const manageNodesResultSchema = z.object({
   moved: z.array(serializedNodeSchema).optional(),
   /**
    * reparent 与 moved 同义(同一份数组):该 op 历史上只回 moved,而占位符最常见
-   * 写法是 {{id.updated[0].id}},两个键同时在,写哪个都能解析(P23)。
+   * 写法是 {{id.updated[0].id}},两个键同时在,写哪个都能解析。
    */
   updated: z.array(serializedNodeSchema).optional(),
   cleaned: z.array(z.string()).optional(),
@@ -114,8 +114,27 @@ export const exportResultSchema = z.object({
   ),
 });
 export const listFontsResultSchema = z.object({
-  families: z.array(z.string()),
-  count: z.number(),
+  families: z.array(z.string()).describe('可用字体族(family)列表'),
+  /**
+   * 每个族实际可用的字型(style)。
+   *
+   * 可选字段是为了**插件版本错位**:输出校验在 daemon 侧,插件若还跑着旧产物,
+   * 这里缺失不该让一次只读调用整体失败(必填会让旧插件直接报校验错误)。
+   */
+  fonts: z
+    .array(
+      z.object({
+        family: z.string().describe('字体族'),
+        styles: z
+          .array(z.string())
+          .describe('该族可用字型,如 ["Regular","Medium","Bold"]'),
+      }),
+    )
+    .optional()
+    .describe(
+      'family → 可用 style 明细。写 fontName 前照这份清单取组合(family+style 需精确匹配,猜错会静默退回默认字重)',
+    ),
+  count: z.number().describe('字体族数量'),
 });
 
 /** 页面结构总览:当前页顶层节点的轻量摘要(不递归子节点) */

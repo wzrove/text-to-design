@@ -22,7 +22,7 @@ export type HostCapability = z.infer<typeof hostCapabilitySchema>;
 
 /**
  * 核心能力:所有平台 adapter 都实现、**不随平台变化**的功能面。
- * 与上面的平台超集能力分开上报(见 P5):调用方要判断「导出/图片填充/
+ * 与上面的平台超集能力分开上报:调用方要判断「导出/图片填充/
  * 批量编排」这类能力是否可用时看这里,不要再从 capabilities 里找
  * ——capabilities 只列平台差异项,jsDesign 只有 `styles` 是正确的。
  *

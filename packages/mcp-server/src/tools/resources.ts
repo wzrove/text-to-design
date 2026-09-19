@@ -48,7 +48,8 @@ export function registerResources(
     'jsd://fonts',
     {
       title: '可用字体列表',
-      description: '当前环境可用的字体族列表,实时从插件读取',
+      description:
+        '当前环境可用的字体族与各族的可用字型(families / fonts:[{family,styles}]),实时从插件读取',
       mimeType: 'application/json',
     },
     async () => {

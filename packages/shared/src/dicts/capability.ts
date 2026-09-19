@@ -71,7 +71,7 @@ export const CAPABILITY_GATED_PROPS: Record<
   platformOps: [],
   // 行为型能力(不改节点属性,只决定 core 的策略顺序):
   // 原生 combineAsVariants 即原位合并 —— 并入组件集的就是实例所指的 COMPONENT
-  // 本身,已有实例链接不断。Figma 声明;jsDesign 无此语义(见 P24)。
+  // 本身,已有实例链接不断。Figma 声明;jsDesign 无此语义。
   inPlaceVariants: [],
 };
 

@@ -1,5 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/server';
 import {
+  instanceStyleRiskNotice,
   moveNodeSchema,
   renameNodeSchema,
   resizeNodeSchema,
@@ -17,13 +18,12 @@ import { bridgeTool, type ToolHandle } from '../core/registry';
 import { propUpdateTool } from './update-common';
 
 /**
- * INSTANCE 内子节点的样式覆盖有平台风险(P7 实测 fills/fontName 回显是新值、
+ * INSTANCE 内子节点的样式覆盖有平台风险(实测 fills/fontName 回显是新值、
  * 渲染仍走组件原样式)。统一挂到样式类工具描述尾部,避免逐条重复长文案;
  * 写时命中会在结果里带 warnings,且告警**直接给出主组件里对应子节点的 id**
  * (见 shared/src/core/update.ts 的 instanceStyleFixHint),调用方拿到就能改主组件。
  */
-const INSTANCE_STYLE_WARN =
-  '⚠ 对位于 INSTANCE 内的子节点改样式有平台风险:回显是新值,渲染却可能仍是组件原样式(实测 fills/fontName,其余样式同类风险);命中时本次结果会带 warnings 并给出主组件里对应子节点的 id —— 改它即所有实例继承,只要单个实例不同则先 jsd_detach_instance 再改';
+const INSTANCE_STYLE_WARN = instanceStyleRiskNotice();
 
 /**
  * 属性操作:从 jsd_update_node 的 50 键大表拆出的单职责工具,每个只负责一组字段。
@@ -81,7 +81,7 @@ export function registerPropTools(
     propUpdateTool({
       name: 'jsd_set_text',
       title: '修改文本',
-      description: `修改文本内容与排版(仅 TEXT 节点生效):characters/fontSize/fontName/对齐/自适应/大小写/装饰/行高/字距,以及 Figma 的截断与最大行数。字体需精确匹配,建议先 jsd_list_fonts 查可用字体(不可用时静默回退默认)。${INSTANCE_STYLE_WARN};characters 内容覆盖在实例内也是正常生效的`,
+      description: `修改文本内容与排版(仅 TEXT 节点生效):characters/fontSize/fontName/对齐/自适应/大小写/装饰/行高/字距,以及 Figma 的截断与最大行数。字体先 jsd_list_fonts 取 fonts[] 里成对的 family + styles:family 用 fonts[].family 原样,style 用同一项的**全名**(如 SourceHanSansCN-Bold,不是简称 "Bold")——写错不报错、会静默退回默认字面,结果 warnings 会点名。要换行须 width + textAutoResize:"HEIGHT"(缺省 WIDTH_AND_HEIGHT 会按内容撑开;只给 width 不给 autoResize 会被引擎置成 NONE、高度不随内容重算)。${INSTANCE_STYLE_WARN};characters 内容覆盖在实例内也是正常生效的`,
       method: 'set_text',
       inputSchema: setTextSchema,
       annotations: { readOnlyHint: false, destructiveHint: false },

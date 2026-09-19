@@ -75,7 +75,8 @@ export function findIcon(raw: string): IconDef | null {
   if (!q) return null;
 
   // A. canonical 精确
-  if (ICONS.has(q)) return ICONS.get(q)!;
+  const exact = ICONS.get(q);
+  if (exact) return exact;
 
   // A2. 废弃名别名精确(优先于模糊,避免 alert-circle 被 Fuse 误召回)
   const aliased = ALIAS_MAP[q];
@@ -86,13 +87,13 @@ export function findIcon(raw: string): IconDef | null {
 
   // B. Fuse name 场;中低分(0.05<score≤0.3)要求共享≥3 前导,滤掉弱误召回
   const qn = norm(q);
-  const nameHits = fuseName
-    .search(q, { limit: 8 })
-    .filter(
-      (r) =>
-        r.score! <= 0.05 ||
-        (r.score! <= 0.3 && commonPrefix(qn, norm(r.item.name)) >= 3),
+  const nameHits = fuseName.search(q, { limit: 8 }).filter((r) => {
+    const score = r.score ?? 1;
+    return (
+      score <= 0.05 ||
+      (score <= 0.3 && commonPrefix(qn, norm(r.item.name)) >= 3)
     );
+  });
   if (nameHits.length) return nameHits[0].item;
 
   // C. tag 精确翻牌:位置越前越核心,名字越短越对
@@ -119,7 +120,8 @@ export function suggestIcons(raw: string, limit = 20): IconDef[] {
   if (!q) return [];
 
   const out = new Map<string, IconDef>();
-  if (ICONS.has(q)) out.set(q, ICONS.get(q)!);
+  const exact = ICONS.get(q);
+  if (exact) out.set(q, exact);
   const aliased = ALIAS_MAP[q];
   if (aliased && !out.has(aliased)) {
     const d = ICONS.get(aliased);

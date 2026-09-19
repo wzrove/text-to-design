@@ -167,7 +167,8 @@ export function registerRawTools(
   const listFonts = bridgeTool({
     name: 'jsd_list_fonts',
     title: '列出可用字体',
-    description: '列出当前环境可用字体族',
+    description:
+      '列出当前环境可用字体与各族的可用字型(返回 families 与 fonts:[{family,styles}])。写 fontName 时 family 用 fonts[].family 原样、style 用同一项的**全名**(如 SourceHanSansCN-Bold,不是简称 "Bold")——组合不存在时不报错、会静默退回默认字面(命中时结果 warnings 点名);引擎解析成功会把 family/style 规范化成短名,回读短名属正常',
     method: 'list_fonts',
     outputSchema: listFontsResultSchema,
     annotations: { readOnlyHint: true },

@@ -71,8 +71,9 @@ export type PluginMethod =
   | 'component_op'
   | 'platform_op';
 
-/** 属性引擎方法 → 各自专属的 params 类型(不再共用一份 50 键大表) */
-type PropParamsByMethod = {
+/** 属性引擎方法 → 各自专属的 params 类型(不再共用一份 50 键大表)。
+ *  导出以便 __tests__ 对它与 PropMethod 做编译期对等断言(见 prop-method-parity.test.ts)。 */
+export type PropParamsByMethod = {
   set_fill: SetFillParams;
   set_stroke: SetStrokeParams;
   set_corner_radius: SetCornerRadiusParams;

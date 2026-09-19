@@ -362,8 +362,16 @@ export const vectorPathSchema: z.ZodType<VectorPath> = z.object({
 
 // 字体 (对齐 runtime FontName)
 export const fontNameSchema = z.object({
-  family: z.string().describe('字体族,如 "PingFang SC"/"Inter"'),
-  style: z.string().describe('字型,如 "Regular"/"Bold"/"Medium"'),
+  family: z
+    .string()
+    .describe(
+      '字体族:用 jsd_list_fonts 的 fonts[].family 原样值,如 "SourceHanSansCN_family"(带 _family 后缀是平台列表的原始名)',
+    ),
+  style: z
+    .string()
+    .describe(
+      '字型:必须是同一 family 的 fonts[].styles 里的**全名**,如 "SourceHanSansCN-Bold"(不是简称 "Bold")。写错不会报错,会静默退回默认字面(命中时结果 warnings 点名)',
+    ),
 });
 export type FontName = z.infer<typeof fontNameSchema>;
 

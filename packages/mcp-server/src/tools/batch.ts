@@ -13,7 +13,6 @@ import {
   lookupExecutor,
   type ToolHandle,
 } from '../core/registry';
-import { DriftWatch, isDriftRisky } from './drift-watch';
 
 /** 按点分路径(含 a[0].b 下标段)从步骤结果根对象取值;任一段不可达视为失败 */
 function getPath(
@@ -81,7 +80,7 @@ const ECHO_NODE_FIELDS = [
 ] as const;
 
 /**
- * 渲染无关且体积会失控的整键字段(P22):vectorPaths 是元凶 —— settings 图标单条
+ * 渲染无关且体积会失控的整键字段:vectorPaths 是元凶 —— settings 图标单条
  * 路径 >10KB 且 16 位小数,两个图标 + 其余步骤回显叠加就到 146K 字符,整批结果被
  * 挤出上下文(落盘到 tool-results/*.txt,模型看不到 ok / 报错,等于盲执行);
  * clone 图标更是 281K。constraints / 包围盒对批处理同样无用,一并丢弃。
@@ -194,17 +193,17 @@ export function registerBatchTools(
     name: 'jsd_batch',
     title: '批量编排执行',
     description: `批量编排器:一次请求内顺序执行多个 jsd_* 步骤,前一步结果经双花括号占位符(内容为 步骤id.字段路径)注入后一步 args,中间 id 不回传模型,显著减少往返与上下文。
-占位符独占一个参数值时保留原类型(数组可直接作 ids 用),嵌在字符串中按 JSON 文本展开;id 重复/未知工具/引用失败立即中止,工具执行失败默认也中止(stopOnError=false 或单步 continueOnError=true 可走完)。
+占位符独占一个参数值时保留原类型(数组可直接作 ids 用),嵌在字符串中按 JSON 文本展开;**占位符只在同一次调用的本批次内有效**(步骤表随调用结束即销毁,引用上一批次的步骤必报「占位符引用的步骤不存在或未成功」并中止整批 —— 跨批次请硬编码上一步回显里的真实 id);id 重复/未知工具/引用失败立即中止,工具执行失败默认也中止(stopOnError=false 或单步 continueOnError=true 可走完)。
 回显已做摘要裁剪:节点对象只留 id/name/type/x/y/width/height/z/parentId,vectorPaths(单条 >10KB、16 位小数)与 constraints 等渲染无关字段整键丢弃;裁剪后仍超 20K 字符的步骤降级为 id 清单(结果里 echoTrimmed=true)。占位符解析不受影响(内部仍用完整数据)。含图标的批次(jsd_create_icon / jsd_clone_node / jsd_create_vector)务必配一次 jsd_export 目视验收,别只看回显。
 各工具返回键与占位符写法(键写错会报「无法解析占位符引用」并中止整批):
 · created 为数组 → {{id.created[0].id}}:per-type create(jsd_create_rectangle / jsd_create_frame 等)、jsd_clone_node、jsd_outline_stroke、jsd_create_instance、jsd_detach_instance
 · created 为单对象 → {{id.created.id}}:jsd_create_svg / jsd_create_icon / jsd_flatten_nodes / jsd_group_nodes / jsd_create_component / jsd_import_component / jsd_combine_as_variants
 · jsd_find → {{id.nodes[0].id}};jsd_get_selection → {{id.selection[0].id}}
 · 属性类 jsd_set_* → {{id.updated[0].id}};jsd_swap_component → {{id.swapped[0].id}}
-· jsd_manage_nodes 各 op:select→selected[](id 字符串)、remove→removed[](id 字符串)、clone/group/flatten/outline_stroke→created[]、ungroup→ungrouped[](id 字符串)、reparent→moved[](与 updated[] 同义,两个键都回)、repair→cleaned[](id 字符串)—— id 字符串数组取 {{id.selected[0]}},节点数组取 {{id.created[0].id}}
+· jsd_manage_nodes 各 op:select→selected[](id 字符串)、remove→removed[](id 字符串)、clone/outline_stroke→created[](节点**数组**)、group/flatten→created(节点**单对象**,与 jsd_group_nodes / jsd_flatten_nodes 同形)、ungroup→ungrouped[](id 字符串)、reparent→moved[](与 updated[] 同义,两个键都回)、repair→cleaned[](id 字符串)—— id 字符串数组取 {{id.selected[0]}},节点数组取 {{id.created[0].id}},节点单对象取 {{id.created.id}}(写成 [0] 会报无法解析)
 · jsd_manage_components 各 op:create_component/create_instance/detach_instance/import_component/combine_as_variants→created(detach_instance 是数组,不是 updated)、swap_component→swapped[]、set_instance_properties→updated[]、copy_overrides→snapshotId、apply_overrides/sync_overrides→applied[]
 · 拿不准某步的返回结构时,先单独调它一次看回显再拼进 batch —— 猜错会连带整批中止。
-结构变更复核(默认开,checkDrift=false 可关):批次里含 remove/reparent/group/ungroup/flatten/repair 时,变更前记下受影响父层(含 reparent 的目标父级与当前页顶层)的子节点坐标,收尾再读一次比对 —— 引擎在删改结构后会把**没碰到**的兄弟节点静默挪走(实测 (24,720)→(28,618):无报错、回显正常,渲染上像样式问题,极易走错排查方向)。漂移写进结果 warnings 并给出原值,照原值用 jsd_move_node 回填即可;覆盖面仅限本次操作触及的父层(协议没有整树读法,别的层漂移查不到)。`,
+结构变更复核(默认开,checkDrift=false 可关):步骤里含 remove/reparent/group/ungroup/flatten/repair 时,变更前记下受影响父层(含 reparent 的目标父级与当前页顶层)的子节点坐标,收尾再读一次比对 —— 引擎在删改结构后会把**没碰到**的兄弟节点静默挪走(实测 (24,720)→(28,618):无报错、回显正常,渲染上像样式问题,极易走错排查方向)。漂移写进结果 warnings 并给出原值,照原值用 jsd_move_node 回填即可;覆盖面仅限本次操作触及的父层(协议没有整树读法,别的层漂移查不到)。`,
     inputSchema: batchSchema,
     outputSchema: batchResultSchema,
     // calls 里可能带 remove/flatten 等破坏性 op,如实标注
@@ -220,11 +219,12 @@ export function registerBatchTools(
       const steps = new Map<string, unknown>();
       const results: BatchResult['results'] = [];
       let echoTrimmed = false;
-      // P25-B:含结构变更(remove/reparent/group/flatten…)时自动做一次同层几何
-      // 复核 —— 引擎会把没碰到的兄弟节点静默挪走。checkDrift=false 可关掉(省
-      // 掉「变更前每层一次读 + 收尾一次读」的往返)。
-      const drift = new DriftWatch();
-      const driftEnabled = checkDrift !== false;
+      // 复核不再由 batch 自己做:结构变更类工具在注册时就挂了漂移复核钩子,
+      // 单工具调用与编排内调用走同一条路(此前只有 batch 内的步骤有复核)。
+      // checkDrift=false 时按「本次调用不实例化钩子」传给执行体 —— 开关是按调用的,
+      // 不是全局开关,也不是把钩子从 def 上摘掉。
+      const skipHooks = checkDrift === false;
+      const stepWarnings: string[] = [];
       for (let i = 0; i < calls.length; i++) {
         const call = calls[i];
         const id =
@@ -255,14 +255,11 @@ export function registerBatchTools(
           break;
         }
         // ---- 执行期:受 stopOnError/continueOnError 控制 ----
-        if (driftEnabled && isDriftRisky(call.tool, resolvedArgs)) {
-          // 结构变更前记下受影响父层的几何(内部读不到就跳过,不阻断批次)
-          await drift.observe(call.tool, resolvedArgs);
-        }
-        const out = (await executor(resolvedArgs, signal)) as {
+        const out = (await executor(resolvedArgs, signal, { skipHooks })) as {
           isError?: boolean;
           structuredContent?: unknown;
           content?: { type: string; text?: string }[];
+          warnings?: string[];
         };
         if (out.isError === true) {
           const text =
@@ -271,11 +268,12 @@ export function registerBatchTools(
           if (!(stopOnError === false || call.continueOnError === true)) break;
           continue;
         }
-        // 占位符解析用完整数据,回显用裁剪后的摘要(P22):两者分离,
+        // 占位符解析用完整数据,回显用裁剪后的摘要:两者分离,
         // 剪掉 vectorPaths 不会让下游 {{id.created[0].id}} 解析失败。
         const echo = echoStep(out.structuredContent);
         if (echo.trimmed) echoTrimmed = true;
         steps.set(id, out.structuredContent);
+        if (out.warnings != null) stepWarnings.push(...out.warnings);
         results.push({
           id,
           tool: call.tool,
@@ -284,7 +282,7 @@ export function registerBatchTools(
         });
       }
       const complete = results.length === calls.length;
-      const warnings = driftEnabled ? await drift.verify() : [];
+      const warnings = stepWarnings;
       return {
         ok: complete && results.every((r) => r.ok),
         executed: results.length,
