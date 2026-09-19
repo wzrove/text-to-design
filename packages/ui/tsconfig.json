@@ -23,6 +23,6 @@
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src", "ui.html", "vite.config.ts"],
+  "include": ["src", "ui.html", "vite.config.ts", "scripts"],
   "exclude": ["src/code/figma"]
 }

@@ -1,7 +1,7 @@
 import {
-  resolveNodes,
   type DesignHost,
   type PlatformOp,
+  resolveNodes,
 } from 'text-to-design-shared';
 import { z } from 'zod';
 
@@ -58,7 +58,10 @@ type StyleableNode = {
 async function createVariables(
   _host: DesignHost,
   params: unknown,
-): Promise<{ collectionId: string; variables: { id: string; name: string }[] }> {
+): Promise<{
+  collectionId: string;
+  variables: { id: string; name: string }[];
+}> {
   const p = params as {
     collectionName?: string;
     variables: {
@@ -84,9 +87,9 @@ async function createVariables(
       // 同名同类型变量就地更新值(幂等补值),避免重复建变量
       const same = existing
         ? (await figma.variables.getLocalVariablesAsync(v.type)).find(
-              (x) =>
-                x.name === v.name && x.variableCollectionId === collection.id,
-            )
+            (x) =>
+              x.name === v.name && x.variableCollectionId === collection.id,
+          )
         : undefined;
       const variable =
         same ??

@@ -4,6 +4,7 @@ import { defineConfig, type Plugin, type UserConfig } from 'vite';
 import { viteSingleFile } from 'vite-plugin-singlefile';
 import solid from 'vite-plugin-solid';
 import manifestPlugin from './scripts/vite-plugin-manifest.js';
+import zodSandboxFix from './scripts/vite-plugin-zod-sandbox.js';
 
 function reorderCss(): Plugin {
   const out = resolve(import.meta.dirname, 'dist/ui.html');
@@ -31,8 +32,15 @@ function reorderCss(): Plugin {
 export default defineConfig(({ mode }): UserConfig => {
   if (mode === 'jsdesign' || mode === 'figma') {
     const platform = mode;
+    // jsDesign 沙箱(Proxy 作用域,决策 0012)用 zodSandboxFix 把模块顶层
+    // globalThis.__zod_globalConfig/Registry 替换为模块局部 const 宿主,
+    // 绕开沙箱对全局标识符的拦截。figma 沙箱不拦截,无需挂载。
+    const platformPlugins: Plugin[] = [manifestPlugin(platform)];
+    if (platform === 'jsdesign') {
+      platformPlugins.push(zodSandboxFix());
+    }
     return {
-      plugins: [manifestPlugin(platform)],
+      plugins: platformPlugins,
       define: {
         global: '{}',
       },
