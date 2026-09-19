@@ -8,7 +8,9 @@
 
 ## 安装插件
 
-1. 获取插件包,解压到本地目录,里面有一个 `dist` 文件夹
+1. 获取插件包:从 [GitHub Releases](https://github.com/wzrove/text-to-design/releases) 下载
+   `text-to-design-ui-v*.zip`,解压到本地目录,里面有一个 `dist` 文件夹
+   (也可以 `npm pack text-to-design-ui`,npm 包里同样带 `dist`)
 2. 打开即时设计(jsDesign)客户端
 3. 点「插件」→「导入」,选择解压目录里 `dist/manifest.json`
 4. 回到画布运行这个插件
