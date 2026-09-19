@@ -12,9 +12,7 @@ export class EventBus {
     for (const cb of this.listeners) {
       try {
         cb(event);
-      } catch {
-        // 忽略订阅回调中的错误
-      }
+      } catch {}
     }
   }
 }

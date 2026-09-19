@@ -43,6 +43,21 @@ export const PROBE_DELAY_MS = 1_000;
 export const CONFIRM_TIMEOUT_MS = 5_000;
 
 /**
+ * 已连接后的确认过期阈值:daemon 每 {@link HEARTBEAT_MS} 重发 ready,
+ * 连续两个周期收不到即视为**半开连接**(TCP 还在、链路已黑洞且无 onclose)。
+ * 没有它时,面板会永久停在「已连接」却收不到任何推送 —— 静默假在线比掉线难查。
+ */
+export const CONFIRM_STALE_MS = 2 * HEARTBEAT_MS;
+
+/** 已连接状态下,距最近一次 daemon 确认是否已过期(半开检测判据) */
+export function isConfirmExpired(
+  lastConfirmedAt: number,
+  now: number,
+): boolean {
+  return now - lastConfirmedAt >= CONFIRM_STALE_MS;
+}
+
+/**
  * WS 握手超时(兜底):从 `new WebSocket()` 起算,超时仍未 onopen 就主动放弃。
  *
  * 这个兜底不能省。没有它,一次「TCP 连上了、但升级帧再也没回来」的悬挂会让

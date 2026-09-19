@@ -1,4 +1,6 @@
+import type { ErrorCode } from 'text-to-design-shared';
 import type { z } from 'zod';
+import { errorCodeOf } from './bridge-error';
 import type { FollowUp } from './registry';
 
 function text(content: unknown): { content: { type: 'text'; text: string }[] } {
@@ -87,6 +89,18 @@ function emptyFor(schema: AnyZod): unknown {
   }
 }
 
+/**
+ * 错误类别 → 下一步引导。这里是该类文案的**唯一真源**:插件/传输层只报 code,
+ * 不再各自往 message 里拼「下一步怎么办」。
+ */
+const ERROR_FOLLOW_UP: Partial<Record<ErrorCode, FollowUp>> = {
+  not_connected: {
+    type: 'prompt',
+    prompt:
+      '在当前设计客户端里运行 text-to-design 插件,并确认面板显示「已连接」后重试。',
+  },
+};
+
 /** 错误返回:人读文本 + schema-valid 结构化空结果 + isError,避免"no structured content" */
 export function err(
   e: unknown,
@@ -98,6 +112,7 @@ export function err(
   isError: true;
   followUp?: FollowUp;
 } {
+  const resolvedFollowUp = ERROR_FOLLOW_UP[errorCodeOf(e)] ?? followUp;
   const base: {
     content: { type: 'text'; text: string }[];
     isError: true;
@@ -111,7 +126,7 @@ export function err(
     ],
     isError: true,
   };
-  if (followUp !== undefined) base.followUp = followUp;
+  if (resolvedFollowUp !== undefined) base.followUp = resolvedFollowUp;
   return schema ? { ...base, structuredContent: emptyFor(schema) } : base;
 }
 

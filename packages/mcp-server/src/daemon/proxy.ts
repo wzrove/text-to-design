@@ -468,7 +468,11 @@ export async function serveProxy(initialClient: Client): Promise<void> {
     shuttingDown = true;
     if (healthTimer) clearTimeout(healthTimer);
     if (fullTimer) clearTimeout(fullTimer);
-    await stdioHandle.close();
+    await stdioHandle.close().catch((e) => {
+      warn(
+        `关闭 stdio 失败(忽略): ${e instanceof Error ? e.message : String(e)}`,
+      );
+    });
     await upstream.close().catch(() => {});
     process.exit(0);
   });

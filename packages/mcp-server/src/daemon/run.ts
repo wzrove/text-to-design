@@ -83,7 +83,12 @@ export async function runDaemon(bridge: Bridge): Promise<void> {
 
   const shutdown = (reason: string): void => {
     log(`daemon 退出: ${reason}`);
-    void handler.close();
+    // 关闭是尽力而为:失败也必须退出,但不能静默(见决策 0007/0013)
+    void handler.close().catch((e) => {
+      debug(
+        `关闭 MCP handler 失败(忽略): ${e instanceof Error ? e.message : String(e)}`,
+      );
+    });
     bridge.stop();
     httpServer?.close();
     process.exit(0);

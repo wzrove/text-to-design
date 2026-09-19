@@ -1,4 +1,5 @@
 import type { LogLevel, ServerPush } from 'text-to-design-shared';
+import { BridgeError } from './core/bridge-error';
 import { log, warn } from './logger';
 import type { PluginMethod, RequestOptions } from './pending';
 import { PendingManager } from './pending';
@@ -65,7 +66,8 @@ export class Bridge {
     if (!this.transport.isConnected) {
       warn(`请求被拒(插件未连接): ${method}`);
       return Promise.reject(
-        new Error(
+        new BridgeError(
+          'not_connected',
           `${currentClient().runtime} 插件未连接。请先在${currentClient().label}中运行该插件。`,
         ),
       );

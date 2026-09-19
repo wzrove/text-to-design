@@ -5,6 +5,7 @@ import type { Bridge } from '../bridge';
 import { error, warn } from '../logger';
 import type { RequestOptions } from '../pending';
 import { describePlatformGate } from '../platform-state';
+import { BridgeError } from './bridge-error';
 import { err, structured } from './response';
 
 /** 注册函数返回的工具句柄(结构化最小类型,兼容 SDK RegisteredTool/Prompt/Resource) */
@@ -168,7 +169,11 @@ export function bridgeTool(
         const gate = describePlatformGate(def);
         if (gate != null) {
           error(`工具 ${def.name} 在当前平台不可用,已拦截`);
-          return err(new Error(gate), def.outputSchema, def.followUp);
+          return err(
+            new BridgeError('platform_unsupported', gate),
+            def.outputSchema,
+            def.followUp,
+          );
         }
         // 入参 schema 校验:直接 MCP 调用已由 SDK validateToolInput 校验过(幂等,
         // 成本可忽略),这里补齐 jsd_batch 直调 executor 的路径——内层工具的
@@ -180,7 +185,10 @@ export function bridgeTool(
             const detail = parsed.error.issues
               .map((i) => `${i.path.join('.') || '(root)'}: ${i.message}`)
               .join('; ');
-            throw new Error(`参数校验失败(${def.name}): ${detail}`);
+            throw new BridgeError(
+              'invalid_args',
+              `参数校验失败(${def.name}): ${detail}`,
+            );
           }
           args = parsed.data as Record<string, unknown>;
         }

@@ -4,6 +4,7 @@ import type {
   PluginResponse,
 } from 'text-to-design-shared';
 import { PLUGIN_TIMEOUT_MS } from 'text-to-design-shared';
+import { BridgeError } from './core/bridge-error';
 import { error, log, warn } from './logger';
 
 export type { PluginMethod };
@@ -92,12 +93,12 @@ export class PendingManager {
         this.pending.delete(id);
         this.detachAbort(entry);
         warn(`请求超时: ${id} ${method} 耗时=${Date.now() - startedAt}ms`);
-        reject(new Error(`请求超时: ${method}`));
+        reject(new BridgeError('plugin_timeout', `请求超时: ${method}`));
       }, timeout);
       if (signal) {
         if (signal.aborted) {
           clearTimeout(entry.timer);
-          reject(new Error(`请求已取消: ${method}`));
+          reject(new BridgeError('cancelled', `请求已取消: ${method}`));
           return;
         }
         entry.abort = {
@@ -106,7 +107,7 @@ export class PendingManager {
             if (this.pending.delete(id)) {
               this.detachAbort(entry);
               log(`请求取消: ${id} ${method} 耗时=${Date.now() - startedAt}ms`);
-              reject(new Error(`请求已取消: ${method}`));
+              reject(new BridgeError('cancelled', `请求已取消: ${method}`));
             }
           },
         };
@@ -188,12 +189,17 @@ export class PendingManager {
     this.pending.delete(msg.id);
     clearTimeout(pending.timer);
     this.detachAbort(pending);
-    const doneLine = `响应: ${pending.id} ${pending.method} ok=${msg.ok} 耗时=${Date.now() - pending.startedAt}ms${msg.ok ? '' : ` error=${msg.error ?? ''}`}`;
+    const doneLine = `响应: ${pending.id} ${pending.method} ok=${msg.ok} 耗时=${Date.now() - pending.startedAt}ms${msg.ok ? '' : ` error=${msg.error?.code ?? ''}`}`;
     // 失败响应升为 error 级:文件日志与 UI 推送面板同步显红
     if (msg.ok) log(doneLine);
     else error(doneLine);
     if (msg.ok) pending.resolve(msg.data);
-    else pending.reject(new Error(msg.error ?? 'plugin error'));
+    else
+      pending.reject(
+        msg.error
+          ? new BridgeError(msg.error.code, msg.error.message)
+          : new BridgeError('plugin_error', 'plugin error'),
+      );
   }
 
   onBinary(raw: Buffer): void {
@@ -220,7 +226,7 @@ export class PendingManager {
     for (const [, p] of this.pending) {
       clearTimeout(p.timer);
       this.detachAbort(p);
-      p.reject(err);
+      p.reject(new BridgeError('not_connected', err.message));
     }
     this.pending.clear();
   }

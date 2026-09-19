@@ -72,9 +72,7 @@ export async function executeOps(
     for (const node of created) {
       try {
         node.remove();
-      } catch {
-        // 忽略回滚中的二次错误
-      }
+      } catch {}
     }
     throw e;
   }

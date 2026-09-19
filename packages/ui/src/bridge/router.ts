@@ -1,4 +1,5 @@
 import type {
+  PluginError,
   PluginPlatform,
   PluginRequest,
   PluginResponse,
@@ -122,7 +123,6 @@ export class Router {
       }
       return;
     }
-    // 未知二进制帧:丢弃
   }
 
   /** 转发服务器请求给插件:只挂超时定时器,code 回包由 onCodeMessage 直接回发 */
@@ -130,7 +130,10 @@ export class Router {
     const timer = window.setTimeout(() => {
       if (this.localPending.delete(msg.id)) {
         this.log('error', `转发到插件超时: ${msg.method}`);
-        this.sendResponseOverWs(conn, msg.id, false, undefined, '插件响应超时');
+        this.sendResponseOverWs(conn, msg.id, false, undefined, {
+          code: 'forward_timeout',
+          message: '插件响应超时',
+        });
       }
     }, UI_FORWARD_TIMEOUT_MS);
     this.localPending.set(msg.id, { timer });
@@ -143,7 +146,7 @@ export class Router {
     id: string,
     ok: boolean,
     data?: unknown,
-    error?: string,
+    error?: PluginError,
   ): void {
     const bytes = extractBytes(data);
     const meta: PluginResponse =
@@ -204,7 +207,7 @@ export class Router {
       if (resolve) {
         // UI 自发的 ping 回包:按 promise 形态 resolve/reject
         if (pm.ok) resolve(pm.data);
-        else entry?.reject?.(new Error(pm.error ?? 'plugin error'));
+        else entry?.reject?.(new Error(pm.error?.message ?? 'plugin error'));
         return;
       }
       // 服务器请求的回包:直接回发 WS

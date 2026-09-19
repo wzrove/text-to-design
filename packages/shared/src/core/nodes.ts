@@ -120,9 +120,7 @@ function restoreLayoutVerified(
     if (dst[key] === value) continue;
     try {
       dst[key] = value;
-    } catch {
-      // 同上:单属性失败不影响其余
-    }
+    } catch {}
   }
 }
 
@@ -569,7 +567,6 @@ export async function groupNodes(
 
   const useLayout = params.layoutMode != null && params.layoutMode !== 'NONE';
 
-  // reparent 子节点进组框
   for (const a of absInfo) {
     frame.appendChild(a.node);
     if (!useLayout) {
@@ -749,7 +746,6 @@ export async function reparentNodes(
       parent.appendChild(n);
     }
 
-    // 验证父级是否真正改变
     if (n.parent?.id !== parent.id) {
       throw new Error(
         `节点 ${n.id} 移动到 ${parent.id} 失败:父级未变化(仍为 ${n.parent?.id ?? 'undefined'})。可能是目标父级不支持子节点或引擎限制`,
@@ -865,9 +861,7 @@ export function repairNodes(host: DesignHost): { cleaned: string[] } {
       try {
         node.remove();
         cleaned.push(node.id);
-      } catch {
-        // 引擎级损坏,跳过
-      }
+      } catch {}
     }
   }
   return { cleaned };

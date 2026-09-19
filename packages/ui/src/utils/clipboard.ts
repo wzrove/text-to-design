@@ -2,7 +2,10 @@
 export function copyText(text: string): boolean {
   try {
     if (navigator.clipboard?.writeText) {
-      void navigator.clipboard.writeText(text);
+      // 写入是异步的,失败也必须留痕:静默失败会让「复制了却没内容」无从排查
+      navigator.clipboard.writeText(text).catch((e) => {
+        console.debug('[ui] 剪贴板写入失败', e);
+      });
       return true;
     }
   } catch {

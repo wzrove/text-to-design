@@ -227,9 +227,7 @@ export class DriftWatch implements ToolHook {
             '处理:用 jsd_move_node 按上述原值回填,或先 jsd_find 复核该层全部节点 x/y。',
           ].join(''),
         );
-      } catch {
-        // 同 before:复核失败静默跳过
-      }
+      } catch {}
     }
     return warnings;
   }

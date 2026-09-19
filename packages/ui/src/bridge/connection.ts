@@ -1,5 +1,8 @@
 import {
+  CONFIRM_STALE_MS,
   CONFIRM_TIMEOUT_MS,
+  HEARTBEAT_MS,
+  isConfirmExpired,
   PROBE_DELAY_MS,
   SUPERSEDED_CLOSE_CODE,
   WS_HANDSHAKE_TIMEOUT_MS,
@@ -33,6 +36,8 @@ export class ConnectionManager {
   /** 当前连接的打开时刻(用于确认超时判定) */
   private openAt = 0;
   private confirmTimer: number | undefined;
+  /** 已连接后的确认过期看门狗(半开连接检测) */
+  private staleTimer: number | undefined;
 
   /** 状态变更回调(门面注入,用于驱动扫描器启停) */
   onStatusChange: ((status: BridgeStatus) => void) | null = null;
@@ -129,6 +134,7 @@ export class ConnectionManager {
         if (isCurrent) {
           if (this.confirmTimer) clearTimeout(this.confirmTimer);
           this.confirmTimer = undefined;
+          this.stopStaleWatch();
           conn.ws = null;
         }
         // 先 settle:哪怕这条 socket 已被取代,也必须让等待它的 Scanner 落地
@@ -157,6 +163,7 @@ export class ConnectionManager {
 
   close(): void {
     this.manualOff = true;
+    this.stopStaleWatch();
     const conn = this.conn;
     if (conn?.ws) {
       conn.ws.close();
@@ -172,12 +179,39 @@ export class ConnectionManager {
     if (this.confirmTimer) clearTimeout(this.confirmTimer);
     this.confirmTimer = undefined;
     this.setStatus('connected', true);
+    this.startStaleWatch();
+  }
+
+  /**
+   * 半开连接看门狗:daemon 每 HEARTBEAT_MS 重发 ready,连续 CONFIRM_STALE_MS
+   * 收不到就主动关闭,交给既有 Scanner 重连。没有它时,链路黑洞且无 onclose
+   * 会让面板永久停在「已连接」却收不到任何推送。
+   */
+  private startStaleWatch(): void {
+    this.stopStaleWatch();
+    this.staleTimer = window.setInterval(() => {
+      const ws = this.conn?.ws;
+      if (!ws || ws.readyState !== WebSocket.OPEN) return;
+      if (isConfirmExpired(this.lastConfirmedAt, Date.now())) {
+        this.emit(
+          'log',
+          `服务确认过期(${CONFIRM_STALE_MS}ms 未收到心跳),关闭重连: ${this.conn.port}`,
+        );
+        ws.close();
+      }
+    }, HEARTBEAT_MS);
+  }
+
+  private stopStaleWatch(): void {
+    if (this.staleTimer !== undefined) clearInterval(this.staleTimer);
+    this.staleTimer = undefined;
   }
 
   /** daemon 明确告知:这条通道被另一个面板接管 → 停止自动重连,等用户夺回 */
   markSuperseded(): void {
     if (this.superseded) return;
     this.superseded = true;
+    this.stopStaleWatch();
     this.setStatus('superseded');
     this.emit('log', SUPERSEDED_HINT);
     const ws = this.conn?.ws;

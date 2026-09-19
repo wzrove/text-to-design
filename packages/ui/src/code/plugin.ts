@@ -3,6 +3,7 @@ import type {
   GetSelectionParams,
   GetSelectionResult,
   PlatformMeta,
+  PluginError,
   PluginPlatform,
   PluginRequest,
   PropMethod,
@@ -86,7 +87,12 @@ export function registerPlugin(
     console.error('[plugin] showUI 失败', e);
   }
 
-  function send(id: string, ok: boolean, data?: unknown, error?: string): void {
+  function send(
+    id: string,
+    ok: boolean,
+    data?: unknown,
+    error?: PluginError,
+  ): void {
     try {
       host.ui.postMessage(makeResponse(id, ok, data, error));
     } catch (e) {
@@ -94,9 +100,9 @@ export function registerPlugin(
     }
   }
 
-  function fail(id: string, method: string, e: unknown): void {
+  function fail(id: string, e: unknown): void {
     const reason = e instanceof Error ? e.message : String(e);
-    send(id, false, undefined, `${method} 失败: ${reason}`);
+    send(id, false, undefined, { code: 'engine_error', message: reason });
   }
 
   function getSelection(params: GetSelectionParams = {}): GetSelectionResult {
@@ -260,12 +266,10 @@ export function registerPlugin(
               send(id, true, repairNodes(host));
               break;
             default:
-              send(
-                id,
-                false,
-                undefined,
-                `未知 node_op: ${String((p as { op?: string }).op)}`,
-              );
+              send(id, false, undefined, {
+                code: 'unknown_method',
+                message: `未知 node_op: ${String((p as { op?: string }).op)}`,
+              });
               return;
           }
           break;
@@ -361,12 +365,10 @@ export function registerPlugin(
               );
               break;
             default:
-              send(
-                id,
-                false,
-                undefined,
-                `未知 component_op: ${String((p as { op?: string }).op)}`,
-              );
+              send(id, false, undefined, {
+                code: 'unknown_method',
+                message: `未知 component_op: ${String((p as { op?: string }).op)}`,
+              });
               return;
           }
           break;
@@ -399,12 +401,10 @@ export function registerPlugin(
           const p = msg.params;
           const op = meta.platformOps.find((o) => o.name === p.op);
           if (!op) {
-            send(
-              id,
-              false,
-              undefined,
-              `平台 ${platform} 不支持操作: ${p.op}(支持: ${meta.platformOps.map((o) => o.name).join(',') || '无'})`,
-            );
+            send(id, false, undefined, {
+              code: 'platform_unsupported',
+              message: `平台 ${platform} 不支持操作: ${p.op}(支持: ${meta.platformOps.map((o) => o.name).join(',') || '无'})`,
+            });
             break;
           }
           let params: unknown = p.params ?? {};
@@ -414,7 +414,10 @@ export function registerPlugin(
               const detail = parsed.error.issues
                 .map((i) => `${i.path.join('.') || '(root)'}: ${i.message}`)
                 .join('; ');
-              send(id, false, undefined, `参数校验失败(${op.name}): ${detail}`);
+              send(id, false, undefined, {
+                code: 'invalid_args',
+                message: `参数校验失败(${op.name}): ${detail}`,
+              });
               break;
             }
             params = parsed.data;
@@ -435,23 +438,17 @@ export function registerPlugin(
             );
             break;
           }
-          send(
-            id,
-            false,
-            undefined,
-            `未知方法: ${(msg as { method: string }).method}`,
-          );
+          send(id, false, undefined, {
+            code: 'unknown_method',
+            message: `未知方法: ${(msg as { method: string }).method}`,
+          });
       }
     } catch (e) {
       // 可观测性:引擎/运行时错误带堆栈与请求摘要落插件 console,
       // 便于定位 "not a function" / "in set_fills" 这类难懂错误
       const paramsSummary = JSON.stringify(msg.params ?? {}).slice(0, 500);
       console.error(`[plugin] ${msg.method} 失败, params=${paramsSummary}`, e);
-      const opName =
-        msg.method === 'node_op' || msg.method === 'component_op'
-          ? ` ${String((msg.params as { op?: string } | undefined)?.op ?? '')}`
-          : '';
-      fail(id, `${msg.method}${opName}`, e);
+      fail(id, e);
     }
   };
 }

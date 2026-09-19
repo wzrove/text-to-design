@@ -185,9 +185,7 @@ export async function combineAsVariantsNodes(
         for (const c of clones) {
           try {
             c.remove();
-          } catch {
-            // 半途被引擎卷走/已失效,忽略
-          }
+          } catch {}
         }
         throw e;
       }
@@ -295,9 +293,7 @@ function detachWithRecovery(inst: NodeSkeleton): NodeSkeleton {
     // 半途而废时删掉克隆,避免画布残留重复实例
     try {
       clone?.remove();
-    } catch {
-      // 已被移除或引擎级损坏,忽略
-    }
+    } catch {}
     const retryMsg =
       retryErr instanceof Error ? retryErr.message : String(retryErr);
     throw new Error(

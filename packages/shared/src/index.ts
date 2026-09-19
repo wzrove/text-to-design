@@ -1,5 +1,6 @@
 import type { z } from 'zod';
 import type { ServerStatusFrame } from './connection';
+import type { PluginError } from './dicts/error-code';
 import type { LogLevel } from './dicts/log';
 import type * as s from './schemas';
 
@@ -212,7 +213,7 @@ export type PluginResponse<D = unknown> = {
   id: string;
   ok: boolean;
   data?: D;
-  error?: string;
+  error?: PluginError;
   hasBinary?: boolean;
   binaryCount?: number;
 };
@@ -225,7 +226,7 @@ export function makeResponse<D>(
   id: string,
   ok: boolean,
   data?: D,
-  error?: string,
+  error?: PluginError,
 ): PluginResponse<D> {
   return { type: 'response', id, ok, data, error };
 }
