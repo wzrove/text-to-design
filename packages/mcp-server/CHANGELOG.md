@@ -1,5 +1,11 @@
 # text-to-design-mcp
 
+## 0.8.2
+
+### Patch Changes
+
+- [`e40cb9d`](https://github.com/wzrove/text-to-design/commit/e40cb9def43f18689d2c34b83a7372ad59606875) Thanks [@wzrove](https://github.com/wzrove)! - Merge branch 'main' of github.com:wzrove/text-to-design
+
 ## 0.8.1
 
 ### Patch Changes
