@@ -78,3 +78,4 @@ export interface WriteCheck {
 |---|---|---|
 | 2026-09-18 | 初次决策 | 采用 固定顺序 Pipeline；明确排除责任链 |
 | 2026-09-18 | 落地后复核 | 结论不变。两份风险集合已收进 `core/props/risk.ts`，MCP 工具描述文案由 `instanceStyleRiskNotice()` 从集合生成（第三份事实消失）；P31 方向回读移入 `layoutWriter.settle`，两条路径共用。能力门控（capability gate）尚未并入 `WriteCheck` 链，仍留在 `updateSelection` 循环里 |
+| 2026-09-19 | 回收面复核（见 0007） | 结论不变，**补一处落地缺口**：`WriteOutcome` 当时只有修改路径回收 —— 创建路径只把能力门控记进 warnings，`readback.ok === false`（P31 方向、P33 字体）与 `outcome.warnings` 被静默丢弃，同一个平台缺陷「建的时候」不点名。现由 `core/props/outcome.ts` 统一搬运/组装、`buildNode` 与 `executeOps` 补齐回收，字段级修法文案收进 `dicts/unapplied-prop.ts`；`WriteCheck` 链仍未引入（当前只有「回读不一致」一类事实，谓词简单，按 0004 的停止条件保持简单） |

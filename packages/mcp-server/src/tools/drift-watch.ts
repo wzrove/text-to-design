@@ -21,10 +21,10 @@ interface Geo {
 /**
  * 结构变更类 node_op:删除/移父之后引擎可能重算同层约束,把没碰到的兄弟挪走。
  *
- * 这份名单是**唯一真源**:tools/nodes.ts 的 opTool 用它给工具打 `structural` tag
- * 并挂上漂移复核钩子,聚合入口 jsd_manage_nodes 也用它按 op 判断。此前
- * `isDriftRisky` 手抄 6 个工具名 + 6 个 op 名,与 opTool 的清单是两份事实 ——
- * 加一个结构类工具忘了改那边,就静默失去复核。
+ * 这份名单是**唯一真源**:tools/nodes.ts 的 opTool 用它给固定 op 小工具挂漂移复核钩子,
+ * 聚合入口 jsd_manage_nodes 的钩子也在 tools/manage.ts 挂上、由本文件的
+ * `isStructuralArgs` 按入参 op 判断该不该查。此前 `isDriftRisky` 手抄 6 个工具名 +
+ * 6 个 op 名,与 opTool 的清单是两份事实 —— 加一个结构类工具忘了改那边,就静默失去复核。
  */
 export const STRUCTURAL_NODE_OPS = new Set([
   'remove',
@@ -152,7 +152,8 @@ export class DriftWatch implements ToolHook {
 
   /** ToolHook.before:执行前确定受影响父层并记下它们的几何 */
   async before(args: Record<string, unknown>): Promise<void> {
-    // 固定 op 的工具在注册时已按 tag 挂上钩子,这里只过滤聚合入口的 op
+    // 钩子同时挂在固定 op 小工具(注册时按 tag 挂)与聚合入口 jsd_manage_nodes 上:
+    // 后者 op 由入参给出,这里按 STRUCTURAL_NODE_OPS 判断本次要不要查
     const op = args.op;
     if (op !== undefined && !isStructuralArgs(args)) return;
     this.engaged = true;

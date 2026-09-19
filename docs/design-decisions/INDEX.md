@@ -10,6 +10,7 @@
 | [0004](0004-写后校验用固定顺序-Pipeline-而非责任链.md) | 写后校验用固定顺序 Pipeline 而非责任链 | 已采纳 | `shared/core/update.ts`、`tools/props.ts`、`dicts/capability.ts` | 2026-09-18 |
 | [0005](0005-事实一致性用-Vitest-不变式测试加-CI-门禁，不引入事件类架构.md) | 事实一致性用 Vitest 不变式测试加 CI 门禁，不引入事件类架构 | 已采纳 | 根 `package.json`、`.github/workflows/`、全仓 | 2026-09-18 |
 | [0006](0006-工具目录体积用单点投影收敛，不引入模式.md) | 工具目录体积用单点投影收敛，不引入模式 | 已采纳 | `daemon/proxy.ts`、`daemon/compact-schema.ts`、`server.ts`、`__tests__/catalog-budget.test.ts` | 2026-09-18 |
+| [0007](0007-静默失效的告警出口统一到-WriteOutcome，创建路径补齐回收.md) | 静默失效的告警出口统一到 WriteOutcome，创建路径补齐回收 | 已采纳 | `shared/core`（execute / buildNode / update / export / props）、`dicts/unapplied-prop.ts`、`tools/*` 与 `server.ts` 的纪律文案 | 2026-09-19 |
 
 ## 依赖关系
 
@@ -20,6 +21,7 @@
 0006 (目录投影)      ── 独立；原则取自 0003（不手抄清单）
 0001 (PropWriter)    ── 依赖 0002
 0004 (Pipeline)      ── 与 0001 同批；纠正早前评审的「责任链」说法
+0007 (回读回收)      ── 把 0004 的回收面补到创建路径；覆盖面口径取自 0003
 ```
 
 ## 汇总

@@ -84,7 +84,11 @@ describe('引擎侧 API 兼容性', () => {
   it('源码里没有设计宿主运行时缺失的现代 API', () => {
     const offenders: string[] = [];
     for (const file of files) {
-      const raw = readFileSync(file, 'utf8');
+      // 归一化 CRLF:`.replace(/\/\/.*$/,'')` 里的 `.` 不吃 `\r`、`$` 又要求串尾,
+      // 于是 Windows(core.autocrlf=true)下**行尾注释整条剥不掉**,注释里提到的 API 名
+      // 会被当违规(实测误报 plugin.ts 行尾注释里的 Object.hasOwn);顺带也让下面的
+      // 行号与源码对齐(块注释被整体删掉时 `lines[i]` 本来就会错位)。
+      const raw = readFileSync(file, 'utf8').replace(/\r\n/g, '\n');
       const lines = raw.split('\n');
       const clean = stripComments(raw).split('\n');
       for (const [api, info] of Object.entries(BANNED)) {

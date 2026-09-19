@@ -185,7 +185,7 @@ function scriptRecipe(task?: string): string {
       : `请用「脚本化」方式完成下面的任务:\n${task}\n\n执行要求:`;
   return `${head}
 1) 多步流程一次成型:优先 jsd_batch 编排(create→reparent→update、find→批量修改、图标×N 等);宿主有代码执行工具时也可写一段脚本连续 await 多个 tools.jsd_*。
-2) 中间值只在管道内流动:上游结果用双花括号占位符(步骤id.字段路径)注入下游参数(脚本内用变量传递);每步只提取后续需要的字段,不回传完整序列化结果。
+2) 中间值只在管道内流动:上游结果用双花括号占位符(步骤id.字段路径)注入下游参数(脚本内用变量传递);每步只提取后续需要的字段,不回传完整序列化结果。**占位符只在同一次调用的本批次内有效** —— 跨批次引用会报「占位符引用的步骤不存在或未成功」并中止整批,跨批次请硬编码上一步回显里的真实 id。
 3) 收敛:最后只做一次 jsd_get_selection(depth=1) 总复核,不要每步都复核。`;
 }
 
@@ -198,12 +198,12 @@ function designStrategyRecipe(screen?: string): string {
 2) 一层只建一层:每个界面先建主容器 FRAME,再分区放内容。复杂结构用 jsd_batch 编排多个 per-type create 步骤一次建完,不要用 children 深嵌套(易整体失败)。
 3) 命名语义化:用「登录页 / Logo 容器 / 邮箱输入 / 主按钮」这类说明用途的名字,不用「矩形 1」「Frame 2」;同一批元素命名风格保持一致。
 4) 归组后再布局:jsd_reparent_nodes 把文本等元素移入目标容器(**parentId 显式传容器 id**,别依赖「当前选中第一个」的缺省值;跨父级移动会保持节点绝对位置,不用手动摆回 x/y,移入 auto-layout 容器时位置交给布局);auto-layout(layoutMode/itemSpacing/padding*/primaryAxisAlignItems 等)最后用 jsd_set_layout 单独设,别在建节点时混着传。
-5) 间距与字号阶梯:主标题 > 正文标签 > 按钮文本 > 辅助说明;同级元素间距一致,用 itemSpacing 统一控制,不靠手调坐标凑。
+5) 间距与字号阶梯:主标题 > 正文标签 > 按钮文本 > 辅助说明;同级元素间距一致,用 itemSpacing 统一控制,不靠手调坐标凑。**长段落要换行**:TEXT 缺省按内容撑开(textAutoResize 缺省 WIDTH_AND_HEIGHT),只给 width 会被引擎改成 NONE 且高度不随内容重算 —— 要固定宽+自动换行传 width + textAutoResize:"HEIGHT",要固定框尺寸传 "NONE"。**字体取 jsd_list_fonts 的 fonts[] 成对值**:family 用 fonts[].family 原样(如 SourceHanSansCN_family),style 用同一项的全名(如 SourceHanSansCN-Bold,不是简称 "Bold")—— 写错会被静默忽略、退回默认字面,结果 warnings 会点名。
 6) 视觉顺序:自上而下按阅读顺序排布,主操作按钮放在输入项之后,次要链接(忘记密码/注册)放最后。
 7) 层序与遮挡:序列化里每个节点都带 \`z\`(= 父级 children 下标 = 绘制顺序,0 = 最底层,越大越靠上),判断谁压谁直接读 z。要调层序用 jsd_reparent_nodes + index(= 目标 z);auto-layout 容器同样支持,若引擎没落位会明确报错,那就改 itemSpacing / 对齐。别靠「新建一个节点压上去」改遮挡。
 8) 样式落点:纯描边图形只传 strokes 就行(fills 会被自动置空,不会变灰块);批量刷色给 ids + recursive(recursive 只作用于后代,容器自己不会被套上方框,要给容器也上色才传 includeSelf=true);实例子节点(位于 INSTANCE 内)的样式覆盖不保证渲染生效 —— 命中时结果的 warnings 会直接给出主组件里对应子节点的 id,改主组件即所有实例继承,只要单实例不同就先 jsd_detach_instance。多状态组件怎么做看平台能力位 \`inPlaceVariants\`:声明了它的平台(如 Figma,原生 combineAsVariants 即原位合并、已有实例链接不断、无冗余原件)直接用 jsd_combine_as_variants 做变体集;未声明的平台(jsDesign,该路径随 P24 必败)只能靠「多主件」—— 每个状态各做一个 COMPONENT 并按「族名 / 状态」命名(如 Nav / Inbox、Nav / Me)。注意 jsDesign 上若走克隆兜底成功,页面会同时留下原件与集合内克隆,需自行 swap 实例到克隆变体后再删原件。「一个主件 + 每屏改子节点颜色」这条捷径两平台都不通(实例子节点样式 override 不生效)。
 9) 批量回显都做了摘要裁剪(jsd_batch 的节点只留 id/name/type/x/y):含图标/矢量克隆的批次要另配一次 jsd_export 目视验收,别拿回显当验收证据。
-10) 出错回滚:ok=false 或「没找到 X 节点」→ jsd_find 复核 id 是否已失效(可能被连坐删除),必要时 jsd_repair_nodes 清理后重试。含删除/移父的批次务必读结果 warnings —— 引擎会把没碰到的兄弟节点静默挪走(同层几何漂移),照 warnings 给的原值回填,别把它当样式问题排查。
+10) 出错回滚:ok=false 或「没找到 X 节点」→ jsd_find 复核 id 是否已失效(可能被连坐删除),必要时 jsd_repair_nodes 清理后重试。**结果 warnings 一律读** —— 它点名的都是「回显成功却没生效」:能力门控字段被忽略、字段回读不一致(fontName 字重被降级 / TEXT 的 width 被 auto-resize 吃掉)、根节点 x/y 被 placement 覆盖;含删除/移父的批次还会报同层几何漂移(引擎把没碰到的兄弟节点静默挪走),照 warnings 给的原值回填,别把它当样式问题排查。
 11) 收敛复核:整批做完只做一次 jsd_get_selection(depth=1),或 jsd_export({ids:[要看的节点id], scale:0.5}) 导小图看效果(ids 为必填数组);**关键视觉改动靠导图目检,回显不等于生效**,不要每步都读一遍。
 
 示例结构(登录页):

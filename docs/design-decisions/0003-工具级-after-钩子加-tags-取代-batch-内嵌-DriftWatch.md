@@ -63,3 +63,4 @@ export interface BridgeToolDef {
 |---|---|---|
 | 2026-09-18 | 初次决策 | 采用 声明式 tags + after 横切钩子 |
 | 2026-09-18 | 落地后复核 | 结论不变，两处按实情调整：① 钩子需要「前后各一次」才能比对，故接口是 `before/after` 一对（工厂产出、每次调用新建实例），不是单个 after；② 钩子告警同时进结果文本块与 `warnings` 字段，否则 `jsd_batch` 只看 structuredContent 会把告警静默丢掉；③ `checkDrift` 是**公开参数**（README 有写），不能静默移除：改为按调用生效 —— `ToolExecutor` 增第三个可选参数 `{ skipHooks }`，batch 传 `checkDrift === false` 时本次不实例化钩子（不是摘掉 def 上的钩子，也不是全局开关），两条方向都有用例覆盖 |
+| 2026-09-19 | 覆盖面复核（见 0007 的压力部分） | 结论不变，**补一处落地缺口**：聚合入口 `jsd_manage_nodes` 此前没挂 `hook`，于是 `drift-watch.ts` 里专为它写的 op 判断（`isStructuralArgs`）是死代码 —— 「走 `jsd_batch` 的 `jsd_manage_nodes{op:'remove'}`」这一步不复核，而固定 op 小工具有复核，同一份暴露面两种待遇。现已在 `tools/manage.ts` 挂上同一个 `driftWatch`（按其入参 op 自过滤，非结构变更调用直接返回），并补两条用例：结构变更 op 触发复核读数、非结构变更 op 不触发 |

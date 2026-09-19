@@ -4,6 +4,11 @@ import { PROP_METHOD_FIELDS } from '../schemas';
 import { isGatedPropUnsupported } from './capabilities';
 import type { DesignHost, NodeSkeleton } from './host';
 import {
+  nodeLabel,
+  type UnappliedProp,
+  unappliedWarning,
+} from './props/outcome';
+import {
   CONTAINER_SELF_VISIBLE_PROPS,
   INSTANCE_STYLE_RISK_PROPS,
   instanceStyleFixHint,
@@ -14,7 +19,7 @@ import { emptyOutcome, type WriteOutcome } from './props/types';
 import { UPDATE_WRITERS } from './props/writers';
 import type { RuntimeContext } from './runtime';
 import { serializeNode } from './serialize';
-import { collectTargets, findNode } from './utils';
+import { collectTargets, findNode, fontNotResolved } from './utils';
 
 async function applyProps(
   host: DesignHost,
@@ -115,6 +120,10 @@ export async function updateSelection(
   const selfMutated: string[] = [];
   const selfMutatedProps = new Set<string>();
   const layoutModeMissed: string[] = [];
+  // 除 layoutMode 外的回读不一致项(如 fontName)与 writer 自述告警 —— 与创建路径
+  // 共用同一份文案(见 core/props/outcome.ts),不再只认 layoutMode 一个字段
+  const unapplied: UnappliedProp[] = [];
+  const messages: string[] = [];
   for (const node of targets) {
     // 能力门控字段:平台不具备该能力(或运行时不长这个属性)时,引擎赋值会静默跳过 → 先记下来点名
     for (const key of Object.keys(props)) {
@@ -138,14 +147,17 @@ export async function updateSelection(
       }
     }
     const readbackMark = outcome.readback.length;
+    const messageMark = outcome.warnings.length;
     await applyProps(host, ctx, node, props, outcome);
     // P31 的方向回读现在由 layoutWriter.settle 统一做(见 core/props/writers),
     // 创建与修改两条路径共用同一份判定;压不住的结果经 outcome.readback 回收点名。
     for (const r of outcome.readback.slice(readbackMark)) {
-      if (r.key === 'layoutMode' && r.ok === false) {
-        layoutModeMissed.push(`${node.name}(${node.id})`);
-      }
+      if (r.ok !== false) continue;
+      const label = nodeLabel(node);
+      if (r.key === 'layoutMode') layoutModeMissed.push(label);
+      else unapplied.push({ key: r.key, label });
     }
+    messages.push(...outcome.warnings.slice(messageMark));
     // 平台缺陷:实例子节点的样式覆盖回显成功但渲染不生效 → 写时点名,别让调用方以为改成了
     const instance = enclosingInstance(node);
     if (instance != null) {
@@ -220,8 +232,29 @@ export async function updateSelection(
       ].join(''),
     );
   }
+  // 序列化提前到告警组装之前:字体判定要用**序列化后**的 fontName(引擎已落库的形态),
+  // 写入时刻读到的还是原样回显,判不出「组合有没有被解析」(见 utils.fontNotResolved)。
+  const updated = targets.map((n) => serializeNode(n));
+  const wantFont = (props as { fontName?: unknown }).fontName as
+    | { family?: unknown; style?: unknown }
+    | undefined;
+  if (wantFont != null) {
+    for (const s of updated) {
+      const why = fontNotResolved(
+        wantFont,
+        (s as unknown as { fontName?: unknown }).fontName,
+      );
+      if (why != null) {
+        unapplied.push({ key: 'fontName', label: nodeLabel(s), detail: why });
+      }
+    }
+  }
+  const unappliedMsg = unappliedWarning(unapplied);
+  if (unappliedMsg != null) warnings.push(unappliedMsg);
+  // writer 自述类告警(WriteOutcome.warnings):0004 预留的出口,此前两条路径都没接
+  warnings.push(...messages);
   return {
-    updated: targets.map((n) => serializeNode(n)),
+    updated,
     ...(warnings.length > 0 ? { warnings } : {}),
   };
 }

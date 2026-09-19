@@ -72,6 +72,31 @@ describe('结构变更复核钩子', () => {
     expect(calls.every((c) => c.method === 'node_op')).toBe(true);
   });
 
+  /**
+   * 聚合入口 jsd_manage_nodes:同一个钩子挂在它上面,由入参 op 决定要不要查。
+   * 此前它**没挂**钩子 —— 于是「jsd_batch 里的 jsd_manage_nodes{op:'remove'}」
+   * 这一步不复核,而固定 op 小工具有复核,同一份暴露面两种待遇。
+   */
+  it('聚合入口的结构变更 op 同样触发复核读数', async () => {
+    const exec = lookupExecutor('jsd_manage_nodes');
+    expect(exec, 'jsd_manage_nodes 未注册').toBeDefined();
+    calls.length = 0;
+    await exec?.({ op: 'remove', ids: ['1:2'] }, undefined);
+    expect(calls.filter((c) => c.method === 'node_op')).toHaveLength(1);
+    expect(
+      calls.filter((c) => c.method !== 'node_op').length,
+      '聚合入口没有触发任何复核读数',
+    ).toBeGreaterThan(0);
+  });
+
+  it('聚合入口的非结构变更 op 不产生复核读数', async () => {
+    const exec = lookupExecutor('jsd_manage_nodes');
+    expect(exec).toBeDefined();
+    calls.length = 0;
+    await exec?.({ op: 'select', ids: ['1:2'] }, undefined);
+    expect(calls.every((c) => c.method === 'node_op')).toBe(true);
+  });
+
   it('checkDrift:false 真的关掉复核 —— 公开参数不能只是个摆设', async () => {
     const exec = lookupExecutor('jsd_batch');
     expect(exec).toBeDefined();

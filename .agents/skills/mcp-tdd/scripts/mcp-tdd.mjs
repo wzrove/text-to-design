@@ -28,7 +28,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 // ---------------------------------------------------------------- 路径解析
 
@@ -1044,4 +1044,13 @@ function main() {
   handler(flags);
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) main();
+// Windows 兼容:process.argv[1] 是 `D:\...`(反斜杠),拼成 `file://D:/...`
+// 与 import.meta.url 的 `file:///D:/...` 永不相等 —— 症状是整个 CLI 在 Windows 上
+// **静默退出 0**(没有输出、也不建台账),看着像「命令不存在」。统一走 pathToFileURL
+// 归一化后再比(顺带覆盖带空格/非 ASCII 的仓库路径)。
+if (
+  process.argv[1] != null &&
+  import.meta.url === pathToFileURL(process.argv[1]).href
+) {
+  main();
+}

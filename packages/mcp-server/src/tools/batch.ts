@@ -193,14 +193,14 @@ export function registerBatchTools(
     name: 'jsd_batch',
     title: '批量编排执行',
     description: `批量编排器:一次请求内顺序执行多个 jsd_* 步骤,前一步结果经双花括号占位符(内容为 步骤id.字段路径)注入后一步 args,中间 id 不回传模型,显著减少往返与上下文。
-占位符独占一个参数值时保留原类型(数组可直接作 ids 用),嵌在字符串中按 JSON 文本展开;id 重复/未知工具/引用失败立即中止,工具执行失败默认也中止(stopOnError=false 或单步 continueOnError=true 可走完)。
+占位符独占一个参数值时保留原类型(数组可直接作 ids 用),嵌在字符串中按 JSON 文本展开;**占位符只在同一次调用的本批次内有效**(步骤表随调用结束即销毁,引用上一批次的步骤必报「占位符引用的步骤不存在或未成功」并中止整批 —— 跨批次请硬编码上一步回显里的真实 id);id 重复/未知工具/引用失败立即中止,工具执行失败默认也中止(stopOnError=false 或单步 continueOnError=true 可走完)。
 回显已做摘要裁剪:节点对象只留 id/name/type/x/y/width/height/z/parentId,vectorPaths(单条 >10KB、16 位小数)与 constraints 等渲染无关字段整键丢弃;裁剪后仍超 20K 字符的步骤降级为 id 清单(结果里 echoTrimmed=true)。占位符解析不受影响(内部仍用完整数据)。含图标的批次(jsd_create_icon / jsd_clone_node / jsd_create_vector)务必配一次 jsd_export 目视验收,别只看回显。
 各工具返回键与占位符写法(键写错会报「无法解析占位符引用」并中止整批):
 · created 为数组 → {{id.created[0].id}}:per-type create(jsd_create_rectangle / jsd_create_frame 等)、jsd_clone_node、jsd_outline_stroke、jsd_create_instance、jsd_detach_instance
 · created 为单对象 → {{id.created.id}}:jsd_create_svg / jsd_create_icon / jsd_flatten_nodes / jsd_group_nodes / jsd_create_component / jsd_import_component / jsd_combine_as_variants
 · jsd_find → {{id.nodes[0].id}};jsd_get_selection → {{id.selection[0].id}}
 · 属性类 jsd_set_* → {{id.updated[0].id}};jsd_swap_component → {{id.swapped[0].id}}
-· jsd_manage_nodes 各 op:select→selected[](id 字符串)、remove→removed[](id 字符串)、clone/group/flatten/outline_stroke→created[]、ungroup→ungrouped[](id 字符串)、reparent→moved[](与 updated[] 同义,两个键都回)、repair→cleaned[](id 字符串)—— id 字符串数组取 {{id.selected[0]}},节点数组取 {{id.created[0].id}}
+· jsd_manage_nodes 各 op:select→selected[](id 字符串)、remove→removed[](id 字符串)、clone/outline_stroke→created[](节点**数组**)、group/flatten→created(节点**单对象**,与 jsd_group_nodes / jsd_flatten_nodes 同形)、ungroup→ungrouped[](id 字符串)、reparent→moved[](与 updated[] 同义,两个键都回)、repair→cleaned[](id 字符串)—— id 字符串数组取 {{id.selected[0]}},节点数组取 {{id.created[0].id}},节点单对象取 {{id.created.id}}(写成 [0] 会报无法解析)
 · jsd_manage_components 各 op:create_component/create_instance/detach_instance/import_component/combine_as_variants→created(detach_instance 是数组,不是 updated)、swap_component→swapped[]、set_instance_properties→updated[]、copy_overrides→snapshotId、apply_overrides/sync_overrides→applied[]
 · 拿不准某步的返回结构时,先单独调它一次看回显再拼进 batch —— 猜错会连带整批中止。
 结构变更复核(默认开,checkDrift=false 可关):步骤里含 remove/reparent/group/ungroup/flatten/repair 时,变更前记下受影响父层(含 reparent 的目标父级与当前页顶层)的子节点坐标,收尾再读一次比对 —— 引擎在删改结构后会把**没碰到**的兄弟节点静默挪走(实测 (24,720)→(28,618):无报错、回显正常,渲染上像样式问题,极易走错排查方向)。漂移写进结果 warnings 并给出原值,照原值用 jsd_move_node 回填即可;覆盖面仅限本次操作触及的父层(协议没有整树读法,别的层漂移查不到)。`,

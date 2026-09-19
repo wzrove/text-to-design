@@ -81,7 +81,7 @@ export function registerPropTools(
     propUpdateTool({
       name: 'jsd_set_text',
       title: '修改文本',
-      description: `修改文本内容与排版(仅 TEXT 节点生效):characters/fontSize/fontName/对齐/自适应/大小写/装饰/行高/字距,以及 Figma 的截断与最大行数。字体需精确匹配,建议先 jsd_list_fonts 查可用字体(不可用时静默回退默认)。${INSTANCE_STYLE_WARN};characters 内容覆盖在实例内也是正常生效的`,
+      description: `修改文本内容与排版(仅 TEXT 节点生效):characters/fontSize/fontName/对齐/自适应/大小写/装饰/行高/字距,以及 Figma 的截断与最大行数。字体先 jsd_list_fonts 取 fonts[] 里成对的 family + styles:family 用 fonts[].family 原样,style 用同一项的**全名**(如 SourceHanSansCN-Bold,不是简称 "Bold")——写错不报错、会静默退回默认字面,结果 warnings 会点名。要换行须 width + textAutoResize:"HEIGHT"(缺省 WIDTH_AND_HEIGHT 会按内容撑开;只给 width 不给 autoResize 会被引擎置成 NONE、高度不随内容重算)。${INSTANCE_STYLE_WARN};characters 内容覆盖在实例内也是正常生效的`,
       method: 'set_text',
       inputSchema: setTextSchema,
       annotations: { readOnlyHint: false, destructiveHint: false },

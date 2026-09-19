@@ -130,7 +130,7 @@ pkill -f text-to-design-mcp
 | `jsd_outline_stroke` | 描边转轮廓矢量(几何被烘焙) |
 | `jsd_reparent_nodes` | 移入父节点成为其子节点(parentId 建议显式传;跨父级移动保持绝对位置,内部自动换算,移入 auto-layout 容器时位置由布局接管) |
 | `jsd_repair_nodes` | 清理引擎残留的损坏/失效节点 |
-| `jsd_manage_nodes` | 聚合入口,op 含 select/remove/clone/group/ungroup/flatten/outline_stroke/reparent/repair;各 op 返回键不同(select→`selected` / remove→`removed` / ungroup→`ungrouped` / repair→`cleaned` 为 id 字符串数组;clone/group/flatten/outline_stroke→`created`;reparent→`moved`,同时附同义的 `updated`) |
+| `jsd_manage_nodes` | 聚合入口,op 含 select/remove/clone/group/ungroup/flatten/outline_stroke/reparent/repair;各 op 返回键不同(select→`selected` / remove→`removed` / ungroup→`ungrouped` / repair→`cleaned` 为 id 字符串数组;clone/outline_stroke→`created` 节点**数组**,group/flatten→`created` 节点**单对象**;reparent→`moved`,同时附同义的 `updated`)。结构变更类 op 与固定 op 小工具一样会做同层几何漂移复核 |
 | `jsd_create_component` | 建「空壳」组件:先 resize 再 reparent 归入子节点,最后删除原容器 |
 | `jsd_create_instance` | 按 COMPONENT 生成实例 |
 | `jsd_detach_instance` | 取消实例链接,得到可自由编辑的普通节点 |
@@ -144,7 +144,7 @@ pkill -f text-to-design-mcp
 | `jsd_manage_components` | 聚合入口,op 含 create_component/create_instance/detach_instance/import_component/swap_component/set_instance_properties/combine_as_variants/copy_overrides/apply_overrides/sync_overrides |
 | `jsd_batch` | 批量编排器:一次请求顺序执行多个 jsd_* 步骤,双花括号占位符串起中间值;步骤回显做摘要裁剪(节点只留 id/name/type/x/y,丢 vectorPaths 等大字段,超预算降级为 id 清单),占位符解析用完整数据;含图标的批次另配一次 `jsd_export` 目视验收;含删除/移父的步骤自动复核同层几何漂移(结果 `warnings`,`checkDrift:false` 可关;单工具调用同样会复核) |
 | `jsd_export` | 导出节点为 PNG/JPG/SVG/PDF(导出失败的 id 在文本里点名) |
-| `jsd_list_fonts` | 列出可用字体 |
+| `jsd_list_fonts` | 列出可用字体:families 与各族的可用字型 `fonts:[{family,styles}]`(写 fontName 前照这份取组合,family+style 需精确匹配,猜错会静默退回默认字重) |
 | `jsd_list_styles` | 列出本地样式(PAINT/TEXT/EFFECT/GRID) |
 | `jsd_fill_image` | 用本地图片填充节点 |
 | `jsd_platform_op` | 平台特有能力的通用通道(Figma 变量/本地样式/组件属性)。先读 `jsd_ping` 的 `platformOps` 名单再传 op 名;插件平台不适用(如即时设计)时由 daemon 直接拦截并给出替代路径,不发插件往返 |
@@ -171,7 +171,7 @@ pkill -f text-to-design-mcp
 | resource | 内容 |
 | --- | --- |
 | `jsd://canvas/selection` | 当前选中的序列化树(等价 jsd_get_selection depth=2) |
-| `jsd://fonts` | 当前环境可用字体族 |
+| `jsd://fonts` | 当前环境可用字体:families 与各族的可用字型 `fonts:[{family,styles}]` |
 | `jsd://styles` | 当前文档可复用本地样式(PAINT/TEXT/EFFECT/GRID,按名应用样式前先读这里) |
 | `jsd://page` | 当前页顶层节点轻量摘要(名称/类型/位置/尺寸/子节点数,从头设计整页前先读) |
 | `jsd://node/{id}` | 按 id 读节点序列化结构 |

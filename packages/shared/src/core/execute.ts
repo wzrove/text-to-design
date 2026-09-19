@@ -6,8 +6,10 @@ import {
 import type { ExecuteOp, SerializedNode } from '../schemas';
 import buildNode from './buildNode';
 import type { DesignHost, NodeSkeleton } from './host';
+import { emptyNotes, nodeLabel, unappliedWarning } from './props/outcome';
 import type { RuntimeContext } from './runtime';
 import { serializeNode } from './serialize';
+import { fontNotResolved } from './utils';
 
 function coerceSpec(raw: unknown): ExecuteOp {
   if (typeof raw !== 'object' || raw === null) {
@@ -49,11 +51,11 @@ export async function executeOps(
   const page = host.currentPage;
   const mode = placement?.mode ?? 'center';
   const created: NodeSkeleton[] = [];
-  // 能力门控字段被跳过时点名(创建路径此前完全静默:调用方以为带上了截断/样式 id)
-  const skipped = new Set<string>();
+  // 写后回收袋(0007):门控字段 + 回读不一致 + writer 自述告警,一次调用共用一份
+  const notes = emptyNotes();
   try {
     for (const spec of specs) {
-      const node = await buildNode(host, ctx, spec, page, skipped);
+      const node = await buildNode(host, ctx, spec, page, notes);
       if (mode === 'center') {
         const center = host.viewport.center;
         const dx = center.x - node.x - node.width / 2;
@@ -77,24 +79,62 @@ export async function executeOps(
     throw e;
   }
   host.viewport.scrollAndZoomIntoView(created);
-  const warnings =
-    skipped.size > 0
-      ? [
-          `以下字段由平台能力门控,当前平台运行时不具备,创建时已忽略:${[
-            ...skipped,
-          ]
-            .map((key) => {
-              const cap = CAPABILITY_OF_GATED_PROP[key];
-              return cap != null ? `${key}(需 ${cap} 能力)` : key;
-            })
-            .join(
-              '、',
-            )};当前平台的能力表见 jsd_ping 的 capabilities(core 判定与该表同源)`,
-        ]
-      : undefined;
+  // 序列化必须在结果装配前完成:字体判定要用**序列化后**的 fontName(引擎已落库的形态),
+  // 写入/结算时刻读到的还是原样回显,判不出「组合有没有被解析」(见 utils.fontNotResolved)。
+  const serialized = created.map((n) => serializeNode(n));
+  for (let i = 0; i < specs.length; i += 1) {
+    const want = specs[i].fontName as
+      | { family?: unknown; style?: unknown }
+      | undefined;
+    const got = serialized[i] as unknown as { fontName?: unknown };
+    if (want == null || got == null) continue;
+    const why = fontNotResolved(want, got.fontName);
+    if (why != null) {
+      notes.unapplied.push({
+        key: 'fontName',
+        label: nodeLabel(serialized[i]),
+        detail: why,
+      });
+    }
+  }
+  const warnings: string[] = [];
+  if (notes.skipped.size > 0) {
+    warnings.push(
+      `以下字段由平台能力门控,当前平台运行时不具备,创建时已忽略:${[
+        ...notes.skipped,
+      ]
+        .map((key) => {
+          const cap = CAPABILITY_OF_GATED_PROP[key];
+          return cap != null ? `${key}(需 ${cap} 能力)` : key;
+        })
+        .join(
+          '、',
+        )};当前平台的能力表见 jsd_ping 的 capabilities(core 判定与该表同源)`,
+    );
+  }
+  // 根节点的 x/y 由 placement 决定:给了坐标却没声明 manual/absolute 时,
+  // 这份坐标会被静默丢弃(缺省 center 用视口中心覆盖)—— 明确点名。
+  // 此前是「回显成功、位置却不在请求的坐标上」,调用方只能靠肉眼发现。
+  const withCoords = specs.filter((s) => s.x != null || s.y != null).length;
+  if (mode !== 'manual' && withCoords > 0) {
+    warnings.push(
+      [
+        `根节点的 x/y 未生效:placement 缺省为 center(本次 mode=${mode}),根节点自身的 x/y 会被 placement 覆盖`,
+        mode === 'center'
+          ? '(每个根节点各自移到视口中心,多根还会互相叠放)。'
+          : `(所有根统一放到 placement.x=${placement?.x}、y=${placement?.y})。`,
+        '要按坐标排布:传 placement:{mode:"manual"}(保留根节点 x/y)或 placement:{mode:"absolute",x,y}(统一坐标);',
+        '层级结构改用 children 嵌套 —— 子节点的 x/y 相对父节点,不受 placement 影响。',
+      ].join(''),
+    );
+  }
+  const unapplied = unappliedWarning(notes.unapplied);
+  if (unapplied != null) warnings.push(unapplied);
+  // writer 自述类告警(WriteOutcome.warnings):0004 预留的出口,创建路径此前没接
+  warnings.push(...notes.messages);
   return {
-    created: created.map((n) => serializeNode(n)),
-    ...(warnings != null ? { warnings } : {}),
+    created: serialized,
+    ...(warnings.length > 0 ? { warnings } : {}),
   };
 }
 

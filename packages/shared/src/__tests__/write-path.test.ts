@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { executeOps } from '../core/execute';
+import { listFonts } from '../core/export';
 import { type RuntimeContext, runtimeContext } from '../core/runtime';
 import { updateSelection } from '../core/update';
 import {
@@ -345,5 +346,321 @@ describe('两条写路径的语义差异(创建 ≠ 修改)', () => {
     expect(frame.paddingTop).toBe(10);
     expect(frame.itemSpacing).toBe(24);
     expect(frame.layoutMode).toBe('VERTICAL');
+  });
+});
+
+/**
+ * 「回显成功却没生效」的回收面(设计决策 0007)。
+ *
+ * 0004 把这类事实统一到 `WriteOutcome`,但当时只有修改路径回收:创建路径只回收
+ * 能力门控,`readback.ok === false` 与 `WriteOutcome.warnings` 被静默丢弃。
+ * 这组用例钉住三条纪律:
+ * ① 回读不一致(字体被降级 / TEXT 尺寸被 auto-resize 吃掉)→ 点名;
+ * ② 根节点 x/y 被 placement 覆盖 → 点名(此前只能靠肉眼发现位置不对);
+ * ③ 没有回读证据时不刷屏(引擎真吃下了值 → 一个字都不报)。
+ */
+describe('创建路径的写后回收(0007)', () => {
+  it('P34:resize 会把 textAutoResize 翻成 NONE → 显式声明的 HEIGHT 被压回(引擎实测行为)', async () => {
+    host = makeHost();
+    // 复刻 2026-09-19 实测的引擎行为:resize() 把 textAutoResize 重置为 NONE
+    host.createText = () => {
+      const t = makeText(`${host.registry.size + 1}:text`);
+      const real = t.resize as (w: number, h: number) => void;
+      t.resize = (w: number, h: number) => {
+        real.call(t, w, h);
+        (t as unknown as { textAutoResize: string }).textAutoResize = 'NONE';
+      };
+      return t;
+    };
+    const r = await executeOps(
+      host,
+      ctx,
+      {
+        type: 'TEXT',
+        name: '固定宽自动高',
+        characters: '很长的一段正文',
+        width: 200,
+        textAutoResize: 'HEIGHT',
+      },
+      { mode: 'manual' },
+    );
+    const created = host.registry.get(r.created[0].id);
+    // 尺寸回压跑在 textWriter 之后,声明过的值必须在它之后再压一遍
+    expect(created?.textAutoResize).toBe('HEIGHT');
+    expect(r.warnings, '声明生效了就不该告警').toBeUndefined();
+  });
+
+  it('P34:给了 width 但没声明 textAutoResize → 引擎置 NONE,点名并给出 HEIGHT 写法', async () => {
+    host = makeHost();
+    host.createText = () => {
+      const t = makeText(`${host.registry.size + 1}:text`);
+      const real = t.resize as (w: number, h: number) => void;
+      t.resize = (w: number, h: number) => {
+        real.call(t, w, h);
+        (t as unknown as { textAutoResize: string }).textAutoResize = 'NONE';
+      };
+      return t;
+    };
+    const r = await executeOps(
+      host,
+      ctx,
+      { type: 'TEXT', name: '正文', characters: '很长的一段正文', width: 200 },
+      { mode: 'manual' },
+    );
+    const warn = r.warnings?.join('') ?? '';
+    expect(warn).toContain('textAutoResize');
+    expect(warn, '要给出正确写法').toContain('HEIGHT');
+  });
+
+  it('P33:TEXT 显式给 width 却被 auto-resize 吃掉 → 点名 width 并给出换行写法', async () => {
+    host = makeHost();
+    // 模拟引擎行为:WIDTH_AND_HEIGHT 的文本 resize 不生效(宽度按内容走)
+    host.createText = () => {
+      const t = makeText(`${host.registry.size + 1}:text`);
+      t.resize = () => {};
+      return t;
+    };
+    const r = await executeOps(
+      host,
+      ctx,
+      {
+        type: 'TEXT',
+        name: '正文段落',
+        characters: '很长的一段正文',
+        width: 690,
+      },
+      { mode: 'manual' },
+    );
+    const warn = r.warnings?.join('') ?? '';
+    expect(warn, 'width 被改写却没有点名').toContain('width');
+    expect(warn).toContain('没生效');
+    expect(warn, '要点出正确写法').toContain('textAutoResize');
+  });
+
+  it('fontName 回读不一致(平台静默退回默认字体)→ 点名 fontName', async () => {
+    host = makeHost();
+    host.createText = () => {
+      const t = makeText(`${host.registry.size + 1}:text`);
+      // 模拟引擎行为:该 family/style 组合不可用,赋值被忽略(不报错)
+      Object.defineProperty(t, 'fontName', {
+        get: () => ({ family: 'SourceHanSansCN', style: 'Regular' }),
+        set: () => {},
+      });
+      return t;
+    };
+    const r = await executeOps(
+      host,
+      ctx,
+      {
+        type: 'TEXT',
+        name: '标题',
+        characters: '标题',
+        fontName: { family: 'Inter', style: 'Bold' },
+      },
+      { mode: 'manual' },
+    );
+    const warn = r.warnings?.join('') ?? '';
+    expect(warn).toContain('fontName');
+    expect(warn, '文案里应点名实测形态(Bold 被降级)').toContain('Bold');
+  });
+
+  it('引擎真吃下了值 → 不产生任何告警', async () => {
+    host = makeHost();
+    host.createText = () => {
+      const t = makeText(`${host.registry.size + 1}:text`);
+      // 真实引擎里新建 TEXT 的缺省就是 WIDTH_AND_HEIGHT(fixture 起点是 NONE)
+      (t as unknown as { textAutoResize: string }).textAutoResize =
+        'WIDTH_AND_HEIGHT';
+      return t;
+    };
+    const r = await executeOps(
+      host,
+      ctx,
+      {
+        type: 'TEXT',
+        name: '标题',
+        characters: '标题',
+        fontName: { family: 'Inter', style: 'Bold' },
+      },
+      { mode: 'manual' },
+    );
+    expect(r.warnings).toBeUndefined();
+  });
+
+  it('短名对请求被引擎接受(实测 `{SourceHanSansCN, Bold}`)→ 不误报', async () => {
+    host = makeHost();
+    host.createText = () => {
+      const t = makeText(`${host.registry.size + 1}:text`);
+      // 实测:短名对请求被接受,落库与回读同为短名
+      Object.defineProperty(t, 'fontName', {
+        get: () => ({ family: 'SourceHanSansCN', style: 'Bold' }),
+        set: () => {},
+      });
+      return t;
+    };
+    const r = await executeOps(
+      host,
+      ctx,
+      {
+        type: 'TEXT',
+        name: '标题',
+        characters: '标题',
+        fontName: { family: 'SourceHanSansCN', style: 'Bold' },
+      },
+      { mode: 'manual' },
+    );
+    // 两条判据都只对「清单形态」生效:短名对不在判据范围,一律放行(宁可漏报不误报)
+    expect(r.warnings).toBeUndefined();
+  });
+
+  it('合法写法被引擎规范化(list 形态 → 短名)→ 不误报', async () => {
+    host = makeHost();
+    host.createText = () => {
+      const t = makeText(`${host.registry.size + 1}:text`);
+      // 实测:请求 (SourceHanSansCN_family, SourceHanSansCN-Bold) → 落库 (SourceHanSansCN, Bold)
+      Object.defineProperty(t, 'fontName', {
+        get: () => ({ family: 'SourceHanSansCN', style: 'Bold' }),
+        set: () => {},
+      });
+      return t;
+    };
+    const r = await executeOps(
+      host,
+      ctx,
+      {
+        type: 'TEXT',
+        name: '标题',
+        characters: '标题',
+        fontName: {
+          family: 'SourceHanSansCN_family',
+          style: 'SourceHanSansCN-Bold',
+        },
+      },
+      { mode: 'manual' },
+    );
+    expect(r.warnings, '规范化后的短名不该被判成没生效').toBeUndefined();
+  });
+
+  it('style 写成简称(回读仍带清单形态)→ 点名,并给出全名写法', async () => {
+    host = makeHost();
+    host.createText = () => {
+      const t = makeText(`${host.registry.size + 1}:text`);
+      // 实测:请求 (SourceHanSansCN_family, "Bold") 时引擎**不解析**、原样保留请求值
+      // (family 仍带 _family),渲染退回默认字面;而合法写法会被规范化成短名。
+      // 判定必须用**序列化后**的值做,才分得出这两种形态(见 utils.fontNotResolved)。
+      Object.defineProperty(t, 'fontName', {
+        get: () => ({ family: 'SourceHanSansCN_family', style: 'Bold' }),
+        set: () => {},
+      });
+      return t;
+    };
+    const r = await executeOps(
+      host,
+      ctx,
+      {
+        type: 'TEXT',
+        name: '标题',
+        characters: '标题',
+        fontName: { family: 'SourceHanSansCN_family', style: 'Bold' },
+      },
+      { mode: 'manual' },
+    );
+    const warn = r.warnings?.join('') ?? '';
+    expect(warn, '简称没被解析却没点名').toContain('fontName');
+    expect(warn, '要点出「回读仍是清单形态」这个事实').toContain('清单形态');
+    expect(warn, '要给全名写法').toContain('-Bold');
+  });
+
+  it('回读被换成别的字面(明确矛盾)→ 点名 fontName', async () => {
+    host = makeHost();
+    host.createText = () => {
+      const t = makeText(`${host.registry.size + 1}:text`);
+      // 整族回退:请求 Inter,读回思源黑 —— 这是明确矛盾,必须点名
+      Object.defineProperty(t, 'fontName', {
+        get: () => ({ family: 'SourceHanSansCN', style: 'Regular' }),
+        set: () => {},
+      });
+      return t;
+    };
+    const r = await executeOps(
+      host,
+      ctx,
+      {
+        type: 'TEXT',
+        name: '标题',
+        characters: '标题',
+        fontName: { family: 'Inter_family', style: 'Inter-Bold' },
+      },
+      { mode: 'manual' },
+    );
+    const warn = r.warnings?.join('') ?? '';
+    expect(warn).toContain('fontName');
+    expect(warn, '要带本次实测到的形态(整族被换掉)').toContain('整族回退');
+  });
+
+  it('根节点 x/y 被 placement 覆盖 → 点名并给出两种正确姿势', async () => {
+    const r = await executeOps(host, ctx, {
+      type: 'RECTANGLE',
+      name: 'card',
+      width: 10,
+      height: 10,
+      x: 2400,
+      y: 0,
+    });
+    const warn = r.warnings?.join('') ?? '';
+    expect(warn, '给了 x/y 却不生效,必须点名').toContain('placement');
+    expect(warn).toContain('manual');
+    // 坐标确实被视口中心覆盖(500,500 - 10/2)
+    expect(r.created[0].x).toBe(495);
+
+    const manual = await executeOps(
+      host,
+      ctx,
+      { type: 'RECTANGLE', name: 'card', width: 10, height: 10, x: 2400, y: 0 },
+      { mode: 'manual' },
+    );
+    expect(manual.warnings).toBeUndefined();
+    expect(manual.created[0].x).toBe(2400);
+  });
+
+  it('修改路径同样回收:fontName 回读不一致 → warnings 点名', async () => {
+    const text = makeText();
+    Object.defineProperty(text, 'fontName', {
+      get: () => ({ family: 'SourceHanSansCN', style: 'Regular' }),
+      set: () => {},
+    });
+    host = makeHost([text]);
+    const r = await updateSelection(
+      host,
+      ctx,
+      {
+        ids: [text.id],
+        props: { fontName: { family: 'Inter', style: 'Bold' } },
+      },
+      'set_text',
+    );
+    const warn = r.warnings?.join('') ?? '';
+    expect(warn).toContain('fontName');
+  });
+});
+
+describe('字体清单(jsd_list_fonts)', () => {
+  it('按 family 归并出可用字型:写 fontName 前有据可依,不用猜 style', async () => {
+    const h = makeHost();
+    h.listAvailableFontsAsync = async () => [
+      { fontName: { family: 'Inter', style: 'Bold' } },
+      { fontName: { family: 'Inter', style: 'Regular' } },
+      { fontName: { family: 'MiSans', style: 'Regular' } },
+    ];
+    const r = await listFonts(h);
+    expect(r.families).toEqual(['Inter', 'MiSans']);
+    expect(r.count).toBe(2);
+    expect(r.fonts?.find((f) => f.family === 'Inter')?.styles).toEqual([
+      'Bold',
+      'Regular',
+    ]);
+    expect(r.fonts?.find((f) => f.family === 'MiSans')?.styles).toEqual([
+      'Regular',
+    ]);
   });
 });

@@ -99,3 +99,4 @@ export interface PropWriter {
 |---|---|---|
 | 2026-09-18 | 初次决策 | 采用 Strategy Registry（表驱动 PropWriter 两阶段管线） |
 | 2026-09-18 | 落地后复核 | 结论不变。实际拆出 8 个 writer（passthrough / geometry / paint / radius / shape / text / layout / superset）+ createStabilize；`buildNode.ts` 337→154 行、`update.ts` 513→318 行。创建路径因「布局属性必须晚于插子节点」不能一趟跑完，故导出 `writePhase` 与 `settleWriters` 让调用方显式分两段——两阶段管线的形状没变，只是阶段边界由调用方划定 |
+| 2026-09-19 | 引擎实测（见 0007）追加第 9 个 writer | 结论不变，是同一模式的又一次应用：`resize()` 会把 TEXT 的 `textAutoResize` 重置为 `NONE`，而创建路径的尺寸回压跑在文本字段之后 → 调用方显式声明的 `HEIGHT` 被吃掉。新增 `textStabilizeWriter`（id `text-stabilize`，`keys:['textAutoResize']`，只在 settle 动作）并接进创建路径的 settle 顺序（尺寸 → 文本自适应 → sizingMode → 方向）与 `UPDATE_WRITERS`。**判据不变**：声明过的值必须在写尺寸之后再压一遍，压不住就进 `WriteOutcome.readback` 点名 |

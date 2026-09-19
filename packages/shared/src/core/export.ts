@@ -68,8 +68,24 @@ export async function fillImageNode(
 
 export async function listFonts(host: DesignHost): Promise<ListFontsResult> {
   const fonts = await host.listAvailableFontsAsync();
-  const families = [...new Set(fonts.map((f) => f.fontName.family))].sort();
-  return { families, count: families.length };
+  // 按 family 归并出可用的 style:写 fontName 要求 family + style 精确匹配,
+  // 只回 family 列表等于让调用方猜字型("Bold" / "Medium" / "Semibold" / "Bold Italic"?),
+  // 猜错不报错、静默退回默认字重(实测中文 family 的 Bold 就是这样被吃掉的)。
+  // 这里把 (family, style) 组合如实摊开,写之前就有据可依。
+  const byFamily = new Map<string, Set<string>>();
+  for (const f of fonts) {
+    const family = f?.fontName?.family;
+    if (typeof family !== 'string' || family === '') continue;
+    const styles = byFamily.get(family) ?? new Set<string>();
+    const style = f.fontName.style;
+    if (typeof style === 'string' && style !== '') styles.add(style);
+    byFamily.set(family, styles);
+  }
+  const detail = [...byFamily.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([family, styles]) => ({ family, styles: [...styles].sort() }));
+  const families = detail.map((d) => d.family);
+  return { families, fonts: detail, count: families.length };
 }
 
 /** 本地样式枚举:两平台 API 同构(PAINT/TEXT/EFFECT/GRID),getter 缺失时跳过 */

@@ -1,4 +1,5 @@
 import { propAppliesTo } from '../../dicts/prop-applicability';
+import type { FontName } from '../../schemas/base';
 import { MIXED } from '../host';
 import {
   normalizeEffects,
@@ -175,6 +176,13 @@ export const shapeWriter: PropWriter = {
 };
 
 /**
+ * 字体的写后判定**不在这里**:实测(2026-09-19)写入瞬间的回读是原样回显,引擎的
+ * 规范化要到后续读取才可见 —— 在这个阶段判会把合法写法误报成未生效。判定改由
+ * 结果装配期用**序列化后**的值做,见 `core/utils.ts` 的 `fontNotResolved`
+ * (调用点:`core/execute.ts` 与 `core/update.ts` 的结果组装)。
+ */
+
+/**
  * 文本字段整体处理:字体加载必须先于逐属性赋值,所以按节点类型整体进入,
  * 而不是逐字段 if。创建路径额外带 characters / fontSize 的默认值。
  */
@@ -196,12 +204,11 @@ export const textWriter: PropWriter = {
     const { node, src, create } = ctx;
     if (node.type !== 'TEXT') return;
     if (create) {
-      const specFont = src.fontName as
-        | { family: string; style: string }
-        | undefined;
+      const specFont = src.fontName as FontName | undefined;
       if (specFont != null && node.fontName !== MIXED) {
         await loadFont(ctx.host, specFont.family, specFont.style);
         node.fontName = specFont;
+        // 判定不在这里:写入瞬间回读是原样回显,见 textStabilizeWriter.settle
       }
       node.characters =
         typeof src.characters === 'string' ? src.characters : 'text';
@@ -210,12 +217,8 @@ export const textWriter: PropWriter = {
       const needLoad =
         src.characters != null || src.fontSize != null || src.fontName != null;
       if (needLoad) {
-        const current = node.fontName as
-          | { family: string; style: string }
-          | undefined;
-        const patch = src.fontName as
-          | { family?: string; style?: string }
-          | undefined;
+        const current = node.fontName as FontName | undefined;
+        const patch = src.fontName as Partial<FontName> | undefined;
         const family = patch?.family ?? current?.family ?? 'PingFang SC';
         const style = patch?.style ?? current?.style ?? 'Regular';
         if (node.fontName !== MIXED) {
@@ -382,6 +385,37 @@ export const createStabilizeWriter: PropWriter = {
   },
 };
 
+/**
+ * TEXT 的 `textAutoResize` 写后稳定化(P34)。
+ *
+ * 实测(2026-09-19,jsDesign 0.8.0 插件):引擎的 `resize()` 会把它重置为 `NONE`
+ * —— 创建路径在 `textWriter.write` 写完它之后还会跑一记尺寸回压
+ * (`geometryWriter.settle` → `applySize`),于是调用方**显式声明的** `"HEIGHT"` 被吃掉。
+ * 与 P19 补丁(resize 把显式 `AUTO` 的 sizingMode 改回 `FIXED`)同一族:**声明过的值
+ * 必须在尺寸写入之后再压一遍**,否则就是「回显成功实则没生效」。
+ *
+ * (`fontName` 的判定不在这里:写入期的回读是原样回显、判不出解析与否,
+ * 见本文件上方注释与 `core/utils.ts` 的 `fontNotResolved`)
+ */
+export const textStabilizeWriter: PropWriter = {
+  id: 'text-stabilize',
+  keys: ['textAutoResize'],
+  write() {
+    // 只在 settle 阶段动作(textAutoResize 由 textWriter.write 先写一次,尺寸回压后再压一次)
+  },
+  settle(ctx) {
+    const { node, src } = ctx;
+    if (node.type !== 'TEXT') return;
+    const want = src.textAutoResize;
+    if (want == null) return;
+    putIfPresent(node, 'textAutoResize', want);
+    // 压不住要留证(回读仍不是声明的值)→ 交 0007 的出口点名
+    const back = (node as unknown as { textAutoResize?: unknown })
+      .textAutoResize;
+    ctx.outcome.readback.push({ key: 'textAutoResize', ok: back === want });
+  },
+};
+
 /** 通用写阶段(不含自动布局:创建路径把它放在插完子节点之后) */
 export const BASE_WRITERS = [
   passthroughWriter,
@@ -394,7 +428,11 @@ export const BASE_WRITERS = [
 ] as const;
 
 /** 修改路径:全部 writer 一趟跑完 */
-export const UPDATE_WRITERS = [...BASE_WRITERS, layoutWriter] as const;
+export const UPDATE_WRITERS = [
+  ...BASE_WRITERS,
+  textStabilizeWriter,
+  layoutWriter,
+] as const;
 
 /** 创建路径:基础组 + 布局(在子节点插完之后由调用方单独跑) */
 export const CREATE_WRITERS = BASE_WRITERS;

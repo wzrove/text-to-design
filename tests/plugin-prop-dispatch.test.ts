@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { PROP_METHOD_FIELDS } from '../packages/shared/src/schemas';
 
@@ -14,8 +15,11 @@ import { PROP_METHOD_FIELDS } from '../packages/shared/src/schemas';
  * 是因为 plugin.ts 跑在设计宿主沙箱里,没法作为模块引入;判定用到的 API 还要受
  * `tests/engine-api-compat.test.ts` 约束(沙箱运行时缺 ES2020+ 的 API)。
  */
-const PLUGIN_TS = new URL('../packages/ui/src/code/plugin.ts', import.meta.url)
-  .pathname;
+// `new URL(...).pathname` 在 Windows 上给的是 `/D:/...`,再拼进 fs 会变成 `D:\D:\...`
+// (ENOENT);用 fileURLToPath 拿平台原生路径。
+const PLUGIN_TS = fileURLToPath(
+  new URL('../packages/ui/src/code/plugin.ts', import.meta.url),
+);
 
 describe('plugin.ts 属性方法分发', () => {
   const source = readFileSync(PLUGIN_TS, 'utf8');

@@ -127,7 +127,7 @@ export function registerCreateTools(
     createNodeTool('TEXT', {
       name: 'jsd_create_text',
       title: '创建文本',
-      description: `创建单个 TEXT 文本节点,入参只含文本字段:characters 必填内容、fontSize/fontName 字号字体、对齐/自适应/大小写/装饰/行高/字距与填充描边。本工具只建一个根文本;层级结构用 children 递归嵌套,子节点 x/y 相对父节点。字体需精确匹配,建议先 jsd_list_fonts 查可用字体(不可用时静默回退默认)。建多个根节点/复杂树用 jsd_batch 编排`,
+      description: `创建单个 TEXT 文本节点,入参只含文本字段:characters 必填内容、fontSize/fontName 字号字体、对齐/自适应/大小写/装饰/行高/字距与填充描边。本工具只建一个根文本;层级结构用 children 递归嵌套,子节点 x/y 相对父节点。字体先 jsd_list_fonts 取 fonts[] 里成对的 family + styles:family 用 fonts[].family 原样(如 SourceHanSansCN_family),style 用同一项的**全名**(如 SourceHanSansCN-Bold,不是简称 "Bold")——写错不报错、会静默退回默认字面,命中时结果 warnings 点名。长段落要换行:TEXT 缺省按内容撑开,显式 width 会被覆盖 —— 传 width + textAutoResize:"HEIGHT";要固定框尺寸传 "NONE"。建多个根节点/复杂树用 jsd_batch 编排`,
       followUp: CREATE_BATCH_FOLLOWUP,
     }),
     createNodeTool('ELLIPSE', {
