@@ -78,7 +78,7 @@ function linuxPlan(exe: string, script: string): PlanStep[] {
     `${UNIT_NAME}.service`,
   );
   const unit = `[Unit]
-Description=${SERVER_NAME} (jsDesign plugin bridge: WS ${PORT} / MCP HTTP ${HTTP_PORT})
+Description=${SERVER_NAME} (design plugin bridge: WS ${PORT} / MCP HTTP ${HTTP_PORT})
 Documentation=https://github.com/wzrove/text-to-design
 After=network.target
 

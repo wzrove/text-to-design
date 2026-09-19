@@ -94,6 +94,8 @@ export function makeFrame(id = '2:1', name = 'frame'): NodeSkeleton {
     paddingLeft: 0,
     primaryAxisSizingMode: 'FIXED',
     counterAxisSizingMode: 'FIXED',
+    primaryAxisAlignItems: 'MIN',
+    counterAxisAlignItems: 'MIN',
     layoutGrow: 0,
     cornerRadius: 0,
     topLeftRadius: 0,

@@ -1,8 +1,8 @@
 import type { LogLevel, ServerPush } from 'text-to-design-shared';
-import { CLIENT } from './config';
 import { log, warn } from './logger';
 import type { PluginMethod, RequestOptions } from './pending';
 import { PendingManager } from './pending';
+import { currentClient } from './platform-state';
 import { Transport } from './transport';
 
 /** 离线日志环形缓冲容量:插件不在线期间先入队,上线按入队顺序回放一次 */
@@ -66,7 +66,7 @@ export class Bridge {
       warn(`请求被拒(插件未连接): ${method}`);
       return Promise.reject(
         new Error(
-          `${CLIENT.runtime} 插件未连接。请先在${CLIENT.label}客户端中运行该插件。`,
+          `${currentClient().runtime} 插件未连接。请先在${currentClient().label}中运行该插件。`,
         ),
       );
     }

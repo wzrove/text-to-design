@@ -6,7 +6,7 @@ import {
   type PluginPlatform,
 } from 'text-to-design-shared';
 import type { Bridge } from './bridge';
-import { PING_TIMEOUT_MS } from './config';
+import { CLIENT, PING_TIMEOUT_MS } from './config';
 import { debug, log } from './logger';
 
 /**
@@ -46,6 +46,19 @@ let inflight: Promise<void> | null = null;
 
 export function getPlatformState(): PlatformState | null {
   return state;
+}
+
+/**
+ * 当前客户端名(报错/提示文案的唯一取法)。
+ * 已探测到平台 → 该平台显示名;未探测或已断开 → config.CLIENT 的中性兜底。
+ */
+export function currentClient(): { label: string; runtime: string } {
+  const platform = state?.platform;
+  if (platform == null) {
+    return { label: CLIENT.label, runtime: CLIENT.runtime };
+  }
+  const name = PLATFORM_LABEL[platform];
+  return { label: `${name}客户端`, runtime: name };
 }
 
 export function clearPlatformState(reason: string): void {

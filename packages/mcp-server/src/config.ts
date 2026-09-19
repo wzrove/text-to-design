@@ -1,4 +1,3 @@
-import { PLATFORM_LABEL } from 'text-to-design-shared';
 import { version } from '../package.json' with { type: 'json' };
 
 export const PORT = Number(process.env.TEXT_TO_DESIGN_MCP_PORT ?? 47812);
@@ -40,10 +39,13 @@ export const MAX_INLINE_DATA_URL_BYTES = Number(
 /** jsd_batch 整批上限:每步仍受自身 timeout 约束,此处只封顶整次编排 */
 export const BATCH_TIMEOUT_MS = 120_000;
 
-/** 设计客户端厂商:当前即时设计,扩展其他客户端(如 Figma)时替换此配置即可。
- *  显示名取自 shared 平台字典,与插件 UI 徽章同源 */
+/**
+ * 设计客户端:插件平台(即时设计/Figma)只有连上后由 ping 回包才可知,
+ * 此处只放「平台未知时」的中性兜底与工具前缀 —— 具体平台名走
+ * platform-state.currentClient()。写死单一平台会在连另一平台时给出错误指引。
+ */
 export const CLIENT = {
-  label: PLATFORM_LABEL.jsdesign,
-  runtime: 'jsDesign',
+  label: '设计客户端',
+  runtime: '设计工具',
   toolPrefix: 'jsd',
 } as const;

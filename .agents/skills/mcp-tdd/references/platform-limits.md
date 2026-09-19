@@ -30,6 +30,7 @@
 | 显式 `width` + `textAutoResize:"HEIGHT"` 被压回 `NONE`（create 路径） | 同上：尺寸回压在文本字段之后执行 | 同上（`textStabilizeWriter` 已修）；修改路径单设 `HEIGHT` 本来就正常（实测回读 `HEIGHT`） | 同上 |
 | `jsd_batch` 里用 `{{步骤id.字段路径}}` 引用**上一批**的步骤 | 步骤表是单次调用的局部状态，跨批次必然查不到 | 报错原文「占位符引用的步骤不存在或未成功」并中止整批（前面已执行的步骤不回滚）→ **跨批次硬编码上一步回显里的真实 id**；该边界已写进 `jsd_batch` 描述、`server.ts` INSTRUCTIONS 与脚本化配方 | `mcp-server/src/tools/batch.ts` |
 | 按 `jsd_manage_nodes` 的聚合清单写占位符，`group` / `flatten` 报「无法解析占位符引用」 | 这两个 op 返回**单对象** `{created:{…}}`（与 `jsd_group_nodes` / `jsd_flatten_nodes` 同形），`clone` / `outline_stroke` 才是数组 | 描述已改正（此前 batch/manage 两处都写成 `created[]`，README/INSTRUCTIONS 同步）；**教训**：同一份「返回键形状」手写四处必然漂移 | `mcp-server/src/tools/{batch,manage}.ts`、`server.ts`、`README.md` |
+| `jsd_create_frame` 创建时传 `primaryAxisAlignItems`/`counterAxisAlignItems` 被静默忽略（节点落成 MIN/MIN，实例：退出登录文字贴左） | `layoutWriter` 的 create 分支只写 layoutMode/itemSpacing/padding + sizingMode 推断，对齐两键虽在 `keys` 里，create 分支提前 return 从未落引擎 | **代码已兜住**：create 分支补写对齐；settle 阶段与 layoutMode 同口径「写 → 回读 → 不一致再压一次」，压不住进 `warnings` 点名 | `shared/src/core/props/writers.ts`（`layoutWriter`） |
 
 ## 用法
 

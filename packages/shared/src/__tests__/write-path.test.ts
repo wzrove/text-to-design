@@ -280,6 +280,67 @@ describe('创建路径 executeOps', () => {
     expect(created?.counterAxisSizingMode).toBe('AUTO');
   });
 
+  it('创建时显式给对齐参数 → 落成请求值(此前 create 分支静默丢弃,节点落成 MIN)', async () => {
+    const r = await executeOps(
+      host,
+      ctx,
+      {
+        type: 'FRAME',
+        name: 'box',
+        width: 300,
+        height: 100,
+        layoutMode: 'VERTICAL',
+        primaryAxisAlignItems: 'CENTER',
+        counterAxisAlignItems: 'CENTER',
+      },
+      { mode: 'absolute', x: 0, y: 0 },
+    );
+    const created = host.registry.get(r.created[0].id);
+    expect(created?.primaryAxisAlignItems).toBe('CENTER');
+    expect(created?.counterAxisAlignItems).toBe('CENTER');
+  });
+
+  it('插子节点触发引擎重算把对齐回写成 MIN → settle 再压回请求值', async () => {
+    // 复刻引擎行为:appendChild 触发布局重算,把对齐回写成 MIN
+    host.createFrame = () => {
+      const f = makeFrame(`${host.registry.size + 1}:frame`);
+      const realAppend = f.appendChild.bind(f);
+      (
+        f as unknown as {
+          appendChild: (c: Parameters<typeof realAppend>[0]) => unknown;
+        }
+      ).appendChild = (c) => {
+        const ret = realAppend(c);
+        (
+          f as unknown as { primaryAxisAlignItems: string }
+        ).primaryAxisAlignItems = 'MIN';
+        (
+          f as unknown as { counterAxisAlignItems: string }
+        ).counterAxisAlignItems = 'MIN';
+        return ret;
+      };
+      return f;
+    };
+    const r = await executeOps(
+      host,
+      ctx,
+      {
+        type: 'FRAME',
+        name: 'box',
+        width: 300,
+        height: 100,
+        layoutMode: 'VERTICAL',
+        primaryAxisAlignItems: 'CENTER',
+        counterAxisAlignItems: 'CENTER',
+        children: [{ type: 'RECTANGLE', name: 'child', width: 10, height: 10 }],
+      },
+      { mode: 'absolute', x: 0, y: 0 },
+    );
+    const created = host.registry.get(r.created[0].id);
+    expect(created?.primaryAxisAlignItems).toBe('CENTER');
+    expect(created?.counterAxisAlignItems).toBe('CENTER');
+  });
+
   it('TEXT 默认值:characters/text 与 fontSize 16', async () => {
     const r = await executeOps(
       host,

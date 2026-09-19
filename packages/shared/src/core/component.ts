@@ -34,7 +34,16 @@ export function createInstances(
   const nodes = findNode(host, ids);
   const components = nodes.filter((n) => n.type === 'COMPONENT');
   if (components.length === 0) {
-    throw new Error('没有找到可实例化的组件节点');
+    // 逐 id 点名:没找到的与类型不符的分开说,别让调用方猜是哪个 id 为什么不行
+    const details = ids
+      .map((id) => {
+        const found = findNode(host, [id]);
+        return found.length === 0
+          ? `${id}:未找到(可能已删除或不在当前页)`
+          : `${id}:类型为 ${found[0].type}(可实例化的只有 COMPONENT)`;
+      })
+      .join(';');
+    throw new Error(`没有找到可实例化的组件节点。${details}`);
   }
   const page = host.currentPage;
   const created: NodeSkeleton[] = [];

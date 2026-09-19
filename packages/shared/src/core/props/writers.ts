@@ -278,6 +278,14 @@ export const layoutWriter: PropWriter = {
       ] as const) {
         if (key in node) setField(node, key, (spec[key] as number) ?? 0);
       }
+      // 对齐也要在创建时写:此前 create 分支直接 return,对齐参数被静默
+      // 丢弃(节点落成 MIN/MIN),与 schema 宣称「创建可带对齐」不符
+      for (const key of [
+        'primaryAxisAlignItems',
+        'counterAxisAlignItems',
+      ] as const) {
+        if (spec[key] != null && key in node) setField(node, key, spec[key]);
+      }
       applySizingInference(ctx);
       return;
     }
@@ -300,6 +308,22 @@ export const layoutWriter: PropWriter = {
     }
     const ok = !('layoutMode' in node) || node.layoutMode === expected;
     ctx.outcome.readback.push({ key: 'layoutMode', ok });
+    // 对齐与方向同族:布局重算可能把它回写成 MIN,声明过的再压一次,
+    // 压不住由结果装配期点名(同 layoutMode 口径,不允许静默失效)
+    for (const key of [
+      'primaryAxisAlignItems',
+      'counterAxisAlignItems',
+    ] as const) {
+      const expectedAlign = src[key];
+      if (expectedAlign == null) continue;
+      if (key in node && node[key] !== expectedAlign) {
+        setField(node, key, expectedAlign);
+      }
+      ctx.outcome.readback.push({
+        key,
+        ok: !(key in node) || node[key] === expectedAlign,
+      });
+    }
   },
 };
 
