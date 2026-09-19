@@ -17,7 +17,7 @@ import {
  * 两条写路径的行为基线。
  *
  * 创建(buildNode / executeOps)与修改(updateSelection)各写了一遍属性赋值,字段
- * 集合大量重叠但**语义刻意不同**:创建路径带默认值与推断(P10 清灰底、P18 padding
+ * 集合大量重叠但**语义刻意不同**:创建路径带默认值与推断(清灰底、padding
  * 归零 + sizingMode FIXED 推断),修改路径是纯增量覆盖。
  *
  * 这里把「同一个字段在两条路径下的差异」钉成断言 —— 它们是 0001 抽 PropWriter 时的
@@ -201,7 +201,7 @@ describe('修改路径 updateSelection', () => {
 });
 
 describe('创建路径 executeOps', () => {
-  it('P10:只给描边没给填充 → 显式清空填充(非 FRAME)', async () => {
+  it('只给描边没给填充 → 显式清空填充(非 FRAME)', async () => {
     const r = await executeOps(
       host,
       ctx,
@@ -213,7 +213,7 @@ describe('创建路径 executeOps', () => {
     expect(created?.fills).toHaveLength(0);
   });
 
-  it('P10 例外:FRAME 不清填充(容器按引擎默认走)', async () => {
+  it('FRAME 例外:不清填充(容器按引擎默认走)', async () => {
     const r = await executeOps(
       host,
       ctx,
@@ -224,7 +224,7 @@ describe('创建路径 executeOps', () => {
     expect(created?.fills).toBeNull();
   });
 
-  it('P18:开 auto-layout 时 padding/itemSpacing 显式归零', async () => {
+  it('开 auto-layout 时 padding/itemSpacing 显式归零', async () => {
     const r = await executeOps(
       host,
       ctx,
@@ -243,7 +243,7 @@ describe('创建路径 executeOps', () => {
     expect(created?.itemSpacing).toBe(0);
   });
 
-  it('P18:给了宽度又没声明该轴 sizingMode → 该轴钉成 FIXED', async () => {
+  it('给了宽度又没声明该轴 sizingMode → 该轴钉成 FIXED', async () => {
     const r = await executeOps(
       host,
       ctx,
@@ -262,7 +262,7 @@ describe('创建路径 executeOps', () => {
     expect(created?.counterAxisSizingMode).toBe('FIXED');
   });
 
-  it('P18:调用方显式声明过的 sizingMode 不被推断抢走', async () => {
+  it('调用方显式声明过的 sizingMode 不被推断抢走', async () => {
     const r = await executeOps(
       host,
       ctx,
@@ -360,7 +360,7 @@ describe('两条写路径的语义差异(创建 ≠ 修改)', () => {
  * ③ 没有回读证据时不刷屏(引擎真吃下了值 → 一个字都不报)。
  */
 describe('创建路径的写后回收(0007)', () => {
-  it('P34:resize 会把 textAutoResize 翻成 NONE → 显式声明的 HEIGHT 被压回(引擎实测行为)', async () => {
+  it('resize 会把 textAutoResize 翻成 NONE → 显式声明的 HEIGHT 被压回(引擎实测行为)', async () => {
     host = makeHost();
     // 复刻 2026-09-19 实测的引擎行为:resize() 把 textAutoResize 重置为 NONE
     host.createText = () => {
@@ -390,7 +390,7 @@ describe('创建路径的写后回收(0007)', () => {
     expect(r.warnings, '声明生效了就不该告警').toBeUndefined();
   });
 
-  it('P34:给了 width 但没声明 textAutoResize → 引擎置 NONE,点名并给出 HEIGHT 写法', async () => {
+  it('给了 width 但没声明 textAutoResize → 引擎置 NONE,点名并给出 HEIGHT 写法', async () => {
     host = makeHost();
     host.createText = () => {
       const t = makeText(`${host.registry.size + 1}:text`);
@@ -412,7 +412,7 @@ describe('创建路径的写后回收(0007)', () => {
     expect(warn, '要给出正确写法').toContain('HEIGHT');
   });
 
-  it('P33:TEXT 显式给 width 却被 auto-resize 吃掉 → 点名 width 并给出换行写法', async () => {
+  it('TEXT 显式给 width 却被 auto-resize 吃掉 → 点名 width 并给出换行写法', async () => {
     host = makeHost();
     // 模拟引擎行为:WIDTH_AND_HEIGHT 的文本 resize 不生效(宽度按内容走)
     host.createText = () => {

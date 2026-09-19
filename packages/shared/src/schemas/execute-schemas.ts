@@ -138,7 +138,7 @@ const visualFields = {
  *
  * 单独抽出来是因为 FRAME 原来**没有**这些字段:调用方给 `jsd_create_frame`
  * 传 `cornerRadius` 会被 strict schema 拒掉,而报错只说「must NOT have
- * additional properties」并把全部入参字段列进去,看着像每个字段都非法(P19)。
+ * additional properties」并把全部入参字段列进去,看着像每个字段都非法。
  * 实际引擎是支持 FRAME 圆角的(jsd_set_cornerRadius 也写明 FRAME 生效)。
  */
 const cornerFields = {

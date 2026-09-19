@@ -115,7 +115,7 @@ export function fontNotResolved(
 export type LayoutMode = 'NONE' | 'HORIZONTAL' | 'VERTICAL';
 
 /**
- * 写 `layoutMode` 并**回读校验**(P31,与 P14 / P19 补丁同族:布局属性写完不能假定它还在)。
+ * 写 `layoutMode` 并**回读校验**(与既有的布局回读补丁同族:布局属性写完不能假定它还在)。
  *
  * 实测:引擎在布局重算之后会回写容器方向 —— 出现「显式传 `HORIZONTAL`、回读却是
  * `VERTICAL`」,子节点于是按垂直方向排布、全叠在同一点(两个导航按钮叠在 (16,8),
@@ -135,7 +135,7 @@ export function ensureLayoutMode(node: object, expected: LayoutMode): boolean {
 
 export interface CollectTargetsOptions {
   /**
-   * recursive=true 时是否连目标节点自身一起改,默认 false(P26)。
+   * recursive=true 时是否连目标节点自身一起改,默认 false。
    * 历史行为是「自身 + 全部后代」,照字面理解「子树/后代」的调用方会中招:
    * 给 12 个图标 FRAME 传 recursive 刷描边,容器自己也被套上 strokeWeight:1 的
    * 矩形框(渲染成「每个图标一个方框」)。现在默认只作用于后代,要连自身一起改

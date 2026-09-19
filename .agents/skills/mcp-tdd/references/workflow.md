@@ -20,6 +20,37 @@ S=.agents/skills/mcp-tdd/scripts/mcp-tdd.mjs
 所有命令都从**仓库根**执行。台账落在 `<repo>/docs/mcp-errors/`(可用 `MCP_TDD_ROOT`
 指向别处,便于在临时目录里试跑)。`node $S help` 打印全量参数。
 
+## 最小可运行示例
+
+一整轮的主干命令,先扫一遍再读下面的分阶段细节:
+
+```bash
+node $S init                                               # 幂等,建台账骨架
+node $S case-new --title "画 300x200 卡片" --platform jsdesign
+RID=$(node $S run-start --case case-20260918-0001 --goal "画卡片")
+
+# —— 任务中每次 jsd_* 报错 ——
+node $S record --run "$RID" --tool jsd_set_fill_color \
+  --error '参数校验失败(jsd_set_fill_color): color: 必须是非空字符串' \
+  --args '{"nodeId":"23:1456","color":""}'
+node $S run-end --run "$RID"; node $S scan-log --run "$RID"
+
+# —— 修复后:typecheck → verify.sh all → build + 重载插件 ——
+node $S list                                               # 指纹 + 骨架文案
+RRID=$(node $S run-start --case case-20260918-0001 --goal "回归 f1fbe3996e54")
+# 按 case-show 的步骤原样重放;若原报错复发就记一条(会被判 regressed):
+#   node $S record --run "$RRID" --stage regress --case case-20260918-0001 \
+#     --tool jsd_set_fill_color --error '<原报错原文>'
+node $S handle --fingerprint f1fbe3996e54 --verdict product-bug \
+  --case case-20260918-0001 --fix "normalizeColor 拦空串,报错点名字段" \
+  --file packages/shared/src/core/normalize.ts --commit $(git rev-parse --short HEAD) \
+  --verified-by "$RRID"                                    # 复发过的指纹还要 --decision NNNN
+node $S report
+```
+
+`--error` 传**原文**(别翻译或概括 —— 指纹算的就是原始文案);`--args` 传**触发这次报错的
+那份入参原样**(后面复现的关键,别省)。
+
 ## 阶段 0 · 前置
 
 ```bash
@@ -163,10 +194,15 @@ node $S handle --fingerprint f1fbe3996e54 \
   --fix "normalizeColor 补空串拦截,报错文案点名字段" \
   --file packages/shared/src/core/normalize.ts \
   --commit $(git rev-parse --short HEAD) \
-  --verified-by "$RRID"
+  --verified-by "$RRID" \
+  --decision 0007
 ```
 
 `--file` 可重复传多次。`--verified-by` 填回归 runId —— 这是修复的证据链。
+
+`--decision <NNNN>` 把闭环挂到 `docs/design-decisions/NNNN-*.md`（暂未建记录只告警不阻断）。
+**已闭环过、且在回归阶段真复发的指纹必须带它**，否则 `handle` 直接拒收 —— 先按
+`SKILL.md` 的闸门一节出决策再回来。`list --decision 0007` 可反查这条决策关联的指纹生死。
 
 ## 阶段 4 · 收口
 
@@ -177,6 +213,18 @@ node $S list                 # 确认未决清零
 
 把 `REPORT.md` 路径和本轮闭环的指纹报给用户。改了 MCP 源码就按仓库约定提交
 (commitlint 走 conventional commits)。
+
+**归档不在这四阶段里** —— 它是台账的独立节奏，只在主库开始碍事时才跑（`list --all` 要翻页、
+或 `report` 里已闭环行压过未决行）：
+
+```bash
+node $S archive --dry-run          # 先看要搬什么，不写盘
+node $S archive --older-than 30d   # 默认 30d
+node $S list --archived            # 查归档内容
+```
+
+归档前后 `record` / `handle` 语义不变：去重闸门同时查归档库，回归阶段复发会把条目整块搬回主库
+并置 `regressed`。判据与不变式见 `SKILL.md` 的「归档」一节，别手删台账文件。
 
 ## 边界情形
 
@@ -198,10 +246,17 @@ node $S list                 # 确认未决清零
 **误判闭环了**(`handle` 后发现有漏)
 `node $S unhandle --fingerprint <fp>`,指纹回到未决,可以重新记。
 
+**`handle` 被拒:该指纹复发过,要求 `--decision`**
+这不是拦路虎,是结论:同一个报错修一次又复发,说明上次的修法是单点补丁。
+先读 `.agents/skills/software-design-patterns/SKILL.md` 出结论、落
+`docs/design-decisions/NNNN-*.md`,再按记录的「最小落地」改一遍并重新回归,
+最后 `handle … --decision NNNN`。确无结构问题(如两次是互不相关的偶发)时才
+`--force --note "原因"` —— 条目会留 `forced` 标记,复盘时会被翻出来。
+
 **跨轮次收敛**
 每轮结束后 `report` 出的未决数应当单调下降。若某指纹每轮都出现却没有被 `handle`,
 说明排查被跳过了 —— 它会一直占着未决列表。
 
 **要临时关掉某类噪音**
 不要靠删事件。正确做法是判定 `usage-error`,用 `--note` 写明为什么不算缺陷。
-台账保留完整历史,闭环库负责降噪。
+台账保留完整历史,闭环库负责降噪;真嫌主库大就跑 `archive`(见阶段 4)。

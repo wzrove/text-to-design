@@ -90,7 +90,7 @@ function receivedKeys(value: unknown): string {
  * `data must NOT have additional properties`,而上层又把「实际收到的全部字段」
  * 平铺进报错 —— 看着像每个字段都非法。实测给 `jsd_create_frame` 传
  * `cornerRadius` 时就这样,调用方(尤其 LLM)会以为自己整个入参格式错了,
- * 反复重写一遍而不是删掉那一个字段(P19)。
+ * 反复重写一遍而不是删掉那一个字段。
  *
  * 只在能确定 schema 允许的字段集时返回(单层 object schema);
  * 联合 schema(anyOf/oneOf)与放行额外字段的 schema 返回 null,由上层退回原报错。

@@ -56,7 +56,8 @@
 怀疑归并行为时,直接看 `list` 输出的 `骨架` 行 —— 那就是归一化结果。
 两条记录的骨架一模一样却没有归并,说明工具名不同(工具名是独立分量)。
 
-要验证某个假设,可临时用 `MCP_TDD_ROOT` 指向空目录做沙盒实验,不影响真台账:
+要验证某个假设,可临时用 `MCP_TDD_ROOT` 指向空目录做沙盒实验,不影响真台账
+(下文 `$S` = `node .agents/skills/mcp-tdd/scripts/mcp-tdd.mjs`):
 
 ```bash
 MCP_TDD_ROOT=/tmp/mcp-tdd-sandbox node $S init

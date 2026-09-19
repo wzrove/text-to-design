@@ -131,7 +131,7 @@ async function readLayer(layer: string): Promise<Map<string, Geo> | null> {
 }
 
 /**
- * P25-B 自动复核:批量含 remove/reparent 等结构变更时,引擎可能把本次操作
+ * 漂移自动复核:批量含 remove/reparent 等结构变更时,引擎可能把本次操作
  * **没碰到**的兄弟节点静默挪走(实测 78:2 里 cta-button (24,720)→(28,618)、
  * lang-card (24,430)→(28,458),x 双双 +4;无报错、回显正常,渲染上看起来像
  * 样式问题 —— cta-halo 与按钮脱钩,呈「悬在导航区的孤光」)。
@@ -220,7 +220,7 @@ export class DriftWatch implements ToolHook {
           drifted.length > MAX_REPORTED ? ` 等 ${drifted.length} 个节点` : '';
         warnings.push(
           [
-            `同层几何漂移(平台缺陷 P25-B):${
+            `同层几何漂移(平台缺陷):${
               layer === PAGE_KEY ? '当前页顶层' : `父级 ${layer}`
             } 内有未被本次操作触及的节点自行移位:${sample.join('、')}${rest}。`,
             '根因疑似删除/移父后引擎重算同层约束(无报错、回显正常),别当成样式问题排查。',

@@ -18,7 +18,7 @@ import { bridgeTool, type ToolHandle } from '../core/registry';
 import { propUpdateTool } from './update-common';
 
 /**
- * INSTANCE 内子节点的样式覆盖有平台风险(P7 实测 fills/fontName 回显是新值、
+ * INSTANCE 内子节点的样式覆盖有平台风险(实测 fills/fontName 回显是新值、
  * 渲染仍走组件原样式)。统一挂到样式类工具描述尾部,避免逐条重复长文案;
  * 写时命中会在结果里带 warnings,且告警**直接给出主组件里对应子节点的 id**
  * (见 shared/src/core/update.ts 的 instanceStyleFixHint),调用方拿到就能改主组件。

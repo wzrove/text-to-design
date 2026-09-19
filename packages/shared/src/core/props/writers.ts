@@ -18,8 +18,8 @@ import {
  * 属性写入器集合。
  *
  * 创建路径与修改路径此前各写了一遍约 200 行的 `if (x != null && 'x' in node)`,
- * 字段集合约 80% 重叠但**语义刻意不同**:创建路径带默认值与推断(P10 清灰底、
- * P18 padding 归零 + sizingMode FIXED 推断),修改路径是纯增量覆盖。
+ * 字段集合约 80% 重叠但**语义刻意不同**:创建路径带默认值与推断(清灰底、
+ * padding 归零 + sizingMode FIXED 推断),修改路径是纯增量覆盖。
  * 差异在这里由 `ctx.create` 显式表达,不再靠两份代码的先后顺序。
  */
 
@@ -77,7 +77,7 @@ export const geometryWriter: PropWriter = {
     applySize(ctx);
   },
   settle(ctx) {
-    // P18:开 auto-layout + 插子节点会触发引擎按内容重算容器尺寸,把上面那次
+    // 开 auto-layout + 插子节点会触发引擎按内容重算容器尺寸,把上面那次
     // resize 覆盖掉 —— 显式给了尺寸就以调用方为准再压一遍。
     if (ctx.create) applySize(ctx);
   },
@@ -119,7 +119,7 @@ export const paintWriter: PropWriter = {
     if (src.fills != null) {
       putIfPresent(node, 'fills', normalizePaints(src.fills, 'fills'));
     } else if (ctx.create && src.strokes != null && node.type !== 'FRAME') {
-      // P10:只给了描边没给填充 —— 引擎会自动塞 #CCCCCC 灰底,纯描边图标变成灰块。
+      // 只给了描边没给填充 —— 引擎会自动塞 #CCCCCC 灰底,纯描边图标变成灰块。
       // 例外 FRAME:容器按文档走引擎默认白底,不在此改动。
       if ('fills' in node) setField(node, 'fills', []);
     }
@@ -243,7 +243,7 @@ export const textWriter: PropWriter = {
   },
 };
 
-/** 自动布局字段;settle 阶段做方向回读(P31) */
+/** 自动布局字段;settle 阶段做方向回读 */
 export const layoutWriter: PropWriter = {
   id: 'layout',
   keys: [
@@ -266,7 +266,7 @@ export const layoutWriter: PropWriter = {
       if (mode == null) return;
       if ('layoutMode' in node) node.layoutMode = mode;
       const spec = src;
-      // P18:引擎开启 auto-layout 时把四边 padding 默认置 10,itemSpacing 同口径;
+      // 引擎开启 auto-layout 时把四边 padding 默认置 10,itemSpacing 同口径;
       // 调用方没传就显式归 0,免得「没写 padding 却莫名多出 10px 内边距」。
       if ('itemSpacing' in node)
         node.itemSpacing = (spec.itemSpacing as number) ?? 0;
@@ -293,7 +293,7 @@ export const layoutWriter: PropWriter = {
     if (src.layoutMode == null) return;
     if (!propAppliesTo('layoutMode', node.type)) return;
     const expected = src.layoutMode as 'NONE' | 'HORIZONTAL' | 'VERTICAL';
-    // P31:布局重算会回写容器方向,写进去的 layoutMode 可能不是最终值。
+    // 布局重算会回写容器方向,写进去的 layoutMode 可能不是最终值。
     // 回读不一致就再压一次,压不住由调用方点名(不允许「回显成功实则没生效」)。
     if ('layoutMode' in node && node.layoutMode !== expected) {
       node.layoutMode = expected;
@@ -386,12 +386,12 @@ export const createStabilizeWriter: PropWriter = {
 };
 
 /**
- * TEXT 的 `textAutoResize` 写后稳定化(P34)。
+ * TEXT 的 `textAutoResize` 写后稳定化。
  *
  * 实测(2026-09-19,jsDesign 0.8.0 插件):引擎的 `resize()` 会把它重置为 `NONE`
  * —— 创建路径在 `textWriter.write` 写完它之后还会跑一记尺寸回压
  * (`geometryWriter.settle` → `applySize`),于是调用方**显式声明的** `"HEIGHT"` 被吃掉。
- * 与 P19 补丁(resize 把显式 `AUTO` 的 sizingMode 改回 `FIXED`)同一族:**声明过的值
+ * 与既有的补丁(resize 把显式 `AUTO` 的 sizingMode 改回 `FIXED`)同一族:**声明过的值
  * 必须在尺寸写入之后再压一遍**,否则就是「回显成功实则没生效」。
  *
  * (`fontName` 的判定不在这里:写入期的回读是原样回显、判不出解析与否,

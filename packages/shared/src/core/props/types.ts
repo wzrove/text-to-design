@@ -49,7 +49,7 @@ export interface PropWriter {
   readonly keys: readonly string[];
   /** 主写入阶段 */
   write(ctx: WriteCtx): void | Promise<void>;
-  /** 稳定化阶段:布局重算之后的回压(P18 尺寸、P31 方向) */
+  /** 稳定化阶段:布局重算之后的回压(尺寸、方向) */
   settle?(ctx: WriteCtx): void | Promise<void>;
 }
 

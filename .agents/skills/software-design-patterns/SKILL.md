@@ -1,6 +1,6 @@
 ---
 name: software-design-patterns
-description: Use when code structure is under pressure — growing if/switch branches, scattered status checks, tight coupling to third-party SDKs, unclear layering or transaction boundaries, extensibility demands, domain modeling, or cross-service reliability (dual writes, retries, sagas, idempotency). Guides selecting, rejecting, and combining GoF, enterprise, DDD, and distributed-system patterns by evidence, and recommends keeping the code simple when the pressure is unproven. Trigger on 重构、解耦、架构评审、扩展点、状态机、双写一致性、重试熔断、CQRS requests even if the user never says "设计模式".
+description: Use when code structure is under pressure — growing if/switch branches, scattered status checks, tight coupling to third-party SDKs, unclear layering or transaction boundaries, extensibility demands, domain modeling, or cross-service reliability (dual writes, retries, sagas, idempotency). Guides selecting, rejecting, and combining GoF, enterprise, DDD, and distributed-system patterns by evidence, and recommends keeping the code simple when the pressure is unproven. Trigger on 重构、解耦、架构评审、扩展点、状态机、双写一致性、重试熔断、CQRS requests even if the user never says "设计模式" — and on 「同一个 bug 修完又复发」「报错横跨多层」这类结构压力伪装成缺陷的场景。
 ---
 
 # 软件设计模式：选择、拒绝与组合
@@ -18,12 +18,15 @@ description: Use when code structure is under pressure — growing if/switch bra
 ## 工作流
 
 1. **先查日志**：若项目已有设计决策日志，读索引，按模块/变化轴定位受影响的既有记录（见「设计决策日志」）。需求变更时从这一步开始，不要重新从零判断。
+   **再查现实**：项目若另有失败信号源（报错台账、回归用例、线上告警、事故复盘 —— 是哪一种由项目决定），
+   先看有没有**复发**落在既有记录的「影响范围」内 —— **正在被现实证伪的决策优先级最高**，
+   它说明上一个结论要么假设不成立、要么退出条件已命中。
 2. **说清压力**：指出条件分支、耦合、职责、状态、事务、一致性或可靠性上的具体问题。
 3. **路由**：用下方「快速路由」表筛出 **最多 3 个候选**。若命中「停止条件」，直接建议保持简单，**不再读任何参考文件**。
-4. **验证候选**：打开候选模式文件，只看 `什么时候使用` / `什么时候不要使用` / `常见误用` / `退出条件`。
+4. **验证候选**：按 [模式索引](references/pattern-index.md) 单条打开候选，只看 `什么时候使用` / `什么时候不要使用` / `常见误用` / `退出条件`。
 5. **组合检查**：推荐 2 个及以上模式时，读 [常见模式组合](references/pattern-combinations.md)，确认职责不重叠、故障链可解释。
-6. **输出**：按「输出模板」给结论。
-7. **落日志**：把结论写入设计决策日志。不是可选项——没有记录的决策等于下次需求变更时重新猜。
+6. **输出**：按 [输出模板](references/output-template.md) 给结论。
+7. **落日志**：把结论写入设计决策日志（机制见 [设计决策日志](references/decision-log.md)）。不是可选项——没有记录的决策等于下次需求变更时重新猜。
 
 **只在**路由表未命中、问题跨多个层级、或需要评分/迁移顺序时，才读 [设计模式决策指南](references/decision-guide.md)。
 
@@ -70,6 +73,16 @@ description: Use when code structure is under pressure — growing if/switch bra
 - 根因是职责划分或数据模型错误——先修边界，不要用模式掩盖。
 - 为了消除一个很小很稳定的 `if` 引入多个接口和类；把模式数量当质量指标。
 
+## 边界：本技能不判门槛
+
+本技能只做「**已确认的结构压力 → 决策**」这一段，**不假设项目用哪套缺陷跟踪** ——
+什么算结构压力、什么时候该走这一步，由**调用方**判定（不同项目用的是报错台账、回归用例、
+事故复盘还是评审意见，本技能不关心是哪种，也不引用任何具体工具）。产出固定为：
+结论 + 候选与排除 + 最小落地 + 成本与退出条件 + 编号 `NNNN`。
+
+**不要给琐碎改动开决策记录** —— 日志一旦被小条目灌满，工作流第 1 步「先查日志」就变成噪音源，
+整条链路失效。
+
 ## Gotchas
 
 - **同名不同物**：`enterprise/repository.md` 是集合式持久化抽象（适合 CRUD/查询封装），`ddd/repository.md` 是聚合根级仓储（富领域模型、强事务边界）。选错会让 ORM 类型渗进领域层。
@@ -82,92 +95,14 @@ description: Use when code structure is under pressure — growing if/switch bra
 - **Adapter 不负责业务编排**：适配层只做类型/协议转换，否则会变成第二个服务层。
 - **超时先于重试**：多层无预算重试会放大流量，必须有总预算和退避上限。
 
-## 输出模板
+## 参考文件（按需加载）
 
-```markdown
-## 压力
-<具体代码/架构压力；变化频率、失败后果、当前已产生的成本>
+| 何时读 | 文件 |
+| --- | --- |
+| 候选定了，要核对单个模式的适用性 / 误用 / 退出条件 | `references/pattern-index.md`（60 条索引，**单条打开**） |
+| 输出结论、采纳前自检 | `references/output-template.md` |
+| 落记录、需求变更时追加/取代/废弃、索引体积治理 | `references/decision-log.md` |
+| 推荐 ≥2 个模式，要确认职责不重叠 | `references/pattern-combinations.md` |
+| 路由未命中、跨多层级、要评分或迁移顺序 | `references/decision-guide.md` |
 
-## 结论
-<主模式>（必要时：<辅助模式>），或明确写「不引入模式，保持 <更简单的做法>」
-
-记录：<docs/design-decisions/NNNN.md>（本次是新建 / 追加 / 取代 / 废弃）
-
-## 理由与排除
-- 命中信号：<可观察证据，不是"最佳实践">
-- 排除 <最相近候选>：<为什么>
-
-## 最小落地
-角色 / 接口所在层 / 创建与装配位置 / 一次请求或消息的调用时序
-
-## 成本与退出条件
-<新增间接层、状态、网络跳数、存储、运维负担>；<需求规模下降或假设不成立时如何回退>
-
-## 验证
-<不变量测试、边界/并发/重试用例、需要打的指标与日志>
-```
-
-异步模式（事件、Outbox、Saga、CQRS、重试）必须在「验证」里写明重复、乱序和恢复策略。
-
-## 设计决策日志（可迭代）
-
-设计结论必须沉淀成记录，随需求变更演进。历史只增不改：旧记录保留，靠状态和「变更历史」表达演进。
-
-**位置**：优先沿用项目已有约定（`docs/adr/`、`docs/decisions/`、`ADR/`、已有设计日志）；都没有则用 `docs/design-decisions/`，索引为 `INDEX.md`。
-
-**创建记录**：
-
-```bash
-python3 scripts/new_decision.py "支付渠道分支改用 Strategy"          # 自动编号 + 更新索引
-python3 scripts/new_decision.py "订单状态机改用 State" --supersedes 0001
-```
-
-脚本从 [assets/decision-record-template.md](assets/decision-record-template.md) 生成骨架（压力 / 候选与排除 / 结论 / 最小落地 / 成本与退出条件 / 验证 / 变更历史），填内容即可。编号永不复用，不覆盖已有文件。
-
-**需求变更时的三种动作**：
-
-| 情况 | 动作 |
-|---|---|
-| 结论不变，只是约束/规模变化 | 在原记录「变更历史」追加一行：日期、需求变更、结论是否变 |
-| 结论变了 | 新建记录并 `--supersedes <原编号>`；原记录状态改为「已被取代」，保留原文 |
-| 命中原记录的「退出条件」 | 原记录状态改为「已废弃」，新建记录写明回退方案与回退后的更简单设计 |
-
-**复盘触发**：每次需求变更后，重扫相关记录的「退出条件」。命中就回退，不要因为已经实现过就继续保留模式。**禁止**删除或静默覆盖旧记录，也禁止只改结论不写理由。
-
-## 采纳前自检
-
-输出建议前确认：
-
-- [ ] 压力是真实的（已有 ≥2 个实现/分支，或已产生回归），不是"未来可能"。
-- [ ] 已比较至少一个相近候选并说明排除理由。
-- [ ] 更简单方案（函数、参数、组合、平台能力）已被明确排除。
-- [ ] 团队能测试和观测新增间接层；异步模式已说明重复/乱序/恢复。
-- [ ] 结论已落入设计决策日志：新建记录，或在既有记录上追加变更/取代/废弃。
-
-任一项未通过 → 回到「停止条件」，优先保持简单。
-
-## 模式索引
-
-### GoF / 创建型
-
-- [Singleton](references/gof/creational/singleton.md) · [Factory Method](references/gof/creational/factory-method.md) · [Abstract Factory](references/gof/creational/abstract-factory.md) · [Builder](references/gof/creational/builder.md) · [Prototype](references/gof/creational/prototype.md)
-
-### GoF / 结构型
-
-- [Adapter](references/gof/structural/adapter.md) · [Bridge](references/gof/structural/bridge.md) · [Composite](references/gof/structural/composite.md) · [Decorator](references/gof/structural/decorator.md) · [Facade](references/gof/structural/facade.md) · [Flyweight](references/gof/structural/flyweight.md) · [Proxy](references/gof/structural/proxy.md)
-
-### GoF / 行为型
-
-- [Chain of Responsibility](references/gof/behavioral/chain-of-responsibility.md) · [Command](references/gof/behavioral/command.md) · [Interpreter](references/gof/behavioral/interpreter.md) · [Iterator](references/gof/behavioral/iterator.md) · [Mediator](references/gof/behavioral/mediator.md) · [Memento](references/gof/behavioral/memento.md) · [Observer](references/gof/behavioral/observer.md) · [State](references/gof/behavioral/state.md) · [Strategy](references/gof/behavioral/strategy.md) · [Template Method](references/gof/behavioral/template-method.md) · [Visitor](references/gof/behavioral/visitor.md)
-
-### 企业应用模式
-
-- [Repository](references/enterprise/repository.md) · [Service Layer](references/enterprise/service-layer.md) · [Unit of Work](references/enterprise/unit-of-work.md) · [Data Mapper](references/enterprise/data-mapper.md) · [Active Record](references/enterprise/active-record.md) · [DTO](references/enterprise/dto.md) · [Dependency Injection](references/enterprise/dependency-injection.md) · [MVC](references/enterprise/mvc.md)
-
-### DDD 模式
-
-- [Entity](references/ddd/entity.md) · [Value Object](references/ddd/value-object.md) · [Aggregate](references/ddd/aggregate.md) · [Aggregate Root](references/ddd/aggregate-root.md) · [DDD Repository](references/ddd/repository.md) · [Domain Service](references/ddd/domain-service.md) · [Domain Event](references/ddd/domain-event.md) · [Application Service](references/ddd/application-service.md) · [DDD Factory](references/ddd/factory.md) · [Specification](references/ddd/specification.md)
-
-### 分布式系统模式
-
-- [Saga](references/distributed/saga.md) · [CQRS](references/distributed/cqrs.md) · [Event Sourcing](references/distributed/event-sourcing.md) · [Transactional Outbox](references/distributed/outbox.md) · [Circuit Breaker](references/distributed/circuit-breaker.md) · [Retry](references/distributed/retry.md) · [Bulkhead](references/distributed/bulkhead.md) · [API Gateway](references/distributed/api-gateway.md) · [Service Discovery](references/distributed/service-discovery.md) · [Idempotency](references/distributed/idempotency.md) · [Leader Election](references/distributed/leader-election.md)
+> 60 个模式文件加起来远超一次对话的预算：**只打开候选那 1–3 个**。

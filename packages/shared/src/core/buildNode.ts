@@ -116,7 +116,7 @@ async function buildNode(
   };
 
   // ---- 属性写入:与修改路径共用同一批 writer(见 core/props/writers) ----
-  // 创建路径的默认值与推断(P10 清灰底 / TEXT 默认字 / P18 padding 归零 + sizingMode
+  // 创建路径的默认值与推断(清灰底 / TEXT 默认字 / padding 归零 + sizingMode
   // 推断)都在 writer 里由 ctx.create 显式触发,不再是这里另写一份 200 行。
   await writePhase(wctx, CREATE_WRITERS);
 
@@ -135,15 +135,15 @@ async function buildNode(
   }
 
   // ---- 自动布局必须在子节点插完之后写 ----
-  // 引擎会在插入子节点时按内容重算容器尺寸与方向,写在前面会被覆盖 —— 这正是 P18
-  // (传 690×210 带嵌套 children,返回 630×160)的根因。
+  // 引擎会在插入子节点时按内容重算容器尺寸与方向,写在前面会被覆盖 —— 这正是尺寸被吃掉的
+  // 根因(实测:传 690×210 带嵌套 children,返回 630×160)。
   await writePhase(wctx, [layoutWriter]);
 
   // ---- 稳定化(顺序固定:尺寸 → 文本自适应 → sizingMode → 方向) ----
-  // ① 尺寸:P18 —— 再压一次,显式给了尺寸就以调用方为准;
-  // ② textAutoResize:P34 —— `resize()` 会把它重置为 NONE,声明过的必须在尺寸之后压回;
+  // ① 尺寸:再压一次,显式给了尺寸就以调用方为准;
+  // ② textAutoResize:`resize()` 会把它重置为 NONE,声明过的必须在尺寸之后压回;
   // ③ sizingMode:resize 会把显式声明的 AUTO 悄悄改回 FIXED,声明过的再写回去;
-  // ④ 方向:P31 —— 布局重算可能把刚写的 layoutMode 回写成另一方向,回读修正。
+  // ④ 方向:布局重算可能把刚写的 layoutMode 回写成另一方向,回读修正。
   await settleWriters(wctx, [
     geometryWriter,
     textStabilizeWriter,
@@ -161,11 +161,11 @@ async function buildNode(
 
   // ---- 写后回读回收(0007) ----
   // 0004 把「某个字段为什么没生效」统一到 WriteOutcome,但当时只有修改路径回收它:
-  // 创建路径只回收能力门控,readback.ok === false(P31 方向、P33 字体)与
+  // 创建路径只回收能力门控,readback.ok === false(方向、字体)与
   // outcome.warnings 被静默丢弃 —— 同一个平台缺陷「建的时候」不点名、「改的时候」才点名。
   harvestOutcome(wctx.outcome, nodeLabel(node), notes);
 
-  // P33/P34:TEXT 的尺寸与自适应模式回读 —— 只记「请求 vs 回读」这份事实,
+  // TEXT 的尺寸与自适应模式回读 —— 只记「请求 vs 回读」这份事实,
   // 修法文案集中在 dicts/unapplied-prop.ts;引擎真按请求落了值就一条都不报。
   if (spec.type === 'TEXT') {
     for (const key of ['width', 'height'] as const) {

@@ -25,6 +25,7 @@ import {
   readFileSync,
   readSync,
   statSync,
+  unlinkSync,
   writeFileSync,
 } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
@@ -47,6 +48,10 @@ const RUNS_DIR = join(LEDGER, 'runs');
 const CASES_DIR = join(LEDGER, 'cases');
 const CURSOR = join(LEDGER, '.log-cursor.json');
 const README = join(LEDGER, 'README.md');
+const ARCHIVE_DIR = join(LEDGER, 'archive');
+const ARCHIVE_EVENTS_DIR = join(ARCHIVE_DIR, 'events');
+const ARCHIVE_HANDLED = join(ARCHIVE_DIR, 'handled.json');
+const ARCHIVE_INDEX = join(ARCHIVE_DIR, 'INDEX.json');
 const DEFAULT_LOG =
   process.env.TEXT_TO_DESIGN_MCP_LOG ?? '/tmp/text-to-design-mcp.log';
 
@@ -88,6 +93,17 @@ function readEvents() {
 
 function readHandled() {
   const db = readJson(HANDLED, { version: 1, entries: {} });
+  if (!db.entries) db.entries = {};
+  return db;
+}
+
+/**
+ * 归档库(已闭环但已终结的指纹)。**必须参与去重判定** —— 否则 archive 会把
+ * 「已修好的 bug 不再记录」这条闸门拆掉:同一个 bug 归档后再冒出来会被当新错误
+ * 重新记账,清单又被噪音填满。归档是搬走,不是注销。
+ */
+function readArchive() {
+  const db = readJson(ARCHIVE_HANDLED, { version: 1, entries: {} });
   if (!db.entries) db.entries = {};
   return db;
 }
@@ -182,24 +198,48 @@ const LEDGER_README = `# MCP 报错台账(mcp-tdd)
 由 \`.agents/skills/mcp-tdd\` 维护。**改台账请走 CLI,不要手改 jsonl** —— 指纹与状态
 由脚本维护,手改会破坏去重。
 
-本台账是 jsDesign MCP 报错的**唯一记账通道**(技能合并后不再维护手写 md)。合并前的
-历史归档已冻结在 \`.agents/skills/mcp-tdd/archive/\`,只读查阅;字段对照表见该技能的
-\`references/bookkeeping.md\`。
+本台账是 jsDesign MCP 报错的**唯一记账通道**。结论写这里,不写 md:
+平台限制的现行口径在技能的 \`references/platform-limits.md\`,修复理由在 \`docs/design-decisions/\`。
+现象**不用编号** —— 报错认指纹(\`list\` 的「骨架」行),平台限制认现象描述,修复理由认决策记录。
 
 **整个目录不入库**(仓库根 \`.gitignore\` 里写着 \`docs/mcp-errors/\`):台账是本机数据 ——
-事件流随任务无限增长,闭环库 / 用例 / run 元信息只对跑过它的那台机器有意义。新克隆的
-仓库不需要它 —— \`init\`(以及任何命令)会自动重建目录与本 README。
+闭环库 / 用例 / run 元信息只对跑过它的那台机器有意义。新克隆的仓库不需要它 ——
+\`init\`(以及任何命令)会自动重建目录与本 README。
 
 文件构成:
 
 | 文件 | 作用 | 可否手改 |
 | --- | --- | --- |
-| \`errors.jsonl\` | 追加式事件流,每条 = 一次报错观察(**本机日志,不入库**) | 否(只由 \`record\`/\`scan-log\` 追加) |
-| \`handled.json\` | 已闭环指纹库,= 去重闸门 | 否(用 \`handle\`/\`unhandle\`) |
+| \`errors.jsonl\` | 追加式事件流,每条 = 一次报错观察(**本机数据**) | 否(只由 \`record\`/\`scan-log\` 追加;\`archive\` 会搬走已终结的部分) |
+| \`handled.json\` | 已闭环指纹库,= 去重闸门 | 否(用 \`handle\`/\`unhandle\`/\`archive\`) |
 | \`cases/<caseId>.json\` | 可重放的设计任务用例(回归依据) | 可(用例本身是测试资产) |
 | \`runs/<runId>.json\` | 一次设计任务的元信息 | 否 |
 | \`.log-cursor.json\` | daemon 日志采集位点 | 否 |
 | \`REPORT.md\` | \`report\` 生成的当前未决报错快照 | 否(会被覆盖) |
+| \`archive/handled.json\` | 已归档的闭环条目(**不是删除**,见下节) | 否(只由 \`archive\`) |
+| \`archive/events/<YYYY-MM>.jsonl\` | 已归档事件,按事件月份分片 | 否 |
+| \`archive/INDEX.json\` | 归档账本:分片 → 指纹数 / 事件数 / 时间范围 | 否 |
+
+## 归档
+
+事件流只追加、闭环库只增 —— 这保证证据链完整,代价是主库无限增长。\`archive\` 把**已经终结**
+的那部分搬走,主库只留活跃项:
+
+\`\`\`bash
+node .agents/skills/mcp-tdd/scripts/mcp-tdd.mjs archive --dry-run          # 先看要搬什么
+node .agents/skills/mcp-tdd/scripts/mcp-tdd.mjs archive --older-than 30d  # 默认就是 30d
+\`\`\`
+
+**判据(三条全满足才搬)**:在 \`handled.json\` 里、\`handledAt\` 早于阈值、\`handledAt\` 之后
+没有任何事件。→ \`regressed\` 的指纹**永不归档**。
+
+**归档 ≠ 遗忘**,这是它必须走 CLI 而不是手删文件的原因:去重闸门会同时查归档库 ——
+
+- 归档过的指纹再冒出来(\`--stage record\`):仍然 \`suppressed\`,只是多带 \`archived: true\`;
+- **在回归阶段复发(\`--stage regress\`)**:不能静默吞掉。条目会被搬回主库并记一条
+  \`state=regressed\`,与从未归档过的指纹行为完全一致。归档不是「把这笔账注销」。
+
+\`list --archived\` 查归档内容;主库的 \`list\`/\`--all\` 不含归档项。
 
 ## 状态语义
 
@@ -223,6 +263,17 @@ const LEDGER_README = `# MCP 报错台账(mcp-tdd)
 \`runs/<runId>.json\` 与事件流里核对:run 不存在、或该指纹在回归 run 里复发,**直接拒绝**;
 回归 run 里夹带别的报错则告警放行。无法回归时用 \`--force --note "原因"\`,
 条目会带 \`forced: true\` 供日后 review。
+
+## 设计决策互链
+
+\`handle --decision <NNNN>\` 把闭环挂到设计决策记录上(位置按项目约定,依次找
+\`docs/design-decisions\` / \`docs/adr\` / \`docs/decisions\` / \`ADR\`)。挂上之后两边互为索引:
+\`list --decision 0007\` 查这条决策关联的报错死没死;决策记录的「验证」段填回归 runId
+与指纹,而不是只写原则。
+
+**已闭环过、且在回归阶段真复发的指纹 \`--decision\` 是强制的** —— 复发说明上次的修法没消
+根因,继续当单点 bug 改只会再复发一次。\`unhandle\` 后重闭环(修正误判)不算,确无结构问题时
+用 \`--force --note "原因"\` 显式豁免。
 
 ## 事件字段
 
@@ -250,6 +301,7 @@ function ensure() {
   if (existsSync(EVENTS) && existsSync(HANDLED) && existsSync(README)) return;
   mkdirSync(RUNS_DIR, { recursive: true });
   mkdirSync(CASES_DIR, { recursive: true });
+  mkdirSync(ARCHIVE_EVENTS_DIR, { recursive: true });
   if (!existsSync(EVENTS)) writeFileSync(EVENTS, '');
   if (!existsSync(HANDLED)) writeJson(HANDLED, { version: 1, entries: {} });
   if (!existsSync(README)) writeFileSync(README, LEDGER_README);
@@ -262,15 +314,30 @@ function cmdInit() {
   out(`  events : ${rel(EVENTS)}`);
   out(`  handled: ${rel(HANDLED)}`);
   out(`  cases  : ${rel(CASES_DIR)}/`);
+  out(`  archive: ${rel(ARCHIVE_DIR)}/`);
 }
 
 // ---------------------------------------------------------------- run
+
+/**
+ * runId 必须唯一 —— 同一秒内起两次 run 是常态(起 run → 立刻 run-end → 起回归 run),
+ * 而 stamp() 只到秒。撞名会让后写的元信息**覆盖**前一次,于是
+ * --verified-by 指向的"回归 run"里躺着上一轮的报错,证据链张冠李戴。
+ * 撞了就顺延编号,格式与既有台账保持一致。
+ */
+function nextRunId() {
+  const base = `run-${stamp()}`;
+  if (!existsSync(join(RUNS_DIR, `${base}.json`))) return base;
+  let i = 2;
+  while (existsSync(join(RUNS_DIR, `${base}-${i}.json`))) i += 1;
+  return `${base}-${i}`;
+}
 
 function cmdRunStart(flags) {
   ensure();
   const caseId = flags.case ?? null;
   if (caseId) assertCase(caseId);
-  const runId = `run-${stamp()}`;
+  const runId = nextRunId();
   writeJson(join(RUNS_DIR, `${runId}.json`), {
     runId,
     caseId,
@@ -358,6 +425,60 @@ function cmdRecord(flags) {
         reason: 'already-handled',
         handledAt: entry.handledAt,
         suppressedCount: entry.suppressedCount,
+      }),
+    );
+    return;
+  }
+
+  // 归档库命中:去重语义与主库一致,但两条分支的落点不同 ——
+  //  · 普通阶段:计数累加在归档条目上,不回迁(主库保持瘦);
+  //  · 回归阶段:这是**真复发**,必须搬回主库并按 regressed 暴露。
+  //    若这里也静默 suppressed,archive 就成了"把账注销"的后门。
+  const adb = readArchive();
+  const archived = adb.entries[fp];
+  if (archived) {
+    if (stage === 'regress') {
+      const back = unarchiveFingerprint(fp);
+      db.entries[fp] = archived;
+      writeJson(HANDLED, db);
+      appendEvent({
+        fp,
+        tool,
+        message,
+        caseId,
+        runId,
+        stage,
+        channel,
+        flags,
+        state: 'regressed',
+      });
+      process.stderr.write(
+        `!! 回归失败: ${fp} 在 ${runId} 复发 —— 它此前已闭环并归档(原判定于 ${archived.handledAt}),` +
+          `已连同 ${back} 条历史事件整块搬回主库重开。\n`,
+      );
+      out(
+        JSON.stringify({
+          action: 'regressed',
+          fingerprint: fp,
+          tool,
+          runId,
+          archived: true,
+        }),
+      );
+      return;
+    }
+    archived.suppressedCount = (archived.suppressedCount ?? 0) + 1;
+    archived.lastSuppressedAt = now();
+    writeJson(ARCHIVE_HANDLED, adb);
+    out(
+      JSON.stringify({
+        action: 'suppressed',
+        fingerprint: fp,
+        tool,
+        reason: 'already-handled-archived',
+        archived: true,
+        handledAt: archived.handledAt,
+        suppressedCount: archived.suppressedCount,
       }),
     );
     return;
@@ -503,32 +624,78 @@ export function aggregate() {
 
 const STATUS_ORDER = { regressed: 0, open: 1, handled: 2 };
 
+/**
+ * `--all` 的默认显示上限。已闭环行随任务无限累积,而它们几乎从不被逐条阅读;
+ * 一次 `--all` 打印几千行会把上下文吃掉一半,还挤掉真正要看的未决项。
+ * 未决/复发不设默认上限(漏一条就是漏一个 bug),只有显式的 --limit 才截断。
+ */
+const ALL_DEFAULT_LIMIT = 50;
+
+function parseLimit(v, fallback) {
+  if (v === undefined) return fallback;
+  if (v === true) die('--limit 需要数值(0 = 不限)');
+  const n = Number(v);
+  if (!Number.isInteger(n) || n < 0) {
+    die(`--limit 需要 ≥0 的整数(0 = 不限),收到 ${v}`);
+  }
+  return n;
+}
+
 function cmdList(flags) {
+  if (flags.archived) {
+    cmdListArchived(flags);
+    return;
+  }
   const { rows, handledOnly } = aggregate();
-  const want = flags.all ? 'all' : 'open';
-  const shown =
+  // --decision 隐含 --all:问的是"这条决策关联的报错死没死",已闭环的行才是答案本身,
+  // 只打未决等于什么都不打。
+  const want = flags.all || flags.decision !== undefined ? 'all' : 'open';
+  let shown =
     want === 'all'
       ? rows
       : rows.filter((r) => r.status === 'open' || r.status === 'regressed');
+
+  if (flags.decision !== undefined) {
+    const id =
+      flags.decision === true ? null : normalizeDecisionId(flags.decision);
+    shown = shown.filter((r) =>
+      id ? r.handled?.decision === id : Boolean(r.handled?.decision),
+    );
+  }
+
   shown.sort(
     (a, b) =>
       STATUS_ORDER[a.status] - STATUS_ORDER[b.status] ||
       (a.lastSeen < b.lastSeen ? 1 : -1),
   );
 
+  const total = shown.length;
+  const limit = parseLimit(flags.limit, want === 'all' ? ALL_DEFAULT_LIMIT : 0);
+  const hidden = limit > 0 ? Math.max(0, total - limit) : 0;
+  if (limit > 0) shown = shown.slice(0, limit);
+
   if (flags.json) {
-    out(JSON.stringify({ mode: want, rows: shown }, null, 2));
+    out(
+      JSON.stringify(
+        { mode: want, limit, total, hidden, rows: shown },
+        null,
+        2,
+      ),
+    );
     return;
   }
 
   const nOpen = rows.filter((r) => r.status === 'open').length;
   const nReg = rows.filter((r) => r.status === 'regressed').length;
   const nHandled = handledOnly.length;
+  const nArchived = Object.keys(readArchive().entries).length;
   out(
-    `未决 ${nOpen} · 回归复发 ${nReg} · 已闭环 ${nHandled} · 事件总数 ${readEvents().length}`,
+    `未决 ${nOpen} · 回归复发 ${nReg} · 已闭环 ${nHandled} · 事件总数 ${readEvents().length}` +
+      (nArchived ? ` · 已归档 ${nArchived}(list --archived)` : ''),
   );
   if (!shown.length) {
-    out(want === 'all' ? '台账为空。' : '无未决报错。');
+    if (flags.decision !== undefined) out('没有挂到该决策的指纹。');
+    else out(want === 'all' ? '台账为空。' : '无未决报错。');
     return;
   }
   out('');
@@ -539,13 +706,59 @@ function cmdList(flags) {
     out(`  首次 ${r.firstSeen}  最近 ${r.lastSeen}`);
     out(`  骨架 ${r.normalized}`);
     if (r.caseIds.length) out(`  用例 ${r.caseIds.join(', ')}`);
+    if (r.handled?.decision) out(`  决策 ${r.handled.decision}`);
     if (r.status === 'regressed') out(`  原闭环于 ${r.handledAt}`);
     if (r.args) out(`  样例入参 ${JSON.stringify(r.args)}`);
     out('');
   }
+  if (hidden) {
+    out(
+      `(另有 ${hidden} 条未显示 —— --limit ${total - hidden + 1} 起继续,或 --limit 0 看全部)`,
+    );
+  }
   out(
     '处理一个: node .agents/skills/mcp-tdd/scripts/mcp-tdd.mjs handle --fingerprint <fp> --fix "..."',
   );
+}
+
+// ---------------------------------------------------------------- 设计决策互链
+
+/**
+ * 台账 ↔ 设计决策记录的互链(与 software-design-patterns 技能约定同源)。
+ *
+ * 为什么要有:报错闭环回答"这条修没修掉",设计决策回答"为什么这么修、什么时候该回退"。
+ * 两者分开记,"结构型修复"的结论就只剩一句 --fix 摘要,下次需求变更时无从复盘。
+ * 目录位置沿用项目既有约定,四个候选逐个找 —— 技能侧允许项目自定义位置。
+ */
+const DECISION_DIRS = [
+  'docs/design-decisions',
+  'docs/adr',
+  'docs/decisions',
+  'ADR',
+];
+
+/** 编号规整成 4 位(与 new_decision.py 的 0001 编号一致) */
+function normalizeDecisionId(v) {
+  const s = String(v).trim();
+  return /^\d+$/.test(s) ? s.padStart(4, '0') : s;
+}
+
+/** 找编号对应的决策记录文件;找不到返回 null(不阻断闭环,由调用方决定告警还是拒绝) */
+function findDecision(id) {
+  for (const d of DECISION_DIRS) {
+    const dir = join(ROOT, d);
+    if (!existsSync(dir)) continue;
+    let hit;
+    try {
+      hit = readdirSync(dir).find(
+        (f) => f.startsWith(`${id}-`) || f.startsWith(`${id}.`),
+      );
+    } catch {
+      continue;
+    }
+    if (hit) return join(dir, hit);
+  }
+  return null;
 }
 
 // ---------------------------------------------------------------- handle
@@ -626,6 +839,39 @@ function cmdHandle(flags) {
   const files = listify(flags.file);
   const prev = db.entries[fp];
   const { verifiedBy, forced } = checkRegressionEvidence(fp, flags, verdict);
+
+  const decision = flags.decision ? normalizeDecisionId(flags.decision) : null;
+  const decisionFile = decision ? findDecision(decision) : null;
+  if (decision && !decisionFile) {
+    process.stderr.write(
+      `!! --decision ${decision} 在 ${DECISION_DIRS.join(' / ')} 下找不到对应记录。\n` +
+        '   编号仍会写进台账,但日后无从核对 —— 先按 .agents/skills/software-design-patterns\n' +
+        '   出结论并落一份决策记录,或去掉这个参数(单点 bug 本来就不需要决策)。\n',
+    );
+  }
+
+  // 结构型修复的硬闸门:已闭环的指纹在回归阶段真复发过,说明上次的修法没消根因,
+  // 再按"单点 bug"改下去只会第三次复发 —— 必须先有设计决策。
+  // 判据用**事件流里的 regress 记录**而不是"重闭环次数":unhandle 后重闭环
+  // (修正误判)不该被要求补决策,只有真复发算。
+  const regressedEvents = prev
+    ? events.filter((e) => e.stage === 'regress' && e.ts > prev.handledAt)
+    : [];
+  if (
+    verdict === 'product-bug' &&
+    regressedEvents.length &&
+    !decision &&
+    flags.force !== true
+  ) {
+    die(
+      `${fp} 已闭环过,且回归阶段复发 ${regressedEvents.length} 次 —— 上次的修法没消根因,\n` +
+        '  这不是单点 bug。按约定先走设计决策:读 .agents/skills/software-design-patterns,\n' +
+        '  出结论后用 python3 .agents/skills/software-design-patterns/scripts/new_decision.py "<标题>"\n' +
+        '  建记录,再回来 handle ... --decision <NNNN>。\n' +
+        '  确认确无结构问题(如两次都是互不相关的偶发)时用 --force --note "原因" 豁免。',
+    );
+  }
+
   db.entries[fp] = {
     fingerprint: fp,
     tool: last.tool,
@@ -640,6 +886,8 @@ function cmdHandle(flags) {
       files,
       commit: flags.commit ?? null,
     },
+    decision,
+    decisionPath: decisionFile ? rel(decisionFile) : null,
     verifiedBy,
     forced,
     note: flags.note ?? '',
@@ -650,6 +898,7 @@ function cmdHandle(flags) {
   out(
     `已闭环 ${fp} (${last.tool}) 判定=${verdict}` +
       (verifiedBy ? ` 回归=${verifiedBy}` : '') +
+      (decision ? ` 决策=${decision}` : '') +
       (prev ? ` — 这是第 ${db.entries[fp].reopenedCount} 次重闭环` : ''),
   );
   out('后续同指纹不再记录。回归阶段若复发会自动置为 regressed 并告警。');
@@ -759,6 +1008,295 @@ function printCase(cs) {
   out('');
   out('重放纪律:每条结果都过一遍 record(--stage regress --run <回归runId>);');
   out('任何一条 isError 都要记,哪怕是"预期内"的新错误。');
+}
+
+// ---------------------------------------------------------------- archive
+
+/**
+ * 归档:把**已经终结**的那部分搬出主库。事件流只追加、闭环库只增是刻意的
+ * (证据链完整),代价是主库无限增长 —— 于是 `list --all` 被迫默认截断 50 条。
+ *
+ * 三条判据全满足才搬:在 handled.json 里 · handledAt 早于阈值 · 此后无任何事件。
+ * 因此 regressed 的指纹**永不归档**(它还活着)。
+ *
+ * 与去重闸门的关系见 readArchive() 的注释:归档是搬走,不是注销。
+ * 写入顺序固定为「先归档分片 → 再收缩主库」,中途失败最坏是重复一份,不会丢。
+ */
+
+const ARCHIVE_DEFAULT_MS = 30 * 86_400_000;
+const DURATION_UNITS = {
+  m: 60_000,
+  h: 3_600_000,
+  d: 86_400_000,
+  w: 604_800_000,
+};
+
+function parseDuration(v, fallback) {
+  if (v === undefined) return fallback;
+  if (v === true) die('--older-than 需要时长,如 30d / 12h / 90m / 2w');
+  const m = /^(\d+)([mhdw])$/.exec(String(v).trim());
+  if (!m) die(`--older-than 需要 <数字><单位 m|h|d|w>(例:30d),收到 ${v}`);
+  return Number(m[1]) * DURATION_UNITS[m[2]];
+}
+
+/** 从归档目录的实际内容重算账本(分片很少,整算比增量维护更不容易漂) */
+function rebuildArchiveIndex() {
+  const shards = [];
+  let events = 0;
+  if (existsSync(ARCHIVE_EVENTS_DIR)) {
+    const files = readdirSync(ARCHIVE_EVENTS_DIR)
+      .filter((f) => f.endsWith('.jsonl'))
+      .sort();
+    for (const f of files) {
+      const lines = readFileSync(join(ARCHIVE_EVENTS_DIR, f), 'utf8')
+        .split('\n')
+        .filter((l) => l.trim());
+      let first = null;
+      let last = null;
+      for (const l of lines) {
+        let ts;
+        try {
+          ts = JSON.parse(l).ts;
+        } catch {
+          continue;
+        }
+        if (!first || ts < first) first = ts;
+        if (!last || ts > last) last = ts;
+      }
+      events += lines.length;
+      shards.push({
+        shard: f,
+        events: lines.length,
+        firstSeen: first,
+        lastSeen: last,
+      });
+    }
+  }
+  const index = {
+    version: 1,
+    lastArchivedAt: now(),
+    fingerprints: Object.keys(readArchive().entries).length,
+    events,
+    shards,
+  };
+  writeJson(ARCHIVE_INDEX, index);
+  return index;
+}
+
+/**
+ * 撤销一次归档:把该指纹**整块**搬回主库(闭环条目 + 它的事件)。
+ * 回归复发时调用 —— 归档是整块搬走的,撤销就得整块搬回,否则归档账本会留下
+ * 「0 个指纹 · N 条事件」这种自相矛盾的计数。返回搬回的事件条数。
+ */
+function unarchiveFingerprint(fp) {
+  const adb = readArchive();
+  if (!adb.entries[fp]) return 0;
+  delete adb.entries[fp];
+  writeJson(ARCHIVE_HANDLED, adb);
+
+  const back = [];
+  if (existsSync(ARCHIVE_EVENTS_DIR)) {
+    for (const f of readdirSync(ARCHIVE_EVENTS_DIR).filter((n) =>
+      n.endsWith('.jsonl'),
+    )) {
+      const file = join(ARCHIVE_EVENTS_DIR, f);
+      const kept = [];
+      for (const l of readFileSync(file, 'utf8').split('\n')) {
+        if (!l.trim()) continue;
+        let ev;
+        try {
+          ev = JSON.parse(l);
+        } catch {
+          continue;
+        }
+        if (ev.fingerprint === fp) back.push(ev);
+        else kept.push(JSON.stringify(ev));
+      }
+      if (kept.length) writeFileSync(file, `${kept.join('\n')}\n`);
+      else unlinkSync(file);
+    }
+  }
+  if (back.length) {
+    appendFileSync(
+      EVENTS,
+      `${back.map((e) => JSON.stringify(e)).join('\n')}\n`,
+    );
+  }
+  rebuildArchiveIndex();
+  return back.length;
+}
+
+function cmdArchive(flags) {
+  ensure();
+  const olderMs = parseDuration(flags['older-than'], ARCHIVE_DEFAULT_MS);
+  const cutoff = new Date(Date.now() - olderMs).toISOString();
+  const db = readHandled();
+  const events = readEvents();
+
+  const lastSeenAt = new Map();
+  for (const ev of events) {
+    const prev = lastSeenAt.get(ev.fingerprint);
+    if (!prev || ev.ts > prev) lastSeenAt.set(ev.fingerprint, ev.ts);
+  }
+  const movable = Object.values(db.entries).filter((e) => {
+    if (!e.handledAt || e.handledAt >= cutoff) return false;
+    const last = lastSeenAt.get(e.fingerprint);
+    return !last || last <= e.handledAt;
+  });
+  const fpSet = new Set(movable.map((e) => e.fingerprint));
+  const moved = fpSet.size
+    ? events.filter((e) => fpSet.has(e.fingerprint))
+    : [];
+  const kept = fpSet.size
+    ? events.filter((e) => !fpSet.has(e.fingerprint))
+    : events;
+  const activeHandled = Object.keys(db.entries).length - movable.length;
+
+  if (flags['dry-run'] === true) {
+    if (flags.json) {
+      out(
+        JSON.stringify(
+          {
+            action: 'archive-dry-run',
+            cutoff,
+            fingerprints: movable.map((e) => ({
+              fingerprint: e.fingerprint,
+              tool: e.tool,
+              handledAt: e.handledAt,
+            })),
+            events: moved.length,
+            wouldLeave: { events: kept.length, handled: activeHandled },
+          },
+          null,
+          2,
+        ),
+      );
+      return;
+    }
+    out(
+      `--dry-run:将归档 ${movable.length} 个指纹 / ${moved.length} 条事件(阈值 handledAt < ${cutoff})`,
+    );
+    for (const e of movable) {
+      out(`  ${e.fingerprint}  ${e.tool}  闭环于 ${e.handledAt}`);
+    }
+    out(`主库将剩: 事件 ${kept.length} 条 · 已闭环 ${activeHandled} 条`);
+    out('未做任何写入。确认后去掉 --dry-run 执行。');
+    return;
+  }
+
+  if (!fpSet.size) {
+    out(
+      flags.json
+        ? JSON.stringify({
+            action: 'archive',
+            archived: 0,
+            events: 0,
+            reason: 'nothing-to-archive',
+          })
+        : '无可归档项(判据:已闭环 · handledAt 早于阈值 · 此后无事件;regressed 的指纹永不归档)。',
+    );
+    return;
+  }
+
+  // 先落归档分片:事件按 ts 月份分片,便于"只翻某段时间"
+  const byMonth = new Map();
+  for (const ev of moved) {
+    const month = String(ev.ts ?? '').slice(0, 7) || 'unknown';
+    if (!byMonth.has(month)) byMonth.set(month, []);
+    byMonth.get(month).push(ev);
+  }
+  mkdirSync(ARCHIVE_EVENTS_DIR, { recursive: true });
+  const written = [];
+  for (const [month, evs] of [...byMonth].sort()) {
+    appendFileSync(
+      join(ARCHIVE_EVENTS_DIR, `${month}.jsonl`),
+      `${evs.map((e) => JSON.stringify(e)).join('\n')}\n`,
+    );
+    written.push({ shard: `${month}.jsonl`, events: evs.length });
+  }
+
+  // 再收主库。注意:这里会重写 errors.jsonl,坏行(JSON 解析失败的)随之消失 ——
+  // 它们本来就对 list/去重不可见,不算丢数据。
+  const adb = readArchive();
+  for (const e of movable) adb.entries[e.fingerprint] = e;
+  writeJson(ARCHIVE_HANDLED, adb);
+  writeFileSync(
+    EVENTS,
+    kept.length ? `${kept.map((e) => JSON.stringify(e)).join('\n')}\n` : '',
+  );
+  for (const fp of fpSet) delete db.entries[fp];
+  writeJson(HANDLED, db);
+
+  const index = rebuildArchiveIndex();
+  if (flags.json) {
+    out(
+      JSON.stringify(
+        {
+          action: 'archive',
+          archived: movable.length,
+          events: moved.length,
+          shards: written,
+          total: { fingerprints: index.fingerprints, events: index.events },
+          left: { events: kept.length, handled: activeHandled },
+        },
+        null,
+        2,
+      ),
+    );
+    return;
+  }
+  out(
+    `归档完成: ${movable.length} 个指纹 / ${moved.length} 条事件 → ${rel(ARCHIVE_DIR)}/`,
+  );
+  for (const w of written) out(`  分片 events/${w.shard}  +${w.events}`);
+  out(`  归档库累计: ${index.fingerprints} 个指纹 · ${index.events} 条事件`);
+  out(`  主库剩余: 事件 ${kept.length} 条 · 已闭环 ${activeHandled} 条`);
+  out(
+    '归档不是注销:同指纹再出现仍 suppressed;若在回归阶段复发,条目会被搬回并置为 regressed。',
+  );
+}
+
+/** 归档库浏览(主库的 list / --all 不含归档项) */
+function cmdListArchived(flags) {
+  const db = readArchive();
+  const entries = Object.values(db.entries).sort((a, b) =>
+    a.handledAt < b.handledAt ? 1 : -1,
+  );
+  const index = readJson(ARCHIVE_INDEX, null);
+  const total = entries.length;
+  const limit = parseLimit(flags.limit, ALL_DEFAULT_LIMIT);
+  const hidden = limit > 0 ? Math.max(0, total - limit) : 0;
+  const shown = limit > 0 ? entries.slice(0, limit) : entries;
+
+  if (flags.json) {
+    out(
+      JSON.stringify(
+        { mode: 'archived', total, limit, hidden, index, rows: shown },
+        null,
+        2,
+      ),
+    );
+    return;
+  }
+  out(
+    `已归档 ${total} 个指纹 · ${index?.events ?? 0} 条事件` +
+      (index?.lastArchivedAt ? ` · 最近归档 ${index.lastArchivedAt}` : ''),
+  );
+  if (!total) {
+    out('归档库为空。跑 archive --dry-run 看有没有可归档的项。');
+    return;
+  }
+  out('');
+  for (const e of shown) {
+    out(`[ARCHIVED] ${e.fingerprint}  ${e.tool}`);
+    out(
+      `  闭环 ${e.handledAt}  判定 ${e.verdict}${e.decision ? `  决策 ${e.decision}` : ''}`,
+    );
+    out(`  骨架 ${e.normalized}`);
+    if (e.fix?.summary) out(`  修复 ${e.fix.summary}`);
+    out('');
+  }
+  if (hidden) out(`(另有 ${hidden} 条未显示 —— --limit 0 看全部)`);
 }
 
 // ---------------------------------------------------------------- scan-log
@@ -898,6 +1436,9 @@ function cmdReport(flags) {
   );
   L.push(`- 已闭环(当前有效): ${handled.length}`);
   L.push(`- 闭环库总数(含复发): ${Object.keys(readHandled().entries).length}`);
+  L.push(
+    `- 已归档(搬出主库,仍受去重闸门保护): ${Object.keys(readArchive().entries).length}`,
+  );
   L.push('');
   L.push('## 未决');
   L.push('');
@@ -918,11 +1459,11 @@ function cmdReport(flags) {
   if (!handled.length) {
     L.push('_(空)_');
   } else {
-    L.push('| 指纹 | 工具 | 闭环时间 | 修复摘要 |');
-    L.push('| --- | --- | --- | --- |');
+    L.push('| 指纹 | 工具 | 闭环时间 | 决策 | 修复摘要 |');
+    L.push('| --- | --- | --- | --- | --- |');
     for (const r of handled) {
       L.push(
-        `| \`${r.fingerprint}\` | \`${r.tool}\` | ${r.handledAt} | ${(r.handled?.fix?.summary ?? '').replace(/\|/g, '\\|')} |`,
+        `| \`${r.fingerprint}\` | \`${r.tool}\` | ${r.handledAt} | ${r.handled?.decision ?? '—'} | ${(r.handled?.fix?.summary ?? '').replace(/\|/g, '\\|')} |`,
       );
     }
   }
@@ -961,14 +1502,32 @@ const HELP = `mcp-tdd — text-to-design MCP 测试驱动开发台账
         --include-warn 连 [WARN] 一起抓(超时/插件未连接是 WARN 级)
 
 台账
-  list [--all] [--json]                     未决 / 复发 / 已闭环
+  list [--all] [--json] [--limit N] [--decision [NNNN]] [--archived]
+        未决 / 复发 / 已闭环;--all 默认只显示 50 条(已闭环会无限累积),
+        --limit 0 看全部,未决不受默认上限约束
+        --decision <NNNN> 只看该设计决策关联的指纹(隐含 --all),
+        不带值则只看挂了决策的行
+        --archived 改看归档库(主库的 list / --all 不含归档项)
   handle --fingerprint <fp> [--case <id>] [--verdict <v>] [--fix "摘要"] \\
-         [--file <path>]... [--commit <sha>] [--verified-by <回归runId>] [--note "..."]
+         [--file <path>]... [--commit <sha>] [--verified-by <回归runId>] \\
+         [--decision <NNNN>] [--note "..."]
         --verdict: product-bug(默认,已改代码) | usage-error(调用方写错) | environment(环境/连接)
         product-bug 必带 --verified-by,且该回归 run 里同指纹不得复发(否则拒绝闭环);
         无法回归时用 --force --note "原因" 显式豁免,条目会留 forced 标记
+        --decision 把闭环挂到设计决策记录上(docs/design-decisions/NNNN-*.md);
+        已闭环过、且在回归阶段**真复发**的指纹强制要求它:复发说明上次没消根因,
+        先走 software-design-patterns 出决策再回来闭环(确无结构问题用 --force 豁免)
   unhandle --fingerprint <fp>               撤销闭环判定(误判时用)
-  report [--out <path>]                     生成 REPORT.md
+  report [--out <path>]                     生成 REPORT.md(含决策列)
+
+归档(台账瘦身;不是注销 —— 去重闸门同时查归档库)
+  archive [--older-than 30d] [--dry-run] [--json]
+        把**已终结**的指纹搬出主库:事件 → archive/events/<YYYY-MM>.jsonl,
+        闭环条目 → archive/handled.json,账本 → archive/INDEX.json
+        判据(三条全满足):在 handled.json 里 · handledAt 早于阈值 · 此后无事件
+        → regressed 的指纹永不归档。--dry-run 只打印不写盘
+        归档过的指纹再出现:仍 suppressed(多带 archived:true);
+        **在回归阶段复发**则搬回主库并置 regressed,与从未归档过的指纹行为一致
 
 用例(回归依据)
   case-new  --title "..." [--intent "..."] [--expect "..."] [--platform jsdesign|figma]
@@ -991,6 +1550,7 @@ const HANDLERS = {
   list: cmdList,
   handle: cmdHandle,
   unhandle: cmdUnhandle,
+  archive: cmdArchive,
   'case-new': cmdCaseNew,
   'case-step': cmdCaseStep,
   'case-show': cmdCaseShow,

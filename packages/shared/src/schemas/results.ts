@@ -57,7 +57,7 @@ export const manageNodesResultSchema = z.object({
   moved: z.array(serializedNodeSchema).optional(),
   /**
    * reparent 与 moved 同义(同一份数组):该 op 历史上只回 moved,而占位符最常见
-   * 写法是 {{id.updated[0].id}},两个键同时在,写哪个都能解析(P23)。
+   * 写法是 {{id.updated[0].id}},两个键同时在,写哪个都能解析。
    */
   updated: z.array(serializedNodeSchema).optional(),
   cleaned: z.array(z.string()).optional(),

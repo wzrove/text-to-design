@@ -335,7 +335,7 @@ const cases: Array<
     'set_stroke',
     { ids: ['1:2'], props: { strokeWeight: 2 } },
   ],
-  // P26:recursive / includeSelf 是定位字段,原样下发且不得漏进 props(引擎方法
+  // recursive / includeSelf 是定位字段,原样下发且不得漏进 props(引擎方法
   // 白名单会拒 —— 「方法 set_stroke 不接受字段: includeSelf」)
   [
     'jsd_set_stroke',
@@ -536,7 +536,7 @@ bridge.request = async (m, p) => {
 const fb2 = await invoke('jsd_set_layout', { ids: ['1:2'], itemSpacing: 12 });
 console.log('反馈(矩形设布局→应点名):', fb2.text.slice(0, 240));
 
-// ---- P22:batch 步骤回显摘要裁剪(图标的 vectorPaths 不再撑爆整批结果) ----
+// ---- batch 步骤回显摘要裁剪(图标的 vectorPaths 不再撑爆整批结果) ----
 bridge.request = async (m, p) => {
   calls.push({ method: m, params: p });
   if (m === 'execute') {
@@ -605,7 +605,7 @@ console.log(
   `batch 超预算降级: echoOmitted=${omitted} 保留 id 清单=${keptIdOnly} 长度=${batchHuge.text.length}`,
 );
 
-// ---- P25-B:结构变更步骤自带漂移复核(编排内与单工具调用同一条路) ----
+// ---- 结构变更步骤自带漂移复核(编排内与单工具调用同一条路) ----
 const delBatch = {
   calls: [{ id: 'del', tool: 'jsd_delete_node', args: { ids: ['1:2'] } }],
 };

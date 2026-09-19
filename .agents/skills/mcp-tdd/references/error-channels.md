@@ -58,6 +58,8 @@
 **采集方式**:按位点增量(`docs/mcp-errors/.log-cursor.json` 记录已读 offset 与 inode)。
 重复执行不会重复入账;文件被轮转/重建(长度回退或 inode 变化)自动从头开始。
 
+下文 `$S` = `node .agents/skills/mcp-tdd/scripts/mcp-tdd.mjs`(从仓库根执行)。
+
 ```bash
 node $S scan-log --run "$RID" --case <caseId>       # 默认只抓 [ERROR]
 node $S scan-log --include-warn ...                 # 连 [WARN] 一起抓

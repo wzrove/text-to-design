@@ -39,7 +39,7 @@ export function updateFeedback(
   }
   // 类型不匹配的属性被 runtime 静默跳过,这里显式点名,避免调用方误以为生效
   //
-  // P29 修订:原条件 `updated.length > 0 && requested.length === 0` 写反 —— 实际
+  // 修订:原条件 `updated.length > 0 && requested.length === 0` 写反 —— 实际
   // 触发于「调用方传了非类型门控字段(strokes / fills / effects 等)且至少 1 个节点
   // 被改」的常见路径,与上一行「已更新 N 个节点」互相矛盾。`requested` 只统计
   // PROP_APPLICABILITY(类型门控)字段,所以 strokes/fills 永远 0,误报恒出。
@@ -79,7 +79,7 @@ export function updateFeedback(
 }
 
 /**
- * P26:recursive 历史上是「自身 + 全部后代」,给容器 FRAME 传它刷描边会连容器自己
+ * recursive 历史上是「自身 + 全部后代」,给容器 FRAME 传它刷描边会连容器自己
  * 一起套上方框。现在默认只作用于后代,这条语义变化必须随工具描述一起下发 ——
  * 否则调用方按旧文档理解会以为「容器自身没改」是失败。统一在 propUpdateTool 里
  * 追加,11 个属性工具一处维护、不逐条抄。
@@ -114,7 +114,7 @@ export function propUpdateTool(def: PropToolDef): BridgeToolDef {
     fields.filter(
       (k) => args[k] !== undefined && PROP_APPLICABILITY[k] !== undefined,
     );
-  // P28 修订:recursive=true 默认不含目标自身(P26 语义),目标 id 合法地不会出现在
+  // 修订:recursive=true 默认不含目标自身(recursive 的新语义),目标 id 合法地不会出现在
   // updated 里 —— 把它交给下面的「missing」分支会被误报成「可能已失效」。这里
   // 预先从 requestedIds 里剔除「按语义本就不该出现在 updated 中的目标」,留出的
   // 是「调用方预期会出现在 updated 的 id」清单,后代 id 不在 args.ids 列表中,

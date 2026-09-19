@@ -341,7 +341,8 @@ if [ "${#FAILED[@]}" -eq 0 ]; then
   note "  1) 改过 shared/ 或 ui/ → 在即时设计里「插件 → 开发 → 重新运行」重载插件"
   note "     加载 packages/ui/dist/jsdesign/manifest.json"
   note "  2) 跑一次最小 MCP 调用实测（jsd_ping 起步）"
-  note "  3) 记账 / 归档（见 references/bookkeeping.md 与 references/platform-limits.md）"
+  note "  3) 记账（handle）并补 platform-limits 清单 —— 见 references/bookkeeping.md"
+  note "     台账主库碍事时才另跑 archive（独立节奏，不是每轮动作）"
   if [ "$JSON" = "1" ]; then
     printf '{"mode":"%s","ok":true,"failed":[]}\n' "$MODE"
   fi

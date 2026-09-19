@@ -131,7 +131,7 @@ export async function updateSelection(
         ignoredSuperset.add(key);
       }
     }
-    // P26:includeSelf=true 时容器自身也在 targets 里,描边/填充会直接画在容器上
+    // includeSelf=true 时容器自身也在 targets 里,描边/填充会直接画在容器上
     if (
       params.recursive === true &&
       params.includeSelf === true &&
@@ -149,7 +149,7 @@ export async function updateSelection(
     const readbackMark = outcome.readback.length;
     const messageMark = outcome.warnings.length;
     await applyProps(host, ctx, node, props, outcome);
-    // P31 的方向回读现在由 layoutWriter.settle 统一做(见 core/props/writers),
+    // 方向回读现在由 layoutWriter.settle 统一做(见 core/props/writers),
     // 创建与修改两条路径共用同一份判定;压不住的结果经 outcome.readback 回收点名。
     for (const r of outcome.readback.slice(readbackMark)) {
       if (r.ok !== false) continue;

@@ -13,7 +13,7 @@ import type { NodeSkeleton } from '../host';
  */
 
 /**
- * 写在 INSTANCE 内的子节点上时,平台不保证渲染生效(P7:实测 fills / fontName
+ * 写在 INSTANCE 内的子节点上时,平台不保证渲染生效(实测 fills / fontName
  * 回显是新值、渲染仍是组件原样式;其余样式同类风险)。
  *
  * 几何/结构/命名类字段(x/y/width/height/name/visible/locked/布局)不在其列 ——
@@ -50,7 +50,7 @@ export const INSTANCE_STYLE_RISK_PROPS: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * 容器自身被改时**肉眼看得见**的字段(P26:给 24×24 图标 FRAME 传 recursive 刷
+ * 容器自身被改时**肉眼看得见**的字段(给 24×24 图标 FRAME 传 recursive 刷
  * 描边,12 个图标外框全被套上 strokeWeight:1 的方框)。
  *
  * 与上面那份的前 16 项是**刻意共享**的同一组样式字段 —— 重叠由

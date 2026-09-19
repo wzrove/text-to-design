@@ -80,7 +80,7 @@ const ECHO_NODE_FIELDS = [
 ] as const;
 
 /**
- * 渲染无关且体积会失控的整键字段(P22):vectorPaths 是元凶 —— settings 图标单条
+ * 渲染无关且体积会失控的整键字段:vectorPaths 是元凶 —— settings 图标单条
  * 路径 >10KB 且 16 位小数,两个图标 + 其余步骤回显叠加就到 146K 字符,整批结果被
  * 挤出上下文(落盘到 tool-results/*.txt,模型看不到 ok / 报错,等于盲执行);
  * clone 图标更是 281K。constraints / 包围盒对批处理同样无用,一并丢弃。
@@ -219,7 +219,7 @@ export function registerBatchTools(
       const steps = new Map<string, unknown>();
       const results: BatchResult['results'] = [];
       let echoTrimmed = false;
-      // P25-B 复核不再由 batch 自己做:结构变更类工具在注册时就挂了漂移复核钩子,
+      // 复核不再由 batch 自己做:结构变更类工具在注册时就挂了漂移复核钩子,
       // 单工具调用与编排内调用走同一条路(此前只有 batch 内的步骤有复核)。
       // checkDrift=false 时按「本次调用不实例化钩子」传给执行体 —— 开关是按调用的,
       // 不是全局开关,也不是把钩子从 def 上摘掉。
@@ -268,7 +268,7 @@ export function registerBatchTools(
           if (!(stopOnError === false || call.continueOnError === true)) break;
           continue;
         }
-        // 占位符解析用完整数据,回显用裁剪后的摘要(P22):两者分离,
+        // 占位符解析用完整数据,回显用裁剪后的摘要:两者分离,
         // 剪掉 vectorPaths 不会让下游 {{id.created[0].id}} 解析失败。
         const echo = echoStep(out.structuredContent);
         if (echo.trimmed) echoTrimmed = true;
