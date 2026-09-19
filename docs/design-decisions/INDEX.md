@@ -21,6 +21,8 @@
 | [0007](0007-静默失效的告警出口统一到-WriteOutcome，创建路径补齐回收.md) | 静默失效的告警出口统一到 WriteOutcome，创建路径补齐回收 | 已采纳 | `shared/core`（execute / buildNode / update / export / props）、`dicts/unapplied-prop.ts`、`tools/*` 与 `server.ts` 的纪律文案 | 2026-09-19 |
 | [0008](0008-归档从人维护的历史文档改为台账自管的生命周期阶段.md) | 归档从人维护的历史文档改为台账自管的生命周期阶段 | 已采纳 | `.agents/skills/mcp-tdd/`（SKILL.md、references、scripts）、`docs/mcp-errors/`、`tests/`、`AGENTS.md` | 2026-09-19 |
 | [0009](0009-技能依赖单向化：通用技能不感知项目的缺陷跟踪工具.md) | 技能依赖单向化：通用技能不感知项目的缺陷跟踪工具 | 已采纳 | `.agents/skills/software-design-patterns/`、`.agents/skills/mcp-tdd/`（SKILL.md、references/bookkeeping.md）、`AGENTS.md`、`tests/skill-doc-budget.test.ts` | 2026-09-19 |
+| [0010](0010-契约接口异步优先：新增能力签名一律-Promise.md) | 契约接口异步优先：新增能力签名一律 Promise | 已采纳 | `shared/core/host.ts`（DesignHost、PlatformOp.run）、`ui/src/code/figma/ops.ts` | 2026-09-19 |
+| [0011](0011-dynamic-page-下文档访问异步化：Access-层收口-解析与加载.md) | dynamic-page 下文档访问异步化：Access 层收口解析与加载 | 已采纳（已落地） | `shared/core/`（新增 access.ts、26 处 findNode）、`host.ts`、双侧 `sync-guarantee.ts`、`figma/ops.ts`、`vite-plugin-manifest.ts` | 2026-09-19 |
 
 ## 依赖关系
 
@@ -34,6 +36,8 @@
 0007 (回读回收)      ── 把 0004 的回收面补到创建路径；覆盖面口径取自 0003
 0008 (归档阶段)      ── 独立于代码层；「能被机器守的约束不靠文档纪律」取自 0005
 0009 (依赖单向)      ── 独立于代码层；「同一事实不手写多份」与 0008 同源，都取自 0005
+0010 (异步优先)      ── 契约纪律，不改管线；「能被机器守的不靠文档纪律」取自 0005，可移植边界取自 0009
+0011 (Access 层)     ── 0010 在 dynamic-page 下的落地；解析/加载收口，0001/0004 管线保持同步
 ```
 
 ## 汇总

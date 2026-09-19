@@ -70,12 +70,31 @@ type NodeTypingsGap = 'absolutePosition' | 'ungroup';
  */
 type JsDesignHostTypingsGap = 'ungroup';
 
+/**
+ * dynamic-page 系缺口(0011):`getNodeByIdAsync` / `loadAllPagesAsync` /
+ * `setCurrentPageAsync` / `getLocal*StylesAsync` 是 Figma 对 dynamic-page 的替代
+ * 符号 —— jsDesign 没有 dynamic-page,typings 里也没有。契约里声明为可选,
+ * Access 层按运行时探测回退到同步实现。若未来 jsDesign typings 收录了任一符号,
+ * 下面的反向断言会编译失败,提醒删掉对应回退分支。
+ */
+type JsDesignAsyncGap =
+  | 'getNodeByIdAsync'
+  | 'loadAllPagesAsync'
+  | 'setCurrentPageAsync'
+  | 'getLocalPaintStylesAsync'
+  | 'getLocalTextStylesAsync'
+  | 'getLocalEffectStylesAsync'
+  | 'getLocalGridStylesAsync';
+
 export type HostContractCheck = ExpectNever<
-  Missing<Exclude<keyof DesignHost, JsDesignHostTypingsGap>, PluginAPI>
+  Missing<
+    Exclude<keyof DesignHost, JsDesignHostTypingsGap | JsDesignAsyncGap>,
+    PluginAPI
+  >
 >;
 /** 反向:登记为缺口的东西必须真的不在 typings 里(登记不诚实也会报错) */
 export type HostGapCheck = ExpectNever<
-  Declared<JsDesignHostTypingsGap, PluginAPI>
+  Declared<JsDesignHostTypingsGap | JsDesignAsyncGap, PluginAPI>
 >;
 export type PageContractCheck = ExpectNever<
   Missing<keyof PageSkeleton, PluginAPI['currentPage']>

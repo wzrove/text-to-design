@@ -4,9 +4,9 @@ import type {
   RawExportFile,
   SerializedNode,
 } from '../schemas';
+import { listStylesAsync, resolveNodes } from './access';
 import type { DesignHost } from './host';
 import { serializeNode } from './serialize';
-import { findNode } from './utils';
 
 export async function exportNodes(
   host: DesignHost,
@@ -18,7 +18,7 @@ export async function exportNodes(
 ): Promise<{ exports: Record<string, RawExportFile> }> {
   const format = params.format ?? 'PNG';
   const scale = params.scale ?? 1;
-  const nodes = findNode(host, params.ids);
+  const nodes = await resolveNodes(host, params.ids);
   if (nodes.length === 0) {
     throw new Error('没有找到要导出的节点');
   }
@@ -54,7 +54,7 @@ export async function fillImageNode(
     throw new Error('无效的图片字节数据');
   }
   const image = host.createImage(params.bytes);
-  const nodes = findNode(host, params.ids);
+  const nodes = await resolveNodes(host, params.ids);
   if (nodes.length === 0) {
     throw new Error('没有找到要填充图片的节点');
   }
@@ -88,24 +88,18 @@ export async function listFonts(host: DesignHost): Promise<ListFontsResult> {
   return { families, fonts: detail, count: families.length };
 }
 
-/** 本地样式枚举:两平台 API 同构(PAINT/TEXT/EFFECT/GRID),getter 缺失时跳过 */
-export function listStyles(host: DesignHost): ListStylesResult {
-  const getters = [
-    host.getLocalPaintStyles,
-    host.getLocalTextStyles,
-    host.getLocalEffectStyles,
-    host.getLocalGridStyles,
-  ] as const;
+/**
+ * 本地样式枚举:两平台 API 同构(PAINT/TEXT/EFFECT/GRID),getter 缺失时跳过。
+ * dynamic-page 下同步 getter 会抛,故走 Access 层的异步入口(0011)。
+ */
+export async function listStyles(host: DesignHost): Promise<ListStylesResult> {
   const styles: ListStylesResult['styles'] = [];
-  for (const getter of getters) {
-    if (typeof getter !== 'function') continue;
-    for (const s of getter.call(host) ?? []) {
-      styles.push({
-        id: s.id,
-        name: s.name,
-        type: s.type as ListStylesResult['styles'][number]['type'],
-      });
-    }
+  for (const s of await listStylesAsync(host)) {
+    styles.push({
+      id: s.id,
+      name: s.name,
+      type: s.type as ListStylesResult['styles'][number]['type'],
+    });
   }
   return { styles, count: styles.length };
 }

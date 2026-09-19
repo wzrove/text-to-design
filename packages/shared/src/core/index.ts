@@ -1,3 +1,11 @@
+export {
+  ensurePagesLoaded,
+  listStylesAsync,
+  resolveMainComponent,
+  resolveNodes,
+  resolveNodesMap,
+  resolveOne,
+} from './access';
 export { default as buildNode } from './buildNode';
 export { hostCapabilityState } from './capabilities';
 export {
@@ -58,7 +66,6 @@ export { updateSelection } from './update';
 export {
   type CollectTargetsOptions,
   collectTargets,
-  findNode,
   loadFont,
   MIN_RESIZE_SIZE,
 } from './utils';

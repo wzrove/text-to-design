@@ -1,6 +1,7 @@
 import { CAPABILITY_OF_GATED_PROP } from '../dicts/capability';
 import type { PropMethod, SerializedNode, UpdateNodeProps } from '../schemas';
 import { PROP_METHOD_FIELDS } from '../schemas';
+import { resolveNodes } from './access';
 import { isGatedPropUnsupported } from './capabilities';
 import type { DesignHost, NodeSkeleton } from './host';
 import {
@@ -19,7 +20,7 @@ import { emptyOutcome, type WriteOutcome } from './props/types';
 import { UPDATE_WRITERS } from './props/writers';
 import type { RuntimeContext } from './runtime';
 import { serializeNode } from './serialize';
-import { collectTargets, findNode, fontNotResolved } from './utils';
+import { collectTargets, fontNotResolved } from './utils';
 
 async function applyProps(
   host: DesignHost,
@@ -85,7 +86,7 @@ export async function updateSelection(
   }
   let base: readonly NodeSkeleton[];
   if (params.ids != null && params.ids.length > 0) {
-    base = findNode(host, params.ids);
+    base = await resolveNodes(host, params.ids);
   } else {
     base = host.currentPage.selection;
   }

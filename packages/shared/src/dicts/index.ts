@@ -10,4 +10,5 @@ export * from './log';
 export * from './node-type';
 export * from './platform';
 export * from './prop-applicability';
+export * from './search-scope';
 export * from './unapplied-prop';

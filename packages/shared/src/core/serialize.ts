@@ -331,8 +331,16 @@ export function serializeNode(
   if ('variantProperties' in node && node.variantProperties != null) {
     base.variantProperties = { ...node.variantProperties };
   }
-  if (node.type === 'INSTANCE' && node.mainComponent != null) {
-    base.mainComponentId = node.mainComponent.id;
+  // dynamic-page 下读 mainComponent 会抛(`Cannot call with documentAccess:
+  // dynamic-page`):这字段是摘要性质,取不到就省略,不能让整份序列化失败。
+  // 需要主组件 id 的逻辑走 Access 层的 resolveMainComponent(0011)。
+  if (node.type === 'INSTANCE') {
+    try {
+      const main = node.mainComponent;
+      if (main != null) base.mainComponentId = main.id;
+    } catch {
+      // 平台禁止同步访问:跳过该字段
+    }
   }
   if ('fillStyleId' in node && node.fillStyleId)
     base.fillStyleId = node.fillStyleId;

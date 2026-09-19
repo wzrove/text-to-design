@@ -101,6 +101,12 @@ export interface NodeSkeleton extends ContainerSkeleton {
 
   children?: readonly NodeSkeleton[];
   mainComponent?: NodeSkeleton | null;
+  /**
+   * 主组件的**异步**入口。dynamic-page 下读 `mainComponent` 直接抛
+   * (`Cannot call with documentAccess: dynamic-page`),必须走本方法(见 0011)。
+   * jsDesign typings 无此符号(已登记为平台超集缺口),由 Access 层回退到同步字段。
+   */
+  getMainComponentAsync?(): Promise<NodeSkeleton | null>;
   variantProperties?: Record<string, string>;
   variantGroupProperties?: Record<string, { values: readonly string[] }>;
 
@@ -132,6 +138,13 @@ export interface NodeSkeleton extends ContainerSkeleton {
   removeOverrides?(): void;
 }
 
+/** 本地样式摘要:两平台 getter 的同构返回值(listStyles 只回这三个字段) */
+export interface StyleSummary {
+  id: string;
+  name: string;
+  type: string;
+}
+
 /** 可容纳子节点的对象:页面 + 容器型节点共享 */
 export interface ContainerSkeleton {
   appendChild(child: NodeSkeleton): void;
@@ -154,7 +167,15 @@ export interface PageSkeleton extends ContainerSkeleton {
   }): NodeSkeleton[];
 }
 
-/** 平台全局(jsDesign.* / figma.*)的窄化接口 */
+/**
+ * 平台全局(jsDesign.* / figma.*)的窄化接口。
+ *
+ * 契约纪律(0010):**新增/变更成员一律异步优先** —— 签名声明 `Promise<...>`。
+ * 同步只保留给「两平台 typings 都只有同步变体 + 纯内存」的成员(如 createFrame /
+ * createImage / appendChild)。理由:底层 Plugin API 的异步面在扩张且两平台不对称
+ * (figma 1.137 有 97 处 Promise,jsDesign 1.0.12 只有 20 处;getMainComponentAsync /
+ * loadAllPagesAsync 等仅 figma 有),同步签名一旦落成,后面接异步能力就要改一遍全链路签名。
+ */
 export interface DesignHost {
   createFrame(): NodeSkeleton;
   createRectangle(): NodeSkeleton;
@@ -169,6 +190,13 @@ export interface DesignHost {
   createImage(bytes: Uint8Array): { hash: string };
 
   readonly currentPage: PageSkeleton;
+  /**
+   * 文档根:页面枚举的唯一入口(0011 批次 5)。dynamic-page 下读各页 children
+   * 前必须先 `loadAllPagesAsync`(见 ensurePagesLoaded 的门控);枚举本身
+   * (root.children)两平台都是同步的轻量元数据。jsDesign 无 dynamic-page,
+   * 文档常驻,直接遍历即可。
+   */
+  readonly root: { readonly children: readonly PageSkeleton[] };
   readonly viewport: {
     center: { x: number; y: number };
     scrollAndZoomIntoView(nodes: readonly NodeSkeleton[]): void;
@@ -208,21 +236,34 @@ export interface DesignHost {
    */
   ungroup?(node: NodeSkeleton): readonly NodeSkeleton[];
 
+  /**
+   * 同步按 id 解析。**dynamic-page 下无条件抛异常**(与页面是否已加载无关),
+   * 仅 jsDesign / legacy 模式可用;存在 `getNodeByIdAsync` 时 Access 层一律走异步。
+   */
   getNodeById(id: string): NodeSkeleton | null;
+  /** dynamic-page 下唯一的按 id 解析入口(0011);jsDesign 无此符号,登记为缺口 */
+  getNodeByIdAsync?(id: string): Promise<NodeSkeleton | null>;
+  /** 全量加载文档页(dynamic-page 下跨页遍历 / documentchange 的前置) */
+  loadAllPagesAsync?(): Promise<void>;
+  /** dynamic-page 下 `currentPage` 变为只读,切页只能走异步 */
+  setCurrentPageAsync?(page: PageSkeleton): Promise<void>;
   loadFontAsync(font: shared.FontName): Promise<void>;
   listAvailableFontsAsync(): Promise<{ fontName: shared.FontName }[]>;
 
   /** 插件外壳:UI 生命周期 / 事件订阅 / 消息收发(两平台同构) */
   showUI(html: string, options: { width?: number; height?: number }): void;
-  /** 本地样式枚举(平台超集:四 getter 均为两平台 PluginAPI 原生符号) */
-  getLocalPaintStyles?(): readonly { id: string; name: string; type: string }[];
-  getLocalTextStyles?(): readonly { id: string; name: string; type: string }[];
-  getLocalEffectStyles?(): readonly {
-    id: string;
-    name: string;
-    type: string;
-  }[];
-  getLocalGridStyles?(): readonly { id: string; name: string; type: string }[];
+  /**
+   * 本地样式枚举:同步 getter 为两平台 PluginAPI 原生符号,`*Async` 为
+   * dynamic-page 下的替代入口(Figma 有、jsDesign 无,登记为缺口)。
+   */
+  getLocalPaintStyles?(): readonly StyleSummary[];
+  getLocalTextStyles?(): readonly StyleSummary[];
+  getLocalEffectStyles?(): readonly StyleSummary[];
+  getLocalGridStyles?(): readonly StyleSummary[];
+  getLocalPaintStylesAsync?(): Promise<readonly StyleSummary[]>;
+  getLocalTextStylesAsync?(): Promise<readonly StyleSummary[]>;
+  getLocalEffectStylesAsync?(): Promise<readonly StyleSummary[]>;
+  getLocalGridStylesAsync?(): Promise<readonly StyleSummary[]>;
   on(event: string, handler: (...args: unknown[]) => void): void;
   readonly ui: {
     postMessage(message: unknown): void;
@@ -243,7 +284,11 @@ export interface PlatformOp {
    * 避免 LLM 传错形状时在实现深层炸出难懂的错。
    */
   inputSchema?: z.ZodType;
-  run(host: DesignHost, params: unknown): Promise<unknown> | unknown;
+  /**
+   * 一律异步(0010):声明为 `Promise<unknown>`,实现方即使内部全同步也标 `async`。
+   * 分发的唯一调用点已 `await`(plugin.ts),收紧类型不改变行为,只把契约钉死。
+   */
+  run(host: DesignHost, params: unknown): Promise<unknown>;
 }
 
 /** 平台元数据:adapter 所在平台声明的能力与特有操作(registerPlugin 第三参注入) */

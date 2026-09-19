@@ -1,4 +1,8 @@
-import type { DesignHost, PlatformOp } from 'text-to-design-shared';
+import {
+  resolveNodes,
+  type DesignHost,
+  type PlatformOp,
+} from 'text-to-design-shared';
 import { z } from 'zod';
 
 /**
@@ -51,10 +55,10 @@ type StyleableNode = {
   effectStyleId?: string;
 };
 
-function createVariables(
+async function createVariables(
   _host: DesignHost,
   params: unknown,
-): { collectionId: string; variables: { id: string; name: string }[] } {
+): Promise<{ collectionId: string; variables: { id: string; name: string }[] }> {
   const p = params as {
     collectionName?: string;
     variables: {
@@ -67,9 +71,10 @@ function createVariables(
   if (!p.variables?.length) throw new Error('变量列表为空');
   const collectionName = p.collectionName ?? 'Variables';
   // 同名集合复用:否则每次调用都新建一个重名集合
-  const existing = figma.variables
-    .getLocalVariableCollections()
-    .find((c) => c.name === collectionName);
+  // dynamic-page 下 variables 的同步 getter 全部抛异常,一律走 *Async(0011)
+  const existing = (
+    await figma.variables.getLocalVariableCollectionsAsync()
+  ).find((c) => c.name === collectionName);
   const collection =
     existing ?? figma.variables.createVariableCollection(collectionName);
   const modeId = collection.defaultModeId;
@@ -78,15 +83,17 @@ function createVariables(
     for (const v of p.variables) {
       // 同名同类型变量就地更新值(幂等补值),避免重复建变量
       const same = existing
-        ? figma.variables
-            .getLocalVariables(v.type)
-            .find(
+        ? (await figma.variables.getLocalVariablesAsync(v.type)).find(
               (x) =>
                 x.name === v.name && x.variableCollectionId === collection.id,
             )
         : undefined;
       const variable =
-        same ?? figma.variables.createVariable(v.name, collection.id, v.type);
+        same ??
+        // dynamic-page 增量模式下 createVariable 拒收 collection id
+        // ("Cannot call ... with a collection id in incremental mode"),
+        // 必须传 collection 节点本身;legacy 模式两种都收,统一传节点(指纹 b300df0ec236)
+        figma.variables.createVariable(v.name, collection, v.type);
       // 必须走 setValueForMode:直接写 valuesByMode 在插件运行时是空操作,
       // 变量会停在新建默认值(COLOR 默认纯白),绑定后整片渲染成白色
       if (v.value !== undefined)
@@ -105,20 +112,18 @@ function createVariables(
  * 「fills and strokes variable bindings must be set on paints directly」 */
 const PAINT_BOUND_FIELDS = new Set(['fills', 'strokes', 'backgrounds']);
 
-function applyVariables(
+async function applyVariables(
   host: DesignHost,
   params: unknown,
-): { applied: string[]; failed: string[] } {
+): Promise<{ applied: string[]; failed: string[] }> {
   const p = params as {
     nodeIds: string[];
     boundProperty: string;
     variableId: string;
   };
-  const variable = figma.variables.getVariableById(p.variableId);
+  const variable = await figma.variables.getVariableByIdAsync(p.variableId);
   if (variable == null) throw new Error(`没有找到变量: ${p.variableId}`);
-  const nodes = p.nodeIds
-    .map((id) => host.getNodeById(id))
-    .filter((n): n is NonNullable<typeof n> => n != null);
+  const nodes = await resolveNodes(host, p.nodeIds);
   if (nodes.length === 0) throw new Error('没有找到要绑定变量的节点');
   const isPaintField = PAINT_BOUND_FIELDS.has(p.boundProperty);
   const paintField = p.boundProperty as 'fills' | 'strokes' | 'backgrounds';
@@ -172,26 +177,25 @@ function findLocalStyleId(
  * 按名应用本地样式。注意:Plugin API 无法按名检索团队库样式
  * (库样式需 importStyleByKeyAsync 走 key),故此处只查本地样式。
  */
-function applyStyleByName(
+async function applyStyleByName(
   host: DesignHost,
   params: unknown,
-): { applied: string[] } {
+): Promise<{ applied: string[] }> {
   const p = params as {
     nodeIds: string[];
     kind: 'fill' | 'stroke' | 'text' | 'effect';
     styleName: string;
   };
+  // dynamic-page 下同步 getter 会抛,一律走 *Async(0011)
   const localStyles =
     p.kind === 'fill' || p.kind === 'stroke'
-      ? figma.getLocalPaintStyles()
+      ? await figma.getLocalPaintStylesAsync()
       : p.kind === 'text'
-        ? figma.getLocalTextStyles()
-        : figma.getLocalEffectStyles();
+        ? await figma.getLocalTextStylesAsync()
+        : await figma.getLocalEffectStylesAsync();
   const styleId = findLocalStyleId(localStyles, p.styleName);
   if (!styleId) throw new Error(`未找到本地样式: ${p.styleName}`);
-  const nodes = p.nodeIds
-    .map((id) => host.getNodeById(id))
-    .filter((n): n is NonNullable<typeof n> => n != null);
+  const nodes = await resolveNodes(host, p.nodeIds);
   if (nodes.length === 0) throw new Error('没有找到要应用样式的节点');
   const styleable = nodes as unknown as StyleableNode[];
   for (const n of styleable) {
@@ -203,20 +207,19 @@ function applyStyleByName(
   return { applied: nodes.map((n) => n.id) };
 }
 
-function setComponentProperties(
+async function setComponentProperties(
   host: DesignHost,
   params: unknown,
-): { updated: string[] } {
+): Promise<{ updated: string[] }> {
   const p = params as {
     nodeIds: string[];
     properties: Record<string, { type: string; value: boolean | string }>;
   };
   if (!p.properties || Object.keys(p.properties).length === 0)
     throw new Error('属性列表为空');
-  const nodes = p.nodeIds
-    .map((id) => host.getNodeById(id))
-    .filter((n): n is NonNullable<typeof n> => n != null)
-    .filter((n) => n.type === 'INSTANCE');
+  const nodes = (await resolveNodes(host, p.nodeIds)).filter(
+    (n) => n.type === 'INSTANCE',
+  );
   if (nodes.length === 0) throw new Error('没有找到要设置属性的实例节点');
   const insts = nodes as unknown as {
     setProperties(properties: Record<string, unknown>): void;

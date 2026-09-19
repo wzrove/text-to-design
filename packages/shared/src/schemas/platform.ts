@@ -13,9 +13,9 @@ export type PluginPlatform = z.infer<typeof pluginPlatformSchema>;
  * 超集字段判定也吃这张表 —— 由插件入口 setHostCapabilities 注入,不再是两套事实。
  *
  * 语义边界 —— 只列**调用方能实际用上**的能力面:
- * - 不含 `getMainComponentAsync`:Figma typings 有此 API,但本仓 manifest 走 legacy
- *   documentAccess(core 用同步 mainComponent),core 零调用,列出来只会让调用方
- *   以为有异步通路 —— 能力表与 typings 的事实核对见各插件包的 sync-guarantee.ts。
+ * - 不含 `getMainComponentAsync`:manifest 已走 dynamic-page(决策 0011),core 的
+ *   主组件读取统一走 Access 层的 resolveMainComponent(内部即 getMainComponentAsync),
+ *   但那是 core 的实现细节、不是暴露给调用方的能力面 —— 不进能力表。
  */
 export const hostCapabilitySchema = z.enum(HOST_CAPABILITIES);
 export type HostCapability = z.infer<typeof hostCapabilitySchema>;

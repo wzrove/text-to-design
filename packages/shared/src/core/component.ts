@@ -3,18 +3,18 @@ import type {
   SerializedNode,
   UpdateNodeProps,
 } from '../schemas';
+import { resolveMainComponent, resolveNodes, resolveNodesMap } from './access';
 import { hostCapabilityState } from './capabilities';
 import { type DesignHost, MIXED, type NodeSkeleton } from './host';
 import type { RuntimeContext } from './runtime';
 import { serializeNode } from './serialize';
 import { updateSelection } from './update';
-import { findNode } from './utils';
 
-export function createComponentNodes(
+export async function createComponentNodes(
   host: DesignHost,
   params: { ids: string[]; name?: string },
-): { created: SerializedNode } {
-  const nodes = findNode(host, params.ids);
+): Promise<{ created: SerializedNode }> {
+  const nodes = await resolveNodes(host, params.ids);
   if (nodes.length === 0) {
     throw new Error('没有找到要固化为组件的节点');
   }
@@ -27,20 +27,20 @@ export function createComponentNodes(
   return { created: serializeNode(component) };
 }
 
-export function createInstances(
+export async function createInstances(
   host: DesignHost,
   ids: string[],
-): { created: SerializedNode[] } {
-  const nodes = findNode(host, ids);
-  const components = nodes.filter((n) => n.type === 'COMPONENT');
+): Promise<{ created: SerializedNode[] }> {
+  const byId = await resolveNodesMap(host, ids);
+  const components = [...byId.values()].filter((n) => n.type === 'COMPONENT');
   if (components.length === 0) {
     // 逐 id 点名:没找到的与类型不符的分开说,别让调用方猜是哪个 id 为什么不行
     const details = ids
       .map((id) => {
-        const found = findNode(host, [id]);
-        return found.length === 0
+        const found = byId.get(id);
+        return found == null
           ? `${id}:未找到(可能已删除或不在当前页)`
-          : `${id}:类型为 ${found[0].type}(可实例化的只有 COMPONENT)`;
+          : `${id}:类型为 ${found.type}(可实例化的只有 COMPONENT)`;
       })
       .join(';');
     throw new Error(`没有找到可实例化的组件节点。${details}`);
@@ -59,17 +59,17 @@ export function createInstances(
   return { created: created.map((n) => serializeNode(n)) };
 }
 
-export function swapComponents(
+export async function swapComponents(
   host: DesignHost,
   params: { ids: string[]; componentId: string },
-): { swapped: SerializedNode[] } {
-  const component = findNode(host, [params.componentId]).find(
+): Promise<{ swapped: SerializedNode[] }> {
+  const component = (await resolveNodes(host, [params.componentId])).find(
     (n) => n.type === 'COMPONENT',
   );
   if (!component) {
     throw new Error(`没有找到组件: ${params.componentId}`);
   }
-  const instances = findNode(host, params.ids).filter(
+  const instances = (await resolveNodes(host, params.ids)).filter(
     (n) => n.type === 'INSTANCE',
   );
   if (instances.length === 0) {
@@ -81,11 +81,11 @@ export function swapComponents(
   return { swapped: instances.map((n) => serializeNode(n)) };
 }
 
-export function setInstanceProperties(
+export async function setInstanceProperties(
   host: DesignHost,
   params: { ids: string[]; properties: Record<string, string> },
-): { updated: SerializedNode[] } {
-  const instances = findNode(host, params.ids).filter(
+): Promise<{ updated: SerializedNode[] }> {
+  const instances = (await resolveNodes(host, params.ids)).filter(
     (n) => n.type === 'INSTANCE',
   );
   if (instances.length === 0) {
@@ -93,7 +93,8 @@ export function setInstanceProperties(
   }
   // 运行时校验:属性名必须属于实例的合法变体属性
   for (const inst of instances) {
-    const compSet = inst.mainComponent?.parent;
+    // dynamic-page 下 inst.mainComponent 直接抛,必须走异步入口(0011)
+    const compSet = (await resolveMainComponent(inst))?.parent;
     const variantProps =
       compSet != null && compSet.type === 'COMPONENT_SET'
         ? compSet.variantGroupProperties
@@ -129,12 +130,12 @@ export async function importComponentNodes(
   return { created: serializeNode(component) };
 }
 
-export function combineAsVariantsNodes(
+export async function combineAsVariantsNodes(
   host: DesignHost,
   ctx: RuntimeContext,
   params: { ids: string[]; name?: string },
-): { created: SerializedNode } {
-  const components = findNode(host, params.ids).filter(
+): Promise<{ created: SerializedNode }> {
+  const components = (await resolveNodes(host, params.ids)).filter(
     (n) => n.type === 'COMPONENT',
   );
   if (components.length < 2) {
@@ -254,13 +255,9 @@ export function combineAsVariantsNodes(
 }
 
 /** mainComponent 可安全触碰(读属性不崩)才算活着;僵尸引用会让引擎解绑时内部崩溃 */
-function mainComponentAlive(n: NodeSkeleton): boolean {
-  try {
-    const main = n.mainComponent;
-    return main != null && typeof main.id === 'string';
-  } catch {
-    return false;
-  }
+async function mainComponentAlive(n: NodeSkeleton): Promise<boolean> {
+  const main = await resolveMainComponent(n);
+  return main != null && typeof main.id === 'string';
 }
 
 /**
@@ -310,21 +307,23 @@ function detachWithRecovery(inst: NodeSkeleton): NodeSkeleton {
 }
 
 // detachWithRecovery 不需要 host:克隆先插回原父级再解绑
-export function detachInstanceNodes(
+export async function detachInstanceNodes(
   host: DesignHost,
   ids: string[],
-): {
+): Promise<{
   created: SerializedNode[];
   failed: { id: string; message: string }[];
-} {
-  const instances = findNode(host, ids).filter((n) => n.type === 'INSTANCE');
+}> {
+  const instances = (await resolveNodes(host, ids)).filter(
+    (n) => n.type === 'INSTANCE',
+  );
   if (instances.length === 0) {
     throw new Error('没有找到要解绑的实例节点');
   }
   const detached: NodeSkeleton[] = [];
   const failed: { id: string; message: string }[] = [];
   for (const inst of instances) {
-    if (!mainComponentAlive(inst)) {
+    if (!(await mainComponentAlive(inst))) {
       failed.push({
         id: inst.id,
         message:
@@ -442,16 +441,20 @@ function captureVisibleProps(node: NodeSkeleton): UpdateNodeProps | undefined {
   return Object.keys(props).length > 0 ? (props as UpdateNodeProps) : undefined;
 }
 
-function captureOverrideSnapshot(
+async function captureOverrideSnapshot(
   host: DesignHost,
   sourceId: string,
   includeVisibleProps: boolean,
-): OverrideSnapshot {
-  const source = findNode(host, [sourceId]).find((n) => n.type === 'INSTANCE');
+): Promise<OverrideSnapshot> {
+  const source = (await resolveNodes(host, [sourceId])).find(
+    (n) => n.type === 'INSTANCE',
+  );
   if (!source) {
     throw new Error(`没有找到源实例: ${sourceId}`);
   }
-  if (!source.mainComponent) {
+  // dynamic-page 下 mainComponent 只能异步取(0011)
+  const main = await resolveMainComponent(source);
+  if (main == null) {
     throw new Error(
       `源实例 ${sourceId} 的 mainComponent 已失效,无法复制覆盖。建议先 jsd_manage_nodes op=repair 清理后重试`,
     );
@@ -459,7 +462,7 @@ function captureOverrideSnapshot(
   const snapshot: OverrideSnapshot = {
     sourceId,
     sourceName: source.name,
-    mainComponentId: source.mainComponent.id,
+    mainComponentId: main.id,
     ...(source.variantProperties != null &&
     Object.keys(source.variantProperties).length > 0
       ? { variantProperties: { ...source.variantProperties } }
@@ -487,11 +490,17 @@ async function applyOverrideSnapshot(
   source: OverrideSummary;
 }> {
   const applied: AppliedOverride[] = [];
+  // 批量预解析(0011):循环内不再逐个 await,避免 N+1
+  const targets = await resolveNodesMap(host, ids);
+  const mainId = snapshot.mainComponentId;
+  const mains =
+    swapToSource && mainId != null
+      ? await resolveNodesMap(host, [mainId])
+      : new Map<string, NodeSkeleton>();
   for (const targetId of ids) {
     try {
-      const target = findNode(host, [targetId]).find(
-        (n) => n.type === 'INSTANCE',
-      );
+      const hit = targets.get(targetId);
+      const target = hit != null && hit.type === 'INSTANCE' ? hit : undefined;
       if (!target) {
         applied.push({
           instanceId: targetId,
@@ -501,10 +510,9 @@ async function applyOverrideSnapshot(
         });
         continue;
       }
-      if (swapToSource && snapshot.mainComponentId != null) {
-        const main = findNode(host, [snapshot.mainComponentId]).find(
-          (n) => n.type === 'COMPONENT',
-        );
+      if (swapToSource && mainId != null) {
+        const hit = mains.get(mainId);
+        const main = hit != null && hit.type === 'COMPONENT' ? hit : undefined;
         if (!main) {
           applied.push({
             instanceId: targetId,
@@ -581,7 +589,7 @@ export async function syncInstanceOverrides(
   total: number;
   source: OverrideSummary;
 }> {
-  const snapshot = captureOverrideSnapshot(
+  const snapshot = await captureOverrideSnapshot(
     host,
     params.sourceId,
     params.includeVisibleProps !== false,
@@ -596,15 +604,15 @@ export async function syncInstanceOverrides(
 }
 
 /** 两段式第一段:复制源实例覆盖为快照,写入插件侧缓存,返回摘要 + snapshotId(=sourceId) */
-export function copyInstanceOverrides(
+export async function copyInstanceOverrides(
   host: DesignHost,
   params: { sourceId: string; includeVisibleProps?: boolean },
-): {
+): Promise<{
   snapshotId: string;
   sourceName: string;
   captured: OverrideSummary;
-} {
-  const snapshot = captureOverrideSnapshot(
+}> {
+  const snapshot = await captureOverrideSnapshot(
     host,
     params.sourceId,
     params.includeVisibleProps !== false,

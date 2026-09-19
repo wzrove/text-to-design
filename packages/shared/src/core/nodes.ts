@@ -5,6 +5,7 @@ import type {
   PageStructureResult,
   SerializedNode,
 } from '../schemas';
+import { ensurePagesLoaded, resolveNodes } from './access';
 import type {
   ContainerSkeleton,
   DesignHost,
@@ -12,7 +13,7 @@ import type {
   PageSkeleton,
 } from './host';
 import { serializeNode, trySerialize } from './serialize';
-import { ensureLayoutMode, findNode, type LayoutMode } from './utils';
+import { ensureLayoutMode, type LayoutMode } from './utils';
 
 /**
  * 节点在页面坐标系里的原点(绝对坐标)。
@@ -220,36 +221,60 @@ function insertChildAt(
   }
 }
 
-export function findNodes(host: DesignHost, params: FindParams): FindResult {
-  const page = host.currentPage;
+export async function findNodes(
+  host: DesignHost,
+  params: FindParams,
+): Promise<FindResult> {
   let nodes: NodeSkeleton[];
+  // document 范围是否真的执行了全量加载(0011 批次 5:成本标注的事实来源)
+  let pagesLoaded = false;
 
   if (params.ids != null && params.ids.length > 0) {
-    nodes = findNode(host, params.ids);
-  } else if (params.type != null) {
-    // 类型名由调用方给(读路径全表):本仓建模的 14 类 + Figma 独有只读类型都能筛,
-    // 未知类型名由引擎返回空集,不必在此拦
-    nodes = page.findAllWithCriteria({
-      types: [params.type as ObservedNodeType],
-    });
+    nodes = await resolveNodes(host, params.ids);
   } else {
-    nodes = page.findAll();
+    // 范围门控(0011 批次 5):document 范围先全量加载再跨页遍历;
+    // dynamic-page 下不加载就读其他页的 children 会拿到空集。门控与
+    // 幂等都在 ensurePagesLoaded 一处,jsDesign(无 dynamic-page)直接短路。
+    if (params.scope === 'document') {
+      pagesLoaded = await ensurePagesLoaded(host);
+    }
+    const pages =
+      params.scope === 'document' ? host.root.children : [host.currentPage];
+    const collect = (page: PageSkeleton): NodeSkeleton[] => {
+      if (params.type != null) {
+        // 类型名由调用方给(读路径全表):本仓建模的 14 类 + Figma 独有只读类型都能筛,
+        // 未知类型名由引擎返回空集,不必在此拦
+        return page.findAllWithCriteria({
+          types: [params.type as ObservedNodeType],
+        });
+      }
+      return page.findAll();
+    };
+    nodes = pages.flatMap(collect);
   }
+
   const name = params.name;
   if (name != null) {
     nodes = nodes.filter((n) => n.name.includes(name));
   }
+  const scoped = params.scope === 'document' && params.ids == null;
   return {
     nodes: nodes.slice(0, 100).map((n) => serializeNode(n, params.depth ?? 1)),
     total: nodes.length,
+    ...(scoped ? { scope: 'document' as const } : {}),
+    ...(scoped && pagesLoaded
+      ? {
+          note: '本次为全文档查找:已执行一次全量页加载(dynamic-page 下有一次性成本),再次调用不再重复加载',
+        }
+      : {}),
   };
 }
 
-export function setSelection(
+export async function setSelection(
   host: DesignHost,
   ids: string[],
-): { selected: string[] } {
-  const nodes = findNode(host, ids);
+): Promise<{ selected: string[] }> {
+  const nodes = await resolveNodes(host, ids);
   if (nodes.length === 0) {
     throw new Error('没有找到要选中的节点');
   }
@@ -259,8 +284,17 @@ export function setSelection(
   return { selected: nodes.map((n) => n.id) };
 }
 
-/** 页面结构总览:当前页顶层节点的轻量摘要(serializeNode depth=0,不递归子节点) */
-export function getPageStructure(host: DesignHost): PageStructureResult {
+/**
+ * 页面结构总览:当前页顶层节点的轻量摘要(serializeNode depth=0,不递归子节点)。
+ *
+ * 0011 批次 5:读取前显式门控 `loadAllPagesAsync`(幂等,重复调用不重复加载),
+ * 附带文档级页面总览(pages)—— dynamic-page 下这是唯一安全的跨页读法;
+ * 真正发生了全量加载时在 note 里标注成本,jsDesign 恒无 note(文档常驻)。
+ */
+export async function getPageStructure(
+  host: DesignHost,
+): Promise<PageStructureResult> {
+  const pagesLoaded = await ensurePagesLoaded(host);
   const children = host.currentPage.children ?? [];
   const nodes: PageStructureResult['nodes'] = [];
   // 下标 = 绘制顺序(z):顶层节点没有父级可回查,这里按页面 children 顺序直接给出
@@ -290,18 +324,32 @@ export function getPageStructure(host: DesignHost): PageStructureResult {
       });
     }
   }
-  return { pageName: host.currentPage.name, nodes, count: nodes.length };
+  return {
+    pageName: host.currentPage.name,
+    nodes,
+    count: nodes.length,
+    // 全量加载后各页顶层可安全读取;childCount 用 children.length(轻量,不序列化)
+    pages: host.root.children.map((p) => ({
+      name: p.name,
+      childCount: p.children?.length ?? 0,
+    })),
+    ...(pagesLoaded
+      ? {
+          note: '本次读取前执行了一次全量页加载(dynamic-page 下有一次性成本),再次调用不再重复加载',
+        }
+      : {}),
+  };
 }
 
-export function removeNodes(
+export async function removeNodes(
   host: DesignHost,
   params: { ids?: string[]; matchName?: string },
-): {
+): Promise<{
   removed: string[];
-} {
+}> {
   let nodes: NodeSkeleton[];
   if (params.ids != null && params.ids.length > 0) {
-    nodes = findNode(host, params.ids);
+    nodes = await resolveNodes(host, params.ids);
   } else {
     nodes = [...host.currentPage.selection];
   }
@@ -318,11 +366,11 @@ export function removeNodes(
   return { removed };
 }
 
-export function cloneNodes(
+export async function cloneNodes(
   host: DesignHost,
   ids: string[],
-): { created: SerializedNode[] } {
-  const nodes = findNode(host, ids);
+): Promise<{ created: SerializedNode[] }> {
+  const nodes = await resolveNodes(host, ids);
   if (nodes.length === 0) {
     throw new Error(
       `没有找到要复制的节点(请求 ids: ${ids.length ? JSON.stringify(ids) : '无'});请先用 jsd_find 确认节点存在且 id 有效`,
@@ -362,7 +410,7 @@ function ungroupNode(host: DesignHost, node: NodeSkeleton): boolean {
   return false;
 }
 
-export function groupNodes(
+export async function groupNodes(
   host: DesignHost,
   params: {
     ids: string[];
@@ -379,9 +427,9 @@ export function groupNodes(
     primaryAxisAlignItems?: 'MIN' | 'MAX' | 'CENTER' | 'SPACE_BETWEEN';
     counterAxisAlignItems?: 'MIN' | 'MAX' | 'CENTER';
   },
-): { created: SerializedNode } | { ungrouped: string[] } {
+): Promise<{ created: SerializedNode } | { ungrouped: string[] }> {
   if (params.ungroup) {
-    const nodes = findNode(host, params.ids);
+    const nodes = await resolveNodes(host, params.ids);
     const grouped = nodes.filter(
       (n) => n.type === 'GROUP' || n.type === 'FRAME',
     );
@@ -409,7 +457,7 @@ export function groupNodes(
     }
     return { ungrouped };
   }
-  const nodes = findNode(host, params.ids);
+  const nodes = await resolveNodes(host, params.ids);
   if (nodes.length < 2) {
     throw new Error('分组至少需要 2 个节点');
   }
@@ -573,11 +621,11 @@ export function groupNodes(
   return { created: serializeNode(frame) };
 }
 
-export function flattenNodes(
+export async function flattenNodes(
   host: DesignHost,
   ids: string[],
-): { created: SerializedNode } {
-  const nodes = findNode(host, ids);
+): Promise<{ created: SerializedNode }> {
+  const nodes = await resolveNodes(host, ids);
   if (nodes.length < 2) {
     throw new Error('flatten 至少需要 2 个节点');
   }
@@ -586,13 +634,13 @@ export function flattenNodes(
   return { created: serializeNode(vector) };
 }
 
-export function outlineStrokeNodes(
+export async function outlineStrokeNodes(
   host: DesignHost,
   ids: string[],
-): {
+): Promise<{
   created: SerializedNode[];
-} {
-  const nodes = findNode(host, ids);
+}> {
+  const nodes = await resolveNodes(host, ids);
   if (nodes.length === 0) {
     throw new Error('没有找到要转描边的节点');
   }
@@ -619,15 +667,15 @@ function canReorderInto(
   return nodes.every((n) => children.some((c) => c.id === n.id));
 }
 
-export function reparentNodes(
+export async function reparentNodes(
   host: DesignHost,
   params: {
     ids: string[];
     parentId?: string;
     index?: number;
   },
-): { moved: SerializedNode[]; updated: SerializedNode[] } {
-  const nodes = findNode(host, params.ids);
+): Promise<{ moved: SerializedNode[]; updated: SerializedNode[] }> {
+  const nodes = await resolveNodes(host, params.ids);
   if (nodes.length === 0) {
     throw new Error('没有找到要移动的节点');
   }
@@ -643,7 +691,7 @@ export function reparentNodes(
   const firstParent = (nodes[0].parent as NodeSkeleton | null) ?? null;
   let parent: NodeSkeleton | PageSkeleton | undefined;
   if (params.parentId != null) {
-    parent = findNode(host, [params.parentId])[0];
+    parent = (await resolveNodes(host, [params.parentId]))[0];
   } else if (selectionHasTarget) {
     parent =
       selection.find((s) => !movingIds.has(s.id)) ??

@@ -1,5 +1,4 @@
 import type { DesignHost, NodeSkeleton } from './host';
-import { trySerialize } from './serialize';
 
 /**
  * 引擎 resize 校验的最小尺寸(实测 0.01,小于该值报
@@ -9,35 +8,6 @@ import { trySerialize } from './serialize';
  * 其他类型低于该值时给可读报错,而不是把引擎断言原样抛给调用方。
  */
 export const MIN_RESIZE_SIZE = 0.01;
-
-export function findNode(host: DesignHost, ids: string[]): NodeSkeleton[] {
-  const nodes: NodeSkeleton[] = [];
-  for (const id of ids) {
-    try {
-      const n = host.getNodeById(id);
-      if (n && isUsable(n)) {
-        nodes.push(n);
-        continue;
-      }
-    } catch {
-      // 失效 id,继续
-    }
-    try {
-      const n = host.currentPage.findOne((x) => x.id === id);
-      if (n && isUsable(n)) nodes.push(n);
-    } catch (e) {
-      console.error(
-        `[core] findOne 失败,跳过 id=${id}: ${e instanceof Error ? e.message : String(e)}`,
-      );
-    }
-  }
-  return nodes;
-}
-
-/** 悬挂节点(底层记录失效,读属性必崩)用 trySerialize 检出并静默剔除 */
-function isUsable(n: NodeSkeleton): boolean {
-  return trySerialize(n, 0) !== null;
-}
 
 export async function loadFont(
   host: DesignHost,

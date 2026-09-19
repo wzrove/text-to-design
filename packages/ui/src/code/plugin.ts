@@ -187,8 +187,10 @@ export function registerPlugin(
         }
         // 属性引擎方法走表驱动(见 isPropMethod),方法名即字段分组,
         // 越界字段由 updateSelection 按同一份 PROP_METHOD_FIELDS 拦截。
+        // 以下 case 的 core 入口全部异步(dynamic-page 文档访问,见决策 0011):
+        // 分发本身已在 async handler 内,await 不改变时序,只把解析点收口到 Access 层。
         case 'find': {
-          const r = findNodes(host, msg.params);
+          const r = await findNodes(host, msg.params);
           send(id, true, r);
           break;
         }
@@ -196,23 +198,23 @@ export function registerPlugin(
           const p = msg.params;
           switch (p.op) {
             case 'select':
-              send(id, true, setSelection(host, p.ids ?? []));
+              send(id, true, await setSelection(host, p.ids ?? []));
               break;
             case 'remove':
               send(
                 id,
                 true,
-                removeNodes(host, { ids: p.ids, matchName: p.matchName }),
+                await removeNodes(host, { ids: p.ids, matchName: p.matchName }),
               );
               break;
             case 'clone':
-              send(id, true, cloneNodes(host, p.ids ?? []));
+              send(id, true, await cloneNodes(host, p.ids ?? []));
               break;
             case 'group':
               send(
                 id,
                 true,
-                groupNodes(host, {
+                await groupNodes(host, {
                   ids: p.ids ?? [],
                   name: p.name,
                   // 布局参数必须原样透传:此前只传 ids/name,导致 layoutMode
@@ -234,20 +236,20 @@ export function registerPlugin(
               send(
                 id,
                 true,
-                groupNodes(host, { ids: p.ids ?? [], ungroup: true }),
+                await groupNodes(host, { ids: p.ids ?? [], ungroup: true }),
               );
               break;
             case 'flatten':
-              send(id, true, flattenNodes(host, p.ids ?? []));
+              send(id, true, await flattenNodes(host, p.ids ?? []));
               break;
             case 'outline_stroke':
-              send(id, true, outlineStrokeNodes(host, p.ids ?? []));
+              send(id, true, await outlineStrokeNodes(host, p.ids ?? []));
               break;
             case 'reparent':
               send(
                 id,
                 true,
-                reparentNodes(host, {
+                await reparentNodes(host, {
                   ids: p.ids ?? [],
                   parentId: p.parentId,
                   index: p.index,
@@ -275,14 +277,17 @@ export function registerPlugin(
               send(
                 id,
                 true,
-                createComponentNodes(host, { ids: p.ids ?? [], name: p.name }),
+                await createComponentNodes(host, {
+                  ids: p.ids ?? [],
+                  name: p.name,
+                }),
               );
               break;
             case 'create_instance':
-              send(id, true, createInstances(host, p.ids ?? []));
+              send(id, true, await createInstances(host, p.ids ?? []));
               break;
             case 'detach_instance':
-              send(id, true, detachInstanceNodes(host, p.ids ?? []));
+              send(id, true, await detachInstanceNodes(host, p.ids ?? []));
               break;
             case 'import_component':
               send(
@@ -298,7 +303,7 @@ export function registerPlugin(
               send(
                 id,
                 true,
-                swapComponents(host, {
+                await swapComponents(host, {
                   ids: p.ids ?? [],
                   componentId: p.componentId ?? '',
                 }),
@@ -308,7 +313,7 @@ export function registerPlugin(
               send(
                 id,
                 true,
-                setInstanceProperties(host, {
+                await setInstanceProperties(host, {
                   ids: p.ids ?? [],
                   properties: p.properties ?? {},
                 }),
@@ -318,7 +323,7 @@ export function registerPlugin(
               send(
                 id,
                 true,
-                combineAsVariantsNodes(host, ctx, {
+                await combineAsVariantsNodes(host, ctx, {
                   ids: p.ids ?? [],
                   name: p.name,
                 }),
@@ -328,7 +333,7 @@ export function registerPlugin(
               send(
                 id,
                 true,
-                copyInstanceOverrides(host, {
+                await copyInstanceOverrides(host, {
                   sourceId: p.sourceId ?? '',
                 }),
               );
@@ -383,11 +388,11 @@ export function registerPlugin(
           break;
         }
         case 'list_styles': {
-          send(id, true, listStyles(host));
+          send(id, true, await listStyles(host));
           break;
         }
         case 'get_page': {
-          send(id, true, getPageStructure(host));
+          send(id, true, await getPageStructure(host));
           break;
         }
         case 'platform_op': {

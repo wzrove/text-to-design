@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { SEARCH_SCOPES } from '../dicts/search-scope';
 import { observedNodeTypeSchema } from './node-type';
 import {
   componentPropertyValueSchema,
@@ -49,6 +50,13 @@ export const getSelectionResultSchema = z.object({
 export const findResultSchema = z.object({
   nodes: z.array(serializedNodeSchema),
   total: z.number(),
+  /** 实际生效的查找范围(document 为显式传入;page 为缺省,一般省略) */
+  scope: z.enum(SEARCH_SCOPES).optional(),
+  /**
+   * 成本标注(0011 批次 5):document 范围首次触发全量加载时点名,
+   * 让调用方知道这次调用比当前页查找贵在哪里。
+   */
+  note: z.string().optional(),
 });
 export const manageNodesResultSchema = z.object({
   selected: z.array(z.string()).optional(),
@@ -155,6 +163,17 @@ export const pageStructureResultSchema = z.object({
     }),
   ),
   count: z.number(),
+  /** 文档级页面总览(0011 批次 5):全量加载后可安全读各页顶层,childCount 为顶层节点数 */
+  pages: z
+    .array(
+      z.object({
+        name: z.string(),
+        childCount: z.number(),
+      }),
+    )
+    .optional(),
+  /** 成本标注:document 范围首次触发全量加载时点名(幂等,此后不再出现) */
+  note: z.string().optional(),
 });
 
 /** 本地样式枚举结果(两平台 API 同构:PAINT/TEXT/EFFECT/GRID) */

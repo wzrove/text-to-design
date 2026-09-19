@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { NODE_TYPES, OBSERVED_NODE_TYPES } from '../dicts/node-type';
+import { SEARCH_SCOPES } from '../dicts/search-scope';
 
 /** Figma 独有的只读类型,单独拼串,免得把 34 类一次糊在描述里 */
 const READ_ONLY_TYPES = OBSERVED_NODE_TYPES.slice(NODE_TYPES.length).join('/');
@@ -12,6 +13,12 @@ export const findSchema = z.object({
     .optional()
     .describe(
       `节点类型过滤,支持:${NODE_TYPES.join('/')};Figma 下还可按画布里本来就有的只读类型筛(${READ_ONLY_TYPES}),这些类型能读不能建`,
+    ),
+  scope: z
+    .enum(SEARCH_SCOPES)
+    .optional()
+    .describe(
+      "查找范围:'page'=当前页(缺省)|'document'=跨页全文档(触发全量加载,大文档有一次性成本,结果 note 点名)",
     ),
   recursive: z.boolean().optional().describe('是否递归查找(默认 true)'),
   depth: z
