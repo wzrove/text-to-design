@@ -38,7 +38,8 @@ export type BridgeEvent =
   | { type: 'status'; status: BridgeStatus }
   | { type: 'log'; level: LogLevel; line: string }
   | { type: 'selection'; data: unknown }
-  | { type: 'platform'; platform: PluginPlatform };
+  | { type: 'platform'; platform: PluginPlatform }
+  | { type: 'ui_env'; canResize: boolean };
 
 export type Conn = {
   port: number;

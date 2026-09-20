@@ -15,7 +15,7 @@ import { useBridge } from '../bridge/useBridge';
  * 与 daemon 缓存、MCP 侧 capabilities 同源(都出自 adapter 的 meta)。
  * 默认收起:面板只有 360×520,能力表属于诊断信息,不进主视线。
  *
- * 展示纪律(沿用 LogPanel/SelectionCard 的既有约定):
+ * 展示纪律(沿用 LogDrawer/SelectionCard 的既有约定):
  * - 可用/不可用不能只靠颜色 → 字形 ✓ / — + 文字标签双保险;
  * - 折叠按钮给 aria-expanded/aria-controls,图标类装饰 aria-hidden。
  */

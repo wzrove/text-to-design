@@ -12,6 +12,7 @@ import type {
 import {
   applyCachedOverrides,
   CORE_CAPABILITIES,
+  clampPanelHeight,
   cloneNodes,
   combineAsVariantsNodes,
   copyInstanceOverrides,
@@ -27,10 +28,13 @@ import {
   getPageStructure,
   groupNodes,
   importComponentNodes,
+  isUiResizeMessage,
   listFonts,
   listStyles,
   makeResponse,
   outlineStrokeNodes,
+  PANEL_HEIGHT_DEFAULT,
+  PANEL_WIDTH,
   PROP_METHOD_FIELDS,
   removeNodes,
   repairNodes,
@@ -44,7 +48,7 @@ import {
   updateSelection,
 } from 'text-to-design-shared';
 
-const UI_OPTIONS = { width: 360, height: 520 };
+const UI_OPTIONS = { width: PANEL_WIDTH, height: PANEL_HEIGHT_DEFAULT };
 
 /**
  * 属性引擎方法判定:方法名是否存在于字段表。
@@ -150,7 +154,39 @@ export function registerPlugin(
   // 补发一次:showUI 后 UI iframe 加载是异步的,立即推可能丢消息
   setTimeout(pushPlatform, 200);
 
+  /**
+   * 上报宿主有没有 `ui.resize`,UI 据此在两种布局里二选一(见 shared/panel.ts)。
+   *
+   * 为什么必须由 code 侧告知:resize 返回 void,宿主就算把请求当空气也不会报错,
+   * UI 侧没有任何可观测的判据。能判的只有「符号在不在」,而那只有这里看得到。
+   */
+  function pushUiEnv(): void {
+    try {
+      const ui = host.ui as { resize?: unknown } | undefined;
+      host.ui.postMessage({
+        type: 'ui_env',
+        canResize: typeof ui?.resize === 'function',
+      });
+    } catch (e) {
+      console.error('[plugin] 推送面板环境失败', e);
+    }
+  }
+  // 与 pushPlatform 同因补发:showUI 后 UI iframe 加载是异步的,立即推可能丢消息
+  setTimeout(pushUiEnv, 200);
+
   host.ui.onmessage = async (raw: unknown) => {
+    // 面板自改高度:旁路消息,不在 PluginRequest 契约内(理由见 shared/panel.ts)。
+    // 必须在取 msg.method 之前拦掉 —— 它没有 method,落到下面会回一个「未知 method」
+    // 错误包,而 UI 侧根本没在等这个回包,等于凭空多一条错误日志。
+    if (isUiResizeMessage(raw)) {
+      try {
+        // 再夹一次:UI 已夹过,但契约的两端都该能独立站住(0013 的分层边界同样思路)
+        host.ui.resize?.(PANEL_WIDTH, clampPanelHeight(raw.height));
+      } catch (e) {
+        console.error('[plugin] 面板改尺寸失败', e);
+      }
+      return;
+    }
     const msg = raw as PluginRequest;
     const id = msg.id;
     try {

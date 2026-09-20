@@ -23,6 +23,11 @@ export interface BridgeStore {
   platform: Accessor<PluginPlatform | null>;
   /** 插件能力表快照(核心/平台差异能力 + 特有 op 名单);未取到时为 null */
   capability: Accessor<CapabilitySnapshot | null>;
+  /**
+   * 宿主是否支持 `ui.resize`(由插件 code 侧上报,见 shared/panel.ts)。
+   * 默认 false = 按历史行为渲染:面板高度固定,剩余高度由选中节点列表填满。
+   */
+  canResize: Accessor<boolean>;
   connect: () => void;
   disconnect: () => void;
   rescan: () => void;
@@ -41,6 +46,13 @@ export function BridgeProvider(props: ParentProps) {
   const [capability, setCapability] = createSignal<CapabilitySnapshot | null>(
     null,
   );
+  /**
+   * 默认 false:在收到 ui_env 之前按「宿主不支持改尺寸」渲染。
+   * 这个默认值是有意的 —— 填充布局(选中节点吃满剩余高度)在固定高度下本来就
+   * 成立,先渲染它只会「多占一点」;反过来先按自适应渲染,窗口没缩下去时
+   * 底部会先空一块再被填上,那是能看见的闪。
+   */
+  const [canResize, setCanResize] = createSignal(false);
 
   let bridge: BridgeSocket | undefined;
   let subscribed = false;
@@ -112,6 +124,7 @@ export function BridgeProvider(props: ParentProps) {
         setPlatform(() => e.platform);
         void refreshCapabilities();
       } else if (e.type === 'log') pushLog(e.line, e.level);
+      else if (e.type === 'ui_env') setCanResize(() => e.canResize);
     });
   });
 
@@ -122,6 +135,7 @@ export function BridgeProvider(props: ParentProps) {
     selection,
     platform,
     capability,
+    canResize,
     connect: () => getBridge().connect(),
     disconnect: () => getBridge().disconnect(),
     rescan: () => getBridge().rescan(),

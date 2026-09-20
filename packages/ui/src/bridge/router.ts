@@ -5,9 +5,11 @@ import type {
   PluginResponse,
   ServerPush,
   ServerStatusFrame,
+  UiEnvMessage,
 } from 'text-to-design-shared';
 import { UI_FORWARD_TIMEOUT_MS } from 'text-to-design-shared';
 import { extractBytes, stripBytes } from './binary';
+import { postToCode } from './codeChannel';
 import type { Conn, LogLevel, Pending } from './types';
 
 /** 请求/响应关联:转发挂超时定时器,code 回包直接回发 WS;localPending 仅存定时器/ping 等待 */
@@ -22,6 +24,9 @@ export class Router {
 
   /** 插件主动推送的当前平台(jsdesign/figma) */
   onPlatform: ((platform: PluginPlatform) => void) | null = null;
+
+  /** 插件上报的宿主面板环境(有没有 ui.resize),决定 UI 走自适应还是填充布局 */
+  onEnv: ((env: UiEnvMessage) => void) | null = null;
 
   /** daemon 主动下发的连接状态帧(ready / superseded),连接相位的唯一权威来源 */
   onServerStatus: ((frame: ServerStatusFrame) => void) | null = null;
@@ -71,7 +76,7 @@ export class Router {
       return;
     }
     if (msg.type === 'log') {
-      // daemon 侧日志实时推送:直接进面板(级别过滤/去重由 LogPanel 承接)
+      // daemon 侧日志实时推送:直接进面板(级别过滤/去重由 LogDrawer 承接)
       this.log(msg.level, msg.line);
       return;
     }
@@ -137,7 +142,7 @@ export class Router {
       }
     }, UI_FORWARD_TIMEOUT_MS);
     this.localPending.set(msg.id, { timer });
-    parent.postMessage({ pluginMessage: msg }, '*');
+    postToCode(msg);
   }
 
   /** 将响应发回 MCP server;若 data 含二进制(bytes),拆为 meta + 二进制帧 */
@@ -179,8 +184,13 @@ export class Router {
         | PluginResponse
         | { type: 'selection'; data: unknown }
         | { type: 'platform'; platform: PluginPlatform }
+        | UiEnvMessage
         | undefined;
       if (!pm) return;
+      if (pm.type === 'ui_env') {
+        this.onEnv?.(pm);
+        return;
+      }
       if (pm.type === 'selection') {
         this.onSelection?.(pm.data);
         return;
@@ -232,7 +242,7 @@ export class Router {
         }, UI_FORWARD_TIMEOUT_MS),
       });
     });
-    parent.postMessage({ pluginMessage: request }, '*');
+    postToCode(request);
     return promise;
   }
 

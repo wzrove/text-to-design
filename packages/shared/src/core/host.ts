@@ -268,6 +268,16 @@ export interface DesignHost {
   readonly ui: {
     postMessage(message: unknown): void;
     onmessage: ((message: unknown) => void) | null;
+    /**
+     * 面板自改尺寸(docs/design-decisions/0014)。两平台符号同名:
+     * Figma `figma.ui.resize(width, height)`、jsDesign `UIAPI.resize`。
+     *
+     * 声明为**可选**:宿主未提供时插件外壳照常工作,只是面板停在
+     * `PANEL_HEIGHT_DEFAULT` —— UI 侧据此降级为「选中节点吃满剩余高度」的
+     * 填充布局(见 UiEnvMessage)。缺符号不报错,所以判据必须是
+     * `typeof host.ui.resize === 'function'`,不能只看属性是否存在。
+     */
+    resize?(width: number, height: number): void;
   };
 }
 

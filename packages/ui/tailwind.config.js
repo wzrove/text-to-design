@@ -26,7 +26,7 @@ import daisyui from 'daisyui';
 //    不要拿它配实心底使用;
 // ③ 信息不得仅靠颜色传达:warn/error 行另有 ⚠/✕ 字形与左色条;
 // ④ 两处登记在册的例外:SelectionCard TYPE_DOT 分类色板(装饰性,类型有文字)、
-//    LogPanel error 衬底 rgba(239,68,68,.06)(oklch 回退兜底);Logo 为品牌原稿色。
+//    LogDrawer error 衬底 rgba(239,68,68,.06)(oklch 回退兜底);Logo 为品牌原稿色。
 
 export default {
   content: ['./index.html', './src/**/*.{ts,tsx}'],

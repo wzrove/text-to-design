@@ -25,6 +25,7 @@
 | [0011](0011-dynamic-page-下文档访问异步化：Access-层收口-解析与加载.md) | dynamic-page 下文档访问异步化：Access 层收口解析与加载 | 已采纳（已落地） | `shared/core/`（新增 access.ts、26 处 findNode）、`host.ts`、双侧 `sync-guarantee.ts`、`figma/ops.ts`、`vite-plugin-manifest.ts` | 2026-09-19 |
 | [0012](0012-zod沙箱化：用模块局部对象替代globalThis避免Proxy沙箱拦截.md) | zod 沙箱化：用模块局部对象替代 globalThis，避免 jsDesign Proxy 沙箱拦截 | 已采纳 | `packages/ui/scripts/vite-plugin-zod-sandbox.ts`（新）、`packages/ui/vite.config.ts`、`packages/ui/dist/jsdesign/code.js` | 2026-09-19 |
 | [0013](0013-错误链路：保持分层边界与载荷结构化及连接确认过期检测.md) | 错误链路：保持分层边界与载荷结构化及连接确认过期检测 | 已采纳（已落地） | `shared/`（`dicts/error-code.ts` 新、PluginResponse、`connection.ts`）、`ui/`（`code/plugin.ts`、`bridge/router.ts`、`bridge/connection.ts`）、`mcp-server/`（`core/bridge-error.ts` 新、`pending.ts`、`bridge.ts`、`core/registry.ts`、`core/response.ts`） | 2026-09-20 |
+| [0014](0014-面板高度自适应用测量加-ui-resize-旁路消息，不引入布局框架.md) | 面板高度自适应用测量加 ui.resize 旁路消息，不引入布局框架 | 已采纳（待引擎实测） | `shared/`（`panel.ts` 新、`core/host.ts`、`index.ts`）、`ui/`（`code/plugin.ts`、`bridge/codeChannel.ts` 新、`bridge/router.ts`、`bridge/BridgeSocket.ts`、`bridge/useBridge.tsx`、`components/PanelHeightSync.tsx` 新、`LogDrawer.tsx`、`SelectionCard.tsx`、`App.tsx`、`index.css`） | 2026-09-20 |
 
 ## 依赖关系
 
@@ -42,6 +43,7 @@
 0011 (Access 层)     ── 0010 在 dynamic-page 下的落地；解析/加载收口，0001/0004 管线保持同步
 0012 (zod 沙箱化)    ── 独立；外部依赖与 0009 同源（不污染上游库）
 0013 (错误链路)      ── 与 0007 同源（不允许静默失效）；「能被机器守的约束」取自 0005；不改 0001/0004 写入管线
+0014 (面板高度)      ── 独立；「同一事实不手写多份」取自 0008/0009；「不为一处需求引依赖」取自 0012；不改 0001/0004 写入管线
 ```
 
 ## 汇总

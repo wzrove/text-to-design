@@ -4,6 +4,21 @@
 @tailwind components;
 @tailwind utilities;
 
+/* 面板底色兜底:自适应高度下「窗口比内容高」的那一段会露出 body ——
+   宿主不认 ui.resize、或窗口收敛前的瞬时。它必须与面板同色,否则是一条横贯
+   面板底部、与主题不符的色带。--b2 是 daisyUI 主题的 base-200(oklch 分量,
+   实测形如 `97.3236% .006921 124.447`),与根元素的 bg-base-200 同源。 */
+html,
+body {
+  background-color: oklch(var(--b2));
+  /* 视口不参与滚动 —— 这条不只为外观,是为断掉一条抖动回环:
+     窗口一旦比内容矮,视口就会长出滚动条(本项目 4px 且占位),内容可用宽度随之
+     变窄 → 中文重排 → 内容变高 → 面板请求更高 → 滚动条消失 → 宽度回来 → 变矮
+     …… 只要视口有滚动条,这条回环就成立。面板本身是固定尺寸的应用面:变长区块
+     (节点列表、日志列表)各自有滚动容器,不需要页面级滚动。 */
+  overflow: hidden;
+}
+
 /* 细滚动条:引用组件层 token(design-tokens.json → tokens.css) */
 * {
   scrollbar-width: thin;
@@ -38,6 +53,22 @@
     opacity: 0;
   }
   to {
+    opacity: 1;
+  }
+}
+
+/* 日志抽屉入场:遮罩与面板各自淡入,盒子再自底部滑一小段 */
+.drawer-enter {
+  animation: drawerUp 180ms ease;
+}
+
+@keyframes drawerUp {
+  from {
+    transform: translateY(8%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
     opacity: 1;
   }
 }

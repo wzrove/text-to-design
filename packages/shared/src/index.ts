@@ -10,6 +10,8 @@ export * from './connection';
 export * from './core';
 /* 跨侧字典数据(节点类型/平台/日志级别/布尔运算的取值与文案真源) */
 export * from './dicts';
+/* 插件面板尺寸契约(UI ↔ code 的初值、夹取区间与自改高度旁路消息) */
+export * from './panel';
 /* 重新导出 zod schemas(唯一真源,供 MCP 运行时校验复用) */
 export * from './schemas';
 

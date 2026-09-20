@@ -31,6 +31,8 @@ export class BridgeSocket {
       this.events.emit({ type: 'selection', data });
     this.router.onPlatform = (platform) =>
       this.events.emit({ type: 'platform', platform });
+    this.router.onEnv = (env) =>
+      this.events.emit({ type: 'ui_env', canResize: env.canResize });
     this.router.onServerStatus = (frame) => {
       if (frame.state === 'superseded') {
         this.connection.markSuperseded();

@@ -43,7 +43,15 @@ function formatSize(bytes: number): string {
   return bytes < 1024 ? `${bytes} B` : `${(bytes / 1024).toFixed(1)} KB`;
 }
 
-export default function SelectionCard(props: { data: unknown }) {
+export default function SelectionCard(props: {
+  data: unknown;
+  /**
+   * 是否吃掉面板剩余高度(宿主不支持 `ui.resize` 时的降级布局,见
+   * docs/design-decisions/0014)。自适应生效时窗口贴着内容,根元素没有剩余高度
+   * 可吃,`flex-1` 反而会把「内容高度」撑成「窗口高度」而形成测量回环。
+   */
+  fill?: boolean;
+}) {
   const nodes = createMemo<SelectedNode[]>(() => {
     const data = props.data as
       | { selection?: SelectedNode[] }
@@ -68,7 +76,11 @@ export default function SelectionCard(props: { data: unknown }) {
   };
 
   return (
-    <div class="flex flex-col rounded-lg border border-base-300 bg-base-100 shadow-sm">
+    <div
+      class={`flex flex-col rounded-lg border border-base-300 bg-base-100 shadow-sm ${
+        props.fill ? 'min-h-0 flex-1' : ''
+      }`}
+    >
       <div class="flex items-center justify-between gap-2 border-b border-base-200 px-2.5 py-1.5">
         <div class="flex min-w-0 items-center gap-2">
           <h2 class="text-xs font-bold text-base-content/70">选中节点</h2>
@@ -107,7 +119,11 @@ export default function SelectionCard(props: { data: unknown }) {
       </div>
 
       <Show when={nodes().length > 0 && open()}>
-        <div class="flex max-h-36 min-h-0 flex-col overflow-y-auto p-1">
+        <div
+          class={`flex min-h-0 flex-col overflow-y-auto p-1 ${
+            props.fill ? 'flex-1' : 'max-h-36'
+          }`}
+        >
           <For each={nodes()}>
             {(n) => (
               <div class="flex items-center gap-2 rounded px-2 py-1.5 transition-colors hover:bg-base-200">
@@ -137,7 +153,11 @@ export default function SelectionCard(props: { data: unknown }) {
       </Show>
 
       <Show when={nodes().length === 0}>
-        <p class="px-2.5 py-4 text-center text-xs text-base-content/70">
+        <p
+          class={`px-2.5 py-4 text-center text-xs text-base-content/70 ${
+            props.fill ? 'flex flex-1 flex-col items-center justify-center' : ''
+          }`}
+        >
           未选中节点
           <br />
           <span class="text-base-content/60">

@@ -1,0 +1,60 @@
+# 0014. 面板高度自适应用测量加 ui.resize 旁路消息，不引入布局框架
+
+- **日期：** 2026-09-20
+- **状态：** 已采纳（待引擎实测）
+- **影响范围：** `shared/`（新增 `panel.ts`、`core/host.ts` 的 DesignHost.ui、`index.ts`）、`ui/`（`code/plugin.ts`、新增 `bridge/codeChannel.ts`、`bridge/router.ts`、`bridge/BridgeSocket.ts`、`bridge/types.ts`、`bridge/useBridge.tsx`、新增 `components/PanelHeightSync.tsx`、`components/LogDrawer.tsx`、`components/SelectionCard.tsx`、`App.tsx`、`index.css`）
+- **相关记录：** 独立；「同一事实不手写多份」取自 0008/0009；「不为一处需求引依赖」取自 0012；不改 0001/0004 写入管线
+
+## 压力
+
+日志改为按需抽屉后，面板固定 520 高，根元素里再没有占 `flex-1` 的区块，底部空出一大片 —— 视觉上就是「没做完」。要做「窗口贴着内容」，有三处真实成本：
+
+1. **宿主没有 auto 模式**。`showUI` 的 `ShowUIOptions` 只收 `width/height: number`（两平台 typings 一致），窗口高度必须由调用方给。所以「自动高度」只能是：UI 量内容 → 通知 code 侧 → `ui.resize`。
+2. **链路是全新的，且没有反馈**。`DesignHost.ui` 此前只有 `postMessage`/`onmessage`；`ui.resize` 返回值是 `void`，宿主把请求当空气也不报错 —— UI 侧没有任何可观测判据来判断「到底生不生效」，能判的只有「符号在不在」，而那只有 code 侧看得到。
+3. **测量容易做成自激**。若让 `SelectionCard` 占 `flex-1`，剩余高度被它吃掉，根元素高度就等于窗口高度；此时「量内容高度去改窗口」会把窗口高度当成内容高度报回去，形成回环。
+
+## 候选与排除
+
+| 候选 | 结论 | 排除理由 |
+|---|---|---|
+| 内容测量 + `ui.resize` 旁路消息 | 采用（主路径） | 唯一真正消灭留白的做法；判据只能取「符号在不在」 |
+| `SelectionCard` 占 `flex-1` 吃满剩余高度 | 采用（降级路径） | 零成本零平台风险，但留白只是换了归属；且与测量互斥（见压力 3） |
+| 引入尺寸观测/自动布局库 | 排除 | 只为一个高度值引依赖，命中 0012 的同一条纪律 |
+| 把 `uiResize` 并进 `HOST_CAPABILITIES` 字典 | 排除 | 那本字典的语义是「节点属性会不会生效」（`CAPABILITY_GATED_PROPS` 反查），面板尺寸不是文档操作能力；混进去会污染能力表与门控 |
+| 高度跟随选中数量（`selectionchange` 驱动） | 排除 | 该事件高频（`plugin.ts` 就挂在它上面推选中），窗口会跟着每次画布点选变高变矮 |
+| 靠 CSS 让窗口自然撑开 | 排除 | 宿主 API 不接受 auto，这条路不存在 |
+
+## 结论
+
+**不引入布局框架，用「内容测量 → 阈值节流 → 两侧各夹一次 → 旁路消息 → `host.ui.resize`」单链路**，并把布局二选一交给宿主能力而不是 UI 猜。三件套：
+
+- **契约收口**：尺寸常量、夹取函数与两条旁路消息集中在新模块 `shared/src/panel.ts`（两侧唯一真源，理由同 `connection.ts`）。
+- **能力上报**：`ui_env` 由 code 侧上报「`typeof host.ui.resize === 'function'`」，UI 据此在「窗口贴内容」与「选中节点吃满」之间切；**缺这条消息时按「不支持」处理**，即与历史行为一致。
+- **双闸防抖 + 断环**：测量值只在变化 ≥ `PANEL_RESIZE_STEP` 时才发，且**向上**吸附到该步长；UI 与 code 两侧各夹一次 `clampPanelHeight`（契约两端都能独立站住，同 0013 的分层边界）。取整方向固定向上并留 `PANEL_HEIGHT_SLACK`，视口再叠一条 `overflow: hidden` —— 三者共同保证「请求高度 ≥ 内容高度」，而这条正是抖动回环的开关（见下）。
+
+旁路消息**不进 `PluginRequest` 契约**：那条契约的 schema 是给 MCP 工具用的、且会进工具目录，改高度不过 MCP、没有外部调用方，混进去等于凭空多出一个工具。
+
+## 最小落地
+
+- 角色与职责：`panel.ts` = 尺寸与消息取值真源；`plugin.ts` = 唯一能看到宿主符号的地方，负责上报与执行；`PanelHeightSync` = 唯一测量点；`App.tsx` = 布局二选一。
+- 接口所在层与依赖方向：`UiResizeMessage` / `UiEnvMessage` 只走 UI ↔ code 的 postMessage 直连，不经 daemon、不进 MCP。信封收敛到 `bridge/codeChannel.ts` 单点 —— 此前 `router.ts` 里手写了两遍，本次是第三个消费方。
+- 一次消息的调用时序：内容回流 → `ResizeObserver` → clamp + 阈值 → `postToCode` → code 侧过守卫并再 clamp → `host.ui.resize` → 窗口尺寸变化（**根元素高度不变，故不回流**，这是不成环的关键）。
+- 抽屉不参与高度决策：**面板高度只由内容决定，开合抽屉不改变窗口尺寸**。抽屉自己取窗口的 85%。抽屉同时由 `absolute` 改 `fixed`：自适应下根元素高度即内容高度，而窗口可能比它高（clamp 下限、宿主夹取、收敛前的瞬时），按根元素定位会比窗口矮一截，遮罩外会露出未变暗的那部分。
+
+## 成本与退出条件
+
+- 成本：两侧需重建 + 重载插件；新增一个 `ResizeObserver`。`ui.resize` 是否真被宿主执行**尚未实测**（见验证）；不生效时按「没有」处理，行为回到历史状态，不会比改前更差。
+- 退出条件：若实测 jsDesign 不执行 `ui.resize`（或存在无法接受的最小高度夹取），删 `pushUiEnv` 与 `PanelHeightSync`，只留 `SelectionCard.fill` 一条降级路径。若未来宿主支持 auto 尺寸，整条链路直接删。
+
+## 验证
+
+- 不变量测试：`pnpm run typecheck`（三包）、`pnpm run test`（87 用例）全绿；`tests/engine-api-compat.test.ts` 确认新增 UI 源码没有引入宿主缺失的现代 API。
+- 引擎实测（**待做，结论未回填**）：重载插件后确认三件事 —— ① `ui_env` 报的值与宿主实际是否执行 `resize` 一致；② 窗口在内容高附近收敛且不抖动；③ **开合日志抽屉时窗口尺寸不变**。若发现最小/最大高度夹取或锚点行为，按现象描述登记到 `.agents/skills/mcp-tdd/references/platform-limits.md`。
+- 指标与日志：改尺寸失败只打 `console.error`，不进报错台账 —— 面板尺寸是 UI 装饰，不是文档事实（同 0005 对日志与状态推送的定位）。
+
+## 变更历史
+
+| 日期 | 需求变更 | 结论变化 |
+|---|---|---|
+| 2026-09-20 | 初次决策 | 采用：测量 + 旁路消息，布局二选一由宿主能力决定 |
+| 2026-09-20 | 实测反馈「展开面板会出现抖动」 | 结论不变，补四处断环：① `clampPanelHeight` 由四舍五入改**向上取整**；② 测量改 `getBoundingClientRect`（小数高度）并加 `PANEL_HEIGHT_SLACK`；③ `html/body` 加 `overflow: hidden` —— 三者共同保证「请求高度 ≥ 内容高度」。根因是「请求比内容矮 → 视口长滚动条 → 宽度少 4px → 中文重排 → 内容变高 → 再请求 → 滚动条消失 ……」这条回环。④ 去掉抽屉的 `min` 抬升：那等于**开合抽屉都改变窗口尺寸**，面板整体跳一下；抽屉改取窗口 85%。 |

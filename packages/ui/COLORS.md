@@ -48,8 +48,8 @@ node ../../.agents/skills/design-system/scripts/validate-tokens.cjs --dir src
 | `base-content` | `#333333` | `#d6dbe2` | 正文与透明度派生(`/60``/70`) | 全局 |
 | `info` | `#2563eb` | `#5aa9f7` | 过渡状态(连接中) | StatusBadge |
 | `success` | `#15803d` | `#34c467` | 成功 / 已连接 / 复制成功反馈 | StatusBadge、ConnectionHint、SelectionCard |
-| `warning` | `#b45309` | `#f59e0b` | 警告 / 待服务 / 日志 warn 行 | LogPanel、StatusBadge、ConnectionHint |
-| `error` | `#dc2626` | `#ef4444` | 错误 / 日志 error 行 | LogPanel |
+| `warning` | `#b45309` | `#f59e0b` | 警告 / 待服务 / 日志 warn 行 | LogDrawer、StatusBadge、ConnectionHint |
+| `error` | `#dc2626` | `#ef4444` | 错误 / 日志 error 行 / 日志入口未读态 | LogDrawer、LogTrigger |
 
 ## 二、三种标准用法(写组件前先对号入座)
 
@@ -75,7 +75,7 @@ node ../../.agents/skills/design-system/scripts/validate-tokens.cjs --dir src
 | 位置 | 颜色 | 原因 |
 |---|---|---|
 | `SelectionCard.tsx` `TYPE_DOT` | 引用 `--component-type-dot-*`(色值在 design-tokens.json 分类色板) | 类型点为装饰性(类型有文字),与语义 token 解耦;换色改 JSON 后重新生成 |
-| `LogPanel.tsx` error 行衬底 | `var(--component-log-error-tint)`(固定 rgba) | oklch 回退在部分 webview 下丢透明度修饰符(`/5` 变实心),故收进 token 层用固定 rgba 兜底 |
+| `LogDrawer.tsx` error 行衬底 | `var(--component-log-error-tint)`(固定 rgba) | oklch 回退在部分 webview 下丢透明度修饰符(`/5` 变实心),故收进 token 层用固定 rgba 兜底 |
 | `Logo.tsx` | 品牌原稿色(#8AD654/#F76868/#333 等) | 设计稿原样,不随主题 |
 | `index.css` 滚动条 | `var(--component-scrollbar-thumb[-hover])` | 中性半透明灰,亮暗通用 |
 
