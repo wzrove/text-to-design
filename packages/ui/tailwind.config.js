@@ -9,10 +9,10 @@ import daisyui from 'daisyui';
 // 两者无 hex 重复:改颜色只改一处。
 //
 // 角色        亮色        暗色        用途
-// primary    #8AD654    #8AD654    品牌动作色:btn-primary、Logo 主绿(与状态绿解耦)
+// primary    #8AD654    #8AD654    品牌动作色:btn-primary(与状态绿解耦)
 /// secondary  #333333    #c9cfd6    次级实心表面(当前组件未直接使用,保留兼容)
-/// accent     #F76868    #F76868    品牌珊瑚红:仅品牌图形(Logo),不作状态色
-/// neutral    #2a2a2a    #2f3640    中性实心徽章(平台名)
+/// accent     #F76868    #F76868    品牌珊瑚红:仅品牌图形(仓库根 logo.svg),不作状态色
+/// neutral    #2a2a2a    #2f3640    中性实心表面(当前组件未直接使用,保留兼容)
 /// base-*     白系        深灰蓝      面板底/hover/border 三档
 /// info       #2563eb    #5aa9f7    过渡状态(连接中)
 /// success    #15803d    #34c467    成功/已连接
@@ -26,7 +26,7 @@ import daisyui from 'daisyui';
 //    不要拿它配实心底使用;
 // ③ 信息不得仅靠颜色传达:warn/error 行另有 ⚠/✕ 字形与左色条;
 // ④ 两处登记在册的例外:SelectionCard TYPE_DOT 分类色板(装饰性,类型有文字)、
-//    LogDrawer error 衬底 rgba(239,68,68,.06)(oklch 回退兜底);Logo 为品牌原稿色。
+//    LogDrawer error 衬底 rgba(239,68,68,.06)(oklch 回退兜底)。
 
 export default {
   content: ['./index.html', './src/**/*.{ts,tsx}'],

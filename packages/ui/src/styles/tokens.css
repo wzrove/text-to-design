@@ -22,13 +22,15 @@
 
 /* === COMPONENTS (引用 primitive 层;rgba alpha 派生无法 var() 引用,保留字面量) === */
 :root {
-  /* status-chip: rgba 派生自 daisyUI 主题 success/info/warning(见 tailwind.config.js) */
+  /* status-chip: rgba 派生自 daisyUI 主题 success/info/warning/error(见 tailwind.config.js) */
   --component-status-chip-connected-bg: rgba(21, 128, 61, 0.1);
   --component-status-chip-connected-border: rgba(21, 128, 61, 0.25);
   --component-status-chip-connecting-bg: rgba(37, 99, 235, 0.1);
   --component-status-chip-connecting-border: rgba(37, 99, 235, 0.25);
   --component-status-chip-waiting-bg: rgba(180, 83, 9, 0.1);
   --component-status-chip-waiting-border: rgba(180, 83, 9, 0.25);
+  --component-status-chip-error-bg: rgba(220, 38, 38, 0.1);
+  --component-status-chip-error-border: rgba(220, 38, 38, 0.25);
   /* hint: rgba 派生自 daisyUI 主题 warning/success(见 tailwind.config.js) */
   --component-hint-warn-bg: rgba(180, 83, 9, 0.08);
   --component-hint-warn-border: rgba(180, 83, 9, 0.35);

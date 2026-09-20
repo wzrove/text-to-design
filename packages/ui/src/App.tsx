@@ -1,10 +1,9 @@
-import { createEffect, createMemo, createSignal } from 'solid-js';
+import { createEffect, createMemo, createSignal, Show } from 'solid-js';
+import { PANEL_HEIGHT_LOG, PLATFORM_LABEL } from 'text-to-design-shared';
 import { BridgeProvider, useBridge } from './bridge/useBridge';
 import CapabilityCard from './components/CapabilityCard';
 import ConnectionHint from './components/ConnectionHint';
-import EnvironmentBadge from './components/EnvironmentBadge';
 import LogDrawer from './components/LogDrawer';
-import Logo from './components/Logo';
 import LogTrigger from './components/LogTrigger';
 import PanelHeightSync from './components/PanelHeightSync';
 import SelectionCard from './components/SelectionCard';
@@ -53,6 +52,21 @@ function Shell() {
 
   let rootEl: HTMLDivElement | undefined;
 
+  /**
+   * 平台名 + 端口合成一行排查上下文。
+   * 平台由插件 code 侧上报,首帧还没有 —— 此时只留端口,不留孤零零的分隔符。
+   */
+  const meta = createMemo(() => {
+    const p = platform();
+    return p ? `${PLATFORM_LABEL[p]} · :${port()}` : `:${port()}`;
+  });
+  const metaTitle = createMemo(() => {
+    const p = platform();
+    return `${
+      p ? `运行平台 ${PLATFORM_LABEL[p]}` : '运行平台未知'
+    } · MCP 桥接端口 ${port()}(可用环境变量 TEXT_TO_DESIGN_MCP_PORT 修改)`;
+  });
+
   return (
     /*
       两种布局由宿主有没有 ui.resize 决定(见 docs/design-decisions/0014):
@@ -68,13 +82,44 @@ function Shell() {
         canResize() ? '' : 'h-screen'
       }`}
     >
-      <header class="flex min-h-0 items-center gap-2">
-        <Logo class="size-5 shrink-0" />
-        <h1 class="min-w-0 flex-1 truncate text-lg font-bold text-base-content">
-          text-to-design MCP Bridge
-        </h1>
-        <EnvironmentBadge platform={platform()} />
+      {/*
+        页头只承载「状态 / 元信息 / 工具」三类,不再重复宿主的身份信息:标题栏已
+        给出插件名与图标,面板里再排一遍 Logo + 标题是把同一句话说两遍,而 360 宽
+        下标题只会被 truncate 成省略号噪声 —— 挤掉的正是唯一要看的连接状态。
+
+        读序即优先级(左 → 右):状态徽章(全页唯一色块)→ 它的挽救动作(仅
+        「没连上」时出现)→ 平台与端口(mono 小字,排查用)→ 日志入口(常驻最右)。
+      */}
+      <header class="flex shrink-0 items-center gap-2">
         <StatusBadge />
+
+        {/*
+          重连动作紧贴状态徽章:状态与它的出路读成一件事。
+          连上后整颗隐藏而非置灰 —— 常态面板里一颗永远不可用的按钮只是噪声;
+          隐藏也不会挤动右侧工具簇(它右侧是 ml-auto 的弹性留白)。
+        */}
+        <Show when={status() !== 'connected'}>
+          <button
+            type="button"
+            class="btn btn-ghost btn-xs shrink-0 px-1.5 text-base-content/70 hover:text-base-content"
+            title={
+              status() === 'superseded'
+                ? '夺回被另一个插件面板占用的通道'
+                : '立即重连后台服务,不必等自动重连的退避间隔'
+            }
+            onClick={() => rescan()}
+          >
+            {status() === 'superseded' ? '夺回' : '重试'}
+          </button>
+        </Show>
+
+        <span
+          class="ml-auto min-w-0 truncate font-mono text-[10px] text-base-content/60"
+          title={metaTitle()}
+        >
+          {meta()}
+        </span>
+
         <LogTrigger
           ref={(el) => {
             triggerEl = el;
@@ -83,25 +128,6 @@ function Shell() {
           open={logOpen()}
           onClick={openLog}
         />
-        <button
-          type="button"
-          class="btn btn-ghost  hover:bg-white btn-xs text-base-content disabled:text-gray-500 disabled:cursor-not-allowed"
-          title={
-            status() === 'superseded'
-              ? '夺回被另一个插件面板占用的通道'
-              : '立即重连后台服务,不必等自动重连的退避间隔'
-          }
-          disabled={status() === 'connected'}
-          onClick={() => rescan()}
-        >
-          {status() === 'superseded' ? '夺回' : '重试'}
-        </button>
-        <span
-          class="badge badge-sm badge-ghost shrink-0 font-mono text-base-content/60"
-          title="MCP 桥接端口(可用环境变量 TEXT_TO_DESIGN_MCP_PORT 修改)"
-        >
-          :{port()}
-        </span>
       </header>
 
       <ConnectionHint />
@@ -117,8 +143,16 @@ function Shell() {
         onClear={clearLog}
       />
 
-      {/* 高度只由内容决定 —— 日志抽屉开合不再参与,否则开合都会把窗口顶一下 */}
-      <PanelHeightSync active={canResize()} target={() => rootEl} />
+      {/*
+        高度只由内容决定,日志抽屉是 fixed 浮层、不进流 —— 所以它打开时窗口不会自己变高,
+        得由 floor 显式抬下限(见 0015)。抽屉取窗口的 85%,面板内容短到下限 300 时
+        drawer 就只剩 255px,几乎看不了几行日志。
+      */}
+      <PanelHeightSync
+        active={canResize()}
+        target={() => rootEl}
+        floor={() => (logOpen() ? PANEL_HEIGHT_LOG : 0)}
+      />
     </div>
   );
 }

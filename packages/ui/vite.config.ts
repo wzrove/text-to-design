@@ -48,7 +48,7 @@ export default defineConfig(({ mode }): UserConfig => {
         outDir: `dist/${platform}`,
         emptyOutDir: false,
         sourcemap: false,
-        target: 'es6',
+        target: 'es2017',
         minify: true,
         rolldownOptions: {
           input: {
@@ -73,7 +73,7 @@ export default defineConfig(({ mode }): UserConfig => {
     build: {
       outDir: 'dist',
       emptyOutDir: false,
-      target: 'es6',
+      target: 'es2017',
       sourcemap: false,
       assetsInlineLimit: 100000000,
       rolldownOptions: {

@@ -38,12 +38,16 @@ node ../../.agents/skills/design-system/scripts/generate-tokens.cjs \
 node ../../.agents/skills/design-system/scripts/validate-tokens.cjs --dir src
 ```
 
+⚠️ 该技能目录**不在本仓**(只存在于设计系统技能的安装环境)。拿不到生成器时,新增
+token 要**手工同步两处**:`design-tokens.json`(真源)+ `src/styles/tokens.css`(产物),
+照着同族 token 的写法派生,别只改一处 —— 下次生成时缺失的那份会被覆盖掉。
+
 | Token | 亮色 | 暗色 | 角色 | 当前使用点 |
 |---|---|---|---|---|
-| `primary` | `#8AD654` | 同 | **品牌动作色**:主按钮、Logo 主绿(刻意与状态绿不同) | btn-primary、Logo |
+| `primary` | `#8AD654` | 同 | **品牌动作色**:主按钮(刻意与状态绿不同) | btn-primary |
 | `secondary` | `#333333` | `#c9cfd6` | 次级实心表面(暂无直接使用,保留兼容) | — |
-| `accent` | `#F76868` | 同 | **品牌珊瑚红**,仅品牌图形;不是状态色 | Logo |
-| `neutral` | `#2a2a2a` | `#2f3640` | 中性实心徽章 | EnvironmentBadge |
+| `accent` | `#F76868` | 同 | **品牌珊瑚红**,仅品牌图形;不是状态色。面板内暂无使用点,品牌原稿见仓库根 `logo.svg` | — |
+| `neutral` | `#2a2a2a` | `#2f3640` | 中性实心表面(暂无直接使用:平台名已降为页头 mono 小字,见 `App.tsx` 页头) | — |
 | `base-100/200/300` | 白系三档 | 深灰蓝三档 | 面板底 / hover / 边框 | 全局 |
 | `base-content` | `#333333` | `#d6dbe2` | 正文与透明度派生(`/60``/70`) | 全局 |
 | `info` | `#2563eb` | `#5aa9f7` | 过渡状态(连接中) | StatusBadge |
@@ -62,7 +66,9 @@ node ../../.agents/skills/design-system/scripts/validate-tokens.cjs --dir src
    (曾导致蓝底配蓝字),禁止直接写 `bg-X/10` 这类类名;淡底/描边一律用
    design-tokens.json 里 `status-chip` / `hint` 的 rgba token。文字用语义实心色
    (`text-X`,token 不受退化影响),亮暗值均已按 ≥4.5:1 校准。
-   现例:StatusBadge 三态、ConnectionHint 两条提示。
+   现例:StatusBadge 四态(connected / connecting / waiting,superseded 复用 waiting)、
+   ConnectionHint 两条提示、LogTrigger 未读态 —— 后者是 `status-chip-error-*` 的
+   唯一使用点:通道与错误是两根轴,绿色状态徽章说不出「连上了但在报错」。
 
 2. **正文着色**:直接 `text-X`(warn/error 日志行);中性正文用
    `text-base-content`,弱化层级用 `/60`(次级元数据)~ `/70`(仍需达标的正文)。
@@ -76,7 +82,6 @@ node ../../.agents/skills/design-system/scripts/validate-tokens.cjs --dir src
 |---|---|---|
 | `SelectionCard.tsx` `TYPE_DOT` | 引用 `--component-type-dot-*`(色值在 design-tokens.json 分类色板) | 类型点为装饰性(类型有文字),与语义 token 解耦;换色改 JSON 后重新生成 |
 | `LogDrawer.tsx` error 行衬底 | `var(--component-log-error-tint)`(固定 rgba) | oklch 回退在部分 webview 下丢透明度修饰符(`/5` 变实心),故收进 token 层用固定 rgba 兜底 |
-| `Logo.tsx` | 品牌原稿色(#8AD654/#F76868/#333 等) | 设计稿原样,不随主题 |
 | `index.css` 滚动条 | `var(--component-scrollbar-thumb[-hover])` | 中性半透明灰,亮暗通用 |
 
 ## 四、校准规则速查

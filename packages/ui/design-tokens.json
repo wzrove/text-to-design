@@ -39,7 +39,12 @@
         "$type": "color"
       },
       "waiting-bg": { "$value": "rgba(180, 83, 9, 0.1)", "$type": "color" },
-      "waiting-border": { "$value": "rgba(180, 83, 9, 0.25)", "$type": "color" }
+      "waiting-border": {
+        "$value": "rgba(180, 83, 9, 0.25)",
+        "$type": "color"
+      },
+      "error-bg": { "$value": "rgba(220, 38, 38, 0.1)", "$type": "color" },
+      "error-border": { "$value": "rgba(220, 38, 38, 0.25)", "$type": "color" }
     },
     "hint": {
       "warn-bg": { "$value": "rgba(180, 83, 9, 0.08)", "$type": "color" },

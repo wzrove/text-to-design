@@ -89,7 +89,7 @@ export default function ConnectionHint() {
       case 'superseded':
         return {
           cls: 'text-warning-content/90',
-          text: '通道已被另一个插件面板接管(同一时刻只服务一个面板),自动重连已停止。点右上角「夺回」切回本面板。',
+          text: '通道已被另一个插件面板接管(同一时刻只服务一个面板),自动重连已停止。点顶部状态徽章旁的「夺回」切回本面板。',
         };
       default:
         // 断开态:这一行让位给下面的引导卡,自身隐藏留白

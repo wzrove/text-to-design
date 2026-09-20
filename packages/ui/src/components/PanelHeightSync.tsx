@@ -15,15 +15,17 @@ import { postToCode } from '../bridge/codeChannel';
  * 做推送),而真正改变内容高度的只有布局本身:连接提示换形态、能力表开合、
  * 列表增删行。换句话说,窗口只在「结构性变化」时动。
  *
- * 没有 `min` 之类的额外入参:下限已经写在 `clampPanelHeight` 里。此前曾按「抽屉
- * 打开就把下限抬到默认高度」来给日志让位,但那等于**开合抽屉都会改变窗口尺寸**
- * —— 面板整体跳一下,读起来就是抖动。抽屉改成自己取窗口的 85%,窗口只由内容决定。
+ * `floor` 是抽屉开合这类**不体现在流里的**高度需求(见 0015):日志抽屉是 fixed 浮层,
+ * 内容高度不因它变化,故这里必须显式读一次 `floor()` 让它成为本 effect 的依赖 ——
+ * 否则开抽屉时 ResizeObserver 根本不会响,窗口也就不会跟着抬。
  */
 export default function PanelHeightSync(props: {
   /** 宿主支持 ui.resize 才启用;false 时本组件完全不做事(布局已在 App 侧降级) */
   active: boolean;
   /** 测量对象:面板根元素。自适应布局下它不定高,高度即内容高度 */
   target: () => HTMLElement | undefined;
+  /** 额外的窗口高度下限(0 / 缺省 = 只要贴内容);打开态要求的占位由调用方给 */
+  floor?: () => number;
 }) {
   createEffect(() => {
     const active = props.active;
@@ -33,6 +35,9 @@ export default function PanelHeightSync(props: {
     // 老 webview 可能没有 ResizeObserver:静默不发请求即可。布局判定在 App 侧,
     // 与「能不能观测」无关 —— 这里缺席不该把面板降级成另一种布局
     if (typeof ResizeObserver === 'undefined') return;
+
+    // 在 effect 顶读一次即可:它只改 push 的结果,而它自己变了就该重发一次请求
+    const floor = props.floor?.() ?? 0;
 
     // -1 保证首帧一定发一次:初始窗口是 PANEL_HEIGHT_DEFAULT,收敛到内容高
     // 这一步必须发生,否则自适应等于没开
@@ -45,7 +50,7 @@ export default function PanelHeightSync(props: {
       // 向上吸附到步长:让「差一点点」的变化落进同一档、不再驱动窗口。
       // 吸附只会让窗口偏高(顶多多出一段同色空白),方向上与 SLACK 一致
       const snapped = Math.ceil(raw / PANEL_RESIZE_STEP) * PANEL_RESIZE_STEP;
-      const height = clampPanelHeight(snapped);
+      const height = clampPanelHeight(Math.max(snapped, floor));
       if (Math.abs(height - sent) < PANEL_RESIZE_STEP) return;
       sent = height;
       const msg: UiResizeMessage = { type: 'ui_resize', height };
