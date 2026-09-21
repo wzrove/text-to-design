@@ -1,4 +1,6 @@
 import type {
+  LocaleChoice,
+  LocaleStateMessage,
   PluginError,
   PluginPlatform,
   PluginRequest,
@@ -7,7 +9,8 @@ import type {
   ServerStatusFrame,
   UiEnvMessage,
 } from 'text-to-design-shared';
-import { UI_FORWARD_TIMEOUT_MS } from 'text-to-design-shared';
+import { toStoredChoice, UI_FORWARD_TIMEOUT_MS } from 'text-to-design-shared';
+import { t } from '../i18n/useLocale';
 import { extractBytes, stripBytes } from './binary';
 import { postToCode } from './codeChannel';
 import type { Conn, LogLevel, Pending } from './types';
@@ -27,6 +30,9 @@ export class Router {
 
   /** 插件上报的宿主面板环境(有没有 ui.resize),决定 UI 走自适应还是填充布局 */
   onEnv: ((env: UiEnvMessage) => void) | null = null;
+
+  /** 插件上报的宿主存储里的语言选择(见 shared/locale-channel.ts) */
+  onLocale: ((stored: LocaleChoice | null) => void) | null = null;
 
   /** daemon 主动下发的连接状态帧(ready / superseded),连接相位的唯一权威来源 */
   onServerStatus: ((frame: ServerStatusFrame) => void) | null = null;
@@ -90,7 +96,12 @@ export class Router {
       return;
     }
     if (msg.type === 'request') {
-      this.log('debug', `收到服务器请求: ${(msg as PluginRequest).method}`);
+      this.log(
+        'debug',
+        t('bridge.log.recvRequest', {
+          method: (msg as PluginRequest).method,
+        }),
+      );
       const raw = msg as PluginRequest & {
         params?: { hasBinary?: boolean; binaryCount?: number };
       };
@@ -105,7 +116,7 @@ export class Router {
       this.forwardRequest(conn, msg);
       return;
     }
-    this.log('debug', `收到服务器响应(忽略): ${msg.id}`);
+    this.log('debug', t('bridge.log.recvResponse', { id: msg.id }));
   }
 
   onWsBinary(conn: Conn, data: ArrayBuffer): void {
@@ -134,9 +145,14 @@ export class Router {
   private forwardRequest(conn: Conn, msg: PluginRequest): void {
     const timer = window.setTimeout(() => {
       if (this.localPending.delete(msg.id)) {
-        this.log('error', `转发到插件超时: ${msg.method}`);
+        this.log(
+          'error',
+          t('bridge.log.forwardTimeout', { method: msg.method }),
+        );
         this.sendResponseOverWs(conn, msg.id, false, undefined, {
           code: 'forward_timeout',
+          // i18n-exempt: 该文案随错误包上行给 MCP(模型读),语言归 MCP 侧,
+          // 不跟面板 locale 走(见 0016「两处语言可以不同步」)
           message: '插件响应超时',
         });
       }
@@ -185,10 +201,16 @@ export class Router {
         | { type: 'selection'; data: unknown }
         | { type: 'platform'; platform: PluginPlatform }
         | UiEnvMessage
+        | LocaleStateMessage
         | undefined;
       if (!pm) return;
       if (pm.type === 'ui_env') {
         this.onEnv?.(pm);
+        return;
+      }
+      if (pm.type === 'locale_state') {
+        // 存储里的脏值一律当「没选过」,守卫在 shared 侧(读的是跨版本存活的外部输入)
+        this.onLocale?.(toStoredChoice((pm as { stored?: unknown }).stored));
         return;
       }
       if (pm.type === 'selection') {
@@ -204,7 +226,9 @@ export class Router {
         // 插件只回响应,不主动发请求;意外请求忽略并记日志
         this.log(
           'debug',
-          `忽略未知插件消息: ${(pm as { type?: string }).type}`,
+          t('bridge.log.ignoreUnknown', {
+            type: (pm as { type?: string }).type ?? '',
+          }),
         );
         return;
       }
@@ -225,7 +249,9 @@ export class Router {
     } catch (e) {
       this.log(
         'error',
-        `code 消息处理失败: ${e instanceof Error ? e.message : String(e)}`,
+        t('bridge.log.codeFailed', {
+          message: e instanceof Error ? e.message : String(e),
+        }),
       );
     }
   };
@@ -237,8 +263,9 @@ export class Router {
         resolve,
         reject,
         timer: window.setTimeout(() => {
-          if (this.localPending.delete(request.id))
-            reject(new Error('插件响应超时'));
+          if (this.localPending.delete(request.id)) {
+            reject(new Error(t('bridge.log.pluginTimeout')));
+          }
         }, UI_FORWARD_TIMEOUT_MS),
       });
     });
@@ -248,7 +275,7 @@ export class Router {
 
   private sendOverWs(ws: WebSocket | null, msg: PluginResponse): void {
     if (!ws || ws.readyState !== WebSocket.OPEN) {
-      this.log('error', `发送响应失败(server 未连接): ${msg.id}`);
+      this.log('error', t('bridge.log.sendFailed', { id: msg.id }));
       return;
     }
     ws.send(JSON.stringify(msg));

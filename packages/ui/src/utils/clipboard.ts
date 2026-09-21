@@ -4,6 +4,7 @@ export function copyText(text: string): boolean {
     if (navigator.clipboard?.writeText) {
       // 写入是异步的,失败也必须留痕:静默失败会让「复制了却没内容」无从排查
       navigator.clipboard.writeText(text).catch((e) => {
+        // i18n-exempt: 开发者控制台诊断,不是面板文案(面板只拿到 true/false)
         console.debug('[ui] 剪贴板写入失败', e);
       });
       return true;

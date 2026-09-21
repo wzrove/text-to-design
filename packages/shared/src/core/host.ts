@@ -265,6 +265,22 @@ export interface DesignHost {
   getLocalEffectStylesAsync?(): Promise<readonly StyleSummary[]>;
   getLocalGridStylesAsync?(): Promise<readonly StyleSummary[]>;
   on(event: string, handler: (...args: unknown[]) => void): void;
+  /**
+   * 宿主键值存储(0016 的语言选择持久化)。两平台符号同名同签名:
+   * `figma.clientStorage` / `jsDesign.clientStorage`,方法都是 `*Async`。
+   *
+   * 声明为**可选**、且各方法都可能是**声明存在而运行时未实现** —— jsDesign 的这份
+   * typings 是从 Figma API fork 来的(文件头写着 "Figma Plugin API version 1, update 40"),
+   * 所以判据必须是 `typeof host.clientStorage?.getAsync === 'function'`,
+   * 且调用点要 `try/catch`。拿不到就退化为「本次会话内有效」,不允许因此让面板起不来。
+   *
+   * 按 0010 一律异步:即使某个平台内部同步也标 Promise,调用点已 await。
+   */
+  readonly clientStorage?: {
+    getAsync(key: string): Promise<unknown>;
+    setAsync(key: string, value: unknown): Promise<void>;
+    deleteAsync(key: string): Promise<void>;
+  };
   readonly ui: {
     postMessage(message: unknown): void;
     onmessage: ((message: unknown) => void) | null;

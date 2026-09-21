@@ -3,11 +3,13 @@ import { PANEL_HEIGHT_LOG, PLATFORM_LABEL } from 'text-to-design-shared';
 import { BridgeProvider, useBridge } from './bridge/useBridge';
 import CapabilityCard from './components/CapabilityCard';
 import ConnectionHint from './components/ConnectionHint';
+import LocaleSwitch from './components/LocaleSwitch';
 import LogDrawer from './components/LogDrawer';
 import LogTrigger from './components/LogTrigger';
 import PanelHeightSync from './components/PanelHeightSync';
 import SelectionCard from './components/SelectionCard';
 import StatusBadge from './components/StatusBadge';
+import { locale, t } from './i18n/useLocale';
 
 function Shell() {
   const {
@@ -53,18 +55,29 @@ function Shell() {
   let rootEl: HTMLDivElement | undefined;
 
   /**
+   * `<html lang>` 跟随当前语言(0016):面板文案换了而 lang 没换,屏读器仍按中文
+   * 发音、字体回退也还是中文栈 —— 这是「看起来生效了、实际没换」的典型。
+   * `ui.html` 里的字面量只是首帧之前的占位。
+   */
+  createEffect(() => {
+    document.documentElement.lang = locale();
+  });
+
+  /**
    * 平台名 + 端口合成一行排查上下文。
    * 平台由插件 code 侧上报,首帧还没有 —— 此时只留端口,不留孤零零的分隔符。
    */
   const meta = createMemo(() => {
     const p = platform();
-    return p ? `${PLATFORM_LABEL[p]} · :${port()}` : `:${port()}`;
+    return p
+      ? t('header.meta', { platform: PLATFORM_LABEL[p], port: port() })
+      : t('header.meta.portOnly', { port: port() });
   });
   const metaTitle = createMemo(() => {
     const p = platform();
-    return `${
-      p ? `运行平台 ${PLATFORM_LABEL[p]}` : '运行平台未知'
-    } · MCP 桥接端口 ${port()}(可用环境变量 TEXT_TO_DESIGN_MCP_PORT 修改)`;
+    return p
+      ? t('header.meta.title', { platform: PLATFORM_LABEL[p], port: port() })
+      : t('header.meta.titleUnknown', { port: port() });
   });
 
   return (
@@ -88,7 +101,7 @@ function Shell() {
         下标题只会被 truncate 成省略号噪声 —— 挤掉的正是唯一要看的连接状态。
 
         读序即优先级(左 → 右):状态徽章(全页唯一色块)→ 它的挽救动作(仅
-        「没连上」时出现)→ 平台与端口(mono 小字,排查用)→ 日志入口(常驻最右)。
+        「没连上」时出现)→ 平台与端口(mono 小字,排查用)→ 语言 → 日志入口(最右)。
       */}
       <header class="flex shrink-0 items-center gap-2">
         <StatusBadge />
@@ -104,12 +117,14 @@ function Shell() {
             class="btn btn-ghost btn-xs shrink-0 px-1.5 text-base-content/70 hover:text-base-content"
             title={
               status() === 'superseded'
-                ? '夺回被另一个插件面板占用的通道'
-                : '立即重连后台服务,不必等自动重连的退避间隔'
+                ? t('header.reclaim.title')
+                : t('header.retry.title')
             }
             onClick={() => rescan()}
           >
-            {status() === 'superseded' ? '夺回' : '重试'}
+            {status() === 'superseded'
+              ? t('header.reclaim')
+              : t('header.retry')}
           </button>
         </Show>
 
@@ -119,6 +134,8 @@ function Shell() {
         >
           {meta()}
         </span>
+
+        <LocaleSwitch />
 
         <LogTrigger
           ref={(el) => {

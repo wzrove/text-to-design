@@ -1,6 +1,8 @@
 import { createMemo, createSignal } from 'solid-js';
+import type { MessageKey } from 'text-to-design-shared';
 import type { BridgeStatus } from '../bridge/BridgeSocket';
 import { useBridge } from '../bridge/useBridge';
+import { t } from '../i18n/useLocale';
 import { copyText } from '../utils/clipboard';
 
 /**
@@ -10,15 +12,6 @@ import { copyText } from '../utils/clipboard';
  * (daemon/run.ts runShim),所以「调一次 ping」就等于「把后台服务叫起来」。
  * README 的第三步讲的就是这件事,这里让文案直说,用户不必自己推导。
  */
-const WAKE_CMD = [
-  '请帮我连接 text-to-design 后台服务:',
-  '',
-  '1. 若尚未注册 MCP 服务:用你工具原生的方式注册一个 stdio MCP server,',
-  '   命令 npx -y text-to-design-mcp@latest(无需手动安装,npx 会自动拉取运行)。',
-  '',
-  '2. 注册后调用 jsd_ping —— 这一步会唤醒(必要时自动拉起)后台常驻服务。',
-  '   若返回「插件未连接」,请提示我在设计软件里运行 text-to-design 插件。',
-].join('\n');
 
 /**
  * 手动常驻启动:daemon 子命令幂等(已有同版本实例直接退出,见 run.ts
@@ -53,11 +46,11 @@ const CARD: Record<Variant, string> = {
 };
 
 /** live region 播报文案:按真实 status 取(含 connecting),压到一行,不念整张引导卡 */
-const ANNOUNCE: Record<BridgeStatus, string> = {
-  connected: '已连接后台服务',
-  connecting: '正在连接后台服务',
-  superseded: '通道已被另一个插件面板接管',
-  disconnected: '尚未连接后台服务',
+const ANNOUNCE: Record<BridgeStatus, MessageKey> = {
+  connected: 'conn.announce.connected',
+  connecting: 'conn.announce.connecting',
+  superseded: 'conn.announce.superseded',
+  disconnected: 'conn.announce.disconnected',
 };
 
 /** 连接引导:未连接给两条可执行路径;已连接给使用引导;被顶替给夺回动作 */
@@ -84,12 +77,12 @@ export default function ConnectionHint() {
       case 'connected':
         return {
           cls: 'text-success-content/90',
-          text: '已连接。选中画布节点后点「复制」,把内容发给 AI 助手——例如:「按这个节点样式帮我再做一张卡片」',
+          text: t('conn.connected'),
         };
       case 'superseded':
         return {
           cls: 'text-warning-content/90',
-          text: '通道已被另一个插件面板接管(同一时刻只服务一个面板),自动重连已停止。点顶部状态徽章旁的「夺回」切回本面板。',
+          text: t('conn.superseded'),
         };
       default:
         // 断开态:这一行让位给下面的引导卡,自身隐藏留白
@@ -102,7 +95,7 @@ export default function ConnectionHint() {
   return (
     <div>
       <div role="status" aria-live="polite" class="sr-only">
-        {ANNOUNCE[status()]}
+        {t(ANNOUNCE[status()])}
       </div>
 
       {/*
@@ -118,14 +111,16 @@ export default function ConnectionHint() {
 
         <div classList={{ hidden: variant() !== 'disconnected' }}>
           <div class="flex items-center gap-2">
-            <span class="font-bold text-warning-content">尚未连接后台服务</span>
+            <span class="font-bold text-warning-content">
+              {t('conn.disconnected.title')}
+            </span>
             <a
               href={GITHUB_URL}
               target="_blank"
               rel="noreferrer"
               class="ml-auto shrink-0 text-warning-content/70 underline"
             >
-              安装教程
+              {t('conn.disconnected.tutorial')}
             </a>
           </div>
 
@@ -133,13 +128,11 @@ export default function ConnectionHint() {
             <button
               type="button"
               class={`btn btn-xs btn-outline ${copied() === 'ai' ? 'text-success' : ''}`}
-              onClick={() => copy('ai', WAKE_CMD)}
+              onClick={() => copy('ai', t('conn.wakeCmd'))}
             >
-              {copied() === 'ai' ? '✓ 已复制' : '① 复制给 AI 助手'}
+              {copied() === 'ai' ? t('conn.copied') : t('conn.copyAi')}
             </button>
-            <span class="text-warning-content/80">
-              发给 AI,让它调用 jsd_ping 唤醒后台服务
-            </span>
+            <span class="text-warning-content/80">{t('conn.copyAi.hint')}</span>
           </div>
 
           <div class="mt-1.5 flex flex-wrap items-center gap-1.5">
@@ -148,7 +141,7 @@ export default function ConnectionHint() {
               class={`btn btn-xs btn-outline ${copied() === 'daemon' ? 'text-success' : ''}`}
               onClick={() => copy('daemon', DAEMON_CMD)}
             >
-              {copied() === 'daemon' ? '✓ 已复制' : '② 复制启动命令'}
+              {copied() === 'daemon' ? t('conn.copied') : t('conn.copyDaemon')}
             </button>
             <code
               class="min-w-0 truncate rounded bg-base-100/60 px-1 py-0.5 font-mono text-[10px] text-warning-content/80"
@@ -157,9 +150,7 @@ export default function ConnectionHint() {
               {DAEMON_CMD}
             </code>
           </div>
-          <p class="mt-1 text-warning-content/70">
-            在本机终端执行即常驻到下次重启;重复执行安全(已有实例会自动跳过)。
-          </p>
+          <p class="mt-1 text-warning-content/70">{t('conn.daemon.note')}</p>
         </div>
       </div>
     </div>

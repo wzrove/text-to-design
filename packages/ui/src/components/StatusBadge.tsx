@@ -1,5 +1,7 @@
 import { createMemo, Show } from 'solid-js';
+import type { MessageKey } from 'text-to-design-shared';
 import { useBridge } from '../bridge/useBridge';
+import { t } from '../i18n/useLocale';
 
 // 淡底深字替代实心徽章。⚠️ 本 webview 下 daisyUI 主题色的透明度修饰符(X/10、X/25)
 // 会退化成实心色(蓝底配蓝字),故底色/描边一律用 design-tokens 生成的 rgba 组件层
@@ -15,21 +17,27 @@ const STYLE = {
     'border border-[var(--component-status-chip-waiting-border)] bg-[var(--component-status-chip-waiting-bg)] text-warning',
 } as const;
 
-const LABEL = {
-  connected: '已连接',
-  connecting: '连接中…',
-  waiting: '等待服务',
-  superseded: '已被接管',
-} as const;
+const LABEL_KEY = {
+  connected: 'status.connected.label',
+  connecting: 'status.connecting.label',
+  waiting: 'status.waiting.label',
+  superseded: 'status.superseded.label',
+} as const satisfies Record<
+  'connected' | 'connecting' | 'waiting' | 'superseded',
+  MessageKey
+>;
 
-const TITLE = {
-  connected: '服务在线,插件与 AI 会话已连通',
-  connecting: '已连上后台服务,等待它确认这条通道',
-  waiting: '服务离线时无需手动操作,AI 调用会自动拉起',
-  superseded: '另一个插件面板占用了通道;点「夺回」可切回本面板',
-} as const;
+const TITLE_KEY = {
+  connected: 'status.connected.title',
+  connecting: 'status.connecting.title',
+  waiting: 'status.waiting.title',
+  superseded: 'status.superseded.title',
+} as const satisfies Record<
+  'connected' | 'connecting' | 'waiting' | 'superseded',
+  MessageKey
+>;
 
-type BadgeKey = keyof typeof LABEL;
+type BadgeKey = keyof typeof LABEL_KEY;
 
 export default function StatusBadge() {
   const { status } = useBridge();
@@ -50,7 +58,7 @@ export default function StatusBadge() {
       role="status"
       aria-atomic="true"
       class={`badge badge-sm gap-1 ${STYLE[key()]}`}
-      title={TITLE[key()]}
+      title={t(TITLE_KEY[key()])}
     >
       {/*
         「连接中」是时间维度上的进行时,不是另一种面板形态 —— 它的可见反馈就
@@ -87,7 +95,7 @@ export default function StatusBadge() {
           />
         </svg>
       </Show>
-      {LABEL[key()]}
+      {t(LABEL_KEY[key()])}
     </span>
   );
 }

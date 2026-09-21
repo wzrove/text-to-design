@@ -7,13 +7,10 @@ import {
   SUPERSEDED_CLOSE_CODE,
   WS_HANDSHAKE_TIMEOUT_MS,
 } from 'text-to-design-shared';
+import { t } from '../i18n/useLocale';
 import type { EventBus } from './events';
 import type { Router } from './router';
 import type { BridgeEvent, BridgeStatus, Conn } from './types';
-
-/** 被顶替时给用户的一行提示:既要说明原因,也要给出唯一可行的动作 */
-const SUPERSEDED_HINT =
-  '通道已被另一个插件面板接管,自动重连已停止(点面板顶部的「夺回」可切回)';
 
 /**
  * 单连接生命周期:一个 ws 的打开/关闭/错误处理、全局状态派生与事件发射。
@@ -89,7 +86,10 @@ export class ConnectionManager {
         if (socket.readyState === WebSocket.OPEN) return;
         this.emit(
           'log',
-          `WS 握手超时(${WS_HANDSHAKE_TIMEOUT_MS}ms),放弃本次连接: ${conn.port}`,
+          t('bridge.log.handshakeTimeout', {
+            ms: WS_HANDSHAKE_TIMEOUT_MS,
+            port: conn.port,
+          }),
         );
         try {
           socket.close();
@@ -107,10 +107,7 @@ export class ConnectionManager {
         }
         this.openAt = Date.now();
         this.setStatus('connecting', true);
-        this.emit(
-          'log',
-          `MCP server 已连接,等待服务确认: ws://localhost:${conn.port}`,
-        );
+        this.emit('log', t('bridge.log.serverConnected', { port: conn.port }));
         settle(true);
         // 延迟探测:绕开代理层「连接瞬间首条消息易丢」的窗口,主动 ping 确认双向可达
         setTimeout(() => this.router.probeServer(), PROBE_DELAY_MS);
@@ -118,7 +115,10 @@ export class ConnectionManager {
         this.confirmTimer = window.setTimeout(() => {
           if (conn.ws !== socket) return;
           if (this.lastConfirmedAt < this.openAt) {
-            this.emit('log', `服务确认超时,关闭重连: ${conn.port}`);
+            this.emit(
+              'log',
+              t('bridge.log.confirmTimeout', { port: conn.port }),
+            );
             socket.close();
           }
         }, CONFIRM_TIMEOUT_MS);
@@ -146,11 +146,11 @@ export class ConnectionManager {
           const first = !this.superseded;
           this.superseded = true;
           this.setStatus('superseded');
-          if (first) this.emit('log', SUPERSEDED_HINT);
+          if (first) this.emit('log', t('bridge.log.superseded'));
           return;
         }
         this.setStatus('disconnected', true);
-        this.emit('log', `连接断开: ${conn.port}`);
+        this.emit('log', t('bridge.log.closed', { port: conn.port }));
       };
 
       socket.onerror = () => {
@@ -195,7 +195,10 @@ export class ConnectionManager {
       if (isConfirmExpired(this.lastConfirmedAt, Date.now())) {
         this.emit(
           'log',
-          `服务确认过期(${CONFIRM_STALE_MS}ms 未收到心跳),关闭重连: ${this.conn.port}`,
+          t('bridge.log.stale', {
+            ms: CONFIRM_STALE_MS,
+            port: this.conn.port,
+          }),
         );
         ws.close();
       }
@@ -213,7 +216,7 @@ export class ConnectionManager {
     this.superseded = true;
     this.stopStaleWatch();
     this.setStatus('superseded');
-    this.emit('log', SUPERSEDED_HINT);
+    this.emit('log', t('bridge.log.superseded'));
     const ws = this.conn?.ws;
     if (ws && ws.readyState === WebSocket.OPEN) ws.close();
   }
@@ -242,7 +245,9 @@ export class ConnectionManager {
     } catch (e) {
       this.emit(
         'log',
-        `WS 消息处理失败: ${e instanceof Error ? e.message : String(e)}`,
+        t('bridge.log.wsFailed', {
+          message: e instanceof Error ? e.message : String(e),
+        }),
       );
     }
   }

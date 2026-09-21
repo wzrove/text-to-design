@@ -2,6 +2,7 @@ import type { Accessor, ParentProps } from 'solid-js';
 import { createContext, createSignal, onMount, useContext } from 'solid-js';
 import type { PluginPlatform } from 'text-to-design-shared';
 import { WS_PORT } from 'text-to-design-shared';
+import { applyStoredChoice, t } from '../i18n/useLocale';
 import type { BridgeStatus } from './BridgeSocket';
 import { BridgeSocket } from './BridgeSocket';
 import type { CapabilitySnapshot, LogLevel } from './types';
@@ -97,10 +98,12 @@ export function BridgeProvider(props: ParentProps) {
     try {
       const snap = toSnapshot(await getBridge().pingPlugin());
       setCapability(() => snap);
-      if (snap == null) pushLog('能力表回包异常(缺 platform)', 'debug');
+      if (snap == null) pushLog(t('bridge.log.capabilityMissing'), 'debug');
     } catch (e) {
       pushLog(
-        `能力表获取失败: ${e instanceof Error ? e.message : String(e)}`,
+        t('bridge.log.capabilityFailed', {
+          message: e instanceof Error ? e.message : String(e),
+        }),
         'debug',
       );
     }
@@ -125,6 +128,7 @@ export function BridgeProvider(props: ParentProps) {
         void refreshCapabilities();
       } else if (e.type === 'log') pushLog(e.line, e.level);
       else if (e.type === 'ui_env') setCanResize(() => e.canResize);
+      else if (e.type === 'locale_state') applyStoredChoice(e.stored);
     });
   });
 
@@ -146,10 +150,15 @@ export function BridgeProvider(props: ParentProps) {
       try {
         const data = await getBridge().pingPlugin();
         setCapability(() => toSnapshot(data));
-        pushLog(`ping 插件成功: ${JSON.stringify(data)}`, 'debug');
+        pushLog(
+          t('bridge.log.pingOk', { data: JSON.stringify(data) }),
+          'debug',
+        );
       } catch (e) {
         pushLog(
-          `ping 插件失败: ${e instanceof Error ? e.message : String(e)}`,
+          t('bridge.log.pingFailed', {
+            message: e instanceof Error ? e.message : String(e),
+          }),
           'error',
         );
       }
@@ -165,6 +174,6 @@ export function BridgeProvider(props: ParentProps) {
 
 export function useBridge(): BridgeStore {
   const ctx = useContext(BridgeContext);
-  if (!ctx) throw new Error('useBridge 必须在 <BridgeProvider> 内使用');
+  if (!ctx) throw new Error(t('bridge.error.useBridge'));
   return ctx;
 }

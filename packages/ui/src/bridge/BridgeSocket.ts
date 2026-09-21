@@ -1,4 +1,5 @@
 import { WS_PORT } from 'text-to-design-shared';
+import { t } from '../i18n/useLocale';
 import { ConnectionManager } from './connection';
 import { EventBus } from './events';
 import { Router } from './router';
@@ -33,6 +34,8 @@ export class BridgeSocket {
       this.events.emit({ type: 'platform', platform });
     this.router.onEnv = (env) =>
       this.events.emit({ type: 'ui_env', canResize: env.canResize });
+    this.router.onLocale = (stored) =>
+      this.events.emit({ type: 'locale_state', stored });
     this.router.onServerStatus = (frame) => {
       if (frame.state === 'superseded') {
         this.connection.markSuperseded();
@@ -46,7 +49,7 @@ export class BridgeSocket {
         this.events.emit({
           type: 'log',
           level: 'info',
-          line: `服务已确认连接(版本 ${frame.version})`,
+          line: t('bridge.log.confirmed', { version: frame.version }),
         });
       }
     };
@@ -95,7 +98,7 @@ export class BridgeSocket {
 
   disconnect(): void {
     this.scanner.abort();
-    this.router.rejectAll(new Error('手动断开连接'));
+    this.router.rejectAll(new Error(t('bridge.log.manualClose')));
     this.connection.close();
   }
 

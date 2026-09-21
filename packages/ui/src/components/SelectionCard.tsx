@@ -1,5 +1,6 @@
 import { createEffect, createMemo, createSignal, For, Show } from 'solid-js';
 import type { NodeType } from 'text-to-design-shared';
+import { t } from '../i18n/useLocale';
 import { copyText } from '../utils/clipboard';
 
 interface SelectedNode {
@@ -83,10 +84,15 @@ export default function SelectionCard(props: {
     >
       <div class="flex items-center justify-between gap-2 border-b border-base-200 px-2.5 py-1.5">
         <div class="flex min-w-0 items-center gap-2">
-          <h2 class="text-xs font-bold text-base-content/70">选中节点</h2>
+          <h2 class="text-xs font-bold text-base-content/70">
+            {t('selection.title')}
+          </h2>
           <Show when={nodes().length > 0}>
             <span class="badge badge-sm badge-ghost border-base-300 font-mono text-[10px] text-base-content/60">
-              {nodes().length} 个 · 序列化 {formatSize(size())}
+              {t('selection.badge', {
+                count: nodes().length,
+                size: formatSize(size()),
+              })}
             </span>
           </Show>
         </div>
@@ -97,13 +103,15 @@ export default function SelectionCard(props: {
               class="btn btn-xs btn-primary"
               onClick={() => copyText(payload())}
             >
-              复制
+              {t('selection.copy')}
             </button>
             <button
               type="button"
               class="btn btn-xs btn-ghost px-2"
               aria-expanded={open()}
-              aria-label={open() ? '收起节点列表' : '展开节点列表'}
+              aria-label={
+                open() ? t('selection.collapse') : t('selection.expand')
+              }
               onClick={() => setOpen((v) => !v)}
             >
               <span
@@ -144,7 +152,9 @@ export default function SelectionCard(props: {
                   class={`btn btn-xs btn-ghost shrink-0 ${copiedId() === n.id ? 'text-success' : ''}`}
                   onClick={() => copyId(n.id)}
                 >
-                  {copiedId() === n.id ? '✓' : '复制'}
+                  {copiedId() === n.id
+                    ? t('selection.copied')
+                    : t('selection.copy')}
                 </button>
               </div>
             )}
@@ -158,11 +168,9 @@ export default function SelectionCard(props: {
             props.fill ? 'flex flex-1 flex-col items-center justify-center' : ''
           }`}
         >
-          未选中节点
+          {t('selection.empty.title')}
           <br />
-          <span class="text-base-content/60">
-            在画布中点选节点后,这里会实时显示并支持复制
-          </span>
+          <span class="text-base-content/60">{t('selection.empty.hint')}</span>
         </p>
       </Show>
     </div>

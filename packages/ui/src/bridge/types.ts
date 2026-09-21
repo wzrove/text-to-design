@@ -2,6 +2,7 @@
 import type {
   CoreCapability,
   HostCapability,
+  LocaleChoice,
   LogLevel,
   PlatformOpInfo,
   PluginPlatform,
@@ -39,7 +40,9 @@ export type BridgeEvent =
   | { type: 'log'; level: LogLevel; line: string }
   | { type: 'selection'; data: unknown }
   | { type: 'platform'; platform: PluginPlatform }
-  | { type: 'ui_env'; canResize: boolean };
+  | { type: 'ui_env'; canResize: boolean }
+  /** 宿主里存着的语言选择(code 侧启动时推一次;见 shared/locale-channel.ts) */
+  | { type: 'locale_state'; stored: LocaleChoice | null };
 
 export type Conn = {
   port: number;

@@ -28,7 +28,10 @@ import {
   getPageStructure,
   groupNodes,
   importComponentNodes,
+  isLocaleSetMessage,
   isUiResizeMessage,
+  LOCALE_CHOICE_STORAGE_KEY,
+  type LocaleChoice,
   listFonts,
   listStyles,
   makeResponse,
@@ -40,10 +43,12 @@ import {
   repairNodes,
   reparentNodes,
   runtimeContext,
+  SYSTEM_CHOICE,
   setInstanceProperties,
   setSelection,
   swapComponents,
   syncInstanceOverrides,
+  toStoredChoice,
   trySerialize,
   updateSelection,
 } from 'text-to-design-shared';
@@ -174,6 +179,54 @@ export function registerPlugin(
   // 与 pushPlatform 同因补发:showUI 后 UI iframe 加载是异步的,立即推可能丢消息
   setTimeout(pushUiEnv, 200);
 
+  /**
+   * 宿主存储:语言选择的保管员(0016)。两边都是**可选**能力 ——
+   * jsDesign 的 `clientStorage` 在 typings 里存在(runtime 是否实现未实测),
+   * 所以判据是 `typeof`、调用点 `try/catch`,拿不到就当没有,绝不让面板起不来。
+   */
+  const storage = host.clientStorage;
+  const canStore = typeof storage?.getAsync === 'function';
+
+  async function readStoredChoice(): Promise<unknown> {
+    if (!canStore) return null;
+    try {
+      return await storage.getAsync(LOCALE_CHOICE_STORAGE_KEY);
+    } catch (e) {
+      console.warn('[plugin] 读取语言选择失败(按未选过处理)', e);
+      return null;
+    }
+  }
+
+  async function writeStoredChoice(choice: LocaleChoice): Promise<void> {
+    if (!canStore) return;
+    try {
+      // 「跟随系统」= 清掉存储值:否则用户以后换了系统语言,
+      // 插件还停在旧语言上(键是显式的,不该表达「随时间变化」的语义)
+      if (choice === SYSTEM_CHOICE) {
+        await storage.deleteAsync?.(LOCALE_CHOICE_STORAGE_KEY);
+        return;
+      }
+      await storage.setAsync(LOCALE_CHOICE_STORAGE_KEY, choice);
+    } catch (e) {
+      console.warn('[plugin] 保存语言选择失败(本次会话内仍生效)', e);
+    }
+  }
+
+  function pushLocaleState(): void {
+    void readStoredChoice().then((stored) => {
+      try {
+        host.ui.postMessage({
+          type: 'locale_state',
+          stored: toStoredChoice(stored),
+        });
+      } catch (e) {
+        console.error('[plugin] 推送语言选择失败', e);
+      }
+    });
+  }
+  // 同 pushPlatform:UI iframe 异步加载,立即推可能丢
+  setTimeout(pushLocaleState, 200);
+
   host.ui.onmessage = async (raw: unknown) => {
     // 面板自改高度:旁路消息,不在 PluginRequest 契约内(理由见 shared/panel.ts)。
     // 必须在取 msg.method 之前拦掉 —— 它没有 method,落到下面会回一个「未知 method」
@@ -185,6 +238,12 @@ export function registerPlugin(
       } catch (e) {
         console.error('[plugin] 面板改尺寸失败', e);
       }
+      return;
+    }
+    // 语言选择:同款旁路消息(见 shared/locale-channel.ts)。持久化在这里做,
+    // 因为 clientStorage 只有 code 侧摸得到
+    if (isLocaleSetMessage(raw)) {
+      await writeStoredChoice(raw.choice);
       return;
     }
     const msg = raw as PluginRequest;

@@ -1,12 +1,14 @@
 <!doctype html>
-<html lang="zh-CN" data-theme="textdesign">
+<!-- `lang` 只是首帧之前的占位:App 挂载后立刻按当前 locale 覆写(见 0016)。
+     title 由宿主标题栏接管,面板里不再重复显示,保持 ASCII 免得进 i18n 面。 -->
+<html lang="en" data-theme="textdesign">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>jsDesign Plugin UI</title>
+    <title>text-to-design</title>
   </head>
   <body>
     <div id="root"></div>
     <script type="module" src="./src/main.tsx"></script>
-  </body> 
+  </body>
 </html>

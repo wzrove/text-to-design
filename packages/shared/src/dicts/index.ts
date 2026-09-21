@@ -7,6 +7,7 @@
 export * from './boolean-operation';
 export * from './capability';
 export * from './error-code';
+export * from './i18n';
 export * from './log';
 export * from './node-type';
 export * from './platform';

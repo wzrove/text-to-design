@@ -8,6 +8,8 @@
  * 此前 ①② 是两套并行事实(core/update 手写一份 PLATFORM_SUPERSET_PROPS),可各自漂移。
  */
 
+import { MESSAGES_ZH_CN } from './i18n/messages.zh-CN';
+
 /** 平台超集能力取值(两平台差异项) */
 export const HOST_CAPABILITIES = [
   'styles',
@@ -34,22 +36,22 @@ export type CoreCapabilityKey = (typeof CORE_CAPABILITIES)[number];
 
 /** 能力 → 中文名(工具/错误文案与面板显示共用) */
 export const HOST_CAPABILITY_LABEL: Record<HostCapabilityKey, string> = {
-  styles: '本地样式',
-  textTruncation: '文本截断',
-  componentProperties: '组件属性',
-  variables: '变量',
-  platformOps: '平台特有操作',
-  inPlaceVariants: '原位合并变体',
+  styles: MESSAGES_ZH_CN['capability.host.styles'],
+  textTruncation: MESSAGES_ZH_CN['capability.host.textTruncation'],
+  componentProperties: MESSAGES_ZH_CN['capability.host.componentProperties'],
+  variables: MESSAGES_ZH_CN['capability.host.variables'],
+  platformOps: MESSAGES_ZH_CN['capability.host.platformOps'],
+  inPlaceVariants: MESSAGES_ZH_CN['capability.host.inPlaceVariants'],
 };
 
 /** 核心能力 → 中文名 */
 export const CORE_CAPABILITY_LABEL: Record<CoreCapabilityKey, string> = {
-  create: '创建',
-  modify: '修改',
-  structure: '结构操作',
-  component: '组件',
-  export: '导出',
-  image: '图片填充',
+  create: MESSAGES_ZH_CN['capability.core.create'],
+  modify: MESSAGES_ZH_CN['capability.core.modify'],
+  structure: MESSAGES_ZH_CN['capability.core.structure'],
+  component: MESSAGES_ZH_CN['capability.core.component'],
+  export: MESSAGES_ZH_CN['capability.core.export'],
+  image: MESSAGES_ZH_CN['capability.core.image'],
 };
 
 /**

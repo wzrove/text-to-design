@@ -1,4 +1,5 @@
 import { Show } from 'solid-js';
+import { t } from '../i18n/useLocale';
 
 /** 未读条数上限:三位数会把 360 宽页头上的平台/端口挤没,超了只报「99+」 */
 const MAX_SHOWN = 99;
@@ -45,10 +46,14 @@ export default function LogTrigger(props: {
         class={`btn btn-ghost btn-xs shrink-0 gap-1 px-2 ${
           hasUnread() ? UNREAD_CLS : HEALTHY_CLS
         }`}
-        aria-label={hasUnread() ? `日志,有 ${props.unread} 条新错误` : '日志'}
+        aria-label={
+          hasUnread()
+            ? t('log.trigger.unread', { count: props.unread })
+            : t('log.trigger')
+        }
         aria-haspopup="dialog"
         aria-expanded={props.open}
-        title="日志:MCP 调用与连接事件"
+        title={t('log.trigger.title')}
         onClick={props.onClick}
       >
         <svg
@@ -64,15 +69,15 @@ export default function LogTrigger(props: {
           <path d="M4 17l6-6-6-6" />
           <path d="M12 19h8" />
         </svg>
-        <Show when={hasUnread()} fallback={<span>日志</span>}>
+        <Show when={hasUnread()} fallback={<span>{t('log.trigger')}</span>}>
           {/* 数字与文字分列:数字 mono 定宽,条数增长时按钮宽度不跟着抖 */}
           <span class="font-mono tabular-nums">{shown()}</span>
-          <span>条错误</span>
+          <span>{t('log.trigger.unit')}</span>
         </Show>
       </button>
       {/* 可见部分只有计数变化,不打断当前朗读;节点常驻故另起一处 sr-only 载体 */}
       <span role="status" aria-live="polite" class="sr-only">
-        {hasUnread() ? `有 ${props.unread} 条新错误` : ''}
+        {hasUnread() ? t('log.trigger.announce', { count: props.unread }) : ''}
       </span>
     </>
   );

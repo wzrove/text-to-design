@@ -1,7 +1,8 @@
 import { createEffect, createSignal, For, onCleanup, Show } from 'solid-js';
-import { LOG_LEVEL_ORDER } from 'text-to-design-shared';
+import { LOG_LEVEL_ORDER, type MessageKey } from 'text-to-design-shared';
 import type { LogLevel } from '../bridge/types';
 import type { LogEntry } from '../bridge/useBridge';
+import { t } from '../i18n/useLocale';
 import { copyText } from '../utils/clipboard';
 
 /** 过滤档位与级别排序:all=不过滤,其余为「该级别及以上」 */
@@ -43,11 +44,11 @@ const LEVEL_MARK: Partial<Record<LogLevel, string>> = {
   error: '✕ ',
 };
 
-const FILTERS: { key: FilterKey; label: string }[] = [
-  { key: 'all', label: '全部' },
-  { key: 'info', label: '信息+' },
-  { key: 'warn', label: '警告+' },
-  { key: 'error', label: '错误' },
+const FILTERS: { key: FilterKey; label: MessageKey }[] = [
+  { key: 'all', label: 'log.drawer.filter.all' },
+  { key: 'info', label: 'log.drawer.filter.info' },
+  { key: 'warn', label: 'log.drawer.filter.warn' },
+  { key: 'error', label: 'log.drawer.filter.error' },
 ];
 
 /**
@@ -137,7 +138,7 @@ function LogEntryItem(props: { entry: LogEntry }) {
         class="absolute top-0.5 right-0.5 z-10 rounded bg-base-100/90 px-1 text-base-content/60 text-[10px] opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100 hover:text-base-content"
         onClick={onCopy}
       >
-        {copied() ? '✓' : '复制'}
+        {copied() ? '✓' : t('log.drawer.copy')}
       </button>
     </div>
   );
@@ -174,13 +175,13 @@ export default function LogDrawer(props: {
   const shown = () =>
     props.entries.filter((e) => RANK[e.level ?? 'info'] >= RANK[filter()]);
 
-  const filterLabel = () =>
-    FILTERS.find((f) => f.key === filter())?.label ?? '';
+  const filterKey = (): MessageKey =>
+    FILTERS.find((f) => f.key === filter())?.label ?? 'log.drawer.filter.all';
 
   const emptyText = (): string =>
     props.entries.length === 0
-      ? '暂无日志。MCP 调用与连接事件会记录在这里。'
-      : `当前档位「${filterLabel()}」下没有日志,切到「全部」看完整记录。`;
+      ? t('log.drawer.empty')
+      : t('log.drawer.emptyFiltered', { filter: t(filterKey()) });
 
   const followBottom = () => {
     const el = containerRef;
@@ -249,29 +250,32 @@ export default function LogDrawer(props: {
       <div class="fixed inset-0 z-30">
         <button
           type="button"
-          aria-label="关闭日志"
+          aria-label={t('log.drawer.close')}
           class="drawer-enter absolute inset-0 h-full w-full cursor-default bg-[rgba(0,0,0,0.35)]"
           onClick={props.onClose}
         />
         <section
           role="dialog"
           aria-modal="true"
-          aria-label="日志"
+          aria-label={t('log.drawer.title')}
           class="drawer-enter absolute inset-x-0 bottom-0 flex h-[85%] flex-col rounded-t-xl border-base-300 border-t bg-base-100 shadow-lg"
         >
           <div class="flex items-center gap-2 px-3 pt-2">
             <h2 class="shrink-0 text-xs font-bold text-base-content/80">
-              日志
+              {t('log.drawer.title')}
             </h2>
             <span class="min-w-0 flex-1 truncate text-base-content/60 text-[10px]">
-              {shown().length} / {props.entries.length} 条
+              {t('log.drawer.count', {
+                shown: shown().length,
+                total: props.entries.length,
+              })}
             </span>
             <button
               type="button"
               class="btn btn-ghost btn-xs text-base-content/60 hover:text-base-content"
               onClick={props.onClear}
             >
-              清空
+              {t('log.drawer.clear')}
             </button>
             <button
               ref={(el) => {
@@ -279,7 +283,7 @@ export default function LogDrawer(props: {
               }}
               type="button"
               class="btn btn-ghost btn-xs px-1.5 text-base-content/60 hover:text-base-content"
-              aria-label="关闭日志"
+              aria-label={t('log.drawer.close')}
               onClick={props.onClose}
             >
               ✕
@@ -296,7 +300,7 @@ export default function LogDrawer(props: {
                   }`}
                   onClick={() => setFilter(f.key)}
                 >
-                  {f.label}
+                  {t(f.label)}
                 </button>
               )}
             </For>
@@ -331,7 +335,7 @@ export default function LogDrawer(props: {
                   class="hint-enter btn btn-xs border-base-300 bg-base-100 text-base-content shadow-md hover:bg-base-200"
                   onClick={jumpToLatest}
                 >
-                  ↓ {newCount()} 条新日志
+                  {t('log.drawer.newCount', { count: newCount() })}
                 </button>
               </div>
             </Show>

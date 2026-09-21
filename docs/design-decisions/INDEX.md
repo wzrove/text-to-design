@@ -27,6 +27,7 @@
 | [0013](0013-错误链路：保持分层边界与载荷结构化及连接确认过期检测.md) | 错误链路：保持分层边界与载荷结构化及连接确认过期检测 | 已采纳（已落地） | `shared/`（`dicts/error-code.ts` 新、PluginResponse、`connection.ts`）、`ui/`（`code/plugin.ts`、`bridge/router.ts`、`bridge/connection.ts`）、`mcp-server/`（`core/bridge-error.ts` 新、`pending.ts`、`bridge.ts`、`core/registry.ts`、`core/response.ts`） | 2026-09-20 |
 | [0014](0014-面板高度自适应用测量加-ui-resize-旁路消息，不引入布局框架.md) | 面板高度自适应用测量加 ui.resize 旁路消息，不引入布局框架 | 已采纳（已落地） | `shared/`（`panel.ts` 新、`core/host.ts`、`index.ts`）、`ui/`（`code/plugin.ts`、`bridge/codeChannel.ts` 新、`bridge/router.ts`、`bridge/BridgeSocket.ts`、`bridge/useBridge.tsx`、`components/PanelHeightSync.tsx` 新、`LogDrawer.tsx`、`SelectionCard.tsx`、`App.tsx`、`index.css`） | 2026-09-21 |
 | [0015](0015-日志抽屉打开时抬升窗口下限.md) | 日志抽屉打开时抬升窗口下限 | 已采纳（已落地） | `shared/panel.ts`、`ui/`（`components/PanelHeightSync.tsx`、`components/LogDrawer.tsx`、`App.tsx`） | 2026-09-21 |
+| [0016](0016-i18n走语义键加参数，默认语言取系统语言并可手动切换.md) | i18n 走语义键加参数，默认语言取系统语言并可手动切换 | 已采纳（部分落地：B0+B2 已落，B1/B3/B4 待做） | `shared/`（新增 `dicts/i18n/`、`locale-channel.ts`、`core/host.ts` 的 clientStorage、`dicts/platform|capability.ts` label 投影、`schemas/*` describe、`core/*` 错误文案）、`ui/`（新增 `src/i18n/*`、`components/LocaleSwitch.tsx`、`App.tsx`、`components/*`、`bridge/*`、`code/plugin.ts`、`ui.html`）、`mcp-server/`（`core/localize-schema.ts` 新、`tools/*`、`core/response.ts`）、`tests/i18n.test.ts` | 2026-09-21 |
 
 ## 依赖关系
 
@@ -46,6 +47,8 @@
 0013 (错误链路)      ── 与 0007 同源（不允许静默失效）；「能被机器守的约束」取自 0005；不改 0001/0004 写入管线
 0014 (面板高度)      ── 独立；「同一事实不手写多份」取自 0008/0009；「不为一处需求引依赖」取自 0012；不改 0001/0004 写入管线
 0015 (日志高度下限)  ── 修订 0014 的「抽屉不参与高度」那一条；「不为一处需求引依赖」取自 0012
+0016 (i18n 键化)    ── 载体取自 0013、唯一真源取自 0007、locale 显式注入沿 0002、体积受 0006 约束；
+                        `ui_env` 加字段沿 0014；不改 0001/0004 写入管线
 ```
 
 ## 汇总
