@@ -48,7 +48,13 @@ if (fresh.length === 0) {
   process.exit(0);
 }
 
-// tag 只带版本号,回查它属于哪个包才能定位 dist
+// tag 形如 <包名>@<版本>(包名可能带 scope),按名反查包即可定位 dist
+// 旧 v<版本> tag 不参与:两包版本线独立,靠版本号反查会撞名错挂
+function parseTag(tag) {
+  const at = tag.lastIndexOf('@');
+  return at > 0 ? { name: tag.slice(0, at), version: tag.slice(at + 1) } : null;
+}
+
 const packages = readdirSync(resolve(ROOT, 'packages'), { withFileTypes: true })
   .filter((entry) => entry.isDirectory())
   .map((entry) => resolve(ROOT, 'packages', entry.name))
@@ -62,15 +68,19 @@ const packages = readdirSync(resolve(ROOT, 'packages'), { withFileTypes: true })
 mkdirSync(OUT, { recursive: true });
 
 for (const tag of fresh) {
-  const pkg = packages.find((p) => p.version === tag.replace(/^v/, ''));
+  const parsed = parseTag(tag);
+  const pkg = parsed ? packages.find((p) => p.name === parsed.name) : undefined;
 
   let assets = [];
-  if (!pkg) {
+  if (!parsed) {
+    console.log(`\n${tag} 不是 <包名>@<版本> 格式,只建 Release`);
+  } else if (!pkg) {
     console.log(`\n${tag} 没有匹配的包,只建 Release`);
   } else if (!existsSync(resolve(pkg.dir, 'dist'))) {
     console.log(`\n${pkg.name} 没有 dist,只建 Release`);
   } else {
-    const zip = resolve(OUT, `${pkg.name}-${tag}.zip`);
+    const safe = pkg.name.replace(/^@/, '').replace(/\//g, '-');
+    const zip = resolve(OUT, `${safe}-${pkg.version}.zip`);
     rmSync(zip, { force: true });
     // 压缩包内顶层目录固定为 dist,与 README 的「解压后有一个 dist 文件夹」一致
     run('zip', ['-q', '-r', zip, 'dist'], { cwd: pkg.dir });

@@ -21,6 +21,19 @@ function isPublished(name, version) {
   }
 }
 
+function gitRevParse(ref) {
+  try {
+    return execFileSync('git', ['rev-parse', ref], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim();
+  } catch {
+    return null;
+  }
+}
+
+const HEAD = gitRevParse('HEAD');
+
 for (const dir of PUBLISHABLE) {
   const pkgPath = resolve(ROOT, dir, 'package.json');
   const {
@@ -34,15 +47,16 @@ for (const dir of PUBLISHABLE) {
     continue;
   }
 
-  const tag = `v${version}`;
-  const tagged = (() => {
-    try {
-      execFileSync('git', ['rev-parse', `refs/tags/${tag}`], { stdio: 'pipe' });
-      return true;
-    } catch {
-      return false;
-    }
-  })();
+  // tag 必须带包名:两个包版本线独立,共用 v<version> 会互相占坑
+  // (ui@0.7.0 撞 mcp@0.7.0 的 v0.7.0 后 tag 被静默跳过,发布成功却无 tag)
+  const tag = `${name}@${version}`;
+  const taggedAt = gitRevParse(`refs/tags/${tag}`);
+
+  if (taggedAt && taggedAt !== HEAD) {
+    throw new Error(
+      `tag ${tag} 已指向 ${taggedAt},当前 HEAD 为 ${HEAD} —— 命名空间被复用,拒绝静默跳过`,
+    );
+  }
 
   if (isPublished(name, version)) {
     console.log(`\nskip ${name}@${version} (已发布)`);
@@ -54,7 +68,7 @@ for (const dir of PUBLISHABLE) {
     console.log(`\npublished ${name}@${version}`);
   }
 
-  if (!tagged) {
+  if (!taggedAt) {
     run('git', ['tag', tag]);
     console.log(`created tag ${tag}`);
   }
