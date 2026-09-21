@@ -1,0 +1,53 @@
+# 复用型校验流水线:本文件不自己触发,只被 ci.yml(PR) 与 release.yml(主干 push) 调用。
+#
+# 拆出来的理由:此前校验步骤只在 ci.yml 里,release.yml 另起一条完全独立的流水线,
+# 两条互不阻塞 —— 主干红了照样发版(见 docs/optimization-plan-2026-09-18.md §1)。
+# 现在发版把 verify 当 needs,红的门禁挡住发布本身,而不是只挡住 PR。
+name: verify
+
+on:
+  workflow_call:
+
+# 根 package.json 的 postinstall 会跑 lefthook install;CI 装本地 hook 无意义
+env:
+  LEFTHOOK: "0"
+
+jobs:
+  quality:
+    name: lint / typecheck / test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: 格式与 lint
+        run: pnpm lint
+      - name: 类型检查
+        run: pnpm typecheck
+      - name: 不变式测试
+        run: pnpm test
+
+  build:
+    # 与 quality 并行:两边的失败原因不同(lint 挂 vs vite 挂),分开才知道该修哪边
+    name: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: 构建(ui 三份产物 + mcp)
+        run: pnpm build

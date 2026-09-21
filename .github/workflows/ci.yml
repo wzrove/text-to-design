@@ -1,28 +1,23 @@
+# PR 门禁。检查步骤全在 verify.yml(与发版共用同一份,不复制)。
+#
+# 为什么这里不挂 push:[main]:
+#   主干 push 由 release.yml 触发,它自己会先调 verify.yml 再发布 —— 两边都挂 push
+#   等于每次合入跑两遍同样的校验。主干依然被校验,只是校验的入口只有一处。
+#   保留 workflow_dispatch 是为了能在任意 ref 上手跑一次。
 name: ci
 
 on:
   pull_request:
-  push:
-    branches: [main]
+  workflow_dispatch:
 
-# 此前 CI 只有 release.yml:类型检查只跑在 lefthook pre-commit 里,而 CI 自己设了
-# LEFTHOOK=0 —— 等于合并进主干的代码从来没有被强制校验过。
+# 同一条 PR 的新 push 顶掉旧 run:旧 run 的结论不该盖住新 run,也省一份机时
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
 jobs:
   verify:
-    runs-on: ubuntu-latest
-    env:
-      LEFTHOOK: "0"
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - name: 类型检查
-        run: pnpm typecheck
-      - name: 不变式测试
-        run: pnpm test
-      - name: 格式与 lint
-        run: pnpm lint
+    uses: ./.github/workflows/verify.yml
