@@ -5,9 +5,9 @@ allowBuilds:
   esbuild: true
 # 跨包共享的公共依赖,各 package.json 用 "catalog:" 引用,版本在此统一维护
 catalog:
-  zod: ^4.5.4
+  zod: ^4.6.5
   typescript: ^7.0.2
   '@types/node': ^24.13.3
-  vite: ^8.2.2
-  concurrently: 10.0.4
+  vite: ^8.3.0
+  concurrently: 10.0.5
   vitest: ^5.0.1
