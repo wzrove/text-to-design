@@ -1,29 +1,53 @@
+# 发版。触发自主干 push(含本地直接 push 的 merge commit),手动重跑走 workflow_dispatch。
+#
+# 组织方式:verify(共用流水线)→ release,release 只有门禁全绿才拿得到 GITHUB_TOKEN 的写权限。
+# 校验不过时这一条会红在 verify 上,而不是像以前那样「CI 红着,发版照样发」。
 name: release
 
 on:
   push:
     branches:
       - main
+  workflow_dispatch:
+
+# 发版**不** cancel-in-progress:publish.mjs 有 isPublished 幂等挡板,但
+# 「已 publish 未打 tag」「tag 已推未建 Release」这两段没有,被顶掉会留半成品。
+# 宁可排队。同名 group 意味着第二个 run 会等第一个跑完。
+concurrency:
+  group: release-main
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  LEFTHOOK: "0"
 
 jobs:
+  verify:
+    uses: ./.github/workflows/verify.yml
+
   release:
+    needs: verify
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     permissions:
-      contents: write
+      contents: write # 推 tag / 建 Release / changesets 开版本 PR
       pull-requests: write
-      id-token: write
-    env:
-      LEFTHOOK: "0"
+      id-token: write # npm provenance
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 0 # changesets 要看历史 tag 才能算出该发哪些包
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 24
           registry-url: https://registry.npmjs.org
+          cache: pnpm
       - name: 版本确认与 npm 升级
+        # 保留 npm 自升级:scripts/publish.mjs 用 `npm view` 做幂等检查,
+        # 走的是随 Node 附带的那份 npm,不升会和 pnpm publish 的认证行为不一致
         run: |
           node --version
           npm --version
@@ -37,11 +61,26 @@ jobs:
           publish: pnpm release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: 推送版本 tag
-        run: git push origin --tags
+      - name: 推送本次新增的 tag
+        # 不用 `git push --tags`:那会把 runner 上任何 tag 都推上去(含 future 的补打)。
+        # 只推 before → after 的差集,与下面建 Release 的口径同一份清单。
+        run: |
+          set -euo pipefail
+          git tag > "${RUNNER_TEMP}/tags-after.txt"
+          LC_ALL=C sort "${RUNNER_TEMP}/tags-before.txt" > "${RUNNER_TEMP}/b.txt"
+          LC_ALL=C sort "${RUNNER_TEMP}/tags-after.txt"  > "${RUNNER_TEMP}/a.txt"
+          comm -13 "${RUNNER_TEMP}/b.txt" "${RUNNER_TEMP}/a.txt" > "${RUNNER_TEMP}/tags-new.txt"
+          if [ ! -s "${RUNNER_TEMP}/tags-new.txt" ]; then
+            echo "没有新 tag,跳过推送"
+            exit 0
+          fi
+          cat "${RUNNER_TEMP}/tags-new.txt"
+          xargs -r -a "${RUNNER_TEMP}/tags-new.txt" git push origin
       - name: 为新 tag 创建 Release 并上传 dist 产物
+        # changesets/action 自己也会建 Release;撞上时本脚本只补传 zip(--clobber),
+        # 两条路都通的设计见 scripts/release-assets.mjs 的 releaseExists 分支
         run: node scripts/release-assets.mjs
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAGS_BEFORE: ${{ runner.temp }}/tags-before.txt
-          RELEASE_REPO: wzrove/text-to-design
+          RELEASE_REPO: ${{ github.repository }}
