@@ -1,13 +1,17 @@
 import type { McpServer } from '@modelcontextprotocol/server';
 import { z } from 'zod';
 import type { ToolHandle } from '../core/registry';
+import type { McpI18n } from '../i18n';
 
-export function registerPrompts(server: McpServer): ToolHandle[] {
+export function registerPrompts(
+  server: McpServer,
+  i18n: McpI18n,
+): ToolHandle[] {
   const htmlToDesign = server.registerPrompt(
     'html-to-design',
     {
-      title: 'HTML 转设计稿',
-      description: '把一段 HTML 转为画布节点,含保真度取舍说明',
+      title: i18n.t('prompt.htmlToDesign.title'),
+      description: i18n.t('prompt.htmlToDesign.description'),
       argsSchema: z.object({
         html: z.string().describe('要转换的 HTML 片段'),
         name: z.string().optional().describe('生成节点的名称,默认 html-design'),
@@ -29,8 +33,8 @@ export function registerPrompts(server: McpServer): ToolHandle[] {
   const iconGrid = server.registerPrompt(
     'icon-grid',
     {
-      title: '图标网格',
-      description: '批量插入 Lucide 图标并排成自动布局网格',
+      title: i18n.t('prompt.iconGrid.title'),
+      description: i18n.t('prompt.iconGrid.description'),
       argsSchema: z.object({
         icons: z
           .string()
@@ -58,7 +62,7 @@ export function registerPrompts(server: McpServer): ToolHandle[] {
   const scriptOps = server.registerPrompt(
     'script-ops',
     {
-      title: '脚本化批量调用',
+      title: i18n.t('prompt.scriptOps.title'),
       description:
         '把多步画布操作合并为一次 ops 数组或一段宿主脚本执行,减少工具往返与上下文占用',
       argsSchema: z.object({
@@ -84,7 +88,7 @@ export function registerPrompts(server: McpServer): ToolHandle[] {
   const designStrategy = server.registerPrompt(
     'design-strategy',
     {
-      title: '设计策略总纲',
+      title: i18n.t('prompt.designStrategy.title'),
       description:
         '画布创作的通用纪律:先摸底、一层只建一层、语义化命名、归组后再布局、间距与字号阶梯、出错回滚,附示例结构树',
       argsSchema: z.object({
@@ -114,7 +118,7 @@ export function registerPrompts(server: McpServer): ToolHandle[] {
   const textReplace = server.registerPrompt(
     'text-replace-strategy',
     {
-      title: '文本批量替换策略',
+      title: i18n.t('prompt.textReplace.title'),
       description:
         '大改文案的安全流程:jsd_clone_node 留底 → 按语义分块 → jsd_set_text ids 批量替换 → 逐块导小图复核',
       argsSchema: z.object({
@@ -139,7 +143,7 @@ export function registerPrompts(server: McpServer): ToolHandle[] {
   const variantSync = server.registerPrompt(
     'variant-sync',
     {
-      title: '同类实例样式批量同步',
+      title: i18n.t('prompt.variantSync.title'),
       description:
         '把一个实例的样式/文案批量套用到多个同类实例(卡片组/列表项/表单组),变体属性走组件操作',
       argsSchema: z.object({

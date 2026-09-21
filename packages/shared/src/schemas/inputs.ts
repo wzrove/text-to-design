@@ -6,8 +6,8 @@ import { SEARCH_SCOPES } from '../dicts/search-scope';
 const READ_ONLY_TYPES = OBSERVED_NODE_TYPES.slice(NODE_TYPES.length).join('/');
 
 export const findSchema = z.object({
-  ids: z.array(z.string()).optional().describe('按节点 id 精确查找,优先级最高'),
-  name: z.string().optional().describe('按名称模糊匹配(包含)'),
+  ids: z.array(z.string()).optional().describe('schema.inputs.ids'),
+  name: z.string().optional().describe('schema.inputs.name'),
   type: z
     .string()
     .optional()
@@ -20,11 +20,8 @@ export const findSchema = z.object({
     .describe(
       "查找范围:'page'=当前页(缺省)|'document'=跨页全文档(触发全量加载,大文档有一次性成本,结果 note 点名)",
     ),
-  recursive: z.boolean().optional().describe('是否递归查找(默认 true)'),
-  depth: z
-    .number()
-    .optional()
-    .describe('序列化深度:0=仅自身,1=含直接子节点;缺省 1'),
+  recursive: z.boolean().optional().describe('schema.inputs.recursive'),
+  depth: z.number().optional().describe('schema.inputs.depth'),
 });
 
 // 组件/实例操作 op 全集(与 manageComponentsSchema 的 op 枚举保持同步),
@@ -89,7 +86,7 @@ export const manageNodesSchema = z
       .describe(
         '仅 remove:在 ids(或当前选中)范围内,仅删除 name 精确匹配的节点',
       ),
-    name: z.string().optional().describe('仅 group:组名'),
+    name: z.string().optional().describe('schema.inputs.name2'),
     layoutMode: z
       .enum(['NONE', 'HORIZONTAL', 'VERTICAL'])
       .optional()
@@ -102,18 +99,21 @@ export const manageNodesSchema = z
       .describe(
         '仅 group。自动布局项间距(px);primaryAxisAlignItems=SPACE_BETWEEN 时该项被忽略(子项均匀分布)',
       ),
-    paddingTop: z.number().optional().describe('仅 group。上内边距(px)'),
-    paddingRight: z.number().optional().describe('仅 group。右内边距(px)'),
-    paddingBottom: z.number().optional().describe('仅 group。下内边距(px)'),
-    paddingLeft: z.number().optional().describe('仅 group。左内边距(px)'),
+    paddingTop: z.number().optional().describe('schema.inputs.paddingTop'),
+    paddingRight: z.number().optional().describe('schema.inputs.paddingRight'),
+    paddingBottom: z
+      .number()
+      .optional()
+      .describe('schema.inputs.paddingBottom'),
+    paddingLeft: z.number().optional().describe('schema.inputs.paddingLeft'),
     primaryAxisSizingMode: z
       .enum(['FIXED', 'AUTO'])
       .optional()
-      .describe('仅 group。主轴尺寸模式:FIXED|AUTO'),
+      .describe('schema.inputs.primaryAxisSizingMode'),
     counterAxisSizingMode: z
       .enum(['FIXED', 'AUTO'])
       .optional()
-      .describe('仅 group。交叉轴尺寸模式:FIXED|AUTO'),
+      .describe('schema.inputs.counterAxisSizingMode'),
     primaryAxisAlignItems: z
       .enum(['MIN', 'MAX', 'CENTER', 'SPACE_BETWEEN'])
       .optional()
@@ -123,7 +123,7 @@ export const manageNodesSchema = z
     counterAxisAlignItems: z
       .enum(['MIN', 'MAX', 'CENTER'])
       .optional()
-      .describe('仅 group。交叉轴对齐:MIN|MAX|CENTER'),
+      .describe('schema.inputs.counterAxisAlignItems'),
     parentId: z
       .string()
       .optional()
@@ -213,14 +213,8 @@ export const manageComponentsSchema = z
       .describe(
         '名称;create_component/import_component/combine_as_variants 可选',
       ),
-    key: z
-      .string()
-      .optional()
-      .describe('团队库组件唯一标识 Key(仅 import_component 必填)'),
-    componentId: z
-      .string()
-      .optional()
-      .describe('目标组件(COMPONENT)节点 id(仅 swap_component 必填)'),
+    key: z.string().optional().describe('schema.inputs.key'),
+    componentId: z.string().optional().describe('schema.inputs.componentId'),
     properties: z
       .record(z.string(), z.string())
       .optional()
@@ -300,13 +294,13 @@ export const exportSchema = z.object({
   format: z
     .enum(['PNG', 'JPG', 'SVG', 'PDF'])
     .optional()
-    .describe('导出格式,默认 PNG'),
-  scale: z.number().optional().describe('缩放倍率(PNG/JPG),默认 1'),
-  savePath: z.string().optional().describe('落盘文件绝对路径,如 /tmp/icon.png'),
+    .describe('schema.inputs.format'),
+  scale: z.number().optional().describe('schema.inputs.scale'),
+  savePath: z.string().optional().describe('schema.inputs.savePath'),
   includeDataUrl: z
     .boolean()
     .optional()
-    .describe('是否同时返回 base64 dataURL,默认 false'),
+    .describe('schema.inputs.includeDataUrl'),
 });
 
 export const listFontsSchema = z.object({});
@@ -315,8 +309,8 @@ export const getPageStructureSchema = z.object({});
 
 /** 图片填充入参:server 读本地文件,经二进制通道传给插件 */
 export const fillImageSchema = z.object({
-  ids: z.array(z.string()).describe('要填充图片的节点 id 列表'),
-  sourcePath: z.string().describe('本地图片文件绝对路径,如 /tmp/poster.png'),
+  ids: z.array(z.string()).describe('schema.inputs.ids2'),
+  sourcePath: z.string().describe('schema.inputs.sourcePath'),
 });
 export type FillImageParams = z.infer<typeof fillImageSchema>;
 
@@ -330,6 +324,6 @@ export const platformOpParamsSchema = z.object({
   params: z
     .record(z.string(), z.unknown())
     .optional()
-    .describe('操作参数,结构随 op 而定'),
+    .describe('schema.inputs.params'),
 });
 export type PlatformOpParams = z.infer<typeof platformOpParamsSchema>;

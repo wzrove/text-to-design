@@ -43,10 +43,10 @@ export type ExecuteOpFromSchema = MergeUnion<
  */
 const childNodeSchema: z.ZodType<ExecuteOp> = z
   .object({
-    type: nodeTypeSchema.describe('子节点类型'),
+    type: nodeTypeSchema.describe('schema.executeSchemas.type'),
     name: z.string().optional(),
-    x: z.number().optional().describe('相对父节点的 X(px)'),
-    y: z.number().optional().describe('相对父节点的 Y(px)'),
+    x: z.number().optional().describe('schema.executeSchemas.x'),
+    y: z.number().optional().describe('schema.executeSchemas.y'),
     width: z.number().optional(),
     height: z.number().optional(),
   })
@@ -55,21 +55,12 @@ const childNodeSchema: z.ZodType<ExecuteOp> = z
 // ---- 基础字段(所有节点共享) ----
 const baseNodeFields = {
   name: z.string().optional(),
-  x: z
-    .number()
-    .optional()
-    .describe('X 坐标(px,相对父节点,缺省 0;根节点的摆放由 placement 控制)'),
-  y: z
-    .number()
-    .optional()
-    .describe('Y 坐标(px,相对父节点,缺省 0;根节点的摆放由 placement 控制)'),
-  width: z.number().optional().describe('宽度(px)'),
-  height: z.number().optional().describe('高度(px)'),
-  rotation: z
-    .number()
-    .optional()
-    .describe('旋转角度(deg,绕节点自身左上角原点,x/y 不变)'),
-  opacity: z.number().optional().describe('不透明度 0-1'),
+  x: z.number().optional().describe('schema.executeSchemas.x2'),
+  y: z.number().optional().describe('schema.executeSchemas.y2'),
+  width: z.number().optional().describe('schema.executeSchemas.width'),
+  height: z.number().optional().describe('schema.executeSchemas.height'),
+  rotation: z.number().optional().describe('schema.executeSchemas.rotation'),
+  opacity: z.number().optional().describe('schema.executeSchemas.opacity'),
   visible: z.boolean().optional(),
   locked: z.boolean().optional(),
   isMask: z.boolean().optional(),
@@ -90,30 +81,51 @@ const visualFields = {
     .describe(
       '填充列表(Paint 数组)。缺省时的引擎默认:FRAME 为白底;非 FRAME 图形若同时传了 strokes,则填充置空(纯描边,不再被引擎塞 #CCCCCC 灰底)——需要底色请显式传 fills',
     ),
-  strokes: z.array(paintSchema).optional().describe('描边列表(Paint 数组)'),
-  strokeWeight: z.number().optional().describe('描边宽度(px)'),
-  strokeTopWeight: z.number().optional().describe('描边顶部宽(px)'),
-  strokeBottomWeight: z.number().optional().describe('描边底部宽(px)'),
-  strokeLeftWeight: z.number().optional().describe('描边左侧宽(px)'),
-  strokeRightWeight: z.number().optional().describe('描边右侧宽(px)'),
+  strokes: z
+    .array(paintSchema)
+    .optional()
+    .describe('schema.executeSchemas.strokes'),
+  strokeWeight: z
+    .number()
+    .optional()
+    .describe('schema.executeSchemas.strokeWeight'),
+  strokeTopWeight: z
+    .number()
+    .optional()
+    .describe('schema.executeSchemas.strokeTopWeight'),
+  strokeBottomWeight: z
+    .number()
+    .optional()
+    .describe('schema.executeSchemas.strokeBottomWeight'),
+  strokeLeftWeight: z
+    .number()
+    .optional()
+    .describe('schema.executeSchemas.strokeLeftWeight'),
+  strokeRightWeight: z
+    .number()
+    .optional()
+    .describe('schema.executeSchemas.strokeRightWeight'),
   strokeAlign: z
     .enum(['CENTER', 'INSIDE', 'OUTSIDE'])
     .optional()
-    .describe('描边对齐:CENTER|INSIDE|OUTSIDE'),
+    .describe('schema.executeSchemas.strokeAlign'),
   strokeCap: z
     .enum(['NONE', 'ROUND', 'SQUARE', 'ARROW_LINES', 'ARROW_EQUILATERAL'])
     .optional()
-    .describe('描边端点:NONE|ROUND|SQUARE|ARROW_LINES|ARROW_EQUILATERAL'),
+    .describe('schema.executeSchemas.strokeCap'),
   strokeJoin: z
     .enum(['MITER', 'BEVEL', 'ROUND'])
     .optional()
-    .describe('描边连接:MITER|BEVEL|ROUND'),
-  dashPattern: z.array(z.number()).optional().describe('虚线段数组,如 [4,4]'),
+    .describe('schema.executeSchemas.strokeJoin'),
+  dashPattern: z
+    .array(z.number())
+    .optional()
+    .describe('schema.executeSchemas.dashPattern'),
   blendMode: blendModeSchema.optional(),
   effects: z
     .array(effectSchema)
     .optional()
-    .describe('效果列表(阴影/模糊,可多层叠加)'),
+    .describe('schema.executeSchemas.effects'),
   constraints: z
     .object({
       horizontal: constraintTypeSchema.describe(
@@ -124,13 +136,19 @@ const visualFields = {
       ),
     })
     .optional()
-    .describe('自动布局中的约束'),
-  clipsContent: z.boolean().optional().describe('是否裁剪溢出内容'),
-  cornerSmoothing: z.number().optional().describe('圆角平滑度 0-1'),
+    .describe('schema.executeSchemas.vertical'),
+  clipsContent: z
+    .boolean()
+    .optional()
+    .describe('schema.executeSchemas.clipsContent'),
+  cornerSmoothing: z
+    .number()
+    .optional()
+    .describe('schema.executeSchemas.cornerSmoothing'),
   layoutGrids: z
     .array(layoutGridSchema)
     .optional()
-    .describe('布局网格(参考线)'),
+    .describe('schema.executeSchemas.layoutGrids'),
 };
 
 /**
@@ -142,11 +160,26 @@ const visualFields = {
  * 实际引擎是支持 FRAME 圆角的(jsd_set_cornerRadius 也写明 FRAME 生效)。
  */
 const cornerFields = {
-  cornerRadius: z.number().optional().describe('圆角半径(px),四角统一'),
-  topLeftRadius: z.number().optional().describe('左上圆角(px)'),
-  topRightRadius: z.number().optional().describe('右上圆角(px)'),
-  bottomLeftRadius: z.number().optional().describe('左下圆角(px)'),
-  bottomRightRadius: z.number().optional().describe('右下圆角(px)'),
+  cornerRadius: z
+    .number()
+    .optional()
+    .describe('schema.executeSchemas.cornerRadius'),
+  topLeftRadius: z
+    .number()
+    .optional()
+    .describe('schema.executeSchemas.topLeftRadius'),
+  topRightRadius: z
+    .number()
+    .optional()
+    .describe('schema.executeSchemas.topRightRadius'),
+  bottomLeftRadius: z
+    .number()
+    .optional()
+    .describe('schema.executeSchemas.bottomLeftRadius'),
+  bottomRightRadius: z
+    .number()
+    .optional()
+    .describe('schema.executeSchemas.bottomRightRadius'),
 };
 
 // ---- 各类型 schema ----
@@ -167,18 +200,30 @@ const frameNodeSchema = z
       .describe(
         '自动布局项间距(px),需先设 layoutMode;primaryAxisAlignItems=SPACE_BETWEEN 时该项被忽略(子项均匀分布)',
       ),
-    paddingTop: z.number().optional().describe('上内边距(px)'),
-    paddingRight: z.number().optional().describe('右内边距(px)'),
-    paddingBottom: z.number().optional().describe('下内边距(px)'),
-    paddingLeft: z.number().optional().describe('左内边距(px)'),
+    paddingTop: z
+      .number()
+      .optional()
+      .describe('schema.executeSchemas.paddingTop'),
+    paddingRight: z
+      .number()
+      .optional()
+      .describe('schema.executeSchemas.paddingRight'),
+    paddingBottom: z
+      .number()
+      .optional()
+      .describe('schema.executeSchemas.paddingBottom'),
+    paddingLeft: z
+      .number()
+      .optional()
+      .describe('schema.executeSchemas.paddingLeft'),
     primaryAxisSizingMode: z
       .enum(['FIXED', 'AUTO'])
       .optional()
-      .describe('主轴尺寸模式:FIXED|AUTO'),
+      .describe('schema.executeSchemas.primaryAxisSizingMode'),
     counterAxisSizingMode: z
       .enum(['FIXED', 'AUTO'])
       .optional()
-      .describe('交叉轴尺寸模式:FIXED|AUTO'),
+      .describe('schema.executeSchemas.counterAxisSizingMode'),
     primaryAxisAlignItems: z
       .enum(['MIN', 'MAX', 'CENTER', 'SPACE_BETWEEN'])
       .optional()
@@ -188,12 +233,15 @@ const frameNodeSchema = z
     counterAxisAlignItems: z
       .enum(['MIN', 'MAX', 'CENTER'])
       .optional()
-      .describe('交叉轴对齐:MIN|MAX|CENTER'),
-    layoutGrow: z.number().optional().describe('自动布局内伸缩系数'),
+      .describe('schema.executeSchemas.counterAxisAlignItems'),
+    layoutGrow: z
+      .number()
+      .optional()
+      .describe('schema.executeSchemas.layoutGrow'),
     layoutAlign: z
       .enum(['MIN', 'CENTER', 'MAX', 'STRETCH', 'INHERIT'])
       .optional()
-      .describe('自动布局内对齐:MIN|CENTER|MAX|STRETCH|INHERIT'),
+      .describe('schema.executeSchemas.layoutAlign'),
     ...cornerFields,
     ...visualFields,
   })
@@ -235,25 +283,30 @@ const rectangleNodeSchema = z
     ...visualFields,
   })
   .strict()
-  .describe('RECTANGLE=矩形');
+  .describe('schema.executeSchemas.type2');
 
 const ellipseNodeSchema = z
   .object({
     type: z.literal('ELLIPSE'),
     ...baseNodeFields,
-    cornerRadius: z.number().optional().describe('圆角半径(px)'),
+    cornerRadius: z
+      .number()
+      .optional()
+      .describe('schema.executeSchemas.cornerRadius2'),
     arcData: z
       .object({
-        startingAngle: z.number().describe('起始角度(radians)'),
-        endingAngle: z.number().describe('结束角度(radians)'),
-        innerRadius: z.number().describe('内半径(0-1 ratio)'),
+        startingAngle: z
+          .number()
+          .describe('schema.executeSchemas.startingAngle'),
+        endingAngle: z.number().describe('schema.executeSchemas.endingAngle'),
+        innerRadius: z.number().describe('schema.executeSchemas.innerRadius'),
       })
       .optional()
-      .describe('环形路径参数(弧线),可画圆环'),
+      .describe('schema.executeSchemas.innerRadius2'),
     ...visualFields,
   })
   .strict()
-  .describe('ELLIPSE=椭圆(配合 arcData 可画环)');
+  .describe('schema.executeSchemas.innerRadius3');
 
 const lineNodeSchema = z
   .object({
@@ -262,40 +315,68 @@ const lineNodeSchema = z
     ...visualFields,
   })
   .strict()
-  .describe('LINE=线段');
+  .describe('schema.executeSchemas.type3');
 
 const polygonNodeSchema = z
   .object({
     type: z.literal('POLYGON'),
     ...baseNodeFields,
-    pointCount: z.number().describe('多边形角点数,如 6=六边形'),
-    cornerRadius: z.number().optional().describe('圆角半径(px)'),
-    topLeftRadius: z.number().optional().describe('左上圆角(px)'),
-    topRightRadius: z.number().optional().describe('右上圆角(px)'),
-    bottomLeftRadius: z.number().optional().describe('左下圆角(px)'),
-    bottomRightRadius: z.number().optional().describe('右下圆角(px)'),
+    pointCount: z.number().describe('schema.executeSchemas.pointCount'),
+    cornerRadius: z
+      .number()
+      .optional()
+      .describe('schema.executeSchemas.cornerRadius3'),
+    topLeftRadius: z
+      .number()
+      .optional()
+      .describe('schema.executeSchemas.topLeftRadius2'),
+    topRightRadius: z
+      .number()
+      .optional()
+      .describe('schema.executeSchemas.topRightRadius2'),
+    bottomLeftRadius: z
+      .number()
+      .optional()
+      .describe('schema.executeSchemas.bottomLeftRadius2'),
+    bottomRightRadius: z
+      .number()
+      .optional()
+      .describe('schema.executeSchemas.bottomRightRadius2'),
     ...visualFields,
   })
   .strict()
-  .describe('POLYGON=多边形(配合 pointCount)');
+  .describe('schema.executeSchemas.bottomRightRadius3');
 
 const starNodeSchema = z
   .object({
     type: z.literal('STAR'),
     ...baseNodeFields,
-    pointCount: z.number().describe('星形角点数,如 5=五角星'),
-    innerRadius: z
+    pointCount: z.number().describe('schema.executeSchemas.pointCount2'),
+    innerRadius: z.number().describe('schema.executeSchemas.innerRadius4'),
+    cornerRadius: z
       .number()
-      .describe('星形内半径比例(0-1,相对外半径),值越小角越尖锐'),
-    cornerRadius: z.number().optional().describe('圆角半径(px)'),
-    topLeftRadius: z.number().optional().describe('左上圆角(px)'),
-    topRightRadius: z.number().optional().describe('右上圆角(px)'),
-    bottomLeftRadius: z.number().optional().describe('左下圆角(px)'),
-    bottomRightRadius: z.number().optional().describe('右下圆角(px)'),
+      .optional()
+      .describe('schema.executeSchemas.cornerRadius4'),
+    topLeftRadius: z
+      .number()
+      .optional()
+      .describe('schema.executeSchemas.topLeftRadius3'),
+    topRightRadius: z
+      .number()
+      .optional()
+      .describe('schema.executeSchemas.topRightRadius3'),
+    bottomLeftRadius: z
+      .number()
+      .optional()
+      .describe('schema.executeSchemas.bottomLeftRadius3'),
+    bottomRightRadius: z
+      .number()
+      .optional()
+      .describe('schema.executeSchemas.bottomRightRadius4'),
     ...visualFields,
   })
   .strict()
-  .describe('STAR=星形(配合 pointCount + innerRadius)');
+  .describe('schema.executeSchemas.bottomRightRadius5');
 
 const vectorNodeSchema = z
   .object({
@@ -303,7 +384,7 @@ const vectorNodeSchema = z
     ...baseNodeFields,
     vectorPaths: z
       .array(vectorPathSchema)
-      .describe('矢量路径数组,每项含 SVG path data(如 "M0 0 L100 100")'),
+      .describe('schema.executeSchemas.vectorPaths'),
     ...visualFields,
   })
   .strict()
@@ -320,7 +401,7 @@ const textNodeSchema = z
       .describe(
         '文本内容,如 "Hello World"。注意:个别 emoji 依赖客户端字体可能缺字(渲染为 ☒),上线前逐个目检',
       ),
-    fontSize: z.number().optional().describe('字号(px),默认 16'),
+    fontSize: z.number().optional().describe('schema.executeSchemas.fontSize'),
     fontName: fontNameSchema
       .optional()
       .describe(
@@ -329,11 +410,11 @@ const textNodeSchema = z
     textAlignHorizontal: z
       .enum(['LEFT', 'CENTER', 'RIGHT', 'JUSTIFIED'])
       .optional()
-      .describe('水平对齐:LEFT|CENTER|RIGHT|JUSTIFIED'),
+      .describe('schema.executeSchemas.textAlignHorizontal'),
     textAlignVertical: z
       .enum(['TOP', 'CENTER', 'BOTTOM'])
       .optional()
-      .describe('垂直对齐:TOP|CENTER|BOTTOM'),
+      .describe('schema.executeSchemas.textAlignVertical'),
     textAutoResize: z
       .enum(['NONE', 'WIDTH_AND_HEIGHT', 'HEIGHT', 'TRUNCATE'])
       .optional()
@@ -343,21 +424,21 @@ const textNodeSchema = z
     textCase: z
       .enum(['ORIGINAL', 'UPPER', 'LOWER', 'TITLE'])
       .optional()
-      .describe('文本大小写:ORIGINAL|UPPER|LOWER|TITLE'),
+      .describe('schema.executeSchemas.textCase'),
     textDecoration: z
       .enum(['NONE', 'UNDERLINE', 'STRIKETHROUGH'])
       .optional()
-      .describe('文本装饰:NONE|UNDERLINE|STRIKETHROUGH'),
+      .describe('schema.executeSchemas.textDecoration'),
     lineHeight: lineHeightSchema
       .optional()
-      .describe('行高:{value,unit},unit 为 PIXELS|PERCENT;或 {unit:"AUTO"}'),
+      .describe('schema.executeSchemas.lineHeight'),
     letterSpacing: letterSpacingSchema
       .optional()
-      .describe('字距:{value,unit},unit 为 PIXELS|PERCENT'),
+      .describe('schema.executeSchemas.letterSpacing'),
     ...visualFields,
   })
   .strict()
-  .describe('TEXT=文本(配合 characters/fontSize/fontName 等)');
+  .describe('schema.executeSchemas.letterSpacing2');
 
 const groupNodeSchema = z
   .object({
@@ -368,7 +449,7 @@ const groupNodeSchema = z
       .array(childNodeSchema)
       .min(2)
       .max(100)
-      .describe('子节点数组,至少 2 个;递归嵌套,最多 100 个直接子节点'),
+      .describe('schema.executeSchemas.children'),
     layoutMode: z
       .enum(['NONE', 'HORIZONTAL', 'VERTICAL'])
       .optional()
@@ -381,18 +462,30 @@ const groupNodeSchema = z
       .describe(
         '项间距(px),需先设 layoutMode;primaryAxisAlignItems=SPACE_BETWEEN 时该项被忽略(子项均匀分布)',
       ),
-    paddingTop: z.number().optional().describe('上内边距(px)'),
-    paddingRight: z.number().optional().describe('右内边距(px)'),
-    paddingBottom: z.number().optional().describe('下内边距(px)'),
-    paddingLeft: z.number().optional().describe('左内边距(px)'),
+    paddingTop: z
+      .number()
+      .optional()
+      .describe('schema.executeSchemas.paddingTop2'),
+    paddingRight: z
+      .number()
+      .optional()
+      .describe('schema.executeSchemas.paddingRight2'),
+    paddingBottom: z
+      .number()
+      .optional()
+      .describe('schema.executeSchemas.paddingBottom2'),
+    paddingLeft: z
+      .number()
+      .optional()
+      .describe('schema.executeSchemas.paddingLeft2'),
     primaryAxisSizingMode: z
       .enum(['FIXED', 'AUTO'])
       .optional()
-      .describe('主轴尺寸模式:FIXED|AUTO'),
+      .describe('schema.executeSchemas.primaryAxisSizingMode2'),
     counterAxisSizingMode: z
       .enum(['FIXED', 'AUTO'])
       .optional()
-      .describe('交叉轴尺寸模式:FIXED|AUTO'),
+      .describe('schema.executeSchemas.counterAxisSizingMode2'),
     primaryAxisAlignItems: z
       .enum(['MIN', 'MAX', 'CENTER', 'SPACE_BETWEEN'])
       .optional()
@@ -402,7 +495,7 @@ const groupNodeSchema = z
     counterAxisAlignItems: z
       .enum(['MIN', 'MAX', 'CENTER'])
       .optional()
-      .describe('交叉轴对齐'),
+      .describe('schema.executeSchemas.counterAxisAlignItems2'),
     ...visualFields,
   })
   .strict()
@@ -429,7 +522,7 @@ const groupNodeSchema = z
       });
     }
   })
-  .describe('GROUP=分组(内部用 Frame 实现)');
+  .describe('schema.executeSchemas.path');
 
 const booleanOperationNodeSchema = z
   .object({
@@ -441,11 +534,11 @@ const booleanOperationNodeSchema = z
     children: z
       .array(childNodeSchema)
       .min(2)
-      .describe('要合并的子节点数组(至少 2 个)'),
+      .describe('schema.executeSchemas.children2'),
     ...visualFields,
   })
   .strict()
-  .describe('BOOLEAN_OPERATION=布尔运算(合并子节点)');
+  .describe('schema.executeSchemas.children3');
 
 // 导出: discriminated union on `type`(用于 JSON Schema 生成,LLM 看到按 type 分组的字段)
 // 运行时校验使用,TypeScript 类型保持为扁平 ExecuteOp 以兼容 UI 侧 duck-typing

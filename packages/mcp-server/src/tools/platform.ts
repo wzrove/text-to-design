@@ -5,16 +5,18 @@ import {
 } from 'text-to-design-shared';
 import type { Bridge } from '../bridge';
 import { bridgeTool, type ToolHandle } from '../core/registry';
+import type { McpI18n } from '../i18n';
 
 /** 平台特有操作:通用通道;op 名单与参数形状由 ping 的 platformOps 下发(不再靠猜) */
 export function registerPlatformTools(
   server: McpServer,
   bridge: Bridge,
+  i18n: McpI18n,
 ): ToolHandle[] {
   const platformOp = bridgeTool({
     name: 'jsd_platform_op',
-    title: '平台特有操作',
-    description: `执行平台特有能力(Figma 变量/本地样式/组件属性等)。CRITICAL: 不要凭空猜测 op 名与参数——先 jsd_ping 读 platformOps 名单(含每个 op 的参数形状说明)与 capabilities,再按名单里的名字调用;平台不支持或 op 名写错时返回错误并列出当前平台支持的 op`,
+    title: 'platformOp.title',
+    description: 'platformOp.description',
     // 平台归属:当前只有 Figma 实现了 op(jsDesign 的 meta.platformOps 为空数组),
     // 平台已知时 daemon 直接拦截,不必等插件侧报「平台不支持」
     platforms: ['figma'],
@@ -28,8 +30,8 @@ export function registerPlatformTools(
     followUp: {
       type: 'tool',
       tool: 'jsd_get_selection',
-      description: '复核平台操作在画布上的效果',
+      description: 'platformOp.description2',
     },
   });
-  return [platformOp(server, bridge)];
+  return [platformOp(server, bridge, i18n)];
 }

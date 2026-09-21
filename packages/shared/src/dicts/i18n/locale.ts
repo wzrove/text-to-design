@@ -34,7 +34,7 @@ export const FALLBACK_LOCALE: Locale = 'en';
 export const LOCALE_CHOICE_STORAGE_KEY = 'text-to-design:locale-choice';
 
 /** 查表:两份 catalog 都在编译期检查过键集,故可按 locale 直接取 */
-const MESSAGES: Record<Locale, Record<MessageKey, string>> = {
+const MESSAGES: Record<Locale, Record<MessageKey, string | null>> = {
   'zh-CN': MESSAGES_ZH_CN,
   en: MESSAGES_EN,
 };
@@ -56,8 +56,11 @@ const PLACEHOLDER = /\{(\w+)\}/g;
  */
 export function createT(locale: Locale): T {
   const table = MESSAGES[locale] ?? MESSAGES[FALLBACK_LOCALE];
+  const zh = MESSAGES['zh-CN'];
   return (key, params) => {
-    const template = table[key] ?? MESSAGES[FALLBACK_LOCALE][key] ?? key;
+    // 回落链:当前 locale → 中文 → 键本身。未译在 en 表里是 `null`(不是空串),
+    // 所以这里用 `??` 就能落到中文 —— 界面看到中文,而不是看到空白(0016)
+    const template = table[key] ?? zh[key] ?? key;
     if (params == null) return template;
     return template.replace(PLACEHOLDER, (match, name: string) => {
       const value = params[name];

@@ -39,23 +39,23 @@ const colorChannels = z
       .number()
       .min(0)
       .max(1, '颜色通道最大 1(0-255 的色值请先除以 255 归一化)')
-      .describe('红色通道,范围 0-1(0=无,1=满),如纯红为 1'),
+      .describe('schema.base.r'),
     g: z
       .number()
       .min(0)
       .max(1, '颜色通道最大 1(0-255 的色值请先除以 255 归一化)')
-      .describe('绿色通道,范围 0-1'),
+      .describe('schema.base.g'),
     b: z
       .number()
       .min(0)
       .max(1, '颜色通道最大 1(0-255 的色值请先除以 255 归一化)')
-      .describe('蓝色通道,范围 0-1'),
+      .describe('schema.base.b'),
     a: z
       .number()
       .min(0)
       .max(1, 'alpha 通道最大 1(0-255 请先归一化)')
       .optional()
-      .describe('不透明度,范围 0-1(0=全透明,1=不透明),缺省按 1 处理'),
+      .describe('schema.base.a'),
   })
   .strict();
 
@@ -102,12 +102,8 @@ export type RGBA = RGB;
 
 export const gradientStopSchema = z
   .object({
-    color: rgbaSchema.describe('该停止点的颜色(带 alpha)'),
-    position: z
-      .number()
-      .min(0)
-      .max(1)
-      .describe('停止点位置,范围 0-1(0=起点,1=终点)'),
+    color: rgbaSchema.describe('schema.base.color'),
+    position: z.number().min(0).max(1).describe('schema.base.position'),
   })
   .describe(
     '渐变停止点,如 {color:{r:1,g:0,b:0,a:1}, position:0}(起点红色)和 {color:{r:0,g:0,b:1,a:1}, position:1}(终点蓝色)',
@@ -127,7 +123,7 @@ export type GradientStop = z.infer<typeof gradientStopSchema>;
 export const transformSchema = z
   .array(z.array(z.number()).length(3))
   .length(2)
-  .describe('变换矩阵,如 [[1,0,0],[0,1,0]] 表示无变换(Identity)');
+  .describe('schema.base.transformSchema');
 export type Transform = z.infer<typeof transformSchema>;
 
 // 混合模式 (对齐 runtime BlendMode)
@@ -160,7 +156,7 @@ export type BlendMode = z.infer<typeof blendModeSchema>;
 export const paintSchema = z.discriminatedUnion('type', [
   z
     .object({
-      type: z.literal('SOLID').describe('填充类型:纯色'),
+      type: z.literal('SOLID').describe('schema.base.type'),
       color: rgbSchema.describe(
         '纯色值,支持 {r,g,b} 对象(通道 0-1)或 hex 字符串,如 "#ff0000"',
       ),
@@ -169,53 +165,53 @@ export const paintSchema = z.discriminatedUnion('type', [
         .min(0)
         .max(1)
         .optional()
-        .describe('不透明度 0-1,缺省 1'),
-      visible: z.boolean().optional().describe('是否可见,缺省 true'),
-      blendMode: blendModeSchema.optional().describe('混合模式,缺省 NORMAL'),
+        .describe('schema.base.opacity'),
+      visible: z.boolean().optional().describe('schema.base.visible'),
+      blendMode: blendModeSchema.optional().describe('schema.base.blendMode'),
     })
     .strict()
-    .describe('纯色填充(SOLID):{color:{r,g,b}}'),
+    .describe('schema.base.blendMode2'),
   z
     .object({
-      type: z.literal('GRADIENT_LINEAR').describe('填充类型:线性渐变'),
+      type: z.literal('GRADIENT_LINEAR').describe('schema.base.type2'),
       gradientStops: z
         .array(gradientStopSchema)
-        .describe('渐变停止点数组(至少 2 个,定义颜色与位置)'),
+        .describe('schema.base.gradientStops'),
       gradientTransform: transformSchema,
     })
     .strict()
-    .describe('线性渐变(GRADIENT_LINEAR):沿直线方向过渡'),
+    .describe('schema.base.gradientTransform'),
   z
     .object({
-      type: z.literal('GRADIENT_RADIAL').describe('填充类型:径向渐变'),
+      type: z.literal('GRADIENT_RADIAL').describe('schema.base.type3'),
       gradientStops: z
         .array(gradientStopSchema)
-        .describe('渐变停止点数组(至少 2 个,定义颜色与位置)'),
+        .describe('schema.base.gradientStops2'),
       gradientTransform: transformSchema,
     })
     .strict()
-    .describe('径向渐变(GRADIENT_RADIAL):从中心向外辐射'),
+    .describe('schema.base.gradientTransform2'),
   z
     .object({
-      type: z.literal('GRADIENT_ANGULAR').describe('填充类型:角度渐变'),
+      type: z.literal('GRADIENT_ANGULAR').describe('schema.base.type4'),
       gradientStops: z
         .array(gradientStopSchema)
-        .describe('渐变停止点数组(至少 2 个,定义颜色与位置)'),
+        .describe('schema.base.gradientStops3'),
       gradientTransform: transformSchema,
     })
     .strict()
-    .describe('角度渐变(GRADIENT_ANGULAR):沿圆周方向过渡'),
+    .describe('schema.base.gradientTransform3'),
   z
     .object({
-      type: z.literal('IMAGE').describe('填充类型:图片填充'),
-      imageHash: z.string().describe('图片资源哈希(由 jsd_fill_image 等注入)'),
+      type: z.literal('IMAGE').describe('schema.base.type5'),
+      imageHash: z.string().describe('schema.base.imageHash'),
       scaleMode: z
         .enum(['FILL', 'FIT', 'CROP', 'TILE'])
         .optional()
-        .describe('缩放模式:FILL=填充裁剪|FIT=完整适配|CROP=裁剪|TILE=平铺'),
+        .describe('schema.base.scaleMode'),
     })
     .strict()
-    .describe('图片填充(IMAGE):以 imageHash 引用图片'),
+    .describe('schema.base.scaleMode2'),
 ]);
 export type Paint = z.infer<typeof paintSchema>;
 
@@ -223,76 +219,62 @@ export type Paint = z.infer<typeof paintSchema>;
 export const effectSchema = z.discriminatedUnion('type', [
   z
     .object({
-      type: z
-        .literal('DROP_SHADOW')
-        .describe('效果类型:外阴影(投影到节点外侧)'),
-      color: rgbaSchema.describe('阴影颜色(带 alpha 透明度)'),
+      type: z.literal('DROP_SHADOW').describe('schema.base.type6'),
+      color: rgbaSchema.describe('schema.base.color2'),
       offset: z
         .object({
-          x: z.number().describe('水平偏移(px),正值向右'),
-          y: z.number().describe('垂直偏移(px),正值向下'),
+          x: z.number().describe('schema.base.x'),
+          y: z.number().describe('schema.base.y'),
         })
-        .describe('阴影偏移向量(px)'),
-      radius: z.number().min(0).describe('模糊半径(px),>=0'),
-      spread: z
-        .number()
-        .optional()
-        .describe('扩散(px),正值扩大阴影、负值收缩,默认 0'),
-      visible: z.boolean().optional().describe('是否可见,默认 true'),
+        .describe('schema.base.y2'),
+      radius: z.number().min(0).describe('schema.base.radius'),
+      spread: z.number().optional().describe('schema.base.spread'),
+      visible: z.boolean().optional().describe('schema.base.visible2'),
       blendMode: blendModeSchema
         .default('NORMAL')
-        .describe('混合模式,默认 NORMAL'),
+        .describe('schema.base.blendMode3'),
       showShadowBehindNode: z
         .boolean()
         .optional()
-        .describe('是否在节点后方显示阴影(即便节点不透明也透出)'),
+        .describe('schema.base.showShadowBehindNode'),
     })
     .strict()
-    .describe('外阴影(DROP_SHADOW):投影到节点外侧的阴影'),
+    .describe('schema.base.showShadowBehindNode2'),
   z
     .object({
-      type: z
-        .literal('INNER_SHADOW')
-        .describe('效果类型:内阴影(投影到节点内侧)'),
-      color: rgbaSchema.describe('阴影颜色(带 alpha 透明度)'),
+      type: z.literal('INNER_SHADOW').describe('schema.base.type7'),
+      color: rgbaSchema.describe('schema.base.color3'),
       offset: z
         .object({
-          x: z.number().describe('水平偏移(px),正值向右'),
-          y: z.number().describe('垂直偏移(px),正值向下'),
+          x: z.number().describe('schema.base.x2'),
+          y: z.number().describe('schema.base.y3'),
         })
-        .describe('阴影偏移向量(px)'),
-      radius: z.number().min(0).describe('模糊半径(px),>=0'),
-      spread: z
-        .number()
-        .optional()
-        .describe('扩散(px),正值扩大、负值收缩,默认 0'),
-      visible: z.boolean().optional().describe('是否可见,默认 true'),
+        .describe('schema.base.y4'),
+      radius: z.number().min(0).describe('schema.base.radius2'),
+      spread: z.number().optional().describe('schema.base.spread2'),
+      visible: z.boolean().optional().describe('schema.base.visible3'),
       blendMode: blendModeSchema
         .default('NORMAL')
-        .describe('混合模式,默认 NORMAL'),
+        .describe('schema.base.blendMode4'),
     })
     .strict()
-    .describe('内阴影(INNER_SHADOW):投影到节点内侧的阴影'),
+    .describe('schema.base.blendMode5'),
   z
     .object({
-      type: z
-        .literal('LAYER_BLUR')
-        .describe('效果类型:图层模糊(模糊整个节点本身)'),
-      radius: z.number().min(0).describe('模糊半径(px),>=0'),
-      visible: z.boolean().optional().describe('是否可见,默认 true'),
+      type: z.literal('LAYER_BLUR').describe('schema.base.type8'),
+      radius: z.number().min(0).describe('schema.base.radius3'),
+      visible: z.boolean().optional().describe('schema.base.visible4'),
     })
     .strict()
-    .describe('图层模糊(LAYER_BLUR):模糊节点自身'),
+    .describe('schema.base.visible5'),
   z
     .object({
-      type: z
-        .literal('BACKGROUND_BLUR')
-        .describe('效果类型:背景模糊(模糊节点背后的内容)'),
-      radius: z.number().min(0).describe('模糊半径(px),>=0'),
-      visible: z.boolean().optional().describe('是否可见,默认 true'),
+      type: z.literal('BACKGROUND_BLUR').describe('schema.base.type9'),
+      radius: z.number().min(0).describe('schema.base.radius4'),
+      visible: z.boolean().optional().describe('schema.base.visible6'),
     })
     .strict()
-    .describe('背景模糊(BACKGROUND_BLUR):模糊节点背后的内容'),
+    .describe('schema.base.visible7'),
 ]);
 export type Effect = z.infer<typeof effectSchema>;
 
@@ -320,15 +302,15 @@ export const layoutGridSchema: z.ZodType<LayoutGrid> = z
   .object({
     pattern: z
       .enum(['ROWS', 'COLUMNS', 'GRID'])
-      .describe('网格类型:ROWS|COLUMNS|GRID'),
+      .describe('schema.base.pattern'),
     alignment: z
       .enum(['MIN', 'MAX', 'CENTER', 'STRETCH'])
       .optional()
-      .describe('对齐:MIN|MAX|CENTER|STRETCH'),
-    sectionSize: z.number().optional().describe('分节尺寸(px)'),
+      .describe('schema.base.alignment'),
+    sectionSize: z.number().optional().describe('schema.base.sectionSize'),
     count: z.number().int().positive().optional(),
-    gutterSize: z.number().optional().describe('沟槽尺寸(px)'),
-    offset: z.number().optional().describe('偏移(px)'),
+    gutterSize: z.number().optional().describe('schema.base.gutterSize'),
+    offset: z.number().optional().describe('schema.base.offset'),
     visible: z.boolean().optional(),
     color: rgbaSchema.optional(),
   })
@@ -357,7 +339,7 @@ export const vectorPathSchema: z.ZodType<VectorPath> = z.object({
   windingRule: z
     .enum(['NONZERO', 'EVENODD', 'NONE'])
     .default('NONZERO')
-    .describe('环绕规则:NONZERO|EVENODD|NONE,默认 NONZERO'),
+    .describe('schema.base.windingRule'),
 });
 
 // 字体 (对齐 runtime FontName)
@@ -384,23 +366,23 @@ export type LineHeight =
 export const lineHeightSchema: z.ZodType<LineHeight> = z.union([
   z
     .object({
-      value: z.number().describe('行高数值(px)'),
-      unit: z.literal('PIXELS').describe('单位:PIXELS=固定像素'),
+      value: z.number().describe('schema.base.value'),
+      unit: z.literal('PIXELS').describe('schema.base.unit'),
     })
     .describe(
       '固定行高:{value: 数值, unit: "PIXELS"},如 {value: 24, unit: "PIXELS"}',
     ),
   z
     .object({
-      value: z.number().describe('行高数值(百分比)'),
-      unit: z.literal('PERCENT').describe('单位:PERCENT=百分比'),
+      value: z.number().describe('schema.base.value2'),
+      unit: z.literal('PERCENT').describe('schema.base.unit2'),
     })
     .describe(
       '百分比行高:{value: 数值, unit: "PERCENT"},如 {value: 150, unit: "PERCENT"}',
     ),
   z
-    .object({ unit: z.literal('AUTO').describe('单位:AUTO=自动行高') })
-    .describe('自动行高:{unit: "AUTO"},无需传 value'),
+    .object({ unit: z.literal('AUTO').describe('schema.base.unit3') })
+    .describe('schema.base.unit4'),
 ]);
 
 // 字距 (对齐 runtime LetterSpacing)
@@ -411,7 +393,5 @@ export interface LetterSpacing {
 
 export const letterSpacingSchema: z.ZodType<LetterSpacing> = z.object({
   value: z.number(),
-  unit: z
-    .enum(['PIXELS', 'PERCENT'])
-    .describe('单位:PIXELS=像素 | PERCENT=百分比'),
+  unit: z.enum(['PIXELS', 'PERCENT']).describe('schema.base.unit5'),
 });

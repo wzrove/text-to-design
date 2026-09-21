@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { Bridge } from '../bridge';
 import { lookupExecutor } from '../core/registry';
+import { createMcpI18n } from '../i18n';
 import { toolRegistrars } from '../tools';
 import { STRUCTURAL_NODE_OPS } from '../tools/drift-watch';
 
@@ -45,7 +46,7 @@ beforeEach(() => {
     return {};
   };
   for (const register of toolRegistrars) {
-    register(fakeServer, bridge);
+    register(fakeServer, bridge, createMcpI18n());
   }
 });
 

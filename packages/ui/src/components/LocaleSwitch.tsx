@@ -4,7 +4,13 @@ import {
   type LocaleChoice,
   SYSTEM_CHOICE,
 } from 'text-to-design-shared';
-import { choice, locale, selectLocale, systemLocale, t } from '../i18n/useLocale';
+import {
+  choice,
+  locale,
+  selectLocale,
+  systemLocale,
+  t,
+} from '../i18n/useLocale';
 
 /**
  * 语言切换器:紧凑下拉(`跟随系统` / `中文` / `English`)。
@@ -93,7 +99,6 @@ export default function LocaleSwitch() {
           onClick={close}
         />
         <ul
-          role="menu"
           aria-label={t('locale.menu')}
           class="menu absolute top-full right-0 z-50 mt-1 w-36 rounded-box border border-base-300 bg-base-100 p-1 text-xs shadow-lg"
         >

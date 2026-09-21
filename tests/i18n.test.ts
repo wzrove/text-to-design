@@ -3,6 +3,14 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
+  collectDescriptions,
+  localizeSchema,
+} from '../packages/mcp-server/src/core/localize-schema';
+import {
+  MCP_DEFAULT_LOCALE,
+  resolveMcpLocale,
+} from '../packages/mcp-server/src/i18n';
+import {
   CORE_CAPABILITIES,
   HOST_CAPABILITIES,
   PLATFORMS,
@@ -24,6 +32,7 @@ import {
   isLocaleSetMessage,
   toStoredChoice,
 } from '../packages/shared/src/locale-channel';
+import { frameNodeSchema } from '../packages/shared/src/schemas';
 
 /**
  * i18n 的不变式(决策见 docs/design-decisions/0016)。
@@ -38,6 +47,12 @@ import {
  */
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+
+/**
+ * en 未译条数的基线(棘轮,只降不升)。
+ * 每次补译后手动调小;它同时是"还剩多少没译"的唯一可信数字。
+ */
+const UNTRANSLATED_BASELINE = 0;
 
 const PLACEHOLDER = /\{(\w+)\}/g;
 const KEY_SHAPE = /^[a-z][A-Za-z0-9]*(\.[A-Za-z0-9-]+)+$/;
@@ -59,25 +74,47 @@ describe('i18n 文案表', () => {
     for (const key of Object.keys(
       MESSAGES_ZH_CN,
     ) as (keyof typeof MESSAGES_ZH_CN)[]) {
+      const en = MESSAGES_EN[key];
+      // null = 未译(显式状态),按"回落到中文"处理,故没有 en 占位符可对
+      if (en == null) continue;
       const zh = placeholders(MESSAGES_ZH_CN[key]);
-      const en = placeholders(MESSAGES_EN[key]);
-      if (zh.join(',') !== en.join(',')) {
-        mismatched.push(`${key}: zh=[${zh}] en=[${en}]`);
+      if (zh.join(',') !== placeholders(en).join(',')) {
+        mismatched.push(`${key}: zh=[${zh}] en=[${placeholders(en)}]`);
       }
     }
     expect(mismatched).toEqual([]);
   });
 
-  it('键名形状统一、值非空', () => {
+  it('键名形状统一、中文值非空、en 值非空或显式 null', () => {
     const bad: string[] = [];
     for (const [key, value] of Object.entries(MESSAGES_ZH_CN)) {
       if (!KEY_SHAPE.test(key)) bad.push(`键名不合规范: ${key}`);
       if (value.trim() === '') bad.push(`空文案: ${key}`);
     }
     for (const [key, value] of Object.entries(MESSAGES_EN)) {
-      if (value.trim() === '') bad.push(`empty message: ${key}`);
+      // 空串是最糟的中间态:界面上看起来是"渲染坏了"。未译必须写 null
+      if (value !== null && value.trim() === '') {
+        bad.push(`en 用空串表示未译(应写 null): ${key}`);
+      }
     }
     expect(bad).toEqual([]);
+  });
+
+  /**
+   * 未译数量的**棘轮**:只允许变少。
+   *
+   * 为什么需要它:允许 null 之后,"漏译"就只是一个没人看的数字 —— 新加一条键、
+   * 顺手写个 null,指标悄悄涨回去。这里把当前值钉住,补译时把数字改小
+   * (与中文守卫同一套思路:能被机器守的约束不靠自觉)。
+   */
+  it('未译条目不超过已记录的基线(棘轮只降不升)', () => {
+    const untranslated = Object.entries(MESSAGES_EN).filter(
+      ([, value]) => value === null,
+    ).length;
+    expect(
+      untranslated,
+      `en 未译 ${untranslated} 条 > 基线 ${UNTRANSLATED_BASELINE}:新加的键要补译,补译后把 UNTRANSLATED_BASELINE 调小`,
+    ).toBeLessThanOrEqual(UNTRANSLATED_BASELINE);
   });
 
   it('字典加了取值就必须有文案(平台 / 能力)', () => {
@@ -214,6 +251,43 @@ describe('t()', () => {
     expect(zh('selection.copy')).toBe('复制');
     expect(en('selection.copy')).toBe('Copy');
     expect(zh('selection.copy')).toBe('复制');
+  });
+});
+
+describe('MCP 侧 locale 与 schema 投影', () => {
+  it('resolveMcpLocale:TEXT_TO_DESIGN_LANG → 归一化 → 默认 zh-CN', () => {
+    expect(resolveMcpLocale('en')).toBe('en');
+    expect(resolveMcpLocale('en-US')).toBe('en');
+    expect(resolveMcpLocale('zh')).toBe('zh-CN');
+    // 认不出来/没设置 → 默认(保持既有行为:工具面历来中文)
+    expect(resolveMcpLocale('ja-JP')).toBe(MCP_DEFAULT_LOCALE);
+    expect(resolveMcpLocale(undefined)).toBe(MCP_DEFAULT_LOCALE);
+    expect(MCP_DEFAULT_LOCALE).toBe('zh-CN');
+  });
+
+  it('localizeSchema 把 describe 里的键换成文案,且不丢字段说明', () => {
+    const zh = createT('zh-CN');
+    // 用**字段说明**这条路径验(frameNodeSchema 的字段已是键;rgbSchema 自身那条
+    // 顶层说明还在迁移队列里,混进来会把断言变成"迁移进度"而不是"投影对不对")
+    const before = collectDescriptions(frameNodeSchema);
+    expect(before.length).toBeGreaterThan(10);
+    expect(before.some((d) => d.startsWith('schema.'))).toBe(true);
+
+    const projected = localizeSchema(frameNodeSchema, zh);
+    const after = collectDescriptions(projected);
+    // 数量不变 = 遍历没漏分支(漏了就会静默少几条说明)
+    expect(after).toHaveLength(before.length);
+    // 不残留键 = 投影真的落到了客户端看得到的地方(zod 4 的描述存在 globalRegistry,
+    // 写错地方就会留下键名 —— 这正是踩过的坑)
+    expect(after.filter((d) => d.startsWith('schema.'))).toEqual([]);
+  });
+
+  it('未译(en 表为 null)时回落到中文,而不是空串', () => {
+    const en = createT('en');
+    // 未译条目在 en 表里是 null → 取到中文;已译条目取英文
+    expect(en('log.trigger')).toBe('Log');
+    expect(en('bridge.error.useBridge')).not.toBe('');
+    expect(en('bridge.error.useBridge').length).toBeGreaterThan(3);
   });
 });
 

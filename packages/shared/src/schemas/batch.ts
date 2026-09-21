@@ -31,11 +31,7 @@ export type BatchCall = z.infer<typeof batchCallSchema>;
 
 /** 与 manageComponentsSchema 同思路:扁平结构,schema 保持简单,语义约束由运行时给出 */
 export const batchSchema = z.object({
-  calls: z
-    .array(batchCallSchema)
-    .min(1)
-    .max(50)
-    .describe('按数组顺序执行的步骤列表'),
+  calls: z.array(batchCallSchema).min(1).max(50).describe('schema.batch.calls'),
   stopOnError: z
     .boolean()
     .optional()
@@ -52,11 +48,9 @@ export const batchSchema = z.object({
 export type BatchParams = z.infer<typeof batchSchema>;
 
 export const batchResultSchema = z.object({
-  ok: z
-    .boolean()
-    .describe('全部步骤均执行且成功(executed 小于 total 即为中途停止)'),
-  executed: z.number().int().min(0).describe('实际产生结果的步骤数'),
-  total: z.number().int().min(0).describe('计划的步骤总数'),
+  ok: z.boolean().describe('schema.batch.ok'),
+  executed: z.number().int().min(0).describe('schema.batch.executed'),
+  total: z.number().int().min(0).describe('schema.batch.total'),
   results: z
     .array(
       z.object({
@@ -69,10 +63,10 @@ export const batchResultSchema = z.object({
           .describe(
             '成功时该工具的 structuredContent(已做回显摘要裁剪,见工具描述)',
           ),
-        error: z.string().optional().describe('失败原因(人读文本)'),
+        error: z.string().optional().describe('schema.batch.error'),
       }),
     )
-    .describe('各步骤结果,顺序与入参一致;被中止而未执行的步骤不出现在此列表'),
+    .describe('schema.batch.error2'),
   /**
    * 回显里的节点只留摘要字段、丢 vectorPaths 等大字段;裁剪后仍超预算的步骤
    * 降级为 id 清单。置 true 时说明有步骤的回显被压缩过 —— 需要细节请把该工具单独

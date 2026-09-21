@@ -1,11 +1,17 @@
 import type { McpServer } from '@modelcontextprotocol/server';
-import type { PluginMethod, PluginPlatform } from 'text-to-design-shared';
+import type {
+  MessageKey,
+  PluginMethod,
+  PluginPlatform,
+} from 'text-to-design-shared';
 import type { z } from 'zod';
 import type { Bridge } from '../bridge';
+import type { McpI18n } from '../i18n';
 import { error, warn } from '../logger';
 import type { RequestOptions } from '../pending';
 import { describePlatformGate } from '../platform-state';
 import { BridgeError } from './bridge-error';
+import { localizeSchema } from './localize-schema';
 import { err, structured } from './response';
 
 /** 注册函数返回的工具句柄(结构化最小类型,兼容 SDK RegisteredTool/Prompt/Resource) */
@@ -145,8 +151,8 @@ export interface BridgeToolDef {
  */
 export function bridgeTool(
   def: BridgeToolDef,
-): (server: McpServer, bridge: Bridge) => ToolHandle {
-  return (server: McpServer, bridge: Bridge): ToolHandle => {
+): (server: McpServer, bridge: Bridge, i18n: McpI18n) => ToolHandle {
+  return (server: McpServer, bridge: Bridge, i18n: McpI18n): ToolHandle => {
     // 边界处单点转型:SDK 的泛型重载无法穿透本工厂推断 zod schema,
     // 运行时调用形状与直接 registerTool 完全一致
     type RegisterFn = (
@@ -261,18 +267,24 @@ export function bridgeTool(
     };
     // daemon 单进程内同名工具重复注册以后者为准(行为一致)
     executors.set(def.name, executeTool);
+    const { t } = i18n;
     const handle = register(
       def.name,
       {
-        title: def.title,
+        // title / description / platformNote 在**源码里存的是 MessageKey**(0016),
+        // 这里做唯一的投影点:注册只发生一次(不做运行期热切换,见 0016 候选表)
+        title: t(def.title as MessageKey),
         // platformNote 静态拼进描述:注册只在 buildServer 时执行一次,不随平台变化,
-        // 具体"当前平台是否适用"由上面的执行期拦截与结果 warnings 表达
+        // 具体"当前平台是否适用"由上面的执行期拦截与结果 warnings 表达。
+        // 两段**各自**译再拼,而不是拼完再译:拼出来的串不是 catalog 的键
         description:
           def.platformNote != null
-            ? `${def.description}${def.platformNote}`
-            : def.description,
-        ...(def.inputSchema ? { inputSchema: def.inputSchema } : {}),
-        outputSchema: def.outputSchema,
+            ? `${t(def.description as MessageKey)}${t(def.platformNote as MessageKey)}`
+            : t(def.description as MessageKey),
+        ...(def.inputSchema
+          ? { inputSchema: localizeSchema(def.inputSchema, t) }
+          : {}),
+        outputSchema: localizeSchema(def.outputSchema, t),
         ...(def.annotations ? { annotations: def.annotations } : {}),
       },
       // 注意:SDK 对「无 inputSchema」的工具会以 callback(ctx) 形态调用

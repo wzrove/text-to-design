@@ -41,9 +41,9 @@ export type CoreCapability = z.infer<typeof coreCapabilitySchema>;
  * 描述里已写明 params 形状,不把 schema 本体塞进线格式。
  */
 export const platformOpInfoSchema = z.object({
-  name: z.string().describe('op 名,调用 jsd_platform_op 时原样传'),
+  name: z.string().describe('schema.platform.name'),
   title: z.string(),
-  description: z.string().describe('含 params 形状说明'),
+  description: z.string().describe('schema.platform.description'),
 });
 export type PlatformOpInfo = z.infer<typeof platformOpInfoSchema>;
 

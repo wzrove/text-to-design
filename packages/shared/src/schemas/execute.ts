@@ -54,12 +54,12 @@ export const createSvgSchema = z.object({
     .describe(
       '完整 SVG 字符串,如 <svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><path d="M0 0 L100 0 L100 100 Z" fill="#ff0000"/></svg>',
     ),
-  name: z.string().optional().describe('生成的图层名,默认 svg-design'),
+  name: z.string().optional().describe('schema.execute.name'),
 });
 
 export const htmlToDesignSchema = z.object({
-  html: z.string().describe('HTML 片段,支持内联 style'),
-  name: z.string().optional().describe('生成的图层名,默认 html-design'),
+  html: z.string().describe('schema.execute.html'),
+  name: z.string().optional().describe('schema.execute.name2'),
 });
 
 export const createIconSchema = z.object({
@@ -68,8 +68,8 @@ export const createIconSchema = z.object({
     .describe(
       '图标名/别名/语义描述,如 home、arrow-right、search、magnifier(搜索);支持模糊匹配与别名联想,查无返回候选提示',
     ),
-  size: z.number().optional().describe('图标边长 px,默认 24'),
-  color: z.string().optional().describe('描边颜色(十六进制),默认 #000000'),
-  strokeWidth: z.number().optional().describe('描边宽度,默认 2'),
-  name: z.string().optional().describe('生成的图层名,默认 icon-<图标名>'),
+  size: z.number().optional().describe('schema.execute.size'),
+  color: z.string().optional().describe('schema.execute.color'),
+  strokeWidth: z.number().optional().describe('schema.execute.strokeWidth'),
+  name: z.string().optional().describe('schema.execute.name3'),
 });

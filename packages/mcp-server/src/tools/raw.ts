@@ -12,6 +12,7 @@ import {
 import type { Bridge } from '../bridge';
 import { LONG_IO_TIMEOUT_MS, MAX_INLINE_DATA_URL_BYTES } from '../config';
 import { bridgeTool, type ToolHandle } from '../core/registry';
+import type { McpI18n } from '../i18n';
 
 /** 由 mimeType/format 推导落盘扩展名 */
 function extFor(mimeType?: string, format?: unknown): string {
@@ -30,11 +31,12 @@ function extFor(mimeType?: string, format?: unknown): string {
 export function registerRawTools(
   server: McpServer,
   bridge: Bridge,
+  i18n: McpI18n,
 ): ToolHandle[] {
   const exportTool = bridgeTool({
     name: 'jsd_export',
-    title: '导出节点为图片',
-    description: `导出节点为 PNG/JPG/SVG/PDF;ids 为必填数组(单节点也写成 ids:["123:456"],不是 nodeId),savePath 落盘与 includeDataUrl 返回 base64 可并存。注意:单张图片超过内联上限(默认 512KB)时不返回 base64,自动落盘并返回路径引用,避免撑爆会话内存。完整字段见 inputSchema。`,
+    title: 'export.title',
+    description: 'export.description',
     inputSchema: exportSchema,
     outputSchema: exportResultSchema,
     // 画布只读;但会写本地文件,不标 readOnly
@@ -43,7 +45,7 @@ export function registerRawTools(
     followUp: {
       type: 'tool',
       tool: 'jsd_fill_image',
-      description: '导出后用该图片填充到节点',
+      description: 'export.description2',
     },
     run: async (args, bridge_, signal) => {
       const { ids, format, scale, savePath, includeDataUrl } = args as {
@@ -132,8 +134,8 @@ export function registerRawTools(
 
   const fillImage = bridgeTool({
     name: 'jsd_fill_image',
-    title: '本地图片填充节点',
-    description: '读取本地图片文件填充到指定节点(IMAGE fill)',
+    title: 'fillImage.title',
+    description: 'fillImage.description',
     inputSchema: fillImageSchema,
     outputSchema: updatedResultSchema,
     annotations: { readOnlyHint: false, destructiveHint: false },
@@ -141,7 +143,7 @@ export function registerRawTools(
     followUp: {
       type: 'tool',
       tool: 'jsd_get_selection',
-      description: '复核图片填充效果',
+      description: 'fillImage.description2',
     },
     run: async (args, bridge_, signal) => {
       const { ids, sourcePath } = args as {
@@ -166,7 +168,7 @@ export function registerRawTools(
 
   const listFonts = bridgeTool({
     name: 'jsd_list_fonts',
-    title: '列出可用字体',
+    title: 'listFonts.title',
     description:
       '列出当前环境可用字体与各族的可用字型(返回 families 与 fonts:[{family,styles}])。写 fontName 时 family 用 fonts[].family 原样、style 用同一项的**全名**(如 SourceHanSansCN-Bold,不是简称 "Bold")——组合不存在时不报错、会静默退回默认字面(命中时结果 warnings 点名);引擎解析成功会把 family/style 规范化成短名,回读短名属正常',
     method: 'list_fonts',
@@ -175,13 +177,13 @@ export function registerRawTools(
     followUp: {
       type: 'tool',
       tool: 'jsd_set_text',
-      description: '用列出的字体设置文本',
+      description: 'listFonts.description',
     },
   });
 
   return [
-    exportTool(server, bridge),
-    fillImage(server, bridge),
-    listFonts(server, bridge),
+    exportTool(server, bridge, i18n),
+    fillImage(server, bridge, i18n),
+    listFonts(server, bridge, i18n),
   ];
 }

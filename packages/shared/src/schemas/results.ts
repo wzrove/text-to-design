@@ -28,7 +28,7 @@ export const pingResultSchema = z.object({
   capabilities: z
     .array(hostCapabilitySchema)
     .optional()
-    .describe('当前平台支持的能力列表(先查此字段再决定能否调用平台特有操作)'),
+    .describe('schema.results.capabilities'),
   coreCapabilities: z
     .array(coreCapabilitySchema)
     .optional()
@@ -122,7 +122,7 @@ export const exportResultSchema = z.object({
   ),
 });
 export const listFontsResultSchema = z.object({
-  families: z.array(z.string()).describe('可用字体族(family)列表'),
+  families: z.array(z.string()).describe('schema.results.families'),
   /**
    * 每个族实际可用的字型(style)。
    *
@@ -132,17 +132,15 @@ export const listFontsResultSchema = z.object({
   fonts: z
     .array(
       z.object({
-        family: z.string().describe('字体族'),
-        styles: z
-          .array(z.string())
-          .describe('该族可用字型,如 ["Regular","Medium","Bold"]'),
+        family: z.string().describe('schema.results.family'),
+        styles: z.array(z.string()).describe('schema.results.styles'),
       }),
     )
     .optional()
     .describe(
       'family → 可用 style 明细。写 fontName 前照这份清单取组合(family+style 需精确匹配,猜错会静默退回默认字重)',
     ),
-  count: z.number().describe('字体族数量'),
+  count: z.number().describe('schema.results.count'),
 });
 
 /** 页面结构总览:当前页顶层节点的轻量摘要(不递归子节点) */

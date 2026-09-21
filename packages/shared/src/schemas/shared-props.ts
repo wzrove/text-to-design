@@ -26,13 +26,10 @@ export const transformPropsSchema = z.object({
     .describe(
       'Y 坐标(px,相对父节点;auto-layout 子节点的位置由父容器接管,修改可能被布局覆盖)',
     ),
-  width: z.number().optional().describe('宽度(px)'),
-  height: z.number().optional().describe('高度(px)'),
-  rotation: z
-    .number()
-    .optional()
-    .describe('旋转角度(deg,绕节点自身左上角原点,x/y 不变)'),
-  opacity: z.number().optional().describe('不透明度 0-1'),
+  width: z.number().optional().describe('schema.sharedProps.width'),
+  height: z.number().optional().describe('schema.sharedProps.height'),
+  rotation: z.number().optional().describe('schema.sharedProps.rotation'),
+  opacity: z.number().optional().describe('schema.sharedProps.opacity'),
   visible: z.boolean().optional(),
   locked: z.boolean().optional(),
 });
@@ -64,43 +61,55 @@ export const resizePropsSchema = z.object({
 
 /** 多边形/星形形状参数 */
 export const shapePropsSchema = z.object({
-  pointCount: z
-    .number()
-    .optional()
-    .describe('多边形/星形角点数(仅 POLYGON/STAR 生效)'),
-  innerRadius: z
-    .number()
-    .optional()
-    .describe('星形内半径比例(0-1,相对外半径;仅 STAR 生效)'),
+  pointCount: z.number().optional().describe('schema.sharedProps.pointCount'),
+  innerRadius: z.number().optional().describe('schema.sharedProps.innerRadius'),
 });
 
 export const strokePropsSchema = z.object({
   strokes: z
     .array(paintSchema)
     .optional()
-    .describe('描边列表(Paint 数组;整体替换,非合并,需保留的描边要一并传入)'),
-  strokeWeight: z.number().optional().describe('描边宽度(px)'),
-  strokeTopWeight: z.number().optional().describe('描边顶部宽(px)'),
-  strokeBottomWeight: z.number().optional().describe('描边底部宽(px)'),
-  strokeLeftWeight: z.number().optional().describe('描边左侧宽(px)'),
-  strokeRightWeight: z.number().optional().describe('描边右侧宽(px)'),
+    .describe('schema.sharedProps.strokes'),
+  strokeWeight: z
+    .number()
+    .optional()
+    .describe('schema.sharedProps.strokeWeight'),
+  strokeTopWeight: z
+    .number()
+    .optional()
+    .describe('schema.sharedProps.strokeTopWeight'),
+  strokeBottomWeight: z
+    .number()
+    .optional()
+    .describe('schema.sharedProps.strokeBottomWeight'),
+  strokeLeftWeight: z
+    .number()
+    .optional()
+    .describe('schema.sharedProps.strokeLeftWeight'),
+  strokeRightWeight: z
+    .number()
+    .optional()
+    .describe('schema.sharedProps.strokeRightWeight'),
   strokeAlign: z
     .enum(['CENTER', 'INSIDE', 'OUTSIDE'])
     .optional()
-    .describe('描边对齐:CENTER|INSIDE|OUTSIDE'),
+    .describe('schema.sharedProps.strokeAlign'),
   strokeCap: z
     .enum(['NONE', 'ROUND', 'SQUARE', 'ARROW_LINES', 'ARROW_EQUILATERAL'])
     .optional()
-    .describe('描边端点:NONE|ROUND|SQUARE|ARROW_LINES|ARROW_EQUILATERAL'),
+    .describe('schema.sharedProps.strokeCap'),
   strokeJoin: z
     .enum(['MITER', 'BEVEL', 'ROUND'])
     .optional()
-    .describe('描边连接:MITER|BEVEL|ROUND'),
-  dashPattern: z.array(z.number()).optional().describe('虚线段数组,如 [4,4]'),
+    .describe('schema.sharedProps.strokeJoin'),
+  dashPattern: z
+    .array(z.number())
+    .optional()
+    .describe('schema.sharedProps.dashPattern'),
   strokeStyleId: z
     .string()
     .optional()
-    .describe('描边样式 id(团队库样式;平台无此能力时被忽略)'),
+    .describe('schema.sharedProps.strokeStyleId'),
 });
 
 export const cornerPropsSchema = z.object({
@@ -113,24 +122,24 @@ export const cornerPropsSchema = z.object({
   topLeftRadius: z
     .number()
     .optional()
-    .describe('左上圆角(px),适用类型同 cornerRadius'),
+    .describe('schema.sharedProps.topLeftRadius'),
   topRightRadius: z
     .number()
     .optional()
-    .describe('右上圆角(px),适用类型同 cornerRadius'),
+    .describe('schema.sharedProps.topRightRadius'),
   bottomLeftRadius: z
     .number()
     .optional()
-    .describe('左下圆角(px),适用类型同 cornerRadius'),
+    .describe('schema.sharedProps.bottomLeftRadius'),
   bottomRightRadius: z
     .number()
     .optional()
-    .describe('右下圆角(px),适用类型同 cornerRadius'),
+    .describe('schema.sharedProps.bottomRightRadius'),
 });
 
 export const textPropsSchema = z.object({
-  characters: z.string().optional().describe('文本内容(仅 TEXT 节点生效)'),
-  fontSize: z.number().optional().describe('字号(px)'),
+  characters: z.string().optional().describe('schema.sharedProps.characters'),
+  fontSize: z.number().optional().describe('schema.sharedProps.fontSize'),
   fontName: fontNameSchema
     .optional()
     .describe(
@@ -139,11 +148,11 @@ export const textPropsSchema = z.object({
   textAlignHorizontal: z
     .enum(['LEFT', 'CENTER', 'RIGHT', 'JUSTIFIED'])
     .optional()
-    .describe('水平对齐:LEFT|CENTER|RIGHT|JUSTIFIED'),
+    .describe('schema.sharedProps.textAlignHorizontal'),
   textAlignVertical: z
     .enum(['TOP', 'CENTER', 'BOTTOM'])
     .optional()
-    .describe('垂直对齐:TOP|CENTER|BOTTOM'),
+    .describe('schema.sharedProps.textAlignVertical'),
   textAutoResize: z
     .enum(['NONE', 'WIDTH_AND_HEIGHT', 'HEIGHT', 'TRUNCATE'])
     .optional()
@@ -153,22 +162,23 @@ export const textPropsSchema = z.object({
   textCase: z
     .enum(['ORIGINAL', 'UPPER', 'LOWER', 'TITLE'])
     .optional()
-    .describe('文本大小写:ORIGINAL|UPPER|LOWER|TITLE'),
+    .describe('schema.sharedProps.textCase'),
   textDecoration: z
     .enum(['NONE', 'UNDERLINE', 'STRIKETHROUGH'])
     .optional()
-    .describe('文本装饰:NONE|UNDERLINE|STRIKETHROUGH'),
-  lineHeight: lineHeightSchema.optional().describe('行高:{value,unit}'),
-  letterSpacing: letterSpacingSchema.optional().describe('字距:{value,unit}'),
-  textStyleId: z
-    .string()
+    .describe('schema.sharedProps.textDecoration'),
+  lineHeight: lineHeightSchema
     .optional()
-    .describe('文本样式 id(团队库样式;平台无此能力时被忽略)'),
+    .describe('schema.sharedProps.lineHeight'),
+  letterSpacing: letterSpacingSchema
+    .optional()
+    .describe('schema.sharedProps.letterSpacing'),
+  textStyleId: z.string().optional().describe('schema.sharedProps.textStyleId'),
   textTruncation: z
     .enum(['DISABLED', 'ENDING'])
     .optional()
-    .describe('文本截断(DISABLED=不截断,ENDING=末尾省略号截断),仅 Figma 生效'),
-  maxLines: z.number().optional().describe('文本最大行数,仅 Figma 生效'),
+    .describe('schema.sharedProps.textTruncation'),
+  maxLines: z.number().optional().describe('schema.sharedProps.maxLines'),
 });
 
 export const autoLayoutPropsSchema = z.object({
@@ -184,18 +194,24 @@ export const autoLayoutPropsSchema = z.object({
     .describe(
       '自动布局项间距(px);primaryAxisAlignItems=SPACE_BETWEEN 时该项被忽略(子项均匀分布)',
     ),
-  paddingTop: z.number().optional().describe('上内边距(px)'),
-  paddingRight: z.number().optional().describe('右内边距(px)'),
-  paddingBottom: z.number().optional().describe('下内边距(px)'),
-  paddingLeft: z.number().optional().describe('左内边距(px)'),
+  paddingTop: z.number().optional().describe('schema.sharedProps.paddingTop'),
+  paddingRight: z
+    .number()
+    .optional()
+    .describe('schema.sharedProps.paddingRight'),
+  paddingBottom: z
+    .number()
+    .optional()
+    .describe('schema.sharedProps.paddingBottom'),
+  paddingLeft: z.number().optional().describe('schema.sharedProps.paddingLeft'),
   primaryAxisSizingMode: z
     .enum(['FIXED', 'AUTO'])
     .optional()
-    .describe('主轴尺寸模式:FIXED|AUTO'),
+    .describe('schema.sharedProps.primaryAxisSizingMode'),
   counterAxisSizingMode: z
     .enum(['FIXED', 'AUTO'])
     .optional()
-    .describe('交叉轴尺寸模式:FIXED|AUTO'),
+    .describe('schema.sharedProps.counterAxisSizingMode'),
   primaryAxisAlignItems: z
     .enum(['MIN', 'MAX', 'CENTER', 'SPACE_BETWEEN'])
     .optional()
@@ -205,12 +221,12 @@ export const autoLayoutPropsSchema = z.object({
   counterAxisAlignItems: z
     .enum(['MIN', 'MAX', 'CENTER'])
     .optional()
-    .describe('交叉轴对齐:MIN|MAX|CENTER'),
-  layoutGrow: z.number().optional().describe('自动布局内伸缩系数'),
+    .describe('schema.sharedProps.counterAxisAlignItems'),
+  layoutGrow: z.number().optional().describe('schema.sharedProps.layoutGrow'),
   layoutAlign: z
     .enum(['MIN', 'CENTER', 'MAX', 'STRETCH', 'INHERIT'])
     .optional()
-    .describe('自动布局内对齐:MIN|CENTER|MAX|STRETCH|INHERIT'),
+    .describe('schema.sharedProps.layoutAlign'),
 });
 
 export const visualPropsSchema = z.object({
@@ -220,19 +236,16 @@ export const visualPropsSchema = z.object({
     .describe(
       '填充列表(Paint 数组;整体替换,非合并,需保留的现有填充项要一并传入)',
     ),
-  fillStyleId: z
-    .string()
-    .optional()
-    .describe('填充样式 id(团队库样式;平台无此能力时被忽略)'),
+  fillStyleId: z.string().optional().describe('schema.sharedProps.fillStyleId'),
   blendMode: blendModeSchema.optional(),
   effectStyleId: z
     .string()
     .optional()
-    .describe('效果样式 id(团队库样式;平台无此能力时被忽略)'),
+    .describe('schema.sharedProps.effectStyleId'),
   effects: z
     .array(effectSchema)
     .optional()
-    .describe('效果列表(阴影/模糊,可多层叠加;整体替换,非合并)'),
+    .describe('schema.sharedProps.effects'),
   constraints: z
     .object({
       horizontal: constraintTypeSchema.describe(
@@ -243,19 +256,25 @@ export const visualPropsSchema = z.object({
       ),
     })
     .optional()
-    .describe('自动布局中的约束'),
-  clipsContent: z.boolean().optional().describe('是否裁剪溢出内容'),
-  cornerSmoothing: z.number().optional().describe('圆角平滑度 0-1'),
+    .describe('schema.sharedProps.vertical'),
+  clipsContent: z
+    .boolean()
+    .optional()
+    .describe('schema.sharedProps.clipsContent'),
+  cornerSmoothing: z
+    .number()
+    .optional()
+    .describe('schema.sharedProps.cornerSmoothing'),
   layoutGrids: z
     .array(layoutGridSchema)
     .optional()
-    .describe('布局网格(参考线)'),
+    .describe('schema.sharedProps.layoutGrids'),
   arcData: z
     .object({
-      startingAngle: z.number().describe('起始角度(radians)'),
-      endingAngle: z.number().describe('结束角度(radians)'),
-      innerRadius: z.number().describe('内半径(0-1 ratio)'),
+      startingAngle: z.number().describe('schema.sharedProps.startingAngle'),
+      endingAngle: z.number().describe('schema.sharedProps.endingAngle'),
+      innerRadius: z.number().describe('schema.sharedProps.innerRadius2'),
     })
     .optional()
-    .describe('环形路径参数(弧线),仅 ELLIPSE 节点生效'),
+    .describe('schema.sharedProps.innerRadius3'),
 });

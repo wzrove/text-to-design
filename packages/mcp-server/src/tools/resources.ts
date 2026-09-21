@@ -32,7 +32,7 @@ export function registerResources(
     'canvas-selection',
     'jsd://canvas/selection',
     {
-      title: '画布当前选中',
+      title: 'resources.title',
       description:
         '当前选中节点的序列化树(含直接子节点),实时从插件读取;等价于 jsd_get_selection depth=2。⚠ 每个节点带 z = 在父级 children 里的下标 = 绘制顺序(0 = 最底层,越大越靠上)',
       mimeType: 'application/json',
@@ -47,7 +47,7 @@ export function registerResources(
     'fonts',
     'jsd://fonts',
     {
-      title: '可用字体列表',
+      title: 'resources.title2',
       description:
         '当前环境可用的字体族与各族的可用字型(families / fonts:[{family,styles}]),实时从插件读取',
       mimeType: 'application/json',
@@ -62,7 +62,7 @@ export function registerResources(
     'styles',
     'jsd://styles',
     {
-      title: '本地样式列表',
+      title: 'resources.title3',
       description:
         '当前文档可复用的本地样式(PAINT/TEXT/EFFECT/GRID),含 id/name/type;按名应用样式前先读这里拿准确样式名',
       mimeType: 'application/json',
@@ -77,7 +77,7 @@ export function registerResources(
     'page',
     'jsd://page',
     {
-      title: '当前页结构总览',
+      title: 'resources.title4',
       description:
         '当前页顶层节点的轻量摘要(名称/类型/位置/尺寸/子节点数),不递归;另附文档级页面总览(pages:各页名与顶层节点数,动态页文档首次读取会全量加载并在 note 点名成本)。从头设计整页前先读这里看页面已有内容',
       mimeType: 'application/json',
@@ -92,7 +92,7 @@ export function registerResources(
     'node',
     new ResourceTemplate('jsd://node/{id}', { list: undefined }),
     {
-      title: '节点详情',
+      title: 'resources.title5',
       description:
         '按 id 读取节点的序列化结构,如 jsd://node/12:3;等价于 jsd_find ids 精确查找',
       mimeType: 'application/json',
@@ -111,7 +111,7 @@ export function registerResources(
     'platform-state',
     'jsd://platform/state',
     {
-      title: '平台状态与能力表',
+      title: 'resources.title6',
       description:
         'daemon 缓存的插件平台状态(platform / capabilities / coreCapabilities / platformOps),取自最近一次 jsd_ping 回包;插件离线或尚未探测到平台时为空(此时先调 jsd_ping)。读缓存不发插件请求 —— 用它判断「当前平台支持什么、有哪些特有 op」比每次 ping 便宜',
       mimeType: 'application/json',

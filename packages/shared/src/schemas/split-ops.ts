@@ -20,15 +20,8 @@ import {
 
 /** 属性类小工具的节点定位字段(属性操作的 ids/matchName/recursive/includeSelf) */
 export const updateTargetFields = {
-  ids: z
-    .array(z.string())
-    .min(1)
-    .optional()
-    .describe('目标节点 id 列表;缺省时作用于当前选中节点'),
-  matchName: z
-    .string()
-    .optional()
-    .describe('按节点 name 精确过滤(精确等值,非模糊/包含),仅命中节点被修改'),
+  ids: z.array(z.string()).min(1).optional().describe('schema.splitOps.ids'),
+  matchName: z.string().optional().describe('schema.splitOps.matchName'),
   recursive: z
     .boolean()
     .optional()
@@ -54,14 +47,8 @@ export const selectNodesSchema = z
 
 export const deleteNodeSchema = z
   .object({
-    ids: z
-      .array(z.string())
-      .optional()
-      .describe('要删除的节点 id 列表;缺省时删除当前选中节点'),
-    matchName: z
-      .string()
-      .optional()
-      .describe('在 ids(或当前选中)范围内,仅删除 name 精确匹配的节点'),
+    ids: z.array(z.string()).optional().describe('schema.splitOps.ids2'),
+    matchName: z.string().optional().describe('schema.splitOps.matchName2'),
   })
   .strict();
 
@@ -74,7 +61,7 @@ export const cloneNodeSchema = z
 export const groupNodesSchema = z
   .object({
     ids: requiredIds('要编组的节点 id 列表,至少 2 个', 2),
-    name: z.string().optional().describe('组名'),
+    name: z.string().optional().describe('schema.splitOps.name'),
     layoutMode: z
       .enum(['NONE', 'HORIZONTAL', 'VERTICAL'])
       .optional()
@@ -87,18 +74,24 @@ export const groupNodesSchema = z
       .describe(
         '自动布局项间距(px);primaryAxisAlignItems=SPACE_BETWEEN 时该项被忽略(子项均匀分布)',
       ),
-    paddingTop: z.number().optional().describe('上内边距(px)'),
-    paddingRight: z.number().optional().describe('右内边距(px)'),
-    paddingBottom: z.number().optional().describe('下内边距(px)'),
-    paddingLeft: z.number().optional().describe('左内边距(px)'),
+    paddingTop: z.number().optional().describe('schema.splitOps.paddingTop'),
+    paddingRight: z
+      .number()
+      .optional()
+      .describe('schema.splitOps.paddingRight'),
+    paddingBottom: z
+      .number()
+      .optional()
+      .describe('schema.splitOps.paddingBottom'),
+    paddingLeft: z.number().optional().describe('schema.splitOps.paddingLeft'),
     primaryAxisSizingMode: z
       .enum(['FIXED', 'AUTO'])
       .optional()
-      .describe('主轴尺寸模式:FIXED|AUTO'),
+      .describe('schema.splitOps.primaryAxisSizingMode'),
     counterAxisSizingMode: z
       .enum(['FIXED', 'AUTO'])
       .optional()
-      .describe('交叉轴尺寸模式:FIXED|AUTO'),
+      .describe('schema.splitOps.counterAxisSizingMode'),
     primaryAxisAlignItems: z
       .enum(['MIN', 'MAX', 'CENTER', 'SPACE_BETWEEN'])
       .optional()
@@ -108,7 +101,7 @@ export const groupNodesSchema = z
     counterAxisAlignItems: z
       .enum(['MIN', 'MAX', 'CENTER'])
       .optional()
-      .describe('交叉轴对齐:MIN|MAX|CENTER'),
+      .describe('schema.splitOps.counterAxisAlignItems'),
   })
   .strict();
 
@@ -146,10 +139,7 @@ export const reparentNodesSchema = z
 
 export const repairNodesSchema = z
   .object({
-    ids: z
-      .array(z.string())
-      .optional()
-      .describe('要清理的已损坏节点 id 列表;缺省时清理当前页全部损坏节点'),
+    ids: z.array(z.string()).optional().describe('schema.splitOps.ids3'),
   })
   .strict();
 
@@ -158,7 +148,7 @@ export const repairNodesSchema = z
 export const createComponentSchema = z
   .object({
     ids: requiredIds('要固化为组件的节点 id 列表'),
-    name: z.string().optional().describe('组件名称'),
+    name: z.string().optional().describe('schema.splitOps.name2'),
   })
   .strict();
 
@@ -174,15 +164,15 @@ export const detachInstanceSchema = z
 
 export const importComponentSchema = z
   .object({
-    key: z.string().describe('团队库组件唯一标识 Key'),
-    name: z.string().optional().describe('导入后的节点名称'),
+    key: z.string().describe('schema.splitOps.key'),
+    name: z.string().optional().describe('schema.splitOps.name3'),
   })
   .strict();
 
 export const swapComponentSchema = z
   .object({
     ids: requiredIds('要换绑的实例(INSTANCE)节点 id 列表'),
-    componentId: z.string().describe('目标组件(COMPONENT)节点 id'),
+    componentId: z.string().describe('schema.splitOps.componentId'),
   })
   .strict();
 
@@ -202,7 +192,7 @@ export const combineAsVariantsSchema = z
     ids: requiredIds(
       '要合并为变体集(分量)的组件(COMPONENT)节点 id 列表;实例不能直接合成,须先 jsd_detach_instance 或重建为组件',
     ),
-    name: z.string().optional().describe('变体集名称'),
+    name: z.string().optional().describe('schema.splitOps.name4'),
   })
   .strict();
 
@@ -218,9 +208,7 @@ export const copyOverridesSchema = z
 
 const applyOverrideFields = {
   ids: requiredIds('要套用覆盖快照的目标实例(INSTANCE)节点 id 列表'),
-  sourceId: z
-    .string()
-    .describe('源实例 id,即先前 copy_overrides 返回的 snapshotId'),
+  sourceId: z.string().describe('schema.splitOps.sourceId'),
   swapToSource: z
     .boolean()
     .optional()
@@ -294,7 +282,7 @@ const setVisibilityProps = {
 };
 
 const renameNodeProps = {
-  name: z.string().describe('节点新名称'),
+  name: z.string().describe('schema.splitOps.name5'),
 };
 
 // 多边形/星形形状参数(长尾字段,原 jsd_update_node 独有):pointCount 仅

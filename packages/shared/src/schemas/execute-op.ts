@@ -19,10 +19,7 @@ import type { NodeType } from './node-type';
 export const pingSchema = z.object({});
 
 export const getSelectionSchema = z.object({
-  depth: z
-    .number()
-    .optional()
-    .describe('序列化深度:0=仅自身,1=含直接子节点,2=含孙节点;缺省 2'),
+  depth: z.number().optional().describe('schema.executeOp.depth'),
 });
 
 // ExecuteOp: 创建指令 (字段对齐 runtime SceneNode 属性)

@@ -7,6 +7,7 @@ import {
 } from 'text-to-design-shared';
 import type { Bridge } from '../bridge';
 import { bridgeTool, type ToolHandle } from '../core/registry';
+import type { McpI18n } from '../i18n';
 import { driftWatch } from './drift-watch';
 
 /**
@@ -17,12 +18,12 @@ import { driftWatch } from './drift-watch';
 export function registerManageTools(
   server: McpServer,
   bridge: Bridge,
+  i18n: McpI18n,
 ): ToolHandle[] {
   const manageNodes = bridgeTool({
     name: 'jsd_manage_nodes',
-    title: '节点结构操作(聚合)',
-    description: `按 op 分发的节点结构操作聚合入口:select|remove|clone|group|ungroup|flatten|outline_stroke|reparent|repair。单次单操作请优先用对应小工具:jsd_select_nodes / jsd_delete_node / jsd_clone_node / jsd_group_nodes / jsd_ungroup_nodes / jsd_flatten_nodes / jsd_outline_stroke / jsd_reparent_nodes / jsd_repair_nodes(描述含平台缺陷与正确流程)。属性修改用 jsd_set_* 系列(含 jsd_set_shape);组件/实例操作用 jsd_manage_components 或 jsd_create_component / jsd_sync_overrides 等,两工具 op 不通用。
-各 op 的返回键(在 jsd_batch 里用占位符引用时才不会写错,写错会中止整批):select→selected[](id 字符串)、remove→removed[](id 字符串)、clone/outline_stroke→created[](节点**数组**)、group/flatten→created(节点**单对象**:这两个 op 内部走的就是 jsd_group_nodes / jsd_flatten_nodes 那条路)、ungroup→ungrouped[](id 字符串)、reparent→moved[](同时附 updated[],两者同一份数组)、repair→cleaned[](id 字符串)。id 字符串数组取 {{步骤id.selected[0]}},节点数组取 {{步骤id.created[0].id}},节点单对象取 {{步骤id.created.id}}(写成 [0] 会报无法解析)。`,
+    title: 'manageNodes.title',
+    description: 'manageNodes.description',
     method: 'node_op',
     inputSchema: manageNodesSchema,
     outputSchema: manageNodesResultSchema,
@@ -36,14 +37,14 @@ export function registerManageTools(
     followUp: {
       type: 'tool',
       tool: 'jsd_set_layout',
-      description: '结构改完后设置容器自动布局',
+      description: 'manageNodes.followUp',
     },
   });
 
   const manageComponents = bridgeTool({
     name: 'jsd_manage_components',
-    title: '组件与实例操作(聚合)',
-    description: `按 op 分发的组件/实例操作聚合入口:create_component|create_instance|detach_instance|import_component|swap_component|set_instance_properties|combine_as_variants|copy_overrides|apply_overrides|sync_overrides。单次单操作请优先用对应小工具:jsd_create_component / jsd_create_instance / jsd_detach_instance / jsd_import_component / jsd_swap_component / jsd_set_instance_properties / jsd_combine_as_variants / jsd_copy_overrides / jsd_apply_overrides / jsd_sync_overrides(描述含平台缺陷与正确流程)。节点结构操作用 jsd_manage_nodes,两工具 op 不通用`,
+    title: 'manageComponents.title',
+    description: 'manageComponents.description',
     method: 'component_op',
     inputSchema: manageComponentsSchema,
     outputSchema: manageComponentsResultSchema,
@@ -51,9 +52,12 @@ export function registerManageTools(
     followUp: {
       type: 'tool',
       tool: 'jsd_set_instance_properties',
-      description: '组件/实例改完后设置变体属性',
+      description: 'manageComponents.description2',
     },
   });
 
-  return [manageNodes(server, bridge), manageComponents(server, bridge)];
+  return [
+    manageNodes(server, bridge, i18n),
+    manageComponents(server, bridge, i18n),
+  ];
 }

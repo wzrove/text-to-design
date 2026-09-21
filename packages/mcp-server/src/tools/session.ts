@@ -6,16 +6,18 @@ import {
 import type { Bridge } from '../bridge';
 import { CLIENT, PING_TIMEOUT_MS } from '../config';
 import { bridgeTool, type ToolHandle } from '../core/registry';
+import type { McpI18n } from '../i18n';
 
 /** 会话类:连接探测 + 选中读取 */
 export function registerSessionTools(
   server: McpServer,
   bridge: Bridge,
+  i18n: McpI18n,
 ): ToolHandle[] {
   const ping = bridgeTool({
     name: 'jsd_ping',
-    title: `检查${CLIENT.label}插件连接`,
-    description: `检查插件是否在线(需先在${CLIENT.label}(即时设计或 Figma)中运行该插件并保持运行)。返回三个能力表:coreCapabilities 为核心能力(create/modify/structure/component/export/image,两平台一致);capabilities 只列平台差异超集(如 variables/componentProperties/textTruncation),即时设计通常只有 styles,Figma 还会有 variables/componentProperties 等;platformOps 列当前平台可用的特有操作(名/标题/参数说明),调 jsd_platform_op 前先读它。回包会被 daemon 缓存,后续可直接读 jsd://platform/state(不必重复 ping)`,
+    title: i18n.t('ping.title', { client: CLIENT.label }),
+    description: i18n.t('ping.description', { client: CLIENT.label }),
     outputSchema: pingResultSchema,
     annotations: { readOnlyHint: true },
     alwaysEnabled: true,
@@ -23,7 +25,7 @@ export function registerSessionTools(
     followUp: {
       type: 'tool',
       tool: 'jsd_get_selection',
-      description: '连接确认后读取当前选中',
+      description: 'ping.followUp',
     },
     run: async () => {
       try {
@@ -56,17 +58,17 @@ export function registerSessionTools(
 
   const getSelection = bridgeTool({
     name: 'jsd_get_selection',
-    title: '读取画布选中',
-    description: `获取画布当前选中节点的序列化树(名称/类型/尺寸/位置/填充/子结构);depth 控制层级深度,默认 2。⚠ 每个节点带 z = 在父级 children 里的下标 = 绘制顺序(0 = 最底层,越大越靠上),判断遮挡读 z 即可`,
+    title: 'getSelection.title',
+    description: 'getSelection.description',
     method: 'get_selection',
     outputSchema: getSelectionResultSchema,
     annotations: { readOnlyHint: true },
     followUp: {
       type: 'tool',
       tool: 'jsd_find',
-      description: '在选中范围内继续精确查找节点',
+      description: 'getSelection.description2',
     },
   });
 
-  return [ping(server, bridge), getSelection(server, bridge)];
+  return [ping(server, bridge, i18n), getSelection(server, bridge, i18n)];
 }
