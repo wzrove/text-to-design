@@ -32,15 +32,15 @@
     "domhandler": "^5.0.3",
     "fuse.js": "^7.5.0",
     "htmlparser2": "^10.0.0",
-    "lucide-static": "^1.30.0",
-    "ws": "^8.21.1",
+    "lucide-static": "^1.47.0",
+    "ws": "^8.21.3",
     "zod": "catalog:"
   },
   "devDependencies": {
     "@types/node": "catalog:",
     "@types/ws": "^8.18.1",
     "text-to-design-shared": "workspace:*",
-    "tsx": "^4.20.0",
+    "tsx": "^4.23.15",
     "typescript": "catalog:",
     "vite": "catalog:"
   }
