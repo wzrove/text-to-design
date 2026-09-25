@@ -58,7 +58,7 @@ jobs:
         run: git tag > "${RUNNER_TEMP}/tags-before.txt"
       - uses: changesets/action@v2
         with:
-          publish: pnpm release
+          publish-script: pnpm release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: 推送本次新增的 tag
