@@ -72,8 +72,14 @@ export const CAPABILITY_GATED_PROPS: Record<
   variables: [],
   platformOps: [],
   // 行为型能力(不改节点属性,只决定 core 的策略顺序):
-  // 原生 combineAsVariants 即原位合并 —— 并入组件集的就是实例所指的 COMPONENT
-  // 本身,已有实例链接不断。Figma 声明;jsDesign 无此语义。
+  // 原生 combineAsVariants 即**原位合并** —— 并入组件集的就是实例所指的 COMPONENT
+  // 本身,已有实例链接不断。Figma / MasterGo 声明。
+  //
+  // jsDesign **未**声明,但理由不是「没有这个语义」—— 它的 typings 里
+  // `combineAsVariants` 与 Figma 同形。真因是**运行时必崩**(2026-09-24 真机:
+  // 三种姿势全部报 `in get_booleanOperation: Value is not a string`,与组件结构
+  // 无关)。语义差异是猜的,平台缺陷是验过的 —— 别把后者写成前者
+  // (见 `mcp-tdd/references/platform-limits.md` 的 B 类行)。
   inPlaceVariants: [],
 };
 

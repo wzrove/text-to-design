@@ -1,5 +1,5 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
@@ -382,7 +382,13 @@ describe('中文棘轮:已迁移的代码里不许再出现中文字面量', () 
     const offenders: string[] = [];
     for (const dir of ['packages/shared/src', 'packages/ui/src']) {
       for (const file of sourceFiles(join(ROOT, dir))) {
-        const rel = file.slice(ROOT.length + 1);
+        // 白名单与真源表写的是 POSIX 风格路径,而 Windows 上 `join` 产出反斜杠 ——
+        // 不归一的话 `startsWith` 永不匹配,白名单整段失效(表现是数百条误报),
+        // 断言本身没错,错的是比较口径。
+        const rel = file
+          .slice(ROOT.length + 1)
+          .split(sep)
+          .join('/');
         if (
           PENDING_MIGRATION_PREFIXES.some((prefix) => rel.startsWith(prefix))
         ) {

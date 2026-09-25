@@ -63,3 +63,53 @@ export const componentPropertyValueSchema = z.object({
 export type ComponentPropertyValue = z.infer<
   typeof componentPropertyValueSchema
 >;
+
+/**
+ * 组件/变体属性的**入参**值:变体属性传字符串(`{"状态":"禁用"}`),布尔属性传布尔,
+ * 需要显式声明类型(或换绑属性要带 `preferredValues`)时传 `{type, value}` 对象。
+ *
+ * 为什么三种都收:契约 `DesignHost.setProperties` 的签名就是
+ * `Record<string, string | ComponentPropertyValue>`,而各宿主底层只收标量
+ * (Figma `setProperties({[名]: string|boolean})`、MG `setProperties({[propertyId]: string|boolean})`)
+ * —— 收窄到字符串会让布尔/换绑属性在**两个平台都设不了**,与契约不符。
+ */
+export const componentPropertyInputSchema = z.union([
+  z.string(),
+  z.boolean(),
+  componentPropertyValueSchema,
+]);
+
+/**
+ * 变量别名引用(Figma `VariableAlias` 的线格式)。`id` 可**直接回喂**
+ * `figma_variables_apply.variableId`,故不改名、不解析、不补名称 —— 读写字形一致,
+ * 写后回读就是同一个 id 的比对(决策 0024)。
+ */
+export const variableAliasRefSchema = z.object({
+  type: z.literal('VARIABLE_ALIAS'),
+  id: z.string(),
+});
+export type VariableAliasRef = z.infer<typeof variableAliasRefSchema>;
+
+/**
+ * 节点上的变量绑定。键 = 引擎的可绑定字段名(与 `figma_variables_apply` 的
+ * `boundProperty` **同一套词汇**),值的三态由引擎决定:
+ * - 单个别名 —— 标量绑定字段(`cornerRadius` / `width` …);
+ * - 别名数组 —— `fills` / `strokes` / `effects` / `layoutGrids` / `textRangeFills`;
+ * - 按属性名索引的别名表 —— `componentProperties`。
+ *
+ * 缺省语义:节点无任何绑定、或平台不提供该字段(仅 Figma 有,见 0024)时**整个键省略**,
+ * 故「键在 = 至少有一条绑定」,调用方不必再判空。
+ *
+ * ⚠ 引擎口径原样保留:有独立圆角的节点上,`cornerRadius` 绑定会表现为
+ * `topLeftRadius`/`topRightRadius`/`bottomLeftRadius`/`bottomRightRadius` 四条
+ * (`@figma/plugin-typings` `plugin-api.d.ts:6441`),不归一成 `cornerRadius`。
+ */
+export const boundVariablesSchema = z.record(
+  z.string(),
+  z.union([
+    variableAliasRefSchema,
+    z.array(variableAliasRefSchema),
+    z.record(z.string(), variableAliasRefSchema),
+  ]),
+);
+export type BoundVariableAliases = z.infer<typeof boundVariablesSchema>;

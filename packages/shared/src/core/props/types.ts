@@ -1,5 +1,7 @@
+import { propAppliesTo } from '../../dicts/prop-applicability';
 import type { DesignHost, NodeSkeleton } from '../host';
 import type { RuntimeContext } from '../runtime';
+import { gatePropWrite } from './platform-gate';
 
 /**
  * 写后反馈的收集器。
@@ -76,4 +78,33 @@ export function putIfPresent(
   if (!(key in node)) return false;
   setField(node, key, value);
   return true;
+}
+
+/**
+ * **写路径的唯一收口**:先按平台类型系统与领域适用性判定,再落到 {@link putIfPresent}。
+ *
+ * 为什么要多这一层而不是各处直接 `putIfPresent`:
+ * - 值域与适用性收窄是**分平台**的事实(`dicts/platform-value-domain.ts`),被拒时必须留下
+ *   证据(`WriteOutcome`)—— 此前这类判定散在平台门面里,只能打 console(0007);
+ * - 「属性 × 节点类型」是**领域事实**(`dicts/prop-applicability.ts`),同样必须在写入前拦下。
+ *   此前只有 shapeWriter / layoutWriter 自己记得调 `propAppliesTo`,而 `paintWriter`
+ *   (layoutGrids)与 `passthroughWriter`(clipsContent)是直写 —— 给矩形写 layoutGrids
+ *   于是变成「回包成功、回读没有该字段」(2026-09-24 MG 真机踩到)。
+ *
+ * 表驱动的单一收口也保证「新增一条判定」只需改一张表,不必再找第二个写入口。
+ *
+ * 判定通过但节点上没这个属性时仍返回 false 且**不记 warnings** —— 那是既有的
+ * 存在性守卫口径(未登记的平台差异一律 fail-open,不误报);适用性不匹配则**静默返回 false**,
+ * 由结果装配期统一点名(`applicabilityMissNotice`:创建与修改两条路径共用那一句)。
+ */
+export function writeProp(
+  w: WriteCtx,
+  node: NodeSkeleton,
+  key: string,
+  value: unknown,
+): boolean {
+  if (value == null) return false;
+  if (!propAppliesTo(key, node.type)) return false;
+  if (!gatePropWrite(w, key, value)) return false;
+  return putIfPresent(node, key, value);
 }

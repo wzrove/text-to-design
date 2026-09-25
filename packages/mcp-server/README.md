@@ -145,9 +145,8 @@ pkill -f text-to-design-mcp
 | `jsd_batch` | 批量编排器:一次请求顺序执行多个 jsd_* 步骤,双花括号占位符串起中间值;步骤回显做摘要裁剪(节点只留 id/name/type/x/y,丢 vectorPaths 等大字段,超预算降级为 id 清单),占位符解析用完整数据;含图标的批次另配一次 `jsd_export` 目视验收;含删除/移父的步骤自动复核同层几何漂移(结果 `warnings`,`checkDrift:false` 可关;单工具调用同样会复核) |
 | `jsd_export` | 导出节点为 PNG/JPG/SVG/PDF(导出失败的 id 在文本里点名) |
 | `jsd_list_fonts` | 列出可用字体:families 与各族的可用字型 `fonts:[{family,styles}]`(写 fontName 前照这份取组合,family+style 需精确匹配,猜错会静默退回默认字重) |
-| `jsd_list_styles` | 列出本地样式(PAINT/TEXT/EFFECT/GRID) |
 | `jsd_fill_image` | 用本地图片填充节点 |
-| `jsd_platform_op` | 平台特有能力的通用通道(Figma 变量/本地样式/组件属性)。先读 `jsd_ping` 的 `platformOps` 名单再传 op 名;插件平台不适用(如即时设计)时由 daemon 直接拦截并给出替代路径,不发插件往返 |
+| `jsd_platform_op` | 平台特有能力的通用通道(Figma 变量/本地样式/组件属性**定义与设值**)。先读 `jsd_ping` 的 `platformOps` 名单再传 op 名;插件平台不适用(如即时设计)时由 daemon 直接拦截并给出替代路径,不发插件往返 |
 
 ### 配方 prompt(`prompts/list`)
 

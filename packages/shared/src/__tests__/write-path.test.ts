@@ -1,8 +1,19 @@
 import { beforeEach, describe, expect, it } from 'vitest';
+import {
+  setInstanceProperties,
+  syncInstanceOverrides,
+  toComponentPropertyWrites,
+} from '../core/component';
 import { executeOps } from '../core/execute';
 import { listFonts } from '../core/export';
+import type { NodeSkeleton } from '../core/host';
+import { findNodes } from '../core/nodes';
+import { normalizeLayoutGrids } from '../core/normalize';
 import { type RuntimeContext, runtimeContext } from '../core/runtime';
+import { trySerialize } from '../core/serialize';
 import { updateSelection } from '../core/update';
+import { LAYOUT_GRID_UNVERIFIABLE_PLATFORMS } from '../dicts/platform-value-domain';
+import { serializedNodeSchema } from '../schemas/serialized-node';
 import {
   type FakeHost,
   makeFrame,
@@ -705,6 +716,613 @@ describe('创建路径的写后回收(0007)', () => {
   });
 });
 
+describe('平台类型事实的写前判定(0022)', () => {
+  /**
+   * 三个平台的上下文。能力表留空(null 也行)—— 这里验的是**平台轴**,与能力位无关:
+   * 前者问「这个值/这个字段面本平台有没有」,后者问「这个能力面本平台有没有」。
+   */
+  const mastergo = runtimeContext(null, 'mastergo');
+  const figma = runtimeContext(null, 'figma');
+  const jsdesign = runtimeContext(null, 'jsdesign');
+
+  it('MG:alignSelf 只有 STRETCH/INHERIT → MIN 被点名且不写入', async () => {
+    host = makeHost();
+    const r = await executeOps(
+      host,
+      mastergo,
+      {
+        type: 'FRAME',
+        name: 'card',
+        width: 100,
+        height: 100,
+        layoutMode: 'VERTICAL',
+        layoutAlign: 'MIN',
+      },
+      { mode: 'manual' },
+    );
+    const warn = r.warnings?.join('') ?? '';
+    expect(warn, '此前这里只打插件 console,调用方什么都看不到').toContain(
+      'layoutAlign',
+    );
+    expect(warn, '要点出本平台接受什么').toContain('INHERIT');
+    const created = host.registry.get(r.created[0].id);
+    expect(created?.layoutAlign, '被拒的值不该落到节点上').toBe('INHERIT');
+  });
+
+  it('同一份输入在 Figma 上正常写入(证明拒绝是平台差异,不是输入错)', async () => {
+    host = makeHost();
+    const r = await executeOps(
+      host,
+      figma,
+      {
+        type: 'FRAME',
+        name: 'card',
+        width: 100,
+        height: 100,
+        layoutMode: 'VERTICAL',
+        layoutAlign: 'MIN',
+      },
+      { mode: 'manual' },
+    );
+    expect(r.warnings, 'Figma 支持 MIN,不该告警').toBeUndefined();
+    expect(host.registry.get(r.created[0].id)?.layoutAlign).toBe('MIN');
+  });
+
+  it('MG:EllipseNode 不含 CornerMixin → 椭圆上的圆角被点名且不写入', async () => {
+    host = makeHost();
+    // fixture 的 createEllipse 复用了 makeRect(类型是 RECTANGLE);这里按真实形态造椭圆
+    host.createEllipse = () => {
+      const e = makeRect(`${host.registry.size + 1}:ellipse`) as unknown as {
+        type: string;
+        cornerRadius?: number;
+      };
+      e.type = 'ELLIPSE';
+      return e as never;
+    };
+    const r = await executeOps(
+      host,
+      mastergo,
+      { type: 'ELLIPSE', name: 'dot', width: 24, height: 24, cornerRadius: 8 },
+      { mode: 'manual' },
+    );
+    const warn = r.warnings?.join('') ?? '';
+    expect(warn).toContain('cornerRadius');
+    expect(warn, '要区分「字段不存在」与「值不合法」').toContain(
+      '没有对应字段',
+    );
+    expect(warn).toContain('ELLIPSE');
+  });
+
+  it('jsDesign 的 BlendMode 没有 PASS_THROUGH → 点名且不写入', async () => {
+    const rect = makeRect();
+    host = makeHost([rect]);
+    const r = await updateSelection(
+      host,
+      jsdesign,
+      { ids: [rect.id], props: { blendMode: 'PASS_THROUGH' } },
+      'set_fill',
+    );
+    const warn = r.warnings?.join('') ?? '';
+    expect(warn).toContain('PASS_THROUGH');
+    expect(rect.blendMode, '节点应保持原值').toBe('NORMAL');
+  });
+
+  it('未注入平台(fail-open)→ 一律放行,与 0002 的既有口径一致', async () => {
+    host = makeHost();
+    const r = await executeOps(
+      host,
+      ctx,
+      {
+        type: 'FRAME',
+        name: 'card',
+        width: 100,
+        height: 100,
+        layoutMode: 'VERTICAL',
+        layoutAlign: 'MIN',
+      },
+      { mode: 'manual' },
+    );
+    expect(r.warnings).toBeUndefined();
+    expect(host.registry.get(r.created[0].id)?.layoutAlign).toBe('MIN');
+  });
+});
+
+/**
+ * **运行时**取值域收窄(2026-09-24 MG 真机逐值实测)。
+ *
+ * 与上一条 describe 的区别:那些值在 MG typings 里**缺席**(类型事实);这里两个值
+ * typings 明明**声明支持**(`mainAxisAlignItems` 含 `'FLEX_END'`/`'SPACING_BETWEEN'`),
+ * 但真机写进去被**静默忽略**(回读保留上一个生效值)。故收在
+ * `PLATFORM_RUNTIME_VALUE_DOMAIN` 单独一张表:断言方向与类型事实那张相反。
+ */
+describe('运行时取值域收窄(类型声明支持但真机不吃)', () => {
+  const mastergo = runtimeContext(null, 'mastergo');
+
+  it('MG 主轴:MAX / SPACE_BETWEEN 写前拦下并给出实测支持值', async () => {
+    host = makeHost();
+    const r = await executeOps(
+      host,
+      mastergo,
+      {
+        type: 'FRAME',
+        name: 'row',
+        width: 200,
+        height: 80,
+        layoutMode: 'HORIZONTAL',
+        primaryAxisAlignItems: 'MAX',
+      },
+      { mode: 'manual' },
+    );
+    const warn = r.warnings?.join('') ?? '';
+    expect(warn).toContain('primaryAxisAlignItems');
+    expect(warn, '要说清是运行时不吃,不是类型不支持').toContain(
+      '运行时实测不接受',
+    );
+    expect(warn, '要给出实测支持的值').toContain('MIN');
+    expect(host.registry.get(r.created[0].id)?.primaryAxisAlignItems).not.toBe(
+      'MAX',
+    );
+  });
+
+  it('MG 主轴:CENTER / MIN 照常放行(别把能用的也拦了)', async () => {
+    host = makeHost();
+    const r = await executeOps(
+      host,
+      mastergo,
+      {
+        type: 'FRAME',
+        name: 'row',
+        width: 200,
+        height: 80,
+        layoutMode: 'HORIZONTAL',
+        primaryAxisAlignItems: 'CENTER',
+      },
+      { mode: 'manual' },
+    );
+    expect(r.warnings).toBeUndefined();
+    expect(host.registry.get(r.created[0].id)?.primaryAxisAlignItems).toBe(
+      'CENTER',
+    );
+  });
+
+  it('MG 交叉轴:MAX 被拦,交叉轴没有 SPACE_BETWEEN 候选', async () => {
+    host = makeHost();
+    const r = await executeOps(
+      host,
+      mastergo,
+      {
+        type: 'FRAME',
+        name: 'row',
+        width: 200,
+        height: 80,
+        layoutMode: 'HORIZONTAL',
+        counterAxisAlignItems: 'MAX',
+      },
+      { mode: 'manual' },
+    );
+    const warn = r.warnings?.join('') ?? '';
+    expect(warn).toContain('counterAxisAlignItems');
+    expect(warn).toContain('运行时实测不接受');
+  });
+
+  it('同一份输入在 Figma 上放行(证明是平台运行时差异)', async () => {
+    host = makeHost();
+    const r = await executeOps(
+      host,
+      runtimeContext(null, 'figma'),
+      {
+        type: 'FRAME',
+        name: 'row',
+        width: 200,
+        height: 80,
+        layoutMode: 'HORIZONTAL',
+        primaryAxisAlignItems: 'MAX',
+      },
+      { mode: 'manual' },
+    );
+    expect(r.warnings).toBeUndefined();
+    expect(host.registry.get(r.created[0].id)?.primaryAxisAlignItems).toBe(
+      'MAX',
+    );
+  });
+
+  it('jsDesign:子项 layoutAlign 只认 STRETCH/INHERIT → MIN 被点名且不写入', async () => {
+    // 2026-09-24 jsDesign 真机实测:父设 counterAxisAlignItems=MAX(子默认贴右 x=150)后
+    // 写子节点 layoutAlign=MIN,x 不动;写 STRETCH 立刻生效(w 40→180)
+    // ⇒ 写入路径是通的,是引擎不收 MIN/CENTER/MAX
+    const frame = makeFrame();
+    const rect = makeRect();
+    rect.parent = frame;
+    frame.children = [rect];
+    host = makeHost([frame, rect]);
+    const r = await updateSelection(
+      host,
+      runtimeContext(null, 'jsdesign'),
+      { ids: [rect.id], props: { layoutAlign: 'MIN' } },
+      'set_layout',
+    );
+    const warn = r.warnings?.join('') ?? '';
+    expect(warn).toContain('layoutAlign');
+    expect(warn, '要报出本平台接受什么').toContain('STRETCH');
+    expect(rect.layoutAlign).toBeUndefined();
+  });
+
+  it('jsDesign:layoutGrow 只认 0|1 → 3 被点名', async () => {
+    const frame = makeFrame();
+    const rect = makeRect();
+    rect.parent = frame;
+    frame.children = [rect];
+    host = makeHost([frame, rect]);
+    const r = await updateSelection(
+      host,
+      runtimeContext(null, 'jsdesign'),
+      { ids: [rect.id], props: { layoutGrow: 3 } },
+      'set_layout',
+    );
+    expect(r.warnings?.join('') ?? '').toContain('实测/类型支持 0 / 1');
+  });
+
+  it('jsDesign:STRETCH / grow 1 照常放行(别把能用的也拦了)', async () => {
+    const frame = makeFrame();
+    const rect = makeRect();
+    rect.parent = frame;
+    frame.children = [rect];
+    host = makeHost([frame, rect]);
+    const r = await updateSelection(
+      host,
+      runtimeContext(null, 'jsdesign'),
+      { ids: [rect.id], props: { layoutAlign: 'STRETCH', layoutGrow: 1 } },
+      'set_layout',
+    );
+    expect(r.warnings).toBeUndefined();
+  });
+
+  it('同一份输入在 Figma 上放行(layoutAlign MIN 是 Figma 的合法取值)', async () => {
+    const frame = makeFrame();
+    const rect = makeRect();
+    rect.parent = frame;
+    frame.children = [rect];
+    host = makeHost([frame, rect]);
+    const r = await updateSelection(
+      host,
+      runtimeContext(null, 'figma'),
+      { ids: [rect.id], props: { layoutAlign: 'MIN' } },
+      'set_layout',
+    );
+    expect(r.warnings).toBeUndefined();
+  });
+});
+
+/**
+ * 布局对齐的写后校验(0007 的回收面 + 2026-09-24 真机实测发现的缺口)。
+ *
+ * MG 真机:只传 `counterAxisAlignItems`(不传 layoutMode)时,引擎把它丢掉、
+ * 回读仍是原值,而 `layoutWriter.settle` 因 `src.layoutMode == null` 提前返回 ——
+ * 那条路径**完全没有回读校验**,调用方拿到的是「已更新 N 个节点」。
+ */
+describe('布局对齐的写后校验(只改对齐也要点名)', () => {
+  it('只改对齐(不传 layoutMode)也必须回读校验 —— 被引擎丢掉要点名', async () => {
+    // 2026-09-24 真机实测(MG):只传 counterAxisAlignItems 时,引擎把它丢掉、
+    // 回读仍是原值,而 layoutWriter.settle 因为 `src.layoutMode == null` 提前返回,
+    // 一条 warnings 都没有 —— 调用方拿到的是「已更新 1 个节点」。
+    const frame = makeFrame();
+    // 复刻引擎行为:主/交叉轴对齐的写入被忽略(读回仍是原值)
+    Object.defineProperty(frame, 'counterAxisAlignItems', {
+      get: () => 'MIN',
+      set: () => {},
+      configurable: true,
+    });
+    host = makeHost([frame]);
+    const r = await updateSelection(
+      host,
+      ctx,
+      { ids: [frame.id], props: { counterAxisAlignItems: 'MAX' } },
+      'set_layout',
+    );
+    const warn = r.warnings?.join('') ?? '';
+    expect(warn, '只改对齐的路径此前完全没有点名').toContain(
+      'counterAxisAlignItems',
+    );
+  });
+
+  it('只改对齐且真的生效 → 不产生告警(别把成功也报成没生效)', async () => {
+    const frame = makeFrame();
+    host = makeHost([frame]);
+    const r = await updateSelection(
+      host,
+      ctx,
+      { ids: [frame.id], props: { primaryAxisAlignItems: 'CENTER' } },
+      'set_layout',
+    );
+    expect(frame.primaryAxisAlignItems).toBe('CENTER');
+    expect(r.warnings).toBeUndefined();
+  });
+});
+
+/**
+ * 「属性 × 节点类型」不匹配必须在**写入前**拦下(2026-09-24 MG 真机踩到)。
+ *
+ * `layoutGrids` / `clipsContent` 只存在于三平台的 frame 族 mixin 上,矩形没有该字段;
+ * 而 `paintWriter` / `passthroughWriter` 此前是直写 —— 给矩形写 layoutGrids 回包
+ * 「已更新 1 个节点」,回读却没有该字段(静默丢弃),创建路径连警告都没有。
+ */
+describe('属性 × 节点类型不匹配的拦截', () => {
+  const ROWS_GRID = {
+    pattern: 'ROWS' as const,
+    count: 3,
+    gutterSize: 16,
+    alignment: 'MIN' as const,
+    // MIN/MAX 形态下 sectionSize 必填(三平台引擎算不出来,本仓不猜),见 core/normalize
+    sectionSize: 40,
+  };
+
+  it('创建路径:给矩形写 layoutGrids → 不写入,且点名(此前完全静默)', async () => {
+    host = makeHost();
+    // fixture 的 createRectangle 不带 layoutGrids;这里按「真有该字段的节点」造,
+    // 否则「没写进去」会因为属性不存在而恒真 —— 测不出拦截本身
+    host.createRectangle = () => {
+      const n = makeRect(`${host.registry.size + 1}:rect`) as unknown as {
+        layoutGrids: unknown[];
+      };
+      n.layoutGrids = [];
+      return n as never;
+    };
+    const r = await executeOps(
+      host,
+      ctx,
+      {
+        type: 'RECTANGLE',
+        name: 'grid-target',
+        width: 60,
+        height: 60,
+        layoutGrids: [ROWS_GRID],
+      },
+      { mode: 'manual' },
+    );
+    const warn = r.warnings?.join('') ?? '';
+    expect(warn).toContain('layoutGrids');
+    expect(warn).toContain('仅适用于');
+    const created = host.registry.get(r.created[0].id) as unknown as {
+      layoutGrids: unknown[];
+    };
+    expect(created.layoutGrids).toEqual([]);
+  });
+
+  it('创建路径:给 FRAME 写 layoutGrids → 正常写入,不告警', async () => {
+    host = makeHost();
+    const r = await executeOps(
+      host,
+      ctx,
+      {
+        type: 'FRAME',
+        name: 'grid-ok',
+        width: 60,
+        height: 60,
+        layoutGrids: [ROWS_GRID],
+      },
+      { mode: 'manual' },
+    );
+    expect(r.warnings).toBeUndefined();
+    const created = host.registry.get(r.created[0].id) as unknown as {
+      layoutGrids: { pattern: string }[];
+    };
+    expect(created.layoutGrids).toHaveLength(1);
+    expect(created.layoutGrids[0].pattern).toBe('ROWS');
+  });
+
+  it('修改路径:给矩形写 layoutGrids → 不写入(点名由 MCP 反馈层负责)', async () => {
+    const rect = makeRect();
+    (rect as unknown as { layoutGrids: unknown[] }).layoutGrids = [];
+    host = makeHost([rect]);
+    await updateSelection(
+      host,
+      ctx,
+      { ids: [rect.id], props: { layoutGrids: [ROWS_GRID] } },
+      'set_effects',
+    );
+    expect((rect as unknown as { layoutGrids: unknown[] }).layoutGrids).toEqual(
+      [],
+    );
+  });
+
+  it('形状专属字段同样走这条收口:给矩形传 pointCount 不写入', async () => {
+    const rect = makeRect();
+    (rect as unknown as { pointCount: number }).pointCount = 3;
+    host = makeHost([rect]);
+    await updateSelection(
+      host,
+      ctx,
+      { ids: [rect.id], props: { pointCount: 12 } },
+      'set_shape',
+    );
+    expect((rect as unknown as { pointCount: number }).pointCount).toBe(3);
+  });
+});
+
+describe('布局网格的写后回读校验', () => {
+  const ROWS_GRID = {
+    pattern: 'ROWS' as const,
+    count: 3,
+    gutterSize: 16,
+    alignment: 'MIN' as const,
+    // MIN/MAX 形态下 sectionSize 必填(三平台引擎算不出来,本仓不猜),见 core/normalize
+    sectionSize: 40,
+  };
+
+  /** 写入被引擎丢掉的节点:setter 收下即弃(模拟「回包成功、回读为空」) */
+  function droppingFrame() {
+    const frame = makeFrame();
+    Object.defineProperty(frame, 'layoutGrids', {
+      get: () => [],
+      set: () => {},
+      configurable: true,
+    });
+    return frame;
+  }
+
+  it('写入被引擎丢掉 → 点名,并说明「写入已发出」', async () => {
+    // 2026-09-24 MG 真机:回包「已更新 1 个节点」,回读为空,零告警
+    const frame = droppingFrame();
+    host = makeHost([frame]);
+    const r = await updateSelection(
+      host,
+      ctx,
+      { ids: [frame.id], props: { layoutGrids: [ROWS_GRID] } },
+      'set_effects',
+    );
+    const warn = r.warnings?.join('') ?? '';
+    expect(warn).toContain('layoutGrids 未生效');
+    expect(warn, '要区分「写没发生」与「引擎没接」').toContain(
+      '写入已发出但引擎未保留',
+    );
+  });
+
+  it('节点上读不到该字段(存在性守卫跳过)→ 点名,并说明「写入未发生」', async () => {
+    // MG 的 frame 族在 typings 里声明了 layoutGrids,但空值读不出来时门面的
+    // `has` 会退化成「读得到就算存在」→ 写被静默跳过。这是与上一条**完全不同**的
+    // 成因,必须能从结果里分开(否则排查无从下手)
+    const frame = makeFrame();
+    delete (frame as unknown as { layoutGrids?: unknown }).layoutGrids;
+    host = makeHost([frame]);
+    const r = await updateSelection(
+      host,
+      ctx,
+      { ids: [frame.id], props: { layoutGrids: [ROWS_GRID] } },
+      'set_effects',
+    );
+    const warn = r.warnings?.join('') ?? '';
+    expect(warn).toContain('layoutGrids 未生效');
+    expect(warn).toContain('写入未发生');
+  });
+
+  it('真的落盘 → 不产生告警(别把成功也报成没生效)', async () => {
+    const frame = makeFrame();
+    host = makeHost([frame]);
+    const r = await updateSelection(
+      host,
+      ctx,
+      { ids: [frame.id], props: { layoutGrids: [ROWS_GRID] } },
+      'set_effects',
+    );
+    expect(r.warnings).toBeUndefined();
+    expect(
+      (frame as unknown as { layoutGrids: unknown[] }).layoutGrids,
+    ).toHaveLength(1);
+  });
+
+  it('幻影写入:同对象读得到、按 id 重新取数后没有 → 单独点名「未写入文档」', async () => {
+    // 2026-09-24 jsDesign 真机:写 layoutGrids 回包成功、结果无告警(同对象回读有),
+    // 但下一次调用的 jsd_find 读不到 ⇒ 赋值只落在不落文档的临时包装对象上。
+    // jsDesign 的类型面齐全(BaseFrameMixin.layoutGrids / GridStyle.layoutGrids),
+    // 所以这不是参数问题 —— 只看同对象会把这种写入报成成功,故必须双读。
+    const frame = makeFrame();
+    host = makeHost([frame]);
+    host.getNodeById = () =>
+      ({
+        id: frame.id,
+        type: 'FRAME',
+        layoutGrids: [],
+      }) as unknown as ReturnType<typeof host.getNodeById>;
+    const r = await updateSelection(
+      host,
+      ctx,
+      { ids: [frame.id], props: { layoutGrids: [ROWS_GRID] } },
+      'set_effects',
+    );
+    const warn = r.warnings?.join('') ?? '';
+    expect(warn).toContain('layoutGrids 未生效');
+    expect(warn, '要与「引擎没接」分开').toContain('未写入文档');
+  });
+
+  it('按 id 取数不可用(dynamic-page 平台会抛)→ fail-open,不误报', async () => {
+    const frame = makeFrame();
+    host = makeHost([frame]);
+    host.getNodeById = () => {
+      throw new Error(
+        'Cannot call getNodeById with documentAccess: dynamic-page',
+      );
+    };
+    const r = await updateSelection(
+      host,
+      ctx,
+      { ids: [frame.id], props: { layoutGrids: [ROWS_GRID] } },
+      'set_effects',
+    );
+    expect(r.warnings).toBeUndefined();
+  });
+
+  it('jsDesign:根因修好后不再套「不可验证」口径(违约金=噪声)', async () => {
+    // jsDesign 曾因我们漏给 sectionSize/offset 被引擎整条拒绝且静默,当时按
+    // 「本平台无法在一次执行内验证」兜着;归一化补齐后五种形态都真落盘并回读到值,
+    // 再挂这条就是对每次成功写入报错 —— 故撤出名单,并在此钉住别回潮。
+    expect(LAYOUT_GRID_UNVERIFIABLE_PLATFORMS).not.toContain('jsdesign');
+    const frame = makeFrame();
+    host = makeHost([frame]);
+    const r = await updateSelection(
+      host,
+      runtimeContext(null, 'jsdesign'),
+      { ids: [frame.id], props: { layoutGrids: [ROWS_GRID] } },
+      'set_effects',
+    );
+    expect(r.warnings, '写成功了就别再报不可验证').toBeUndefined();
+  });
+
+  it('MG 仍在不可验证名单里(该平台的回读滞后尚未复验)', async () => {
+    const frame = makeFrame();
+    host = makeHost([frame]);
+    const r = await updateSelection(
+      host,
+      runtimeContext(null, 'mastergo'),
+      { ids: [frame.id], props: { layoutGrids: [ROWS_GRID] } },
+      'set_effects',
+    );
+    expect(r.warnings?.join('') ?? '').toContain('无法在一次执行内验证');
+  });
+
+  it('Figma 上双读一致就是真落盘(别把两平台的口径串台)', async () => {
+    const frame = makeFrame();
+    host = makeHost([frame]);
+    const r = await updateSelection(
+      host,
+      runtimeContext(null, 'figma'),
+      { ids: [frame.id], props: { layoutGrids: [ROWS_GRID] } },
+      'set_effects',
+    );
+    expect(r.warnings).toBeUndefined();
+  });
+
+  it('MG:文案要说「不必然代表写失败」,别把平台的偶发落地说成我们的缺陷', async () => {
+    // 真机实测:同一参数连写 8 帧只成 1 条,且落地那帧同会话回读也为空 ——
+    // 写成「写入失败」会诱导调用方无谓重试,故 MG 走「以画布目检为准」的口径
+    const frame = droppingFrame();
+    host = makeHost([frame]);
+    const r = await updateSelection(
+      host,
+      runtimeContext(null, 'mastergo'),
+      { ids: [frame.id], props: { layoutGrids: [ROWS_GRID] } },
+      'set_effects',
+    );
+    const warn = r.warnings?.join('') ?? '';
+    expect(warn).toContain('不必然代表写失败');
+    expect(warn, '要给出可执行出口').toContain('手动添加');
+    expect(warn, '要说清「参数已核实过、是引擎不收」').toContain('全部零落盘');
+  });
+
+  it('非 MG 平台不套用 MG 的实测口径(别把平台事实串台)', async () => {
+    const frame = droppingFrame();
+    host = makeHost([frame]);
+    const r = await updateSelection(
+      host,
+      runtimeContext(null, 'figma'),
+      { ids: [frame.id], props: { layoutGrids: [ROWS_GRID] } },
+      'set_effects',
+    );
+    const warn = r.warnings?.join('') ?? '';
+    expect(warn).not.toContain('极不稳定');
+    expect(warn).toContain('写入已发出但引擎未保留');
+  });
+});
+
 describe('字体清单(jsd_list_fonts)', () => {
   it('按 family 归并出可用字型:写 fontName 前有据可依,不用猜 style', async () => {
     const h = makeHost();
@@ -723,5 +1341,342 @@ describe('字体清单(jsd_list_fonts)', () => {
     expect(r.fonts?.find((f) => f.family === 'MiSans')?.styles).toEqual([
       'Regular',
     ]);
+  });
+});
+
+/**
+ * 布局网格归一化:sectionSize / offset **按 alignment 分三套且互斥**。
+ *
+ * typings 里这两项都标了 `?`,但运行时(jsDesign `set_layoutGrids` 实测)会逐变体
+ * 校验:STRETCH 要 offset 且**不能**带 sectionSize,CENTER 要 sectionSize 且**不能**
+ * 带 offset,MIN/MAX 两者都要 —— 不匹配就整条拒绝(此前表现为「回包成功、读不到」)。
+ * 修法与 count / gutterSize 一致:能补的补(offset 补 0),补不出的报错点名,不猜。
+ */
+describe('Figma 运行时收窄与节点序列化容错', () => {
+  it('Figma:写 layoutGrow 3 要写前拦下(引擎只接受 0|1)', async () => {
+    // 2026-09-24 Figma 真机:写 3 直接抛
+    // `in set_layoutGrow: … Invalid literal value, expected 0 / expected 1`
+    const frame = makeFrame();
+    const rect = makeRect();
+    rect.parent = frame;
+    frame.children = [rect];
+    host = makeHost([frame, rect]);
+    const r = await updateSelection(
+      host,
+      runtimeContext(null, 'figma'),
+      { ids: [rect.id], props: { layoutGrow: 3 } },
+      'set_layout',
+    );
+    const warn = r.warnings?.join('') ?? '';
+    expect(warn).toContain('layoutGrow');
+    expect(warn, '要说清本平台接受什么').toContain('0 / 1');
+    expect(rect.layoutGrow).toBeUndefined();
+  });
+
+  it('Figma:layoutGrow 0 / 1 照常放行', async () => {
+    const frame = makeFrame();
+    const rect = makeRect();
+    rect.parent = frame;
+    frame.children = [rect];
+    host = makeHost([frame, rect]);
+    const r = await updateSelection(
+      host,
+      runtimeContext(null, 'figma'),
+      { ids: [rect.id], props: { layoutGrow: 1 } },
+      'set_layout',
+    );
+    expect(r.warnings).toBeUndefined();
+  });
+
+  it('节点读到 variantProperties 抛错时,序列化不崩、只省略该字段', () => {
+    // Figma 真机:文档里存在「带错误的组件集」时该 getter 抛
+    // `in get_variantProperties: Component set for node has existing errors`
+    const broken = makeFrame();
+    Object.defineProperty(broken, 'variantProperties', {
+      get: () => {
+        throw new Error('Component set for node has existing errors');
+      },
+      configurable: true,
+    });
+    const out = trySerialize(broken);
+    expect(out).not.toBeNull();
+    expect(out?.id).toBe(broken.id);
+    expect(
+      (out as unknown as Record<string, unknown>).variantProperties,
+    ).toBeUndefined();
+  });
+
+  it('一个坏节点不掀翻整次查找:它降级成最小摘要,好节点照常全量', async () => {
+    // 上面的 try 只兜住 `variantProperties` 一个字段;引擎在节点处于错误状态时
+    // **别的 getter 同样会抛**,故 findNodes 还有一层单节点保护。用 `effects`
+    // 模拟(它是 serializeNode 里不加 try 的字段)。
+    const broken = makeFrame('F:broken', '带错误的组件集');
+    Object.defineProperty(broken, 'effects', {
+      get: () => {
+        throw new Error(
+          'in get_effects: Component set for node has existing errors',
+        );
+      },
+      configurable: true,
+    });
+    const good = makeRect('F:good', '好节点');
+    host = makeHost([broken, good]);
+
+    const r = await findNodes(host, {});
+
+    expect(r.total).toBe(2);
+    const [bad, ok] = r.nodes;
+    // 坏节点:只回认得出它所需的最小摘要,不带任何属性字段
+    expect(bad).toMatchObject({
+      id: 'F:broken',
+      name: '带错误的组件集',
+      type: 'FRAME',
+    });
+    expect(Object.keys(bad).sort()).toEqual(['id', 'name', 'type', 'x', 'y']);
+    // 好节点:照常全量 —— 这才是「好节点也拿不到」的反例
+    expect(ok).toMatchObject({ id: 'F:good', type: 'RECTANGLE' });
+    expect(ok.width).toBeDefined();
+  });
+});
+
+describe('变量绑定的读出口(0024)', () => {
+  const alias = (id: string) => ({ type: 'VARIABLE_ALIAS' as const, id });
+
+  it('三态原样透传:单别名 / 别名数组 / 按属性名的别名表', () => {
+    const rect = makeRect();
+    rect.boundVariables = {
+      cornerRadius: alias('VariableID:1:2'),
+      fills: [alias('VariableID:3:4')],
+      componentProperties: { 状态: alias('VariableID:5:6') },
+    };
+
+    const out = trySerialize(rect);
+
+    expect(out?.boundVariables).toEqual({
+      cornerRadius: { type: 'VARIABLE_ALIAS', id: 'VariableID:1:2' },
+      fills: [{ type: 'VARIABLE_ALIAS', id: 'VariableID:3:4' }],
+      componentProperties: {
+        状态: { type: 'VARIABLE_ALIAS', id: 'VariableID:5:6' },
+      },
+    });
+    // 线格式声明能收下三态 —— 出参 schema 与投影口径一致
+    expect(serializedNodeSchema.safeParse(out).success).toBe(true);
+  });
+
+  it('别名类型不是 VARIABLE_ALIAS 时线格式拒收(不静默放过别的形状)', () => {
+    const parsed = serializedNodeSchema.safeParse({
+      id: '1:1',
+      name: 'r',
+      type: 'RECTANGLE',
+      x: 0,
+      y: 0,
+      boundVariables: { fills: [{ type: 'HARDCODED', id: '1' }] },
+    });
+    expect(parsed.success).toBe(false);
+  });
+
+  it('无绑定时整个键省略 —— 「键在 = 至少有一条绑定」可直接依赖', () => {
+    const rect = makeRect();
+    rect.boundVariables = {};
+    expect(Object.keys(trySerialize(rect) ?? {})).not.toContain(
+      'boundVariables',
+    );
+  });
+
+  it('平台不提供该字段(jsDesign / MasterGo 形状)时结果里不出现该键', () => {
+    expect(Object.keys(trySerialize(makeRect()) ?? {})).not.toContain(
+      'boundVariables',
+    );
+  });
+
+  it('引擎读 boundVariables 抛错时,序列化不崩、只省略该字段', () => {
+    const broken = makeRect();
+    Object.defineProperty(broken, 'boundVariables', {
+      get: () => {
+        throw new Error('in get_boundVariables: node has existing errors');
+      },
+      configurable: true,
+    });
+
+    const out = trySerialize(broken);
+
+    expect(out).not.toBeNull();
+    expect(out?.id).toBe(broken.id);
+    expect(Object.keys(out ?? {})).not.toContain('boundVariables');
+  });
+});
+
+describe('布局网格归一化:按 alignment 的必填/互斥', () => {
+  it('STRETCH:补 offset 0,并剔除 sectionSize(该形态不能带它)', () => {
+    expect(
+      normalizeLayoutGrids([
+        {
+          pattern: 'ROWS',
+          count: 3,
+          gutterSize: 16,
+          alignment: 'STRETCH',
+          sectionSize: 40,
+        },
+      ]),
+    ).toMatchObject([{ pattern: 'ROWS', alignment: 'STRETCH', offset: 0 }]);
+    const [g] = normalizeLayoutGrids([
+      {
+        pattern: 'ROWS',
+        count: 3,
+        gutterSize: 16,
+        alignment: 'STRETCH',
+        sectionSize: 40,
+      },
+    ]);
+    expect(
+      (g as unknown as Record<string, unknown>).sectionSize,
+    ).toBeUndefined();
+  });
+
+  it('CENTER:要 sectionSize,并剔除 offset', () => {
+    const [g] = normalizeLayoutGrids([
+      {
+        pattern: 'ROWS',
+        count: 3,
+        gutterSize: 16,
+        alignment: 'CENTER',
+        sectionSize: 40,
+        offset: 10,
+      },
+    ]);
+    expect(g).toMatchObject({ alignment: 'CENTER', sectionSize: 40 });
+    expect((g as unknown as Record<string, unknown>).offset).toBeUndefined();
+  });
+
+  it('MIN/MAX:sectionSize 与 offset 都要(缺 sectionSize 就报错点名,不猜数)', () => {
+    const [g] = normalizeLayoutGrids([
+      {
+        pattern: 'ROWS',
+        count: 3,
+        gutterSize: 16,
+        alignment: 'MIN',
+        sectionSize: 40,
+      },
+    ] as never);
+    expect(g).toMatchObject({ alignment: 'MIN', sectionSize: 40, offset: 0 });
+    expect(() =>
+      normalizeLayoutGrids([
+        { pattern: 'ROWS', count: 3, gutterSize: 16, alignment: 'MIN' },
+      ]),
+    ).toThrow(/sectionSize 必填/);
+  });
+
+  it('未给 alignment 时默认 STRETCH(只给 count+gutter 也能用)', () => {
+    const [g] = normalizeLayoutGrids([
+      { pattern: 'ROWS', count: 3, gutterSize: 16 },
+    ]);
+    expect(g).toMatchObject({ alignment: 'STRETCH', offset: 0 });
+  });
+
+  it('GRID 只保留该有的字段(判别式联合多带字段会匹配不上)', () => {
+    const [g] = normalizeLayoutGrids([
+      {
+        pattern: 'GRID',
+        sectionSize: 8,
+        count: 3,
+        gutterSize: 16,
+        alignment: 'MIN',
+        offset: 4,
+      },
+    ]);
+    expect(g).toMatchObject({ pattern: 'GRID', sectionSize: 8 });
+    expect((g as unknown as Record<string, unknown>).count).toBeUndefined();
+    expect((g as unknown as Record<string, unknown>).alignment).toBeUndefined();
+  });
+});
+
+/**
+ * 组件属性的「读形态 ≠ 写形态」(0023)。
+ *
+ * Figma typings 里 `componentProperties` 读回来是 `{type, value}`,而
+ * `setProperties` 只收标量(`plugin-api.d.ts:11115`)。本仓曾经把读形态原样回喂写侧,
+ * 于是**四个出口**(set_instance_properties / apply_overrides / sync_overrides /
+ * figma_component_properties_set)在 2026-09-24 Figma 真机上全部被引擎拒绝 ——
+ * 而工具自己的 inputSchema 还明写着「传 {type,value}」,等于契约骗调用方。
+ */
+describe('组件属性写形态与覆盖套用(0023)', () => {
+  it('映射:裸值原样、{type,value} 取 value、SLOT 跳过并点名', () => {
+    expect(
+      toComponentPropertyWrites({
+        Text: 'hi',
+        Bool: false,
+        Variant: { type: 'VARIANT', value: 'A' },
+        Slot: { type: 'SLOT', value: 'x' },
+      } as unknown as Record<string, unknown>),
+    ).toEqual({
+      writes: { Text: 'hi', Bool: false, Variant: 'A' },
+      skipped: ['Slot'],
+    });
+  });
+
+  it('set_instance_properties:文档承诺的 {type,value} 必须以标量下发引擎', async () => {
+    const inst = makeInstance('5:9', 'SM');
+    const seen: unknown[] = [];
+    (inst as unknown as { setProperties(p: unknown): void }).setProperties = (
+      p,
+    ) => {
+      seen.push(p);
+    };
+    host = makeHost([inst]);
+    await setInstanceProperties(host, {
+      ids: ['5:9'],
+      properties: { 'Property 1': { type: 'VARIANT', value: 'B' } },
+    });
+    expect(seen).toEqual([{ 'Property 1': 'B' }]);
+  });
+
+  /** 源实例(带变体身份 + 样式覆盖)与目标实例 */
+  const makePair = () => {
+    const main = {
+      ...makeInstance('5:10', 'SM/A'),
+      type: 'COMPONENT',
+    } as unknown as NodeSkeleton;
+    const src = makeInstance('5:11', 'SM/A');
+    src.mainComponent = main;
+    src.variantProperties = { 'Property 1': 'A' };
+    src.componentProperties = {
+      'Property 1': { type: 'VARIANT', value: 'A' },
+    } as never;
+    src.fills = [{ type: 'SOLID', color: { r: 1, g: 0, b: 0 } }];
+    const target = makeInstance('5:12', 'SM/B');
+    const writes: unknown[] = [];
+    (target as unknown as { setProperties(p: unknown): void }).setProperties = (
+      p,
+    ) => {
+      writes.push(p);
+    };
+    return { main, src, target, writes };
+  };
+
+  it('swapToSource=false(默认):不换目标变体,并在 warnings 点名', async () => {
+    const { main, src, target, writes } = makePair();
+    host = makeHost([main, src, target]);
+    const r = await syncInstanceOverrides(host, runtimeContext(null, 'figma'), {
+      sourceId: '5:11',
+      ids: ['5:12'],
+      swapToSource: false,
+    });
+    expect(r.applied[0]?.ok).toBe(true);
+    // 换绑等于丢目标既有覆盖 ⇒ 默认路径一发都不发
+    expect(writes).toEqual([]);
+    expect(r.warnings?.join('')).toContain('Property 1');
+  });
+
+  it('swapToSource=true:显式开启才套变体身份,且下发的是标量', async () => {
+    const { main, src, target, writes } = makePair();
+    host = makeHost([main, src, target]);
+    const r = await syncInstanceOverrides(host, runtimeContext(null, 'figma'), {
+      sourceId: '5:11',
+      ids: ['5:12'],
+      swapToSource: true,
+    });
+    expect(r.applied[0]?.ok).toBe(true);
+    expect(writes).toEqual([{ 'Property 1': 'A' }]);
+    expect(r.warnings).toBeUndefined();
   });
 });

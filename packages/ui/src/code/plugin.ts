@@ -83,8 +83,10 @@ export function registerPlugin(
 ): void {
   // 一次运行的显式上下文:core 的「字段是否生效」判定与 ping 上报的能力表同源,
   // 由这里组装成对象沿着调用链传下去(此前是模块级可变全局 setHostCapabilities,
-  // 谁都能改、改完无从追查,也无法同时存在两个平台的实例)
-  const ctx = runtimeContext(meta.capabilities);
+  // 谁都能改、改完无从追查,也无法同时存在两个平台的实例)。
+  // `platform` 一并注入:值域/适用性的**分平台收窄**要按平台 id 反查声明表
+  // (`dicts/platform-value-domain.ts`),能力位表达不了(见 0022)。
+  const ctx = runtimeContext(meta.capabilities, platform);
   try {
     if (__html__ || (typeof __html__ === 'string' && __html__.trim() !== '')) {
       host.showUI(__html__, UI_OPTIONS);
@@ -282,7 +284,7 @@ export function registerPlugin(
           break;
         }
         case 'create_svg': {
-          const r = createSvgNode(host, msg.params.svg, msg.params.name);
+          const r = await createSvgNode(host, msg.params.svg, msg.params.name);
           send(id, true, r);
           break;
         }
@@ -372,16 +374,22 @@ export function registerPlugin(
         case 'component_op': {
           const p = msg.params;
           switch (p.op) {
-            case 'create_component':
+            case 'create_component': {
+              // 协议层的 params 是各 op 字段的并集,此处按 op 收窄成本操作的入参形状
+              const cp = p as Parameters<typeof createComponentNodes>[2];
               send(
                 id,
                 true,
-                await createComponentNodes(host, {
-                  ids: p.ids ?? [],
-                  name: p.name,
+                await createComponentNodes(host, ctx, {
+                  ids: cp.ids ?? [],
+                  name: cp.name,
+                  children: cp.children ?? [],
+                  width: cp.width,
+                  height: cp.height,
                 }),
               );
               break;
+            }
             case 'create_instance':
               send(id, true, await createInstances(host, p.ids ?? []));
               break;
@@ -480,7 +488,8 @@ export function registerPlugin(
           break;
         }
         case 'list_fonts': {
-          const r = await listFonts(host);
+          // 过滤/分页参数原样透传(默认页在 core 里兜):字体库规模随平台差一个量级
+          const r = await listFonts(host, msg.params);
           send(id, true, r);
           break;
         }

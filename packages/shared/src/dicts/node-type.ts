@@ -107,8 +107,23 @@ export const FIGMA_ONLY_NODE_TYPES = [
 
 export type FigmaOnlyNodeType = (typeof FIGMA_ONLY_NODE_TYPES)[number];
 
-/** 读路径可观察到的全类型集(含平台独有只读类型) */
+/**
+ * MasterGo 运行时独有、本仓**写路径未建模**的节点类型。
+ *
+ * 与 FIGMA_ONLY_NODE_TYPES 同因:画布上本来就存在的平台独有类型若按 nodeTypeSchema
+ * 校验会整条结果判非法。两者的差集已按「本仓 14 类 + 各自独有」逐项核过
+ * (`@mastergo/plugin-typings@2.19.2` 的 `SceneNode` 联合,见 0017):
+ * `CONNECTOR` / `SECTION` 两类 Figma 也有,已在上面登记;`PEN` 由 mastergo adapter
+ * 在节点门面里映射成本仓的 `VECTOR`(见 ui/src/code/mastergo/node-facade.ts),
+ * 故不在此登记 —— 否则同一事实会有两份类型名。
+ */
+export const MASTERGO_ONLY_NODE_TYPES = ['INTELLIGENT_CONTAINER'] as const;
+
+export type MastergoOnlyNodeType = (typeof MASTERGO_ONLY_NODE_TYPES)[number];
+
+/** 读路径可观察到的全类型集(含各平台独有只读类型) */
 export const OBSERVED_NODE_TYPES = [
   ...NODE_TYPES,
   ...FIGMA_ONLY_NODE_TYPES,
+  ...MASTERGO_ONLY_NODE_TYPES,
 ] as const;

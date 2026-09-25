@@ -1,6 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/server';
 import {
   getSelectionResultSchema,
+  getSelectionSchema,
   pingResultSchema,
 } from 'text-to-design-shared';
 import type { Bridge } from '../bridge';
@@ -61,6 +62,9 @@ export function registerSessionTools(
     title: 'getSelection.title',
     description: 'getSelection.description',
     method: 'get_selection',
+    // 同 jsd_list_fonts:没有 inputSchema 时 MCP 侧按空对象校验,depth 会被静默丢掉
+    // (实测:传 depth 与不传结果一样,永远是默认层级)
+    inputSchema: getSelectionSchema,
     outputSchema: getSelectionResultSchema,
     annotations: { readOnlyHint: true },
     followUp: {

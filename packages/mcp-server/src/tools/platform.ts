@@ -17,11 +17,11 @@ export function registerPlatformTools(
     name: 'jsd_platform_op',
     title: 'platformOp.title',
     description: 'platformOp.description',
-    // 平台归属:当前只有 Figma 实现了 op(jsDesign 的 meta.platformOps 为空数组),
-    // 平台已知时 daemon 直接拦截,不必等插件侧报「平台不支持」
-    platforms: ['figma'],
+    // 平台归属:Figma 与 MasterGo 各有一档 op(jsDesign 仍是空数组)。先 jsd_ping 读
+    // platformOps 名单再调;平台不匹配时 daemon 直接拦截,不必等插件侧报「平台不支持」
+    platforms: ['figma', 'mastergo'],
     platformNote:
-      '(仅 Figma 有平台特有操作;jsDesign 没有对应 op,本地样式改用 jsd_list_styles 或读 jsd://styles,组件属性用 jsd_set_instance_properties)',
+      '(仅 Figma / MasterGo 有平台特有操作,名单见 jsd_ping 的 platformOps;jsDesign 没有对应 op —— 本地样式读 jsd://styles(只读资源,没有同名工具);变体值读 jsd_find 的 variantProperties、写用 jsd_set_instance_properties;**组件的布尔/文本/换绑属性(componentProperties)在 jsDesign 上不存在**,别去找该字段;MG 上新增组件属性用 mg_add_component_property,Figma 上用 figma_component_property_add)',
     method: 'platform_op',
     inputSchema: platformOpParamsSchema,
     outputSchema: platformOpResultSchema,

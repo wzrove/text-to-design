@@ -65,7 +65,13 @@ function nodeCreateInputSchema(type: CreatableNodeType): z.ZodType {
 
 type CreateNodeDef = Pick<
   BridgeToolDef,
-  'name' | 'title' | 'description' | 'annotations' | 'followUp'
+  | 'name'
+  | 'title'
+  | 'description'
+  | 'annotations'
+  | 'followUp'
+  | 'platforms'
+  | 'platformNote'
 >;
 
 /**
@@ -160,6 +166,12 @@ export function registerCreateTools(
       name: 'jsd_create_vector',
       title: 'createVector.title',
       description: 'createVector.description',
+      // MasterGo 的矢量是 PenNode(顶点/区域模型 penNetwork),线格式的
+      // vectorPaths(SVG path data)在那边没有对应字段 —— 建出来会是空矢量。
+      // 已知且无替代路径,故按平台拒绝,不让调用方拿到「成功但空」的结果(0017)。
+      platforms: ['jsdesign', 'figma'],
+      platformNote:
+        '(MasterGo 的矢量节点是 PenNode,路径为 penNetwork 顶点模型,与本工具的 vectorPaths(SVG path data)不同形;该平台暂不支持建矢量)',
       followUp: CREATE_BATCH_FOLLOWUP,
     }),
     createNodeTool('GROUP', {

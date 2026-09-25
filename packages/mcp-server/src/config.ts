@@ -40,7 +40,7 @@ export const MAX_INLINE_DATA_URL_BYTES = Number(
 export const BATCH_TIMEOUT_MS = 120_000;
 
 /**
- * 设计客户端:插件平台(即时设计/Figma)只有连上后由 ping 回包才可知,
+ * 设计客户端:插件平台(即时设计/Figma/MasterGo)只有连上后由 ping 回包才可知,
  * 此处只放「平台未知时」的中性兜底与工具前缀 —— 具体平台名走
  * platform-state.currentClient()。写死单一平台会在连另一平台时给出错误指引。
  */

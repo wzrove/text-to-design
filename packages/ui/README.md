@@ -1,4 +1,4 @@
-# text-to-design 插件(给即时设计用)
+# text-to-design 插件(jsDesign / Figma / MasterGo)
 
 这是 text-to-design 的**设计软件插件**,负责把 AI 的话变成设计画布上的实际内容。画图形、改样式、导出图片,都是它在画布上动手。
 
@@ -11,8 +11,10 @@
 1. 获取插件包:从 [GitHub Releases](https://github.com/wzrove/text-to-design/releases) 下载
    `text-to-design-ui-v*.zip`,解压到本地目录,里面有一个 `dist` 文件夹
    (也可以 `npm pack text-to-design-ui`,npm 包里同样带 `dist`)
-2. 打开即时设计(jsDesign)客户端
-3. 点「插件」→「导入」,选择解压目录里 `dist/manifest.json`
+2. 打开对应的设计客户端(即时设计 / Figma / MasterGo)
+3. 导入**该平台那一份** manifest:即时设计点「插件」→「导入」选 `dist/jsdesign/manifest.json`;
+   Figma 走「Plugins → Development → Import plugin from manifest」选 `dist/figma/manifest.json`;
+   MasterGo 走「插件 → 开发者模式 → 创建/添加插件」上传 `dist/mastergo/manifest.json`
 4. 回到画布运行这个插件
 
 面板上显示「已连接」,就是准备好了。之后保持插件运行,AI 助手就能通过配套服务操作你的画布。

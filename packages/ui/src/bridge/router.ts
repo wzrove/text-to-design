@@ -12,7 +12,7 @@ import type {
 import { toStoredChoice, UI_FORWARD_TIMEOUT_MS } from 'text-to-design-shared';
 import { t } from '../i18n/useLocale';
 import { extractBytes, stripBytes } from './binary';
-import { postToCode } from './codeChannel';
+import { postToCode, readCodeMessage } from './codeChannel';
 import type { Conn, LogLevel, Pending } from './types';
 
 /** 请求/响应关联:转发挂超时定时器,code 回包直接回发 WS;localPending 仅存定时器/ping 等待 */
@@ -195,14 +195,16 @@ export class Router {
 
   onCodeMessage = (event: MessageEvent): void => {
     try {
-      const pm = event.data?.pluginMessage as
+      // 信封拆包收在 codeChannel(两种形状都收,理由见那边注释:MasterGo 不拆
+      // `pluginMessage`,只认一种的话所有回包会被静默丢弃 → daemon ping 超时)
+      const pm = readCodeMessage(event.data) as
         | PluginRequest
         | PluginResponse
         | { type: 'selection'; data: unknown }
         | { type: 'platform'; platform: PluginPlatform }
         | UiEnvMessage
         | LocaleStateMessage
-        | undefined;
+        | null;
       if (!pm) return;
       if (pm.type === 'ui_env') {
         this.onEnv?.(pm);

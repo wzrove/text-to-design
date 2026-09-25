@@ -4,7 +4,8 @@
     "module": "esnext",
     "lib": ["ES2023", "DOM"],
     /* 默认(主)编译单元 = jsDesign 平台域(src/code/jsdesign + 共享 plugin.ts) + UI/bridge;
-       figma 域由 src/code/figma/tsconfig.json 独立编译,避免两平台 typings 全局冲突 */
+       figma 域由 src/code/figma/tsconfig.json、mastergo 域由 src/code/mastergo/tsconfig.json
+       各自独立编译,避免多平台 typings 的全局类型互相冲突 */
     "types": ["vite/client", "@jsdesigndeveloper/plugin-typings"],
     "skipLibCheck": true,
 
@@ -24,5 +25,5 @@
     "noFallthroughCasesInSwitch": true
   },
   "include": ["src", "ui.html", "vite.config.ts", "scripts"],
-  "exclude": ["src/code/figma"]
+  "exclude": ["src/code/figma", "src/code/mastergo"]
 }

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { BLEND_MODE_VALUES } from '../dicts/platform-value-domain';
 
 // ---- 基础类型 (对齐 plugin-typings runtime) ----
 
@@ -127,26 +128,10 @@ export const transformSchema = z
 export type Transform = z.infer<typeof transformSchema>;
 
 // 混合模式 (对齐 runtime BlendMode)
+// 取值表在 dicts/platform-value-domain.ts —— 那里要拿它算「本平台接受什么」
+// (契约候选 − 平台收窄),故真源放 dicts(AGENTS.md 的字典归位约定),这里只引用。
 export const blendModeSchema = z
-  .enum([
-    'PASS_THROUGH',
-    'NORMAL',
-    'DARKEN',
-    'MULTIPLY',
-    'COLOR_BURN',
-    'LIGHTEN',
-    'SCREEN',
-    'COLOR_DODGE',
-    'OVERLAY',
-    'SOFT_LIGHT',
-    'HARD_LIGHT',
-    'DIFFERENCE',
-    'EXCLUSION',
-    'HUE',
-    'SATURATION',
-    'COLOR',
-    'LUMINOSITY',
-  ])
+  .enum(BLEND_MODE_VALUES)
   .describe(
     '混合模式:PASS_THROUGH=穿透 | NORMAL=正常 | DARKEN=变暗 | MULTIPLY=正片叠底 | COLOR_BURN=颜色加深 | LIGHTEN=变亮 | SCREEN=滤色 | COLOR_DODGE=颜色减淡 | OVERLAY=叠加 | SOFT_LIGHT=柔光 | HARD_LIGHT=强光 | DIFFERENCE=差值 | EXCLUSION=排除 | HUE=色相 | SATURATION=饱和度 | COLOR=颜色 | LUMINOSITY=明度',
   );
@@ -321,6 +306,21 @@ export const layoutGridSchema: z.ZodType<LayoutGrid> = z
         message: 'pattern 为 GRID 时,sectionSize 为必填项',
         path: ['sectionSize'],
       });
+    }
+    // ROWS / COLUMNS 对应三平台 typings 里同形的 RowsColsLayoutGrid —— 其
+    // `count` / `gutterSize` 三平台**都**是必填(Figma 无 `?`)。缺了引擎会丢掉
+    // 整条网格且不报错,故在边界就拦下,不让它变成「回显成功、画布没变」。
+    // `alignment` 同为必填但有公认默认(左/上),由 core/normalize 补 MIN,不在此拦。
+    if (val.pattern === 'ROWS' || val.pattern === 'COLUMNS') {
+      for (const key of ['count', 'gutterSize'] as const) {
+        if (val[key] == null) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: `pattern 为 ${val.pattern} 时,${key} 为必填项(三平台的 RowsColsLayoutGrid 都把它列为必填)`,
+            path: [key],
+          });
+        }
+      }
     }
   });
 

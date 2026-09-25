@@ -8,7 +8,7 @@
 import { MESSAGES_ZH_CN } from './i18n/messages.zh-CN';
 
 /** 平台枚举(即运行时标识;未来新增平台在此加值) */
-export const PLATFORMS = ['jsdesign', 'figma'] as const;
+export const PLATFORMS = ['jsdesign', 'figma', 'mastergo'] as const;
 
 export type PlatformKey = (typeof PLATFORMS)[number];
 
@@ -24,4 +24,5 @@ export type PlatformKey = (typeof PLATFORMS)[number];
 export const PLATFORM_LABEL: Record<PlatformKey, string> = {
   jsdesign: MESSAGES_ZH_CN['platform.jsdesign'],
   figma: MESSAGES_ZH_CN['platform.figma'],
+  mastergo: MESSAGES_ZH_CN['platform.mastergo'],
 };

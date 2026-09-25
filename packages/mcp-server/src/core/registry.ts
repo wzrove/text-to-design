@@ -167,6 +167,17 @@ export function bridgeTool(
       cb: (args: Record<string, unknown>, ctx: ToolCtx) => Promise<unknown>,
     ) => ToolHandle;
     const register = server.registerTool.bind(server) as unknown as RegisterFn;
+    /**
+     * followUp.description 与 title / description 走同一条 0016 约定:源码里存
+     * MessageKey。注册期只投影了 title / description,**结果里的 followUp 曾整块
+     * 原样透传**,调用方读到的是 `"find.description"` 这种裸键。投影点收在这里,
+     * 覆盖 structured / err / 平台门控三条出口。
+     * `type:'prompt'` 的 followUp 存的是成品文案(如「插件未连接」引导),不译。
+     */
+    const projectFollowUp = (fu: FollowUp | undefined): FollowUp | undefined =>
+      fu == null || fu.type !== 'tool' || fu.description == null
+        ? fu
+        : { ...fu, description: i18n.t(fu.description as MessageKey) };
     // 可编程执行体:MCP 回调与 jsd_batch 编排共用(统一兜底/超时/取消传播)
     const executeTool: ToolExecutor = async (args, signal, opts) => {
       try {
@@ -178,7 +189,7 @@ export function bridgeTool(
           return err(
             new BridgeError('platform_unsupported', gate),
             def.outputSchema,
-            def.followUp,
+            projectFollowUp(def.followUp),
           );
         }
         // 入参 schema 校验:直接 MCP 调用已由 SDK validateToolInput 校验过(幂等,
@@ -252,7 +263,7 @@ export function bridgeTool(
           data,
           def.outputSchema,
           extra.length > 0 ? extra : undefined,
-          def.followUp,
+          projectFollowUp(def.followUp),
         );
         return warnings.length > 0 ? { ...result, warnings } : result;
       } catch (e) {
@@ -262,7 +273,7 @@ export function bridgeTool(
         // isError 文本中
         const msg = e instanceof Error ? e.message : String(e);
         error(`工具 ${def.name} 执行失败: ${msg.slice(0, 200)}`);
-        return err(e, def.outputSchema, def.followUp);
+        return err(e, def.outputSchema, projectFollowUp(def.followUp));
       }
     };
     // daemon 单进程内同名工具重复注册以后者为准(行为一致)

@@ -54,7 +54,31 @@ function normalizeColor(raw: unknown, path: string): NormalizedColor {
   return { r, g, b, a };
 }
 
-/** 布局网格归一化:color 的 hex 字符串转通道对象(引擎只收 {r,g,b[,a]}) */
+/**
+ * 图片填充缺省缩放方式。
+ *
+ * 三平台 typings 都把它列为 `ImagePaint` 的必填(Figma/jsDesign 无 `?`),
+ * 而线格式允许缺省 —— 缺省时引擎可能判整条 paint 非法并静默丢弃(回读成默认灰)。
+ * 默认取 `FILL`(与平台 UI 的默认缩放一致):裁满容器。
+ */
+const DEFAULT_IMAGE_SCALE_MODE = 'FILL';
+
+/**
+ * 给颜色补上 `a`(缺省 1)。
+ *
+ * 为什么统一在这里补而不是逐个平台补:三平台 typings 里**凡声明为 RGBA 的位置**
+ * `a` 都是必填(渐变停靠点 / 阴影 / 网格颜色),而线格式允许只给 rgb。此前这条
+ * 约束按字段名在各处补(MasterGo 门面的 paint 落点补了、effect 与 grid 落点漏了),
+ * 补到第二处就开始漏 —— 收成一个函数,新增 RGBA 落点直接复用(见决策 0022)。
+ */
+function withAlpha(c: NormalizedColor): NormalizedColor {
+  return { r: c.r, g: c.g, b: c.b, a: c.a ?? 1 };
+}
+
+/**
+ * 布局网格归一化:color 的 hex 字符串转通道对象(引擎只收 {r,g,b[,a]});
+ * ROWS/COLUMNS 的必填字段补齐/校验(见函数内注释)。
+ */
 export function normalizeLayoutGrids(value: unknown): LayoutGrid[] {
   if (!Array.isArray(value)) {
     throw new Error(
@@ -66,13 +90,80 @@ export function normalizeLayoutGrids(value: unknown): LayoutGrid[] {
       throw new Error(`layoutGrids[${i}] 必须是布局网格对象`);
     }
     const g = raw as Record<string, unknown>;
-    return {
+    const out: Record<string, unknown> = {
       ...g,
+      // 网格颜色在三平台 typings 里都是 RGBA(`a` 必填),而 hex/对象入参可能只给
+      // rgb —— 缺 a 时补 1(与 effects 的颜色同口径),否则 MasterGo 会整条 paint 丢弃。
       ...(g.color != null
-        ? { color: normalizeColor(g.color, `layoutGrids[${i}].color`) }
+        ? {
+            color: withAlpha(
+              normalizeColor(g.color, `layoutGrids[${i}].color`),
+            ),
+          }
         : {}),
-    } as LayoutGrid;
+    };
+    // ROWS / COLUMNS 在三平台的 RowsColsLayoutGrid 里 gutterSize / count 都是**必填**,
+    // alignment 同(Figma `readonly alignment: 'MIN'|'MAX'|'STRETCH'|'CENTER'`)。
+    // count / gutterSize 没有可推断的默认值 —— 引擎遇到缺字段会丢掉整条网格且不报错,
+    // 故这里明确报错而不是猜一个数。
+    if (out.pattern === 'ROWS' || out.pattern === 'COLUMNS') {
+      for (const key of ['count', 'gutterSize'] as const) {
+        if (typeof out[key] !== 'number') {
+          throw new Error(
+            `layoutGrids[${i}].${key} 必填(pattern 为 ${String(out.pattern)} 时,三平台的 RowsColsLayoutGrid 都把它列为必填;缺它会丢掉整条网格)`,
+          );
+        }
+      }
+      // alignment 默认取 **STRETCH**(MG 设计器里「拉伸」就是默认;Figma 的栅格默认
+      // 同样是拉伸)。此前补的是 MIN —— 而 MIN/MAX 分支下 `sectionSize` 是必填且
+      // 无法凭空推断(见下),把默认设成 MIN 会让「只给 count + gutterSize」这种
+      // 最常见写法直接被判缺字段,故改成 STRETCH:它只需要 offset(补 0 即可)。
+      const align =
+        typeof out.alignment === 'string' ? out.alignment : 'STRETCH';
+      out.alignment = align;
+      //
+      // ⚠ sectionSize / offset 在 typings 里都标了 `?`,但**运行时按 alignment 分
+      // 三套、且互斥**(jsDesign 实测 2026-09-24,引擎 `set_layoutGrids` 会逐变体校验,
+      // 不匹配就整条拒绝):
+      //   - STRETCH:必填 offset,**不能带** sectionSize(宽度由容器算出);
+      //   - CENTER :必填 sectionSize,**不能带** offset;
+      //   - MIN/MAX:两者都必填。
+      // typings 的两条注释其实已经点明了(「Not set for alignment: STRETCH」 /
+      // 「Not set for alignment: CENTER」),只是把可缺省读成了"随便给"。
+      // 处理口径与 count / gutterSize 一致:能补的补(offset 补 0,三平台同默认),
+      // 补不了的(sectionSize)报错点名 —— 不猜一个数把网格画错。
+      if (align === 'STRETCH') {
+        if (typeof out.offset !== 'number') out.offset = 0;
+        delete out.sectionSize;
+      } else if (align === 'CENTER') {
+        requireSectionSize(out, i);
+        delete out.offset;
+      } else {
+        // MIN / MAX
+        requireSectionSize(out, i);
+        if (typeof out.offset !== 'number') out.offset = 0;
+      }
+    }
+    // GRID 三平台的 GridLayoutGrid 都只有 pattern + sectionSize(+ visible / color);
+    // 多带 count / gutterSize / alignment 会让判别式联合匹配不上,故只保留该有的字段。
+    if (out.pattern === 'GRID') {
+      requireSectionSize(out, i);
+      delete out.count;
+      delete out.gutterSize;
+      delete out.alignment;
+      delete out.offset;
+    }
+    return out as unknown as LayoutGrid;
   });
+}
+
+/** ROWS/COLUMNS 的 MIN|MAX|CENTER 与 GRID 都需要 sectionSize:补不出来就报错点名 */
+function requireSectionSize(out: Record<string, unknown>, i: number): void {
+  if (typeof out.sectionSize !== 'number') {
+    throw new Error(
+      `layoutGrids[${i}].sectionSize 必填(pattern 为 ${String(out.pattern)}、alignment 为 ${String(out.alignment)} 时):该形态下引擎要求给出列宽/行高(或单元格大小),本仓无法凭空推断 —— 缺失会让整条网格被静默丢弃;不确定就改用 alignment: STRETCH(由容器算宽度)`,
+    );
+  }
 }
 
 /** 把 unknown 归一化成合法 Paint 数组;非数组直接抛错(引擎对非数组容器会报 not a function) */
@@ -126,7 +217,7 @@ function normalizePaint(raw: unknown, path: string): Paint {
           `${path}.gradientStops[${i}].color`,
         );
         return {
-          color: { r: c.r, g: c.g, b: c.b, a: c.a ?? 1 },
+          color: withAlpha(c),
           position: typeof stop.position === 'number' ? stop.position : 0,
         };
       });
@@ -145,10 +236,17 @@ function normalizePaint(raw: unknown, path: string): Paint {
           `${path}.imageHash 必须是非空字符串(图片填充需先经 jsd_fill_image 得到 hash)`,
         );
       }
+      // scaleMode 在三平台的 typings 里都是 ImagePaint 的**必填**字段
+      // (Figma/jsDesign 无 `?`;MasterGo 虽标可选,但缺它会走引擎自己的默认),
+      // 线格式此前允许缺省 —— 缺省时整条 paint 可能被引擎判非法而静默丢弃。
+      // 这里补成与 UI 一致的 FILL(裁满),调用方要别的缩放方式显式传。
       return {
         type: 'IMAGE',
         imageHash: p.imageHash,
-        ...(typeof p.scaleMode === 'string' ? { scaleMode: p.scaleMode } : {}),
+        scaleMode:
+          typeof p.scaleMode === 'string'
+            ? p.scaleMode
+            : DEFAULT_IMAGE_SCALE_MODE,
       } as Paint;
     }
     default:
@@ -185,7 +283,7 @@ function normalizeEffect(raw: unknown, path: string): Effect {
           : {};
       const out: Record<string, unknown> = {
         type: e.type,
-        color: { r: color.r, g: color.g, b: color.b, a: color.a ?? 1 },
+        color: withAlpha(color),
         offset: {
           x: typeof offset.x === 'number' ? offset.x : 0,
           y: typeof offset.y === 'number' ? offset.y : 0,

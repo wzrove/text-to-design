@@ -1,4 +1,5 @@
 import {
+  applicabilityMissNotice,
   PROP_APPLICABILITY,
   PROP_METHOD_FIELDS,
   type PropMethod,
@@ -57,12 +58,8 @@ export function updateFeedback(
       );
     });
     if (skipped.length > 0) {
-      blocks.push({
-        type: 'text',
-        text: `以下属性与目标节点类型不匹配,已被忽略:${skipped
-          .map((k) => `${k}(仅适用于 ${PROP_APPLICABILITY[k].join('/')})`)
-          .join('、')}`,
-      });
+      const notice = applicabilityMissNotice(skipped);
+      if (notice != null) blocks.push({ type: 'text', text: notice });
     }
   }
   if (requestedIds.length > 0) {

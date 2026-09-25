@@ -19,6 +19,7 @@ export {
   setInstanceProperties,
   swapComponents,
   syncInstanceOverrides,
+  toComponentPropertyWrites,
 } from './component';
 export { createSvgNode, executeOps } from './execute';
 export { exportNodes, fillImageNode, listFonts, listStyles } from './export';

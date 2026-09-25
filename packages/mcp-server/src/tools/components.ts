@@ -122,7 +122,7 @@ export function registerComponentTools(
       name: 'jsd_set_instance_properties',
       title: 'setInstanceProperties.title',
       description:
-        '设置实例的变体属性(如 {"状态":"禁用"})。可调属性与可选值需先 jsd_find / jsd_get_selection 读 variantGroupProperties,属性名必须完全匹配。componentProperties 仅 Figma 生效,jsDesign 自动降级为变体属性+可见样式',
+        '设置实例的变体/组件属性。属性名与可选值先 jsd_find / jsd_get_selection 读 variantProperties(变体,如 {"状态":["a0","a1"]})与 componentProperties(布尔/文本/换绑),名字必须完全匹配(宿主侧键可能是属性 id 如 Property 1#1:0,传名字即可,adapter/门面会自动归一)。值:变体属性传字符串(如 {"状态":"禁用"}),布尔属性传布尔({"显示图标":false}),需要显式类型或换绑候选时传 {"type":"INSTANCE_SWAP","value":"1:2"}。平台差异:变体属性三平台都走同名入口(jsDesign 缺专用入口时由引擎降级为变体属性+可见样式);布尔/文本/换绑属性在 Figma 与 MasterGo 生效(两端原生 setProperties 都收 string|boolean),jsDesign 无对应能力',
       inputSchema: setInstancePropertiesSchema,
       annotations: { readOnlyHint: false, destructiveHint: false },
       followUp: {

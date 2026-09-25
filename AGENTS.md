@@ -27,7 +27,8 @@ Rules:
 - **现象不用编号**（旧的编号字典 `references/timeline.md` 已废、文件已删）：报错认台账指纹，
   平台限制认 `references/platform-limits.md` 的现象描述，修复理由认 `docs/design-decisions/`。
   别再起新编号 —— `tests/skill-doc-budget.test.ts` 会拦住回潮。
-- 改了 `shared/` 或 `ui/` → 必须 `pnpm build` + 在即时设计里**重载插件**，否则验证的是旧产物。
+- 改了 `shared/` 或 `ui/` → 必须 `pnpm build` + 在**对应平台的客户端里重载插件**（jsDesign / Figma /
+  MasterGo 各载各的 `dist/<平台>/manifest.json`），否则验证的是旧产物。
 
 ## 报错闭环 ↔ 设计决策（两个技能怎么配合）
 

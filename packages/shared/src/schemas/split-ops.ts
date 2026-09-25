@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { childNodeSchema } from './execute-schemas';
+import { componentPropertyInputSchema } from './platform';
 import {
   autoLayoutPropsSchema,
   cornerPropsSchema,
@@ -147,8 +149,23 @@ export const repairNodesSchema = z
 
 export const createComponentSchema = z
   .object({
-    ids: requiredIds('要固化为组件的节点 id 列表'),
+    ids: z
+      .array(z.string())
+      .optional()
+      .describe('要固化为组件的节点 id 列表;给了就先校验存在(不改动这些节点)'),
     name: z.string().optional().describe('schema.splitOps.name2'),
+    children: z
+      .array(childNodeSchema)
+      .max(100)
+      .optional()
+      .describe(
+        '组件内容:子节点数组(递归嵌套,最多 100 个直接子节点),字段与 jsd_create_frame 的 children 一致;给了就一次建成带内容的组件,不必再 reparent 搬子节点',
+      ),
+    width: z
+      .number()
+      .optional()
+      .describe('组件宽度(px);在子节点插完之后压,避免被布局重算吃掉'),
+    height: z.number().optional().describe('组件高度(px);同上'),
   })
   .strict();
 
@@ -178,11 +195,11 @@ export const swapComponentSchema = z
 
 export const setInstancePropertiesSchema = z
   .object({
-    ids: requiredIds('要设置变体属性的实例(INSTANCE)节点 id 列表'),
+    ids: requiredIds('要设置变体/组件属性的实例(INSTANCE)节点 id 列表'),
     properties: z
-      .record(z.string(), z.string())
+      .record(z.string(), componentPropertyInputSchema)
       .describe(
-        '变体属性名→值,如 {"状态":"禁用"};可调属性需从 jsd_find / jsd_get_selection 返回的 variantGroupProperties 获取,属性名必须完全匹配',
+        '属性名→值:变体属性传字符串(如 {"状态":"禁用"}),布尔属性传布尔(如 {"显示图标":false}),需要显式类型或换绑候选时传 {"type":"INSTANCE_SWAP","value":"1:2"}。属性名从 jsd_find / jsd_get_selection 返回的 variantProperties(变体)与 componentProperties(布尔/文本/换绑)里取,必须完全匹配;宿主侧键可能是属性 id(如 Property 1#1:0),名字也能用 —— 门面会自动归一',
       ),
   })
   .strict();

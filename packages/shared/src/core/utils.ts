@@ -9,15 +9,26 @@ import type { DesignHost, NodeSkeleton } from './host';
  */
 export const MIN_RESIZE_SIZE = 0.01;
 
+/**
+ * 加载字体。**返回是否真的加载成功** —— 不成功不是「无所谓」:
+ * 部分平台(MasterGo 实测)在改字号/行高等文本样式前,要求该段**当前字体**已加载,
+ * 否则调用直接抛 `Cannot use unloaded font "…"`。此前这里把失败整个吞掉,于是
+ * 失败一路静默到下游写入才炸,且报错指向引擎内部。调用方拿到 false 应落到
+ * `WriteOutcome.warnings` 点名(0007 的「不允许静默失效」)。
+ *
+ * 仍不抛:字体不存在是**可预期**的输入问题(用户写了清单外的名字),不该让整次
+ * 写入失败 —— 但必须让调用方看见。
+ */
 export async function loadFont(
   host: DesignHost,
   family: string,
   style: string,
-): Promise<void> {
+): Promise<boolean> {
   try {
     await host.loadFontAsync({ family, style });
+    return true;
   } catch {
-    // 字体不可用时忽略,保持默认字体
+    return false;
   }
 }
 

@@ -7,6 +7,7 @@ import {
   exportSchema,
   fillImageSchema,
   listFontsResultSchema,
+  listFontsSchema,
   updatedResultSchema,
 } from 'text-to-design-shared';
 import type { Bridge } from '../bridge';
@@ -170,8 +171,11 @@ export function registerRawTools(
     name: 'jsd_list_fonts',
     title: 'listFonts.title',
     description:
-      '列出当前环境可用字体与各族的可用字型(返回 families 与 fonts:[{family,styles}])。写 fontName 时 family 用 fonts[].family 原样、style 用同一项的**全名**(如 SourceHanSansCN-Bold,不是简称 "Bold")——组合不存在时不报错、会静默退回默认字面(命中时结果 warnings 点名);引擎解析成功会把 family/style 规范化成短名,回读短名属正常',
+      '按家族名过滤、分页列出可用字体与各族的可用字型(返回 families 与 fonts:[{family,styles}])。**默认只回第一页**(50 族,上限 500):字体库规模随平台差一个量级——MasterGo 实测约 1900 族 / 整表 322 KB,整表必然撑爆上下文。结果里的 total 是过滤后的家族总数、truncated 表示还有下一页;按名字找字体传 family(不区分大小写的子串),翻页传 offset/limit。写 fontName 时 family 用 fonts[].family 原样、style 用同一项的**全名**(如 SourceHanSansCN-Bold,不是简称 "Bold")——组合不存在时不报错、会静默退回默认字面(命中时结果 warnings 点名);引擎解析成功会把 family/style 规范化成短名,回读短名属正常',
     method: 'list_fonts',
+    // 入参 schema 必须挂:没有它时 MCP 侧按空对象校验,family/offset/limit 会被
+    // **静默丢掉**(实测:传了 family/limit,插件收到的是空 params,分页/过滤双双失效)
+    inputSchema: listFontsSchema,
     outputSchema: listFontsResultSchema,
     annotations: { readOnlyHint: true },
     followUp: {

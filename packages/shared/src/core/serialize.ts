@@ -328,8 +328,16 @@ export function serializeNode(
           : p.windingRule,
     })) as unknown as WireVectorPath[];
   }
-  if ('variantProperties' in node && node.variantProperties != null) {
-    base.variantProperties = { ...node.variantProperties };
+  // 读 `variantProperties` 会抛的情况(Figma 实测:文档里存在「带错误的组件集」时,
+  // 引擎报 `in get_variantProperties: Component set for node has existing errors`)。
+  // 这是**摘要字段**:取不到就省略,绝不能让整份序列化失败 —— 而 `findNodes`
+  // 是逐节点调 serializeNode 的,一个坏节点会把整次查找掀翻(2026-09-24 Figma 真机)。
+  try {
+    if ('variantProperties' in node && node.variantProperties != null) {
+      base.variantProperties = { ...node.variantProperties };
+    }
+  } catch {
+    // 引擎 getter 抛:该字段省略,其余字段照常回传
   }
   // dynamic-page 下读 mainComponent 会抛(`Cannot call with documentAccess:
   // dynamic-page`):这字段是摘要性质,取不到就省略,不能让整份序列化失败。
@@ -358,6 +366,20 @@ export function serializeNode(
   }
   if ('componentProperties' in node && node.componentProperties != null) {
     base.componentProperties = { ...node.componentProperties };
+  }
+  // 变量绑定(仅 Figma):键就是写侧 figma_variables_apply 的 boundProperty 词汇,
+  // 故整对象原样透传,不归一、不改名 —— 写后回读比的就是同一个 variableId(0024)。
+  // 与 variantProperties 同纪律:摘要字段,引擎 getter 抛就只丢它,绝不掀翻整份序列化。
+  // 无绑定(空对象)时省略,使「键在 = 至少有一条绑定」成为可直接依赖的判据。
+  try {
+    if ('boundVariables' in node) {
+      const bv = node.boundVariables;
+      if (bv != null && Object.keys(bv).length > 0) {
+        base.boundVariables = { ...bv };
+      }
+    }
+  } catch {
+    // 引擎 getter 抛:该字段省略,其余字段照常回传
   }
   if (node.type === 'COMPONENT_SET' && node.variantGroupProperties != null) {
     base.variantGroupProperties = Object.fromEntries(

@@ -41,7 +41,7 @@ export type ExecuteOpFromSchema = MergeUnion<
  * 约 18 万字符。这里只列判别字段与最常用定位字段,其余字段 catchall 放行:引擎收到的数据与
  * 严格校验时完全一致,字段写错由引擎报错;顶层入参本身仍是完整严格校验。
  */
-const childNodeSchema: z.ZodType<ExecuteOp> = z
+export const childNodeSchema: z.ZodType<ExecuteOp> = z
   .object({
     type: nodeTypeSchema.describe('schema.executeSchemas.type'),
     name: z.string().optional(),
