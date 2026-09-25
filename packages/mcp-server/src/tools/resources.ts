@@ -49,7 +49,7 @@ export function registerResources(
     {
       title: 'resources.title2',
       description:
-        '当前环境可用的字体族与各族的可用字型(families / fonts:[{family,styles}]),实时从插件读取',
+        '当前环境可用的字体族与各族的可用字型(families / fonts:[{family,styles}]),实时从插件读取。**只回第一页**并给出 total/truncated —— 字体库实测可达约 1900 族,整表会撑爆上下文;要按名字找或翻页请用 jsd_list_fonts 的 family/offset/limit',
       mimeType: 'application/json',
     },
     async () => {

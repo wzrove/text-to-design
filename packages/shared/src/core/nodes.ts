@@ -4,6 +4,7 @@ import type {
   ObservedNodeType,
   PageStructureResult,
   SerializedNode,
+  SerializedNodeType,
 } from '../schemas';
 import { ensurePagesLoaded, resolveNodes } from './access';
 import type {
@@ -219,6 +220,39 @@ function insertChildAt(
   }
 }
 
+/**
+ * 单节点序列化:引擎 getter 抛时降级成最小摘要,而不是让整次查找失败。
+ *
+ * 触发场景(Figma 真机 2026-09-24):文档里存在「带错误的组件集」,读它的
+ * `variantProperties` 会抛 `Component set for node has existing errors`。
+ * `serialize.ts` 已对该字段加了 try,但**其它引擎 getter 同样可能抛**(平台在
+ * 节点处于错误状态时会),故这里再兜一层:坏节点回最小摘要(id / name / type),
+ * 好节点照常全量 —— 调用方至少还能认节点、继续排查。
+ */
+function minimalOrFull(node: NodeSkeleton, depth: number): SerializedNode {
+  try {
+    return serializeNode(node, depth);
+  } catch {
+    try {
+      return {
+        id: node.id,
+        name: node.name,
+        type: node.type as SerializedNodeType,
+        x: typeof node.x === 'number' ? Math.round(node.x) : 0,
+        y: typeof node.y === 'number' ? Math.round(node.y) : 0,
+      };
+    } catch {
+      return {
+        id: '',
+        name: '',
+        type: 'UNKNOWN' as SerializedNodeType,
+        x: 0,
+        y: 0,
+      };
+    }
+  }
+}
+
 export async function findNodes(
   host: DesignHost,
   params: FindParams,
@@ -257,7 +291,11 @@ export async function findNodes(
   }
   const scoped = params.scope === 'document' && params.ids == null;
   return {
-    nodes: nodes.slice(0, 100).map((n) => serializeNode(n, params.depth ?? 1)),
+    // 逐节点序列化**必须各带保护**:引擎 getter 会因节点自身状态抛(实测 Figma:
+    // 文档里存在「带错误的组件集」时 `get_variantProperties` 抛),一个坏节点会让
+    // 整次查找变成工具级报错 —— 调用方连其它好节点都拿不到。故单节点失败时降级
+    // 成最小摘要(id / name / type),其余节点照常回传。
+    nodes: nodes.slice(0, 100).map((n) => minimalOrFull(n, params.depth ?? 1)),
     total: nodes.length,
     ...(scoped ? { scope: 'document' as const } : {}),
     ...(scoped && pagesLoaded

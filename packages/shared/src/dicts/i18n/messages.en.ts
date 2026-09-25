@@ -17,6 +17,7 @@ import type { MESSAGES_ZH_CN } from './messages.zh-CN';
 export const MESSAGES_EN = {
   'platform.jsdesign': 'jsDesign',
   'platform.figma': 'Figma',
+  'platform.mastergo': 'MasterGo',
 
   'capability.core.create': 'Create',
   'capability.core.modify': 'Modify',
@@ -388,6 +389,11 @@ export const MESSAGES_EN = {
   'schema.inputs.sourcePath':
     'Absolute path of the local image, e.g. /tmp/poster.png',
   'schema.inputs.params': 'Operation parameters; the shape depends on the op',
+  'schema.inputs.family':
+    'Filter by family name (case-insensitive substring), e.g. "Source"',
+  'schema.inputs.offset': 'Paging start index (families to skip), default 0',
+  'schema.inputs.limit':
+    'Max families per page, default 50, max 500; a font library can hold ~1900 families and dumping all of them blows up the context',
   'schema.platform.name':
     'op name, pass it verbatim when calling jsd_platform_op',
   'schema.platform.description': 'Includes the params shape',
@@ -396,7 +402,12 @@ export const MESSAGES_EN = {
   'schema.results.family': 'Font family',
   'schema.results.styles':
     'Styles available in this family, e.g. ["Regular","Medium","Bold"]',
-  'schema.results.count': 'Number of font families',
+  'schema.results.count': 'Number of font families in this page',
+  'schema.results.total':
+    'Total families after filtering (independent of paging)',
+  'schema.results.offset': 'Start index of this page',
+  'schema.results.truncated':
+    'true means more pages exist; continue with offset',
   'schema.sharedProps.width': 'Width (px)',
   'schema.sharedProps.height': 'Height (px)',
   'schema.sharedProps.rotation':
@@ -495,8 +506,9 @@ export const MESSAGES_EN = {
   'batch.followUp': 'Review the canvas result after the orchestrated run',
   'createComponent.title': 'Create component',
   'createComponent.description':
-    'Turn a node into a COMPONENT and return the new id. To apply styles/text across sibling instances use jsd_sync_overrides; for variant properties use jsd_set_instance_properties',
-  'createComponent.description2': 'Resize the new empty component',
+    'Create a COMPONENT and return the new id. Pass children to build it with content in one call (same fields as jsd_create_frame children), optionally with width/height; without children you get an empty shell to fill via jsd_reparent_nodes. The source nodes are never converted or modified — a component is always created fresh. Name variants as "prop=value, prop=value"; set variant properties with jsd_set_instance_properties',
+  'createComponent.description2':
+    'Resize the component / add fill, corner radius, shadow',
   'createInstance.title': 'Create component instance',
   'createInstance.description': 'Set the variant properties of the instance',
   'detachInstance.title': 'Detach instance',
@@ -579,7 +591,7 @@ export const MESSAGES_EN = {
   'repairNodes.description': 'Review the page node state after repairing',
   'platformOp.title': 'Platform-specific operation',
   'platformOp.description':
-    'Run a platform-specific op by name (only Figma has them; jsDesign has no equivalent — use jsd_list_styles or read jsd://styles for local styles, jsd_set_instance_properties for component properties). Read platformOps from jsd_ping or jsd://platform/state first',
+    'Run a platform-specific op by name (only Figma has them; jsDesign has no equivalent — read the jsd://styles resource for local styles (no same-named tool), jsd_set_instance_properties for component properties). Read platformOps from jsd_ping or jsd://platform/state first',
   'platformOp.description2':
     'Review the effect of the platform op on the canvas',
   'prompt.htmlToDesign.title': 'HTML to design',

@@ -23,7 +23,35 @@
 
 第 ⑤ 层是绝大多数设计语义 bug 的所在地。第 ②③④ 层管参数、门控、超时、连接。
 
-## 文案 → 定位路由
+## 平台类型是唯一真源（报错第一站，先于任何「平台不支持」的结论）
+
+涉及**平台 API / 字段名 / 参数名 / 同步异步**的报错，先 grep 该平台的 typings 拿行号依据，
+再回代码落映射；**不要凭记忆改，也不要急着把锅推给平台**。
+
+| 平台 | typings（pnpm 形式） |
+|---|---|
+| 即时设计 | `node_modules/.pnpm/@jsdesigndeveloper+plugin-typings@*/node_modules/@jsdesigndeveloper/plugin-typings/plugin-api.d.ts` |
+| Figma | `node_modules/.pnpm/@figma+plugin-typings@*/node_modules/@figma/plugin-typings/plugin-api.d.ts` |
+| MasterGo | `node_modules/.pnpm/@mastergo+plugin-typings@*/node_modules/@mastergo/plugin-typings/dist/index.d.ts` |
+
+**两向都要核**——只核一向就会得出错结论（两条都是本仓真机上撞到的）：
+
+- **类型有、运行时没有**：MG 的 `InstanceNode.mainComponent`、组件/实例的 `children` 都是声明了但运行时不给
+  （后者要用同 mixin 的遍历入口 `findAll` / `findChildren`）；
+- **类型没有、运行时却有**：MG 的 `InstanceNode.mainComponentId`（正是靠它解析主组件）。
+
+**报错先自检前置条件，再扩散到平台**。本仓踩过的坑：MG 绑定属性报
+`Can only set component property references on symbol sublayer`，看着像平台不支持，
+实际是「本仓 `create_component` 只建空壳，子层要调用方 `reparent` 进去」——组件里根本没有子层。
+归因平台会写出错误台账，比没有台账更坏。
+
+**落到代码时的要求**（评审会看）：
+
+- 映射表/门面里每条平台差异**带 typings 行号**（如「3097 行」），改的人能回原处核；
+- `sync-guarantee.ts` 的编译期断言守「typings 里确实有」——官方收编后断言失败，提醒回来复核；
+- 判定「运行时没有」的项要在**真机**上确认过，而不是只看类型。
+
+
 
 拿 `list` 输出的**骨架**字段比对:
 
@@ -44,6 +72,7 @@
 | `请求被拒(插件未连接)` | ④ | `bridge.ts` |
 | `端口 <n> 被非 text-to-design MCP 服务占用` / `daemon 启动超时` | ④ | `daemon/run.ts` |
 | Figma 专有 API 抛错(`Cannot call with documentAccess: dynamic-page` 等) | ⑤ | `ui/src/code/figma/` + `ui/scripts/vite-plugin-manifest.ts` |
+| MasterGo 侧属性写不进去 / 读回 undefined / 文本样式无变化 | ⑤ | `ui/src/code/mastergo/`(属性名与枚举差异看 `node-facade.ts` 的映射表;宿主层符号看 `host.ts`)。**字段名/参数名不确定时别猜**:权威真源是 `@mastergo/plugin-typings` 的 `dist/index.d.ts`(pnpm 下 `node_modules/.pnpm/@mastergo+plugin-typings@<ver>/node_modules/@mastergo/plugin-typings/dist/index.d.ts`),按符号 grep 出**行号**,再回 `node-facade.ts` 落映射 —— 映射表、`sync-guarantee.ts` 的断言、`platform-limits.md` 的条目都要求带行号依据 |
 
 找不到对应行时,直接全文搜骨架里最长的中文片段(`throw new Error` 都是字面量),命中率很高。
 

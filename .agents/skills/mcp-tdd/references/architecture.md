@@ -37,7 +37,7 @@ pnpm exec biome check <changed files>     # 只 lint 改动文件，别跑全仓
 ```
 
 然后在即时设计客户端：`插件 → 开发 → 重新运行`，加载
-`packages/ui/dist/jsdesign/manifest.json`。
+`packages/ui/dist/jsdesign/manifest.json`（Figma / MasterGo 各自是 `dist/figma/`、`dist/mastergo/`）。
 
 ## 跑 tsx 脚本：用仓库内的，别用裸 `npx`
 
@@ -62,7 +62,7 @@ cd packages/mcp-server && ./node_modules/.bin/tsx smoke-split.ts
 | 算法/核心 | `packages/shared/src/core/` | 坐标与尺寸计算、编组、增删改、序列化 | build + 重载插件 |
 | Schema | `packages/shared/src/schemas/` | 入参 schema、`PROP_METHOD_FIELDS`、平台能力 | build + 重载插件 |
 | 插件分发/透传 | `packages/ui/src/code/plugin.ts` | `switch(msg.method)`，把参数透传给引擎 | build + 重载插件 |
-| 平台适配 | `packages/ui/src/code/jsdesign/`、`code/figma/` | host、host 能力 | build + 重载插件 |
+| 平台适配 | `packages/ui/src/code/jsdesign/`、`code/figma/`、`code/mastergo/`（后两者各自 tsconfig 独立编译） | host、host 能力；mastergo 另有一层节点门面（`node-facade.ts`，属性名/枚举/文本属性与契约不同形，见 0017） | build + 重载插件 |
 | 桥与传输 | `packages/mcp-server/src/bridge.ts`、`transport.ts`、`pending.ts` | WS 收发、二进制帧、超时与错误上下文 | 重启 daemon |
 | daemon | `packages/mcp-server/src/daemon/` | probe / run / proxy / spawn，探活与替换 | 重启 daemon |
 | 工具与提示词 | `packages/mcp-server/src/tools/`、`server.ts` | 工具注册、schema、`INSTRUCTIONS`、prompts | 重启 daemon |

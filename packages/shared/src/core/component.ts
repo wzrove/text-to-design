@@ -1,28 +1,56 @@
 import type {
   ComponentPropertyValue,
+  ExecuteOp,
   SerializedNode,
   UpdateNodeProps,
 } from '../schemas';
 import { resolveMainComponent, resolveNodes, resolveNodesMap } from './access';
+import buildNode from './buildNode';
 import { hostCapabilityState } from './capabilities';
-import { type DesignHost, MIXED, type NodeSkeleton } from './host';
+import {
+  type ContainerSkeleton,
+  type DesignHost,
+  MIXED,
+  type NodeSkeleton,
+} from './host';
 import type { RuntimeContext } from './runtime';
 import { serializeNode } from './serialize';
 import { updateSelection } from './update';
 
 export async function createComponentNodes(
   host: DesignHost,
-  params: { ids: string[]; name?: string },
+  ctx: RuntimeContext,
+  params: {
+    ids?: string[];
+    name?: string;
+    children?: ExecuteOp[];
+    width?: number;
+    height?: number;
+  },
 ): Promise<{ created: SerializedNode }> {
-  const nodes = await resolveNodes(host, params.ids);
-  if (nodes.length === 0) {
-    throw new Error('没有找到要固化为组件的节点');
+  // ids 只做「存在性校验」,不改动这些节点:组件一律新建,不把已有节点卷进来 ——
+  // appendChild 已有节点会触发引擎再包一层 wrapper,后续删 wrapper 连坐删子树并残留 dangling。
+  if (params.ids != null && params.ids.length > 0) {
+    const nodes = await resolveNodes(host, params.ids);
+    if (nodes.length === 0) {
+      throw new Error('没有找到要固化为组件的节点');
+    }
   }
-  // 只建空壳组件:不要 appendChild 已有节点(会触发引擎卷进 wrapper,
-  // 后续删 wrapper 连坐删子树并残留 dangling,影响整图序列化)。
-  // 子节点由调用方用 reparent 归组进来。
   const component = host.createComponent();
   component.name = params.name ?? 'component';
+  // 子节点走通用 buildNode 管线(写入 / 布局 / 回读回收与 create 路径同源),三平台行为一致 ——
+  // 不用 mg.createComponent(children) 那条平台专属分支,否则「带内容建组件」会变成 MG 独有能力(0020)。
+  const parent = component as ContainerSkeleton;
+  for (const child of params.children ?? []) {
+    await buildNode(host, ctx, child, parent);
+  }
+  // 尺寸最后压:插子节点时引擎会按内容重算容器尺寸,写在前面会被吃掉
+  if (params.width != null || params.height != null) {
+    component.resize(
+      params.width ?? component.width,
+      params.height ?? component.height,
+    );
+  }
   host.viewport.scrollAndZoomIntoView([component]);
   return { created: serializeNode(component) };
 }
@@ -81,15 +109,84 @@ export async function swapComponents(
   return { swapped: instances.map((n) => serializeNode(n)) };
 }
 
+/**
+ * 组件属性的**读形态 → 写形态**映射(0023)。
+ *
+ * 读回来的 `componentProperties` 每项是 `{type, value}`,而引擎写侧只收标量:
+ * Figma `setProperties(properties: {[name]: string|boolean|VariableAlias})`
+ * (`@figma/plugin-typings` 1.137.0 `plugin-api.d.ts:11115`)。把读形态原样回喂会被
+ * 整条拒绝(`Unrecognized key(s) in object: 'value'`),且 `SLOT` 引擎明确不收
+ * (`cannotSetSlotProperty`)—— 被跳过的键名进 `skipped`,由调用方点名,不静默丢。
+ *
+ * 三种入参形态都收(裸字符串 / 裸布尔 / `{type,value}`),因为工具入参与覆盖快照
+ * 两个来源本来就不同形。MG 门面另有一层**键归一**(名字→propertyId),与本函数不重叠。
+ */
+export function toComponentPropertyWrites(props: Record<string, unknown>): {
+  writes: Record<string, string | boolean>;
+  skipped: string[];
+} {
+  const writes: Record<string, string | boolean> = {};
+  const skipped: string[] = [];
+  for (const [name, raw] of Object.entries(props)) {
+    if (typeof raw === 'string' || typeof raw === 'boolean') {
+      writes[name] = raw;
+      continue;
+    }
+    if (raw == null || typeof raw !== 'object') {
+      skipped.push(name);
+      continue;
+    }
+    const entry = raw as { type?: unknown; value?: unknown };
+    if (entry.type === 'SLOT') {
+      skipped.push(name);
+      continue;
+    }
+    if (
+      typeof entry.value === 'string' ||
+      typeof entry.value === 'boolean' ||
+      // 变量绑定:写侧要的就是 alias 对象里的值(string id)
+      (entry.value != null && typeof entry.value === 'object')
+    ) {
+      const value = entry.value as { id?: string } | string | boolean;
+      writes[name] =
+        typeof value === 'object' && value.id != null
+          ? value.id
+          : (value as string | boolean);
+      continue;
+    }
+    skipped.push(name);
+  }
+  return { writes, skipped };
+}
+
+/**
+ * 设置实例的变体/组件属性。
+ *
+ * `properties` 是**宽类型**(字符串 | 布尔 | `ComponentPropertyValue`),与契约
+ * `DesignHost.setProperties` 的签名一致:变体属性是字符串,布尔/文本/换绑属性是标量,
+ * 需要显式类型或换绑候选时才传对象。宿主底层只收标量,故这里统一走
+ * {@link toComponentPropertyWrites} 整形(0023);MG 还要把名字键归一到 propertyId,
+ * 那一层在门面里(见 0017)。
+ */
 export async function setInstanceProperties(
   host: DesignHost,
-  params: { ids: string[]; properties: Record<string, string> },
+  params: {
+    ids: string[];
+    properties: Record<string, string | boolean | ComponentPropertyValue>;
+  },
 ): Promise<{ updated: SerializedNode[] }> {
   const instances = (await resolveNodes(host, params.ids)).filter(
     (n) => n.type === 'INSTANCE',
   );
   if (instances.length === 0) {
     throw new Error('没有找到要设置的实例节点');
+  }
+  const { writes, skipped } = toComponentPropertyWrites(params.properties);
+  if (Object.keys(params.properties).length > 0 && skipped.length > 0) {
+    // i18n-exempt: 随结果上行给模型,不走面板文案
+    throw new Error(
+      `属性 ${skipped.join('、')} 的值形态无法写成标量(SLOT 属性引擎不收,或值缺少 value)。请用 jsd_find 回读该实例的 componentProperties 取合法项后重试。`,
+    );
   }
   // 运行时校验:属性名必须属于实例的合法变体属性
   for (const inst of instances) {
@@ -110,7 +207,7 @@ export async function setInstanceProperties(
         );
       }
     }
-    inst.setProperties(params.properties);
+    inst.setProperties(writes);
   }
   return { updated: instances.map((n) => serializeNode(n)) };
 }
@@ -152,7 +249,9 @@ export async function combineAsVariantsNodes(
   // - Figma 的原生 combineAsVariants 就是**原位合并** —— 并入集合的就是实例所指的
   //   那些 COMPONENT 本身,已有实例链接不断;克隆姿势在它上面纯属副作用(留下
   //   「原件 + 集合内克隆」两份,实例继续指向原件,变体集与实例脱钩)。
-  // - jsDesign 没有这个语义(该路径必然崩),只能靠克隆兜底。
+  // - jsDesign 上该路径**运行时必崩**(`get_booleanOperation: Value is not a
+  //   string`,三种姿势全败,与组件结构无关 ⇒ 平台缺陷,不是我们的调用问题),
+  //   只能靠克隆兜底;它的 typings 语义其实与 Figma 同形,别写成「语义不同」。
   //
   // 故声明了 inPlaceVariants 能力的平台优先走原位,其余保持历史顺序(克隆优先)。
   let set: NodeSkeleton | undefined;
@@ -484,8 +583,11 @@ async function applyOverrideSnapshot(
   applied: AppliedOverride[];
   total: number;
   source: OverrideSummary;
+  warnings?: string[];
 }> {
   const applied: AppliedOverride[] = [];
+  // 因 `swapToSource:false` 而没套的变体属性名(逐实例去重后统一出一条告警)
+  const skippedIdentity: string[] = [];
   // 批量预解析(0011):循环内不再逐个 await,避免 N+1
   const targets = await resolveNodesMap(host, ids);
   const mainId = snapshot.mainComponentId;
@@ -521,22 +623,38 @@ async function applyOverrideSnapshot(
         target.swapComponent(main);
       }
       // Figma 有 componentProperties 时走部分更新(整体赋值会重置其余属性且新版只读);
-      // 否则(jsDesign)走跨平台变体属性。两者都经 setProperties 部分更新语义合并。
+      // 否则(jsDesign)走跨平台变体属性。两者都经 setProperties 部分更新语义合并,
+      // 且**一律先归一到写形态**(引擎只收标量,见 0023)。
+      //
+      // 变体身份(目标是哪个变体)只在调用方显式 `swapToSource: true` 时才套:写 VARIANT
+      // 属性等于换绑,而该字段默认 false、描述写明「swap 会丢失目标既有覆盖,需显式开启」
+      // —— 默认路径上偷换身份就是 0007 的静默失效,故跳过并在 warnings 点名。
       if (
         snapshot.componentProperties != null &&
         Object.keys(snapshot.componentProperties).length > 0
       ) {
-        // 只带 {type, value} 的部分更新:整体赋值会重置其余属性且新版 API 只读
-        const patch: Record<string, ComponentPropertyValue> = {};
+        const wanted: Record<string, unknown> = {};
         for (const [k, v] of Object.entries(snapshot.componentProperties)) {
-          patch[k] = { type: v.type, value: v.value };
+          if (!swapToSource && v.type === 'VARIANT') {
+            if (!skippedIdentity.includes(k)) skippedIdentity.push(k);
+            continue;
+          }
+          wanted[k] = v;
         }
-        target.setProperties(patch);
+        const { writes } = toComponentPropertyWrites(wanted);
+        if (Object.keys(writes).length > 0) target.setProperties(writes);
       } else if (
         snapshot.variantProperties != null &&
         Object.keys(snapshot.variantProperties).length > 0
       ) {
-        target.setProperties(snapshot.variantProperties);
+        if (swapToSource) {
+          target.setProperties(
+            toComponentPropertyWrites(snapshot.variantProperties).writes,
+          );
+        } else {
+          for (const k of Object.keys(snapshot.variantProperties))
+            if (!skippedIdentity.includes(k)) skippedIdentity.push(k);
+        }
       }
       if (snapshot.props != null && Object.keys(snapshot.props).length > 0) {
         // 复用 updateSelection:含 TEXT 的 loadFont 等边界处理
@@ -567,7 +685,19 @@ async function applyOverrideSnapshot(
         .join(', ')}`,
     );
   }
-  return { applied, total: ids.length, source: toSummary(snapshot) };
+  return {
+    applied,
+    total: ids.length,
+    source: toSummary(snapshot),
+    ...(skippedIdentity.length > 0
+      ? {
+          warnings: [
+            // i18n-exempt: 随结果上行给模型,不走面板文案
+            `套用时跳过了变体属性 ${skippedIdentity.join('、')}:改变体等于给目标实例换绑(会丢它既有覆盖),只在显式 swapToSource=true 时才生效。要换变体:传 swapToSource=true,或直接用 jsd_swap_component。其余覆盖(样式/文本/布尔/换绑属性)已照常套用。`,
+          ],
+        }
+      : {}),
+  };
 }
 
 /** 无状态一次性「复制+套用」:不写缓存,适合 jsd_batch 流水 */
@@ -584,6 +714,7 @@ export async function syncInstanceOverrides(
   applied: AppliedOverride[];
   total: number;
   source: OverrideSummary;
+  warnings?: string[];
 }> {
   const snapshot = await captureOverrideSnapshot(
     host,
@@ -630,6 +761,7 @@ export async function applyCachedOverrides(
   applied: AppliedOverride[];
   total: number;
   source: OverrideSummary;
+  warnings?: string[];
 }> {
   const snapshot = overrideCache.get(params.sourceId);
   if (!snapshot) {

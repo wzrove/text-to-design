@@ -3,6 +3,10 @@ import {
   CREATABLE_NODE_TYPES,
   type CreatableNodeType,
 } from '../dicts/node-type';
+import {
+  applicabilityMissNotice,
+  propAppliesTo,
+} from '../dicts/prop-applicability';
 import type { ExecuteOp, SerializedNode } from '../schemas';
 import buildNode from './buildNode';
 import type { DesignHost, NodeSkeleton } from './host';
@@ -128,6 +132,19 @@ export async function executeOps(
   }
   const unapplied = unappliedWarning(notes.unapplied);
   if (unapplied != null) warnings.push(unapplied);
+  // 属性 × 节点类型不匹配:创建路径此前**不点名**(给矩形写 layoutGrids 会静默丢弃,
+  // 回包却是成功),而修改路径早有这句话 —— 同一个事实两处只说一处。
+  // 文案与允许类型都由 dicts/prop-applicability 派生,两条路径共用(2026-09-24)。
+  const missKeys = new Set<string>();
+  for (let i = 0; i < specs.length; i += 1) {
+    const created0 = serialized[i] as unknown as { type?: string };
+    if (created0?.type == null) continue;
+    for (const key of Object.keys(specs[i])) {
+      if (!propAppliesTo(key, created0.type)) missKeys.add(key);
+    }
+  }
+  const missed = applicabilityMissNotice([...missKeys]);
+  if (missed != null) warnings.push(missed);
   // writer 自述类告警(WriteOutcome.warnings):0004 预留的出口,创建路径此前没接
   warnings.push(...notes.messages);
   return {
@@ -136,15 +153,16 @@ export async function executeOps(
   };
 }
 
-export function createSvgNode(
+export async function createSvgNode(
   host: DesignHost,
   svg: string,
   name?: string,
-): { created: SerializedNode } {
+): Promise<{ created: SerializedNode }> {
   if (typeof svg !== 'string' || svg.trim() === '') {
     throw new Error('无效的 svg: 必须是非空字符串');
   }
-  const node = host.createNodeFromSvg(svg);
+  // 异步建节点(MasterGo 只有 *Async 变体,见 host.ts 的契约注释 / 0017)
+  const node = await host.createNodeFromSvgAsync(svg);
   node.name = name ?? 'html-design';
   const page = host.currentPage;
   page.appendChild(node);

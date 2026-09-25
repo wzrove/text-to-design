@@ -1,6 +1,8 @@
 import { z } from 'zod';
+import { FONT_PAGE_MAX } from '../dicts/font';
 import { NODE_TYPES, OBSERVED_NODE_TYPES } from '../dicts/node-type';
 import { SEARCH_SCOPES } from '../dicts/search-scope';
+import { componentPropertyInputSchema } from './platform';
 
 /** Figma 独有的只读类型,单独拼串,免得把 34 类一次糊在描述里 */
 const READ_ONLY_TYPES = OBSERVED_NODE_TYPES.slice(NODE_TYPES.length).join('/');
@@ -216,10 +218,10 @@ export const manageComponentsSchema = z
     key: z.string().optional().describe('schema.inputs.key'),
     componentId: z.string().optional().describe('schema.inputs.componentId'),
     properties: z
-      .record(z.string(), z.string())
+      .record(z.string(), componentPropertyInputSchema)
       .optional()
       .describe(
-        '变体属性名→值,如 {"状态":"禁用"}(仅 set_instance_properties 必填);可调属性需从 jsd_find/jsd_get_selection 返回的 variantGroupProperties 获取,属性名必须完全匹配',
+        '属性名→值:变体属性传字符串(如 {"状态":"禁用"}),布尔属性传布尔,需要显式类型或换绑候选时传 {"type":"INSTANCE_SWAP","value":"1:2"}(仅 set_instance_properties 必填);属性名从 jsd_find/jsd_get_selection 返回的 variantProperties(变体)与 componentProperties(布尔/文本/换绑)里取,必须完全匹配',
       ),
     sourceId: z
       .string()
@@ -303,7 +305,23 @@ export const exportSchema = z.object({
     .describe('schema.inputs.includeDataUrl'),
 });
 
-export const listFontsSchema = z.object({});
+/**
+ * 字体清单入参:按家族名过滤 + 分页。
+ *
+ * 为什么不回整表(默认):字体库随平台差一个量级,MasterGo 实测约 1900 族 / 322 KB,
+ * 整表必然撑爆上下文。默认只回第一页,`total`/`truncated` 写清还有多少。
+ */
+export const listFontsSchema = z.object({
+  family: z.string().optional().describe('schema.inputs.family'),
+  offset: z.number().int().min(0).optional().describe('schema.inputs.offset'),
+  limit: z
+    .number()
+    .int()
+    .min(1)
+    .max(FONT_PAGE_MAX)
+    .optional()
+    .describe('schema.inputs.limit'),
+});
 export const listStylesSchema = z.object({});
 export const getPageStructureSchema = z.object({});
 

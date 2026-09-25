@@ -1,5 +1,6 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import type { PluginPlatform } from 'text-to-design-shared';
 import { defineConfig, type Plugin, type UserConfig } from 'vite';
 import { viteSingleFile } from 'vite-plugin-singlefile';
 import solid from 'vite-plugin-solid';
@@ -29,12 +30,20 @@ function reorderCss(): Plugin {
   };
 }
 
+/** 平台 mode → 引擎入口(新增平台在此加一行;与 vite-plugin-manifest 的平台分支同源) */
+const PLATFORM_ENTRIES: Record<string, string> = {
+  jsdesign: 'src/code/jsdesign/entry.ts',
+  figma: 'src/code/figma/entry.ts',
+  mastergo: 'src/code/mastergo/entry.ts',
+};
+
 export default defineConfig(({ mode }): UserConfig => {
-  if (mode === 'jsdesign' || mode === 'figma') {
-    const platform = mode;
+  const entry = PLATFORM_ENTRIES[mode];
+  if (entry != null) {
+    const platform = mode as PluginPlatform;
     // jsDesign 沙箱(Proxy 作用域,决策 0012)用 zodSandboxFix 把模块顶层
     // globalThis.__zod_globalConfig/Registry 替换为模块局部 const 宿主,
-    // 绕开沙箱对全局标识符的拦截。figma 沙箱不拦截,无需挂载。
+    // 绕开沙箱对全局标识符的拦截。figma / mastergo 沙箱不拦截,无需挂载。
     const platformPlugins: Plugin[] = [manifestPlugin(platform)];
     if (platform === 'jsdesign') {
       platformPlugins.push(zodSandboxFix());
@@ -52,12 +61,7 @@ export default defineConfig(({ mode }): UserConfig => {
         minify: true,
         rolldownOptions: {
           input: {
-            code: resolve(
-              import.meta.dirname,
-              platform === 'figma'
-                ? 'src/code/figma/entry.ts'
-                : 'src/code/jsdesign/entry.ts',
-            ),
+            code: resolve(import.meta.dirname, entry),
           },
           output: {
             entryFileNames: 'code.js',

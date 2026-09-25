@@ -1,6 +1,11 @@
 import { z } from 'zod';
 
 import {
+  COUNTER_AXIS_ALIGN_VALUES,
+  LAYOUT_ALIGN_VALUES,
+  PRIMARY_AXIS_ALIGN_VALUES,
+} from '../dicts/platform-value-domain';
+import {
   blendModeSchema,
   constraintTypeSchema,
   effectSchema,
@@ -186,7 +191,7 @@ export const autoLayoutPropsSchema = z.object({
     .enum(['NONE', 'HORIZONTAL', 'VERTICAL'])
     .optional()
     .describe(
-      '自动布局方向:NONE|HORIZONTAL|VERTICAL,仅 FRAME 节点生效。传 itemSpacing/padding*/primaryAxis* 等布局属性前必须先设为 HORIZONTAL 或 VERTICAL',
+      '自动布局方向:NONE|HORIZONTAL|VERTICAL,FRAME / COMPONENT / COMPONENT_SET 生效。传 itemSpacing/padding*/primaryAxis* 等布局属性前必须先设为 HORIZONTAL 或 VERTICAL',
     ),
   itemSpacing: z
     .number()
@@ -213,18 +218,18 @@ export const autoLayoutPropsSchema = z.object({
     .optional()
     .describe('schema.sharedProps.counterAxisSizingMode'),
   primaryAxisAlignItems: z
-    .enum(['MIN', 'MAX', 'CENTER', 'SPACE_BETWEEN'])
+    .enum(PRIMARY_AXIS_ALIGN_VALUES)
     .optional()
     .describe(
       '主轴对齐:MIN|MAX|CENTER|SPACE_BETWEEN;设为 SPACE_BETWEEN 时 itemSpacing 被忽略(子项均匀分布)',
     ),
   counterAxisAlignItems: z
-    .enum(['MIN', 'MAX', 'CENTER'])
+    .enum(COUNTER_AXIS_ALIGN_VALUES)
     .optional()
     .describe('schema.sharedProps.counterAxisAlignItems'),
   layoutGrow: z.number().optional().describe('schema.sharedProps.layoutGrow'),
   layoutAlign: z
-    .enum(['MIN', 'CENTER', 'MAX', 'STRETCH', 'INHERIT'])
+    .enum(LAYOUT_ALIGN_VALUES)
     .optional()
     .describe('schema.sharedProps.layoutAlign'),
 });

@@ -1,4 +1,5 @@
 import type { HostCapabilityKey } from '../dicts/capability';
+import type { PlatformKey } from '../dicts/platform';
 
 /**
  * 一次运行的显式上下文。
@@ -20,14 +21,34 @@ import type { HostCapabilityKey } from '../dicts/capability';
 export interface RuntimeContext {
   /** 当前平台声明的能力表;null = 未注入(fail-open,退回运行时属性探测) */
   readonly capabilities: readonly HostCapabilityKey[] | null;
+  /**
+   * 当前平台标识;null = 未注入。
+   *
+   * 为什么能力表不够、还要单独带平台:`capabilities` 是**能力位**(「这个平台有没有
+   * 本地样式 / 变量」),而值域与适用性收窄问的是另一件事 ——「同一属性在这个平台
+   * 接受的取值/字段面更窄」(如 MG 的 alignSelf 只有 STRETCH/INHERIT、jsDesign 的
+   * BlendMode 没有 PASS_THROUGH)。这类事实由 `dicts/platform-value-domain.ts` 按
+   * 平台声明,判定要按 id 反查,能力位表达不了。见决策 0022。
+   *
+   * 与 `capabilities` 同为**构造期快照**(仍是 0002 的口径):
+   * 平台在运行中变化不在本模型的考虑范围内。
+   */
+  readonly platform: PlatformKey | null;
 }
 
 /** 未注入能力表时的基线上下文:纯开场也能跑,行为与"未绑定"时一致 */
-export const NO_CAPABILITIES: RuntimeContext = { capabilities: null };
+export const NO_CAPABILITIES: RuntimeContext = {
+  capabilities: null,
+  platform: null,
+};
 
-/** 按能力表构造上下文;传 null 表示"未知"(fail-open,不误报不支持) */
+/**
+ * 按能力表与平台构造上下文;传 null 表示"未知"(fail-open,不误报不支持)。
+ * `platform` 缺省为 null —— 未注入时平台值域/适用性收窄一律放行,只留存在性守卫。
+ */
 export function runtimeContext(
   capabilities: readonly HostCapabilityKey[] | null,
+  platform: PlatformKey | null = null,
 ): RuntimeContext {
-  return { capabilities };
+  return { capabilities, platform };
 }

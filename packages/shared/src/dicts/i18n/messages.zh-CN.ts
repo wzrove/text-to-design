@@ -12,6 +12,7 @@ export const MESSAGES_ZH_CN = {
   // ── 平台名(dicts/platform.ts 的 label 表由此投影) ──
   'platform.jsdesign': '即时设计',
   'platform.figma': 'Figma',
+  'platform.mastergo': 'MasterGo',
 
   // ── 能力名(dicts/capability.ts 的 label 表由此投影) ──
   'capability.core.create': '创建',
@@ -356,6 +357,11 @@ export const MESSAGES_ZH_CN = {
   'schema.inputs.ids2': '要填充图片的节点 id 列表',
   'schema.inputs.sourcePath': '本地图片文件绝对路径,如 /tmp/poster.png',
   'schema.inputs.params': '操作参数,结构随 op 而定',
+  'schema.inputs.family':
+    '按家族名过滤(不区分大小写的子串),如 "Source" 或 "思源"',
+  'schema.inputs.offset': '分页起始序号(跳过多少族),默认 0',
+  'schema.inputs.limit':
+    '本页最多返回多少族,默认 50、上限 500;字体库可达约 1900 族,整表会撑爆上下文',
   'schema.platform.name': 'op 名,调用 jsd_platform_op 时原样传',
   'schema.platform.description': '含 params 形状说明',
   'schema.results.capabilities':
@@ -363,7 +369,10 @@ export const MESSAGES_ZH_CN = {
   'schema.results.families': '可用字体族(family)列表',
   'schema.results.family': '字体族',
   'schema.results.styles': '该族可用字型,如 ["Regular","Medium","Bold"]',
-  'schema.results.count': '字体族数量',
+  'schema.results.count': '本页返回的字体族数量',
+  'schema.results.total': '过滤后的字体族总数(不受分页影响)',
+  'schema.results.offset': '本页起始序号',
+  'schema.results.truncated': '为 true 表示还有下一页,用 offset 继续取',
   'schema.sharedProps.width': '宽度(px)',
   'schema.sharedProps.height': '高度(px)',
   'schema.sharedProps.rotation': '旋转角度(deg,绕节点自身左上角原点,x/y 不变)',
@@ -457,8 +466,8 @@ export const MESSAGES_ZH_CN = {
   'batch.followUp': '编排执行后复核画布结果',
   'createComponent.title': '建组件',
   'createComponent.description':
-    '建「空壳」组件——不会固化传入节点,返回全新 100×100 空组件,原节点不动。正确流程:1) jsd_resize_node 把空壳改成目标尺寸 → 2) jsd_reparent_nodes 把原 Frame 的子节点移进空壳 → 3) jsd_delete_node 删原 Frame → 4) 需要填充/圆角/阴影时再 jsd_set_fill_color / jsd_set_cornerRadius / jsd_set_effects 补。顺序必须先 resize 后 reparent,否则子节点默认 SCALE 约束会被拉伸到错位(或先给子节点 constraints:{horizontal:"MIN",vertical:"MIN"})',
-  'createComponent.description2': '把空壳组件调到目标尺寸',
+    '建组件(COMPONENT)并返回新 id。传 children 时一次建成带内容的组件(字段同 jsd_create_frame 的 children),可再传 width/height 定尺寸,不必再手工 reparent 搬子节点;不传 children 则是空壳,后续用 jsd_reparent_nodes 归组。原节点不会被固化也不会被改动 —— 组件一律新建(避免把已有节点卷进 wrapper)。变体命名用「属性=值, 属性=值」,变体属性用 jsd_set_instance_properties',
+  'createComponent.description2': '调整组件尺寸 / 补齐填充、圆角、阴影',
   'createInstance.title': '生成组件实例',
   'createInstance.description': '设置实例的变体属性',
   'detachInstance.title': '取消实例链接',

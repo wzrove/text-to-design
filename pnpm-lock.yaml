@@ -285,6 +285,9 @@ importers:
       '@jsdesigndeveloper/plugin-typings':
         specifier: ^1.0.12
         version: 1.0.12
+      '@mastergo/plugin-typings':
+        specifier: ^2.19.2
+        version: 2.19.2
       '@types/node':
         specifier: 'catalog:'
         version: 26.6.2
@@ -826,6 +829,9 @@ packages:
   '@manypkg/tools@2.1.2':
     resolution: {integrity: sha512-6QEf6yqFbETdwGITKq57aYoPfX/3K8XFNwsAlx0C1M7o8cb79sv1M3w+tWuWvIcSbNqrLF7OD7YpZMVVz335hQ==}
     engines: {node: '>=20.0.0'}
+
+  '@mastergo/plugin-typings@2.19.2':
+    resolution: {integrity: sha512-T3CCTD6u+Mi/bQnCqCkbGea6+KKljWCsOR+l1fMn5+x0rEl3pHOtT0HTjlgec5Ez37j5hY68IHuVJ83Nok3Kqw==}
 
   '@modelcontextprotocol/client@2.0.0':
     resolution: {integrity: sha512-8f1OghQ2rjzIOfqgUCP+8GiUWqRs89njoWLNqAe8kWmDePv3s1fZXseej+QXemssEuuOvLLmLO/kqM3IQHtISw==}
@@ -2718,6 +2724,8 @@ snapshots:
       jju: 1.4.0
       tinyglobby: 0.2.17
       yaml: 2.9.1
+
+  '@mastergo/plugin-typings@2.19.2': {}
 
   '@modelcontextprotocol/client@2.0.0':
     dependencies:

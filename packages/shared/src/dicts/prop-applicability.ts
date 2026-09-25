@@ -35,16 +35,21 @@ export const PROP_APPLICABILITY: Readonly<
   letterSpacing: ['TEXT'],
   textTruncation: ['TEXT'],
   maxLines: ['TEXT'],
-  layoutMode: ['FRAME'],
-  itemSpacing: ['FRAME'],
-  paddingTop: ['FRAME'],
-  paddingRight: ['FRAME'],
-  paddingBottom: ['FRAME'],
-  paddingLeft: ['FRAME'],
-  primaryAxisSizingMode: ['FRAME'],
-  counterAxisSizingMode: ['FRAME'],
-  primaryAxisAlignItems: ['FRAME'],
-  counterAxisAlignItems: ['FRAME'],
+  // 布局字段:FRAME 之外,COMPONENT / COMPONENT_SET 同样继承 frame 的自动布局 mixin ——
+  // 三平台 typings 一致(Figma `ComponentNode/ComponentSetNode extends (Base)FrameMixin`、
+  // jsDesign 同形、MasterGo `… extends FrameContainerMixin extends AutoLayout`),见 0021。
+  // 此前只写 FRAME,导致组件集的变体重叠时无法用 jsd_set_layout 排布。
+  // 运行时若某平台不认(写不进去),由 layoutWriter.settle 的回读点名兜住(0007),不静默失效。
+  layoutMode: ['FRAME', 'COMPONENT', 'COMPONENT_SET'],
+  itemSpacing: ['FRAME', 'COMPONENT', 'COMPONENT_SET'],
+  paddingTop: ['FRAME', 'COMPONENT', 'COMPONENT_SET'],
+  paddingRight: ['FRAME', 'COMPONENT', 'COMPONENT_SET'],
+  paddingBottom: ['FRAME', 'COMPONENT', 'COMPONENT_SET'],
+  paddingLeft: ['FRAME', 'COMPONENT', 'COMPONENT_SET'],
+  primaryAxisSizingMode: ['FRAME', 'COMPONENT', 'COMPONENT_SET'],
+  counterAxisSizingMode: ['FRAME', 'COMPONENT', 'COMPONENT_SET'],
+  primaryAxisAlignItems: ['FRAME', 'COMPONENT', 'COMPONENT_SET'],
+  counterAxisAlignItems: ['FRAME', 'COMPONENT', 'COMPONENT_SET'],
   cornerRadius: [
     'FRAME',
     'RECTANGLE',
@@ -63,6 +68,18 @@ export const PROP_APPLICABILITY: Readonly<
     'VECTOR',
     'BOOLEAN_OPERATION',
   ],
+  // 布局网格与裁剪只在 frame 族混入上声明,三平台一致(2026-09-24 逐平台核对):
+  // - Figma:`BaseFrameMixin.layoutGrids / .clipsContent`(plugin-api.d.ts:9193 / 9207),
+  //   而 `RectangleNode`(10728)不含该 mixin;
+  // - jsDesign:同形,`BaseFrameMixin`(plugin-api.d.ts:874 / 876);
+  // - MasterGo:`FrameContainerMixin.layoutGrids / .clipsContent`(index.d.ts:2638 / 2637),
+  //   `RectangleNode`(2776)extends DefaultShapeMixin + ConstraintMixin + CornerMixin +
+  //   RectangleStrokeWeightMixin —— 不含 FrameContainerMixin。
+  // 三平台一致 ⇒ 是**领域事实**,不是平台收窄,故写在这里而不是 platform-value-domain。
+  // 真机症状(0022 复验踩到):给矩形写 layoutGrids 回包「已更新 1 个节点」,回读无该字段 ——
+  // 写路径此前对这两个字段完全没有适用性判定(paintWriter / passthroughWriter 直写)。
+  layoutGrids: ['FRAME', 'COMPONENT', 'COMPONENT_SET', 'INSTANCE'],
+  clipsContent: ['FRAME', 'COMPONENT', 'COMPONENT_SET', 'INSTANCE'],
   topLeftRadius: ['FRAME', 'RECTANGLE'],
   topRightRadius: ['FRAME', 'RECTANGLE'],
   bottomLeftRadius: ['FRAME', 'RECTANGLE'],
@@ -78,4 +95,22 @@ export const PROP_APPLICABILITY: Readonly<
 export function propAppliesTo(prop: string, type: string): boolean {
   const types = PROP_APPLICABILITY[prop];
   return types == null || types.some((t) => t === type);
+}
+
+/**
+ * 一次请求里「属性 × 目标节点类型」不匹配的字段 → 一句点名。
+ *
+ * 放在字典里而不是各层各写一遍:创建路径(`core/execute.ts`)与修改路径
+ * (`mcp-server/tools/update-common.ts`)说的是**同一个事实**,此前只有修改路径
+ * 有这句话,创建路径遇到同样情形是静默丢弃(给矩形写 `layoutGrids` 就属这一类)。
+ * 文案与允许类型都由本表派生,加字段不必再改文案。
+ */
+export function applicabilityMissNotice(
+  keys: readonly string[],
+): string | null {
+  const missed = keys.filter((k) => PROP_APPLICABILITY[k] != null);
+  if (missed.length === 0) return null;
+  return `以下属性与目标节点类型不匹配,已被忽略:${missed
+    .map((k) => `${k}(仅适用于 ${PROP_APPLICABILITY[k].join('/')})`)
+    .join('、')}`;
 }

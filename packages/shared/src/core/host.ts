@@ -114,9 +114,20 @@ export interface NodeSkeleton extends ContainerSkeleton {
   createInstance(): NodeSkeleton;
   detachInstance(): NodeSkeleton;
   swapComponent(component: NodeSkeleton): void;
-  /** 变体值(Record<string,string>)或 Figma 组件属性(ComponentPropertyValue)两种形态 */
+  /**
+   * 实例属性:变体值传字符串,布尔/文本/换绑属性传标量(布尔也是标量),
+   * 需要显式类型或换绑候选时传 `ComponentPropertyValue` 对象。
+   *
+   * 为什么三种都收:两平台原生入口都收 `string | boolean`
+   * (Figma `setProperties({[名]: string|boolean})`、MG `setProperties({[propertyId]: string|boolean})`,
+   * 后者见 `@mastergo/plugin-typings` 3097 行),收窄成字符串会让布尔属性在两边都设不了。
+   * 对象形态只有 Figma 收(MG 会把 boolean 之外的形态拒掉),故由 adapter/门面负责整形。
+   */
   setProperties(
-    properties: Record<string, string | shared.ComponentPropertyValue>,
+    properties: Record<
+      string,
+      string | boolean | shared.ComponentPropertyValue
+    >,
   ): void;
   outlineStroke(): NodeSkeleton | null;
   /**
@@ -134,6 +145,13 @@ export interface NodeSkeleton extends ContainerSkeleton {
   textStyleId?: string;
   effectStyleId?: string;
   componentProperties?: Record<string, shared.ComponentPropertyValue>;
+  /**
+   * 变量绑定(仅 Figma 运行时存在,其余平台恒 undefined)。**同步只读值成员**,
+   * 不是能力签名 —— 故 0010 的「新增成员一律异步」不适用(与上面几个 Figma 超集
+   * 成员同档);且 Figma typings 只有同步变体。键 = 写侧 `boundProperty` 的同一套词汇,
+   * 线格式与省略纪律见 `schemas/platform.ts` 的 `boundVariablesSchema`(决策 0024)。
+   */
+  boundVariables?: shared.BoundVariableAliases;
   resetOverrides?(): void;
   removeOverrides?(): void;
 }
@@ -168,13 +186,16 @@ export interface PageSkeleton extends ContainerSkeleton {
 }
 
 /**
- * 平台全局(jsDesign.* / figma.*)的窄化接口。
+ * 平台全局(jsDesign.* / figma.* / mg)的窄化接口。
  *
  * 契约纪律(0010):**新增/变更成员一律异步优先** —— 签名声明 `Promise<...>`。
- * 同步只保留给「两平台 typings 都只有同步变体 + 纯内存」的成员(如 createFrame /
- * createImage / appendChild)。理由:底层 Plugin API 的异步面在扩张且两平台不对称
- * (figma 1.137 有 97 处 Promise,jsDesign 1.0.12 只有 20 处;getMainComponentAsync /
- * loadAllPagesAsync 等仅 figma 有),同步签名一旦落成,后面接异步能力就要改一遍全链路签名。
+ * 同步只保留给「各平台 typings 都只有同步变体 + 纯内存」的成员(如 createFrame /
+ * appendChild)。理由:底层 Plugin API 的异步面在扩张且三平台不对称
+ * (figma 1.137 有 97 处 Promise,jsDesign 1.0.12 只有 20 处,mastergo 2.19 把
+ * `createNodeFromSvg` / `createImage` 都做成了 Promise 版;
+ * getMainComponentAsync / loadAllPagesAsync 等仅 figma 有),同步签名一旦落成,
+ * 后面接异步能力就要改一遍全链路签名 —— 0017 就是这条纪律在第三平台上的兑现
+ * (两处成员由同步改异步)。
  */
 export interface DesignHost {
   createFrame(): NodeSkeleton;
@@ -186,8 +207,33 @@ export interface DesignHost {
   createStar(): NodeSkeleton;
   createVector(): NodeSkeleton;
   createComponent(): NodeSkeleton;
-  createNodeFromSvg(svg: string): NodeSkeleton;
-  createImage(bytes: Uint8Array): { hash: string };
+  /**
+   * 由 SVG 字符串建节点(一律异步)。
+   *
+   * 为什么必须异步(0017):MasterGo 只有 `mg.createNodeFromSvgAsync(svg): Promise<FrameNode>`,
+   * 没有同步变体 —— `@mastergo/plugin-typings@2.19.2` 全文件无 `createNodeFromSvg`。
+   * 同步签名一旦保留,第三平台的 adapter 只能返回 Promise,调用方拿到的是 Promise
+   * 而不是节点(`node.id` 全 undefined、`appendChild` 抛 "child is not a node"),
+   * 报错点会漂到组装/序列化深处。故按 0010 的异步优先统一成 Promise;
+   * figma / jsDesign 侧由各自 adapter 把同步原生方法包成 async。
+   */
+  createNodeFromSvgAsync(svg: string): Promise<NodeSkeleton>;
+  /**
+   * 上传图片字节,拿回**宿主本地**的图片引用(一律异步)。
+   *
+   * 为什么不叫 `createImageAsync`:这个确切名字在 Figma 与 jsDesign 的 typings 里
+   * **已被占用且语义不同** —— 两家都是 `createImageAsync(src: string): Promise<Image>`,
+   * 收的是**图片来源字符串**(URL / base64 src),不是字节。沿用同名会让「读名字猜行为」
+   * 的人(以及后来写 adapter 的人)把两者当同一个东西,而它是静默错用:
+   * 传进去的 `Uint8Array` 会被当 src 解析。故按语义命名(`FromBytes`)避开撞车。
+   *
+   * 为什么返回 `{ hash }` 而不是更中性的名字:`hash` 是本仓线格式里 IMAGE paint 的
+   * 字段(Figma `imageHash`),core 直接把它写进 `fills`/`strokes`。第三平台
+   * (MasterGo)的原生字段是 `imageRef`、且 `createImage` 返回的是 `Image{href}` ——
+   * 该平台 adapter 负责把 href 当 `hash` 交出、并在节点侧把 paint 的
+   * `imageHash` 翻译回 `imageRef`(见 0017);core 与线格式保持平台无关。
+   */
+  createImageFromBytesAsync(bytes: Uint8Array): Promise<{ hash: string }>;
 
   readonly currentPage: PageSkeleton;
   /**

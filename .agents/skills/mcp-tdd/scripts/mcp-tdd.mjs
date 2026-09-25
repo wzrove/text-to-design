@@ -1530,7 +1530,7 @@ const HELP = `mcp-tdd — text-to-design MCP 测试驱动开发台账
         **在回归阶段复发**则搬回主库并置 regressed,与从未归档过的指纹行为一致
 
 用例(回归依据)
-  case-new  --title "..." [--intent "..."] [--expect "..."] [--platform jsdesign|figma]
+  case-new  --title "..." [--intent "..."] [--expect "..."] [--platform jsdesign|figma|mastergo]
   case-step --case <id> --tool <jsd_x> --args '<json>' [--note "..."]
   case-show [--case <id>]                   打印可重放的步骤清单
 

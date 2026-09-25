@@ -27,7 +27,13 @@ type NodeOpKind = z.infer<typeof manageNodesSchema>['op'];
 
 type NodeOpDef = Pick<
   BridgeToolDef,
-  'name' | 'title' | 'description' | 'inputSchema' | 'followUp'
+  | 'name'
+  | 'title'
+  | 'description'
+  | 'inputSchema'
+  | 'followUp'
+  | 'platforms'
+  | 'platformNote'
 > & {
   annotations?: ToolHints;
 };
@@ -115,6 +121,10 @@ export function registerNodeOpTools(
       title: 'ungroupNodes.title',
       description:
         '解散分组,子节点回到原父节点下(坐标变为相对新父,可能需要重新摆位)',
+      // MasterGo 两级 API 都没有 ungroup(PluginAPI 与 GroupNode 都没有该符号,
+      // 见 0017 的实测记录),宿主层无从实现 → 平台拒绝,不给「假成功」
+      platforms: ['jsdesign', 'figma'],
+      platformNote: '(MasterGo 未提供解组 API;该平台请改用拆分/重排替代)',
       inputSchema: ungroupNodesSchema,
       annotations: { readOnlyHint: false, destructiveHint: false },
       followUp: {
@@ -153,7 +163,7 @@ export function registerNodeOpTools(
       name: 'jsd_reparent_nodes',
       title: 'reparentNodes.title',
       description:
-        '把节点移入 parentId 成为其子节点,可指定插入位置。⚠ **parentId 请显式传**:缺省值取「当前选中里第一个不是被移动节点的节点」——当前选中为空或不含父容器时该值不可靠(会报「没有找到目标父节点」,或把节点误移进另一个被选中的节点下)。需要依赖缺省时的两种姿势:①先 jsd_select_nodes 选中目标容器;②只调层序 → 传 index 且 ids 里含被调整节点本身,此时缺省父级 = 该节点的原父级。⚠ 层序语义:index 是 children 数组下标(0 = 最底层),children 顺序即绘制顺序(末位 = 最上层),序列化里对应字段是 z —— 判断遮挡读 z,调层序就用本工具 + index。节点已在该父级下时本工具只调层序,x/y 不变;auto-layout 容器同样支持(index 会在内部临时关掉布局插入再恢复),若引擎没落位会明确报错并提示改 itemSpacing / 对齐。⚠ **跨父级移动保持节点绝对位置**:内部按页面系记账(移动前取绝对原点,移动后换算成新父下的 x/y),不要再按「相对系重新解释」手动摆回 —— 那会把节点推走。唯一例外是移入 auto-layout 容器:位置由布局接管,写 x/y 无效,想调排布改 itemSpacing / 对齐。确需手工定位(按坐标排布等)时用 jsd_resize_node 传 x/y(可与 width/height 一次改完)或 jsd_move_node',
+        '把节点移入 parentId 成为其子节点,可指定插入位置。⚠ **实例不能当 parentId**:引擎直接拒(`in insertChild: Cannot move node. New parent is an instance or is inside of an instance`),往实例里加东西请先 jsd_detach_instance 拆链接。⚠ **parentId 请显式传**:缺省值取「当前选中里第一个不是被移动节点的节点」——当前选中为空或不含父容器时该值不可靠(会报「没有找到目标父节点」,或把节点误移进另一个被选中的节点下)。需要依赖缺省时的两种姿势:①先 jsd_select_nodes 选中目标容器;②只调层序 → 传 index 且 ids 里含被调整节点本身,此时缺省父级 = 该节点的原父级。⚠ 层序语义:index 是 children 数组下标(0 = 最底层),children 顺序即绘制顺序(末位 = 最上层),序列化里对应字段是 z —— 判断遮挡读 z,调层序就用本工具 + index。节点已在该父级下时本工具只调层序,x/y 不变;auto-layout 容器同样支持(index 会在内部临时关掉布局插入再恢复),若引擎没落位会明确报错并提示改 itemSpacing / 对齐。⚠ **跨父级移动保持节点绝对位置**:内部按页面系记账(移动前取绝对原点,移动后换算成新父下的 x/y),不要再按「相对系重新解释」手动摆回 —— 那会把节点推走。唯一例外是移入 auto-layout 容器:位置由布局接管,写 x/y 无效,想调排布改 itemSpacing / 对齐。确需手工定位(按坐标排布等)时用 jsd_resize_node 传 x/y(可与 width/height 一次改完)或 jsd_move_node',
       inputSchema: reparentNodesSchema,
       annotations: { readOnlyHint: false, destructiveHint: false },
       followUp: {

@@ -1,0 +1,8 @@
+{
+  "extends": "../../../tsconfig.json",
+  "compilerOptions": {
+    "types": ["@mastergo/plugin-typings"]
+  },
+  "include": ["."],
+  "exclude": []
+}

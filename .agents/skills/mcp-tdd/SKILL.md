@@ -43,6 +43,8 @@ AI 会话 ──stdio──> shim ──HTTP(47820)──> daemon ──WS(47812
   只重启 daemon **完全无效**：插件仍跑旧产物，报错与改前一字不差。
 - 改 `mcp-server/` → 重启 daemon 即可（下次调用时 shim 自动接管）。
 - 插件加载的是 `packages/ui/dist/jsdesign/manifest.json`（旧 dist 会误导排查）。
+- **报错先查平台类型再下结论**：grep 该平台 typings 拿行号依据，别凭记忆、也别急着归因平台
+  （路径与两向核法见 `references/fix-playbook.md`「平台类型是唯一真源」）。
 
 ## 闭环（按序做，别跳步）
 
@@ -85,17 +87,11 @@ AI 会话 ──stdio──> shim ──HTTP(47820)──> daemon ──WS(47812
 
 ## 归档（台账瘦身，独立节奏）
 
-事件流只追加、闭环库只增是**刻意的**（证据链完整），代价是主库无限增长。`archive` 把**已终结**
-的那部分搬出主库：事件按月份分片进 `archive/events/`，闭环条目进 `archive/handled.json`；
-`list --archived` 查归档内容。参数以 `node .agents/skills/mcp-tdd/scripts/mcp-tdd.mjs help` 为准，
-别照抄记忆里的版本。
-
-- **判据（三条全满足才搬）**：在 `handled.json` 里 · `handledAt` 早于阈值 · 此后无事件。
-  → `regressed` 的指纹**永不归档**，它还活着。
-- **归档 ≠ 注销**：去重闸门同时查归档库 —— 再出现仍 `suppressed`（多带 `archived: true`）；
-  **回归阶段复发**则连同历史事件整块搬回主库并置 `regressed`。所以**别手删台账文件**：
-  手删才是真把闸门拆了。
-- **节奏**：不追求每轮必跑。`list --all` 要翻页、或 `report` 里已闭环行压过未决行时跑一次。
+`archive` 把**已终结**的事件搬出主库（事件按月份进 `archive/events/`、闭环条目进
+`archive/handled.json`）。三条判据**全满足才搬**：在 `handled.json` 里 · `handledAt` 早于阈值 ·
+此后无事件 —— `regressed` 的指纹**永不归档**。**别手删台账文件**（手删才是拆闸门）。
+节奏：不追求每轮必跑，`list --all` 要翻页、或 `report` 里已闭环行压过未决行时跑一次。
+细节（`list --archived`、复发回搬规则、CLI 参数）见 `references/bookkeeping.md`「归档的判据与边界」。
 
 ## 闸门：什么时候转 software-design-patterns
 
@@ -162,6 +158,7 @@ CLI 参数以 `node .agents/skills/mcp-tdd/scripts/mcp-tdd.mjs help` 为准，�
 | **动 `shared/src/core/`、`ui/src/code/plugin.ts`，或要加字段之前**（字段集单一真相 / 提示词与代码同源 / schema 复用 / 零轴两侧不同 / 协议窄化 / mock host 三坑） | `references/constraints.md` |
 | 「改动是否真生效」判不准，或 `diagnose.sh` 没定位到 | `references/troubleshooting.md` |
 | 怀疑平台限制，要决定「代码兜 / 提示词 / 记账」 | `references/platform-limits.md` |
+| 主表里没有、但想确认「是不是早就撞过、后来兜住了」（已滚出的历史现象，**只读**） | `references/platform-limits-history.md` |
 | 查某文件属哪一层、改完要做什么 | `references/architecture.md` |
 | 报错走哪条采集通道，或要加日志埋点 | `references/error-channels.md` |
 | 指纹归并过粗 / 过细，看到不该 `suppressed` 的项 | `references/fingerprint.md` |

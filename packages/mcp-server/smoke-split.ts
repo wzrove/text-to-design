@@ -5,6 +5,7 @@ import {
   updateSelection,
 } from 'text-to-design-shared';
 import { Bridge } from './src/bridge';
+import { createMcpI18n } from './src/i18n';
 import { toolRegistrars } from './src/tools';
 
 // ---- 假 McpServer:只捕获工具定义与回调 ----
@@ -45,7 +46,10 @@ bridge.request = async (method, params) => {
   return {};
 };
 
-for (const register of toolRegistrars) register(fakeServer, bridge);
+// i18n 与 server.ts 同一条装配路径:注册期把文案投影一次(缺省第三参会让
+// register*Tools 在 `i18n.t(...)` 上抛,整个冒烟跑不起来)
+const i18n = createMcpI18n();
+for (const register of toolRegistrars) register(fakeServer, bridge, i18n);
 
 // ---- 引擎侧方法白名单:updateSelection 应拒绝方法外的字段、放行方法内字段 ----
 const FAKE_HOST = { getNodeById: () => NODE } as never;
@@ -177,11 +181,15 @@ async function invoke(
     content?: { type: string; text?: string }[];
     followUp?: unknown;
   };
+  // 结构类 op 在写入前先发一次 `find` 定位/复核(删除、编组、reparent 都是),
+  // 所以「下发的是什么」要看**第一个非读数调用**,不能固定取 calls[0] ——
+  // 取 [0] 会把断言基准悄悄挪到前置读数上,写调用长错了也照样绿。
+  const write = calls.find((c) => c.method !== 'find') ?? calls[0];
   return {
     isError: out.isError,
     text: (out.content ?? []).map((c) => c.text ?? '').join(' | '),
-    params: calls[0]?.params,
-    method: calls[0]?.method as PluginMethod,
+    params: write?.params,
+    method: write?.method as PluginMethod,
     followUp: out.followUp,
   };
 }
@@ -648,7 +656,9 @@ bridge.request = async (m, p) => {
   calls.push({ method: m, params: p });
   if (isPropMethod(m)) return { updated: [NODE] };
   if (m === 'execute') return { created: RECT };
-  if (m === 'find') return { nodes: [NODE] };
+  // find 的出参 schema 里 `total` 必填(schemas/results.ts)——缺它会被出参校验
+  // 判成 isError,把「followUp 有没有注入」这件事掩盖掉
+  if (m === 'find') return { nodes: [NODE], total: 1 };
   return {};
 };
 const followCases: [string, Record<string, unknown>, string][] = [
@@ -675,3 +685,20 @@ for (const [name, args, wantTool] of followCases) {
 console.log(
   `followUp 结果引导: ${followCases.length - fupFail}/${followCases.length} 通过`,
 );
+
+// ---- followUp.description 必须是**译文**而不是 MessageKey ----
+// (0016 把 title/description 收进注册期投影,later 结果里的 followUp 漏了,
+// 调用方拿到 "find.description" 这种裸键)
+const fupDesc = (
+  (await invoke('jsd_find', { ids: ['1:2'] })).followUp as
+    | { description?: string }
+    | undefined
+)?.description;
+if (fupDesc == null || /^[a-z][\w]*\.[\w]+$/.test(fupDesc)) {
+  fail++;
+  console.log(
+    `✗ followUp.description 未投影(仍是键): ${JSON.stringify(fupDesc)}`,
+  );
+} else {
+  console.log(`followUp 文案投影: ${JSON.stringify(fupDesc.slice(0, 24))}`);
+}

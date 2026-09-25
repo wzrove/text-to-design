@@ -27,8 +27,8 @@ import {
 } from './base';
 import type { ObservedNodeType } from './node-type';
 import { observedNodeTypeSchema } from './node-type';
-import type { ComponentPropertyValue } from './platform';
-import { componentPropertyValueSchema } from './platform';
+import type { BoundVariableAliases, ComponentPropertyValue } from './platform';
+import { boundVariablesSchema, componentPropertyValueSchema } from './platform';
 
 // ---- 序列化节点 (read 侧) ----
 export interface SerializedNode {
@@ -114,6 +114,8 @@ export interface SerializedNode {
   textStyleId?: string;
   effectStyleId?: string;
   componentProperties?: Record<string, ComponentPropertyValue>;
+  /** 变量绑定(仅 Figma;无绑定或不支持该字段的平台恒缺省 —— 键在即至少有一条绑定) */
+  boundVariables?: BoundVariableAliases;
 }
 
 export const serializedNodeSchema: z.ZodType<SerializedNode> = z.lazy(() =>
@@ -223,5 +225,6 @@ export const serializedNodeSchema: z.ZodType<SerializedNode> = z.lazy(() =>
     componentProperties: z
       .record(z.string(), componentPropertyValueSchema)
       .optional(),
+    boundVariables: boundVariablesSchema.optional(),
   }),
 );

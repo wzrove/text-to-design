@@ -107,6 +107,8 @@ export const manageComponentsResultSchema = z.object({
   source: overrideSummarySchema.optional(),
   /** detach_instance 部分失败时逐条报告(id + 原因);全部失败直接抛错 */
   failed: z.array(z.object({ id: z.string(), message: z.string() })).optional(),
+  /** apply/sync 跳过了哪一类覆盖及为什么(如 swapToSource=false 时的变体属性,0023) */
+  warnings: z.array(z.string()).optional(),
 });
 export const exportResultSchema = z.object({
   exports: z.array(
@@ -141,6 +143,13 @@ export const listFontsResultSchema = z.object({
       'family → 可用 style 明细。写 fontName 前照这份清单取组合(family+style 需精确匹配,猜错会静默退回默认字重)',
     ),
   count: z.number().describe('schema.results.count'),
+  /**
+   * 分页元信息(可选:插件版本错位时旧产物不发,不能让只读调用整体失败 —— 同 `fonts`)。
+   * `total` 是**过滤后**的家族总数,`truncated` 表示这一页之外还有。
+   */
+  total: z.number().optional().describe('schema.results.total'),
+  offset: z.number().optional().describe('schema.results.offset'),
+  truncated: z.boolean().optional().describe('schema.results.truncated'),
 });
 
 /** 页面结构总览:当前页顶层节点的轻量摘要(不递归子节点) */
