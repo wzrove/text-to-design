@@ -59,7 +59,7 @@ export default function manifestPlugin(platform: PluginPlatform) {
                 // 权限按「用到才要」给(将来要用再加,见 0017 的联调清单)。
                 name: 'text-to-design MCP Bridge',
                 api: '1.0.0',
-                id: '1000000000000000001',
+                id: '205493389761958',
               }
             : JSON.parse(readFileSync(resolve(root, 'manifest.json'), 'utf8'));
       const manifest = { ...base, main: 'code.js', ui: 'ui.html' };
