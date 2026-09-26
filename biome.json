@@ -1,12 +1,7 @@
 {
   "$schema": "https://biomejs.dev/schemas/2.5.14/schema.json",
   "files": {
-    "includes": [
-      "**",
-      "!**/dist",
-      "!**/node_modules",
-      "!.git"
-    ]
+    "includes": ["**", "!**/dist", "!**/node_modules", "!.git"]
   },
   "formatter": {
     "enabled": true,
@@ -24,7 +19,7 @@
       "tailwindDirectives": true
     },
     "formatter": {
-      "enabled":true
+      "enabled": true
     }
   },
   "linter": {
@@ -46,9 +41,7 @@
   },
   "overrides": [
     {
-      "includes": [
-        "**/*.css"
-      ],
+      "includes": ["**/*.css"],
       "linter": {
         "rules": {
           "suspicious": {
