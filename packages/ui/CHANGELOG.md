@@ -1,5 +1,11 @@
 # text-to-design-ui
 
+## 0.7.1
+
+### Patch Changes
+
+- [#31](https://github.com/wzrove/text-to-design/pull/31) [`b467b29`](https://github.com/wzrove/text-to-design/commit/b467b296206704a0329d6e37db47f70ad3653740) Thanks [@wzrove](https://github.com/wzrove)! - feat: add mastergo
+
 ## 0.7.0
 
 ### Minor Changes
