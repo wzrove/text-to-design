@@ -4,6 +4,7 @@ import type { LogLevel } from '../bridge/types';
 import type { LogEntry } from '../bridge/useBridge';
 import { t } from '../i18n/useLocale';
 import { copyText } from '../utils/clipboard';
+import CollapsibleSection from './CollapsibleSection';
 
 /** 过滤档位与级别排序:all=不过滤,其余为「该级别及以上」 */
 type FilterKey = 'all' | LogLevel;
@@ -20,8 +21,8 @@ const RANK: Record<FilterKey, number> = {
   error: LOG_LEVEL_ORDER.error + 1,
 };
 
-// 级别文字用主题语义色(warning/error,见 tailwind.config.js);
-// 衬底保留固定 rgba——daisyUI oklch 回退在部分 webview 下会丢失透明度修饰符。
+// 级别文字用主题语义色(warning/error,见 src/index.css 的主题变量);
+// error 行衬底用 bg-error/6(比提示条的 8% 更轻,只为压一层底色不抢文字)。
 // debug 用 /70:白底约 4.9:1,满足 ui-ux-pro-max ux-guidelines「正文对比度≥4.5:1」
 const LEVEL_CLASS: Record<LogLevel, string> = {
   debug: 'text-base-content/70',
@@ -35,7 +36,7 @@ const LEVEL_ACCENT: Record<LogLevel, string> = {
   debug: '',
   info: '',
   warn: 'border-l-2 border-warning',
-  error: 'border-l-2 border-error bg-[var(--component-log-error-tint)]',
+  error: 'border-l-2 border-error bg-error/6',
 };
 
 /** 行首字形标记:颜色之外的第二重区分(色弱/主题漂移都兜得住) */
@@ -148,16 +149,19 @@ function LogEntryItem(props: { entry: LogEntry }) {
  * 日志抽屉。
  *
  * 日志属于纯诊断信息(与 CapabilityCard 同一条纪律:诊断不进主视线),所以它
- * 不再常驻占位 —— 原实现拿 `flex-1` 吃满面板剩余高度,是面板上最重的视觉块。
- * 现在常态零占位,入口是页头右端的幽灵图标(LogTrigger),展开才从底部滑出。
+ * 不常驻占位 —— 入口是页头右端的幽灵图标(LogTrigger),展开才从底部滑出。
  *
- * 结构要点:
+ * 结构外壳由 `CollapsibleSection` 的 `sheet` 形态提供(遮罩、点外部收起、
+ * `aria-modal`、`fixed` 锚视口、85% 高度、`panel-enter` 入场);本组件只负责
+ * 日志这一层:过滤档位、跟随底部、未读计数、清空。**不再自带浮层骨架** ——
+ * 三处展开面板各自实现过一遍,是本条要治的病(见 0026)。
+ *
+ * 剩下的几点:
  * - 高度取窗口的 85%(不写死 px):抽屉自己不定高,而窗口在打开期间由 App 把下限
- *   抬到 `PANEL_HEIGHT_LOG`(见 0015)—— 否则自适应布局下面板可能只有 300 高,
+ *   抬到 `PANEL_HEIGHT_OVERLAY`(见 0015)—— 否则自适应布局下面板可能只有 300 高,
  *   85% 就是一条 255px 的窄缝;
- * - 遮罩用真 button:键盘可达,也避开给 div 挂 onClick 的 a11y 问题;
- * - 焦点在打开时落到关闭钮、关闭时由调用方还给触发钮(见 App.tsx closeLog);
- * - ESC 与点遮罩都能关。
+ * - 焦点在打开时落到关闭钮、关闭时由 App 还给触发钮(见 App.tsx closeLog);
+ * - ESC 也由 App 收(理由见那边的注释:关闭要连带还焦点,两个端点分处两个组件)。
  */
 export default function LogDrawer(props: {
   open: boolean;
@@ -241,107 +245,97 @@ export default function LogDrawer(props: {
   };
 
   return (
-    <Show when={props.open}>
-      {/*
-        fixed 而不是 absolute:自适应布局下根元素的高度等于「内容高度」,而窗口可能
-        比它高(clamp 的下限、宿主对高度的夹取、收敛前的瞬时)—— 按根元素定位的抽屉
-        会矮一截,窗口多出来的那部分露在遮罩外面。锚视口两种布局都对。
-      */}
-      <div class="fixed inset-0 z-30">
-        <button
-          type="button"
-          aria-label={t('log.drawer.close')}
-          class="drawer-enter absolute inset-0 h-full w-full cursor-default bg-[rgba(0,0,0,0.35)]"
-          onClick={props.onClose}
-        />
-        <section
-          role="dialog"
-          aria-modal="true"
-          aria-label={t('log.drawer.title')}
-          class="drawer-enter absolute inset-x-0 bottom-0 flex h-[85%] flex-col rounded-t-xl border-base-300 border-t bg-base-100 shadow-lg"
-        >
-          <div class="flex items-center gap-2 px-3 pt-2">
-            <h2 class="shrink-0 text-xs font-bold text-base-content/80">
-              {t('log.drawer.title')}
-            </h2>
-            <span class="min-w-0 flex-1 truncate text-base-content/60 text-[10px]">
-              {t('log.drawer.count', {
-                shown: shown().length,
-                total: props.entries.length,
-              })}
-            </span>
+    <CollapsibleSection
+      variant="sheet"
+      open={props.open}
+      openChange={(v) => {
+        if (!v) props.onClose();
+      }}
+      label={t('log.drawer.title')}
+      header={
+        <div class="flex items-center gap-2 px-3 pt-2">
+          <h2 class="shrink-0 text-xs font-bold text-base-content/80">
+            {t('log.drawer.title')}
+          </h2>
+          <span class="min-w-0 flex-1 truncate text-base-content/60 text-[10px]">
+            {t('log.drawer.count', {
+              shown: shown().length,
+              total: props.entries.length,
+            })}
+          </span>
+          <button
+            type="button"
+            class="btn btn-ghost btn-xs text-base-content/60 hover:text-base-content"
+            onClick={props.onClear}
+          >
+            {t('log.drawer.clear')}
+          </button>
+          {/* 浮层的关闭是「退出」而不是「收起」,故用叉而非箭头:这里的箭头
+              只表达方向,而那一步是把整个面板关掉 */}
+          <button
+            ref={(el) => {
+              closeRef = el;
+            }}
+            type="button"
+            class="btn btn-ghost btn-xs px-1.5 text-base-content/60 hover:text-base-content"
+            aria-label={t('log.drawer.close')}
+            onClick={props.onClose}
+          >
+            ✕
+          </button>
+        </div>
+      }
+    >
+      <div class="join flex-wrap items-center gap-0.5 px-3 py-1.5">
+        <For each={FILTERS}>
+          {(f) => (
             <button
               type="button"
-              class="btn btn-ghost btn-xs text-base-content/60 hover:text-base-content"
-              onClick={props.onClear}
+              class={`btn btn-xs join-item ${
+                filter() === f.key ? 'btn-primary' : 'btn-ghost'
+              }`}
+              onClick={() => setFilter(f.key)}
             >
-              {t('log.drawer.clear')}
+              {t(f.label)}
             </button>
-            <button
-              ref={(el) => {
-                closeRef = el;
-              }}
-              type="button"
-              class="btn btn-ghost btn-xs px-1.5 text-base-content/60 hover:text-base-content"
-              aria-label={t('log.drawer.close')}
-              onClick={props.onClose}
-            >
-              ✕
-            </button>
-          </div>
-
-          <div class="join flex-wrap items-center gap-0.5 px-3 py-1.5">
-            <For each={FILTERS}>
-              {(f) => (
-                <button
-                  type="button"
-                  class={`btn btn-xs join-item ${
-                    filter() === f.key ? 'btn-primary' : 'btn-ghost'
-                  }`}
-                  onClick={() => setFilter(f.key)}
-                >
-                  {t(f.label)}
-                </button>
-              )}
-            </For>
-          </div>
-
-          <div class="relative min-h-0 flex-1 border-base-200 border-t">
-            <div
-              ref={containerRef}
-              onScroll={onScroll}
-              class="h-full overflow-y-auto px-3 py-2 font-mono text-xs"
-            >
-              <For
-                each={shown()}
-                fallback={
-                  <p class="px-2 py-8 text-center text-xs text-base-content/60 leading-relaxed">
-                    {emptyText()}
-                  </p>
-                }
-              >
-                {(entry) => <LogEntryItem entry={entry} />}
-              </For>
-            </div>
-            <Show when={newCount() > 0}>
-              {/* role=status + polite:新日志到达时读屏可感知,不打断当前朗读 */}
-              <div
-                role="status"
-                aria-live="polite"
-                class="absolute right-2 bottom-2"
-              >
-                <button
-                  type="button"
-                  class="hint-enter btn btn-xs border-base-300 bg-base-100 text-base-content shadow-md hover:bg-base-200"
-                  onClick={jumpToLatest}
-                >
-                  {t('log.drawer.newCount', { count: newCount() })}
-                </button>
-              </div>
-            </Show>
-          </div>
-        </section>
+          )}
+        </For>
       </div>
-    </Show>
+
+      <div class="relative min-h-0 flex-1 border-base-200 border-t">
+        <div
+          ref={containerRef}
+          onScroll={onScroll}
+          class="h-full overflow-y-auto px-3 py-2 font-mono text-xs"
+        >
+          <For
+            each={shown()}
+            fallback={
+              <p class="px-2 py-8 text-center text-xs text-base-content/60 leading-relaxed">
+                {emptyText()}
+              </p>
+            }
+          >
+            {(entry) => <LogEntryItem entry={entry} />}
+          </For>
+        </div>
+        <Show when={newCount() > 0}>
+          {/* role=status + polite:新日志到达时读屏可感知,不打断当前朗读 */}
+          <div
+            role="status"
+            aria-live="polite"
+            class="absolute right-2 bottom-2"
+          >
+            <button
+              type="button"
+              class="hint-enter btn btn-xs border-base-300 bg-base-100 text-base-content shadow-md hover:bg-base-200"
+              onClick={jumpToLatest}
+            >
+              {t('log.drawer.newCount', { count: newCount() })}
+            </button>
+          </div>
+        </Show>
+      </div>
+    </CollapsibleSection>
   );
 }

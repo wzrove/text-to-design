@@ -11,7 +11,7 @@ const MAX_SHOWN = 99;
  */
 const HEALTHY_CLS = 'text-base-content/60 hover:text-base-content/80';
 const UNREAD_CLS =
-  'border border-[var(--component-status-chip-error-border)] bg-[var(--component-status-chip-error-bg)] text-error hover:bg-[var(--component-status-chip-error-border)]';
+  'border border-error/25 bg-error/10 text-error hover:bg-error/25';
 
 /**
  * 日志入口。
@@ -24,7 +24,6 @@ const UNREAD_CLS =
  * ② 出得来。有未读错误时整颗升级成 error 淡底胶囊并报出条数 —— 这一态比「已连接」
  *    更响是有意的:绿色是期望中的稳态,而日志里的错误计数只增不减(同一行复发会
  *    合并计数),它是页头上唯一能说出「连上了,但一直在出错」的地方。
- *    升级态的底色用 rgba token 而非 `bg-error/10` —— 本 webview 下后者会退化成实心色。
  */
 export default function LogTrigger(props: {
   /** 未读错误条数(抽屉打开或关闭时清零,见 App.tsx) */

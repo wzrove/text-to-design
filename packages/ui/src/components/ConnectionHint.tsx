@@ -37,12 +37,9 @@ type Variant = 'connected' | 'superseded' | 'disconnected';
  * px-2.5 与 p-2.5 谁生效取决于生成顺序,不可控。文字色由内层元素各带各的。
  */
 const CARD: Record<Variant, string> = {
-  connected:
-    'px-2.5 py-1.5 border-[var(--component-hint-ok-border)] bg-[var(--component-hint-ok-bg)]',
-  superseded:
-    'px-2.5 py-1.5 border-[var(--component-status-chip-waiting-border)] bg-[var(--component-status-chip-waiting-bg)]',
-  disconnected:
-    'p-2.5 border-[var(--component-hint-warn-border)] bg-[var(--component-hint-warn-bg)]',
+  connected: 'px-2.5 py-1.5 border-success/35 bg-success/8',
+  superseded: 'px-2.5 py-1.5 border-warning/25 bg-warning/10',
+  disconnected: 'p-2.5 border-warning/35 bg-warning/8',
 };
 
 /** live region 播报文案:按真实 status 取(含 connecting),压到一行,不念整张引导卡 */

@@ -33,7 +33,7 @@ const variablesApplySchema = z.object({
 });
 
 /**
- * 组件属性的**定义**入参(0025)。`type` 收全五种是为了给 `VARIANT` / `SLOT` 一句
+ * `type` 收全五种是为了给 `VARIANT` / `SLOT` 一句
  * 点名原因 —— 只在 schema 层用 enum 拒掉的话,调用方看到的是通用「Invalid enum value」。
  */
 const componentPropertyAddSchema = z.object({

@@ -112,8 +112,13 @@ type NodeTypingsGap = 'absolutePosition' | 'ungroup';
  * jsDesign typings 的**宿主层**缺口:`ungroup` 在 Figma 是 `PluginAPI.ungroup(node)`,
  * 但 @jsdesigndeveloper/plugin-typings 里两级都没有。core 因此按运行时 typeof 探测
  * (有就用、没有就报明确错误),契约里声明为可选。
+ *
+ * 装饰高(0028)的 `chromeHeight` 同样登记在此:本平台没有真源(`headerHeight`
+ * 在这份 typings 里不存在),适配器不实现它,契约侧缺省 0 = 不补偿(见
+ * `UI_CHROME_DEFAULT`)。**可选成员也是 `keyof`,所以照样得登记** —— 下面两条
+ * 断言查的是「契约里有、typings 里没有」这个差集,与是否可选无关。
  */
-type JsDesignHostTypingsGap = 'ungroup';
+type JsDesignHostTypingsGap = 'ungroup' | 'chromeHeight';
 
 /**
  * dynamic-page 系缺口(0011):`getNodeByIdAsync` / `loadAllPagesAsync` /
@@ -163,7 +168,14 @@ export type PageContractCheck = ExpectNever<
   Missing<keyof PageSkeleton, PluginAPI['currentPage']>
 >;
 export type UiContractCheck = ExpectNever<
-  Missing<keyof DesignHost['ui'], PluginAPI['ui']>
+  Missing<
+    Exclude<keyof DesignHost['ui'], JsDesignHostTypingsGap>,
+    PluginAPI['ui']
+  >
+>;
+/** 反向:登记为 ui 层缺口的必须真的不在 typings 里 */
+export type UiGapCheck = ExpectNever<
+  Declared<JsDesignHostTypingsGap, PluginAPI['ui']>
 >;
 export type ViewportContractCheck = ExpectNever<
   Missing<keyof DesignHost['viewport'], PluginAPI['viewport']>

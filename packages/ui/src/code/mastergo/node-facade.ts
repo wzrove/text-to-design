@@ -108,7 +108,6 @@ export const GRID_ALIGN_TO_MG = {
 /** 运行期按下标查用(键是运行时的字符串,字面量对象不能直接索引) */
 const GRID_ALIGN_BY_KEY: Record<string, string> = GRID_ALIGN_TO_MG;
 
-/** 节点类型名:MG 的矢量叫 PEN,本仓叫 VECTOR(读路径翻回来,写路径走 mg.createPen) */
 /** 键是平台类型名,值是本仓类型名;`satisfies` 保字面量键,断言才查得到 'PEN' */
 export const MG_TYPE_TO_CONTRACT = { PEN: 'VECTOR' } as const satisfies Record<
   string,

@@ -9,7 +9,6 @@ import { CLIENT, PING_TIMEOUT_MS } from '../config';
 import { bridgeTool, type ToolHandle } from '../core/registry';
 import type { McpI18n } from '../i18n';
 
-/** 会话类:连接探测 + 选中读取 */
 export function registerSessionTools(
   server: McpServer,
   bridge: Bridge,

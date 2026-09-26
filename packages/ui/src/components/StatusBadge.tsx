@@ -3,18 +3,15 @@ import type { MessageKey } from 'text-to-design-shared';
 import { useBridge } from '../bridge/useBridge';
 import { t } from '../i18n/useLocale';
 
-// 淡底深字替代实心徽章。⚠️ 本 webview 下 daisyUI 主题色的透明度修饰符(X/10、X/25)
-// 会退化成实心色(蓝底配蓝字),故底色/描边一律用 design-tokens 生成的 rgba 组件层
-// token;文字用语义实心色(token 本身不受影响),亮暗主题均已按 ≥4.5:1 校准
+// 淡底深字替代实心徽章:bg-X/10 + border-X/25(状态徽章的比例)。
+// Tailwind 4 会为透明度修饰符生成 @supports (color:color-mix(...)) 渐进降级,
+// 支持 color-mix 的客户端拿正确 alpha、老的拿实色兜底。
+// 文字用语义实心色 text-X,亮暗主题均已按 ≥4.5:1 校准
 const STYLE = {
-  connected:
-    'border border-[var(--component-status-chip-connected-border)] bg-[var(--component-status-chip-connected-bg)] text-success',
-  connecting:
-    'border border-[var(--component-status-chip-connecting-border)] bg-[var(--component-status-chip-connecting-bg)] text-info',
-  waiting:
-    'border border-[var(--component-status-chip-waiting-border)] bg-[var(--component-status-chip-waiting-bg)] text-warning',
-  superseded:
-    'border border-[var(--component-status-chip-waiting-border)] bg-[var(--component-status-chip-waiting-bg)] text-warning',
+  connected: 'border border-success/25 bg-success/10 text-success',
+  connecting: 'border border-info/25 bg-info/10 text-info',
+  waiting: 'border border-warning/25 bg-warning/10 text-warning',
+  superseded: 'border border-warning/25 bg-warning/10 text-warning',
 } as const;
 
 const LABEL_KEY = {

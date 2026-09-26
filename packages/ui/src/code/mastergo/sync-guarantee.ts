@@ -137,8 +137,16 @@ export const _mixedSymbolCheck: symbol extends PluginAPI['mixed']
  * **投影项**:MG 有等价能力,但名字/形态不同,由 host.ts 换算(不是「没有」)。
  * - `currentPage` / `root` → `mg` 顶层没有,挂在 `mg.document` 下;
  * - `createVector` → MG 只有 `createPen`(节点类型也叫 `PEN`,由门面翻回 `VECTOR`)。
+ *
+ * 装饰高(0028)的 `chromeHeight` 也在这里:本平台是**三平台里唯一有真源的**
+ * (`ui.viewport.headerHeight`),适配器实现了它 —— 但符号不在 `ui` 这一层
+ * (`ui` 只有 `resize`),而在 `ui.viewport` 下,由 host.ts 换算取出 ⇒ 位置不同。
  */
-type HostProjectionGap = 'currentPage' | 'root' | 'createVector';
+type HostProjectionGap =
+  | 'currentPage'
+  | 'root'
+  | 'createVector'
+  | 'chromeHeight';
 
 /**
  * **缺席项**:MG 两级 API 都没有,契约里声明为可选,core 按运行时探测回退或用明确
@@ -178,7 +186,7 @@ export type PageContractCheck = ExpectNever<
   Missing<keyof PageSkeleton, PluginAPI['document']['currentPage']>
 >;
 export type UiContractCheck = ExpectNever<
-  Missing<keyof DesignHost['ui'], PluginAPI['ui']>
+  Missing<Exclude<keyof DesignHost['ui'], HostProjectionGap>, PluginAPI['ui']>
 >;
 export type ViewportContractCheck = ExpectNever<
   Missing<keyof DesignHost['viewport'], PluginAPI['viewport']>

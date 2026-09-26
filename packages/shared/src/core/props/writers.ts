@@ -306,7 +306,6 @@ export const radiusWriter: PropWriter = {
   },
 };
 
-/** 形状专属字段:适用性按 dicts/prop-applicability 判定(两条路径同一份事实) */
 /** 形状专属字段:适用性判定统一在 `writeProp` 里做(单一收口),这里不再自己判一遍 */
 export const shapeWriter: PropWriter = {
   id: 'shape',

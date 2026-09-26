@@ -69,8 +69,6 @@ function resolveEntry(): { exe: string; script: string } | { problem: string } {
   return { exe, script };
 }
 
-// ---- 各平台服务定义 ----
-
 function linuxPlan(exe: string, script: string): PlanStep[] {
   const unitPath = join(
     homedir(),
@@ -225,8 +223,6 @@ function uninstallPlan(): PlanStep[] {
   }
   return [];
 }
-
-// ---- 执行 ----
 
 function execute(step: PlanStep, dryRun: boolean): void {
   if (step.kind === 'note') {

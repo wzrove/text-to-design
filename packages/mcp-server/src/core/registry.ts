@@ -87,7 +87,6 @@ export type ToolExecutor = (
 /** 工具名 → 执行体(daemon 单进程多会话共享;重复注册以后者为准,行为一致) */
 const executors = new Map<string, ToolExecutor>();
 
-/** 按名查找执行体;未注册工具返回 undefined */
 export function lookupExecutor(name: string): ToolExecutor | undefined {
   return executors.get(name);
 }

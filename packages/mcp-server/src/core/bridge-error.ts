@@ -17,7 +17,6 @@ export class BridgeError extends Error {
   }
 }
 
-/** 从任意错误里取错误码:非 BridgeError 一律归为 plugin_error */
 export function errorCodeOf(e: unknown): ErrorCode {
   return e instanceof BridgeError ? e.code : 'plugin_error';
 }

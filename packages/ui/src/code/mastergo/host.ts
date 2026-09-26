@@ -1,8 +1,9 @@
-import type {
-  ContainerSkeleton,
-  DesignHost,
-  NodeSkeleton,
-  PageSkeleton,
+import {
+  type ContainerSkeleton,
+  type DesignHost,
+  type NodeSkeleton,
+  normalizeChromeHeight,
+  type PageSkeleton,
 } from 'text-to-design-shared';
 import { unwrapHostMessage } from './envelope';
 import { summarizeStyle, unwrapNode, wrapNode } from './node-facade';
@@ -181,5 +182,16 @@ export const host: DesignHost = {
           },
         }
       : {}),
+    /**
+     * 三平台里**只有 MG 有**这个符号(`UIViewport.headerHeight`)，是本条链路唯一的
+     * 真源 —— Figma / jsDesign 的 typings 里没有对应符号，那两个适配器因此**不实现
+     * 本方法**（缺省即 0 = 不补偿，见 `UI_CHROME_DEFAULT`），不拿猜测冒充事实。
+     *
+     * 读法必须经可选链 + 可信性判定：该 viewport 是运行时对象，插件启动早期读可能
+     * 拿不到（同本仓对 `currentPage` / `viewport` 那类 getter 的一贯顾虑）；
+     * 拿不到或值荒唐时 `normalizeChromeHeight` 收成 0 —— 面板少补偿几像素顶多是
+     * 留白，不该崩，也不该让宿主给的值原样冲进请求。
+     */
+    chromeHeight: () => normalizeChromeHeight(mg.ui.viewport?.headerHeight),
   },
 };

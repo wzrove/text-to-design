@@ -149,7 +149,6 @@ interface PropertyHostNode {
     characters?: string;
     mainComponent?: string;
   } | null;
-  /** 逐节点遍历(typings 的 `ChildrenMixin`,2419–2425):绕开读不到的 `children` */
   /**
    * 逐节点遍历(typings 的 `ChildrenMixin`,2419–2425):绕开读不到的 `children`。
    * `findAll` 是**深度**遍历(与 Figma 同语义),`findChildren`/`findChild` 只看**直接子层**

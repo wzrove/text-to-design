@@ -119,6 +119,14 @@ type NodeTypingsGap = 'absolutePosition' | 'ungroup';
  */
 type HostAsyncNameGap = 'createNodeFromSvgAsync' | 'createImageFromBytesAsync';
 
+/**
+ * `ui` 契约层里的缺口(0028):`chromeHeight` 在本平台**没有真源** ——
+ * Figma typings 全文无 `headerHeight`,故 figma/host.ts 不实现它,契约侧缺省
+ * 0 = 不补偿(见 `UI_CHROME_DEFAULT`)。**可选成员也是 `keyof`**,下面两条断言
+ * 查的是「契约里有、typings 里没有」这个差集,与是否可选无关,所以照样得登记。
+ */
+type UiDerivedGap = 'chromeHeight';
+
 export type HostContractCheck = ExpectNever<
   Missing<Exclude<keyof DesignHost, HostAsyncNameGap>, PluginAPI>
 >;
@@ -129,7 +137,11 @@ export type PageContractCheck = ExpectNever<
   Missing<keyof PageSkeleton, PluginAPI['currentPage']>
 >;
 export type UiContractCheck = ExpectNever<
-  Missing<keyof DesignHost['ui'], PluginAPI['ui']>
+  Missing<Exclude<keyof DesignHost['ui'], UiDerivedGap>, PluginAPI['ui']>
+>;
+/** 反向:登记为缺口的必须真不在 typings 里(官方哪天收录会在此报错,提醒改读真实值) */
+export type UiDerivedGapCheck = ExpectNever<
+  Declared<UiDerivedGap, PluginAPI['ui']>
 >;
 export type ViewportContractCheck = ExpectNever<
   Missing<keyof DesignHost['viewport'], PluginAPI['viewport']>

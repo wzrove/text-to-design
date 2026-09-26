@@ -1,28 +1,209 @@
-@import "./styles/tokens.css";
+@import "tailwindcss";
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+/* ─── daisyUI 5 主题(CSS-first)—— 全站颜色的唯一入口 ────────────────
+   配色体系总览详见 packages/ui/COLORS.md。所有颜色(语义色、分类色板、
+   滚动条)都在此声明,组件只通过 Tailwind 类消费;不再有第二份 tokens.css
+   颜色表,也没有 --component-* 之类的中转变量。
+
+   色值书写规则:
+   - 一律写 **hex 原值**(设计稿口径),源码即事实来源,不做二次编码。
+     daisyUI 构建时会自动展开为 `hex → color(display-p3) → lab` 三层渐进降级,
+     所以写 hex 不损失广色域能力 —— 最老 webview 拿到 hex,现代浏览器拿到 p3。
+   - 透明度直接用 Tailwind 的 `bg-X/N` 修饰符,不需要预置 rgba 槽(Tailwind 4
+     会为它生成 `@supports (color:color-mix(...))` 渐进降级:支持 color-mix 的
+     浏览器拿正确 alpha,不支持的拿实色兜底)。
+
+   角色        亮色      暗色      用途
+   primary    #8AD654   #8AD654   品牌动作色:btn-primary(与状态绿解耦)
+   secondary  #333333   #c9cfd6   次级实心表面(当前组件未直接使用,保留兼容)
+   accent     #F76868   #F76868   品牌珊瑚红:仅品牌图形(仓库根 logo.svg),不作状态色
+   neutral    #2a2a2a   #2f3640   中性实心表面(当前组件未直接使用,保留兼容)
+   base-*     白系三档  深灰蓝三档  面板底/hover/border 三档
+   info       #2563eb   #5aa9f7   过渡状态(连接中)
+   success    #15803d   #34c467   成功/已连接
+   warning    #b45309   #f59e0b   警告/待服务/日志 warn
+   error      #d02626   #f87171   错误/日志 error(压暗/提亮一档过对比度,见下)
+
+   扩展槽(非 daisyUI 标准,本项目自用):
+   dot-*      节点类型分类色板(14 项,亮暗通用)
+   scrollbar-thumb[-hover]  细滚动条(中性半透明灰,亮暗通用)
+
+   使用规则(ui-ux-pro-max 指南校准):
+   ① 状态/提示统一「淡底组合」:bg-X/N + border-X/N + text-X。比例:
+      状态徽章 bg 10% / border 25%;提示条与日志衬底按各自对比度取 8% / 35% / 6%。
+      淡底值均按 ≥4.5:1 校准,文字用语义实心色 text-X;
+   ② *-content 按「淡底贴近 base-100」的场景校准(亮色主题取深字、暗色取浅字),
+      不要拿它配实心底使用;
+   ③ 信息不得仅靠颜色传达:warn/error 行另有 ⚠/✕ 字形与左色条。 */
+
+/* 分类色板:纯 hex 槽走 Tailwind 的 @theme 命名空间,自动生成 bg-* 工具类,
+   值原样保留不参与降级转换。
+   ⚠️ @theme 必须放在 @plugin "daisyui" **之前** —— 放之后会被 daisyUI 的插件
+   处理吞掉(实测:变量与工具类双双消失,且不报错)。 */
+@theme {
+  /* 节点类型分类色板:装饰性(类型有文字),与语义色解耦 */
+  --color-dot-frame: #0ea5e9;
+  --color-dot-group: #94a3b8;
+  --color-dot-rectangle: #6366f1;
+  --color-dot-ellipse: #14b8a6;
+  --color-dot-line: #cbd5e1;
+  --color-dot-polygon: #f97316;
+  --color-dot-star: #eab308;
+  --color-dot-vector: #a855f7;
+  --color-dot-text: #22c55e;
+  --color-dot-component: #ec4899;
+  --color-dot-component-set: #f472b6;
+  --color-dot-instance: #f9a8d4;
+  --color-dot-boolean-operation: #fb923c;
+  --color-dot-slice: #cbd5e1;
+}
+
+@plugin "daisyui" {
+  themes: false;
+}
+
+@plugin "daisyui/theme" {
+  name: "textdesign";
+  default: true;
+  prefersdark: false;
+  color-scheme: light;
+
+  --color-primary: #8ad654;
+  --color-primary-content: #1a2b0e;
+  --color-secondary: #333333;
+  --color-secondary-content: #ffffff;
+  --color-accent: #f76868;
+  --color-accent-content: #ffffff;
+  --color-neutral: #2a2a2a;
+  --color-neutral-content: #ffffff;
+  --color-base-100: #ffffff;
+  --color-base-200: #f5f7f2;
+  --color-base-300: #e9eee2;
+  --color-base-content: #333333;
+  --color-info: #2563eb;
+  --color-info-content: #ffffff;
+  --color-success: #15803d;
+  --color-success-content: #052e12;
+  --color-warning: #b45309;
+  --color-warning-content: #3a2e00;
+  /* error 压暗一档(#dc2626 → #d02626):同色相(27.3→27.1),肉眼无差,
+     但让 `text-error` 落在 `bg-error/6`(4.80)与 `/10`(4.50)上都达标
+     —— 原值 4.40/4.14,日志错误行是 12px 正文,需 ≥4.5 */
+  --color-error: #d02626;
+  --color-error-content: #ffffff;
+
+  /* 结构变量:daisyUI 5 的 .btn/.input/.tab 等组件读这些(--border 决定
+     border-width,--depth 决定阴影/描边强度…)。主题块不声明就不会有默认值,
+     var() 解析失败会回退到 CSS 初始值(border-width 初值 = medium = 3px),
+     表现为「按钮一圈粗黑边」。daisyUI 内置主题均带这套默认值,自定义主题
+     必须自己补上。 */
+  --radius-selector: 0.5rem;
+  --radius-field: 0.25rem;
+  --radius-box: 0.5rem;
+  --size-selector: 0.25rem;
+  --size-field: 0.25rem;
+  --border: 1px;
+  --depth: 1;
+  --noise: 0;
+}
+
+/* 暗色主题:main.tsx 按 prefers-color-scheme 切换 data-theme。
+   状态色整体提亮一档以满足暗底对比;*-content 取浅色调(见规则②) */
+@plugin "daisyui/theme" {
+  name: "textdesign_dark";
+  default: false;
+  prefersdark: false;
+  color-scheme: dark;
+
+  --color-primary: #8ad654;
+  --color-primary-content: #15230b;
+  --color-secondary: #c9cfd6;
+  --color-secondary-content: #14171b;
+  --color-accent: #f76868;
+  --color-accent-content: #2a0e0e;
+  --color-neutral: #2f3640;
+  --color-neutral-content: #e5e7eb;
+  --color-base-100: #1d232a;
+  --color-base-200: #222931;
+  --color-base-300: #333a43;
+  --color-base-content: #d6dbe2;
+  --color-info: #5aa9f7;
+  --color-info-content: #cfe6ff;
+  --color-success: #34c467;
+  --color-success-content: #baf0cd;
+  --color-warning: #f59e0b;
+  --color-warning-content: #ffe1ad;
+  /* error 提亮一档(#ef4444 → #f87171,red-500 → red-400):暗底上原值
+     在 `bg-error/6` 只有 3.84、`/10` 3.84 —— 12px 正文需 ≥4.5。提亮后
+     5.28 / 4.97,且 `text-error` 落在 base-100 上 5.72(原 4.00) */
+  --color-error: #f87171;
+  --color-error-content: #ffd0d0;
+
+  /* 结构变量:同亮色主题,缺一不可(见上方说明) */
+  --radius-selector: 0.5rem;
+  --radius-field: 0.25rem;
+  --radius-box: 0.5rem;
+  --size-selector: 0.25rem;
+  --size-field: 0.25rem;
+  --border: 1px;
+  --depth: 1;
+  --noise: 0;
+}
+
+/* 亮暗通用的非主题色:目前只剩细滚动条(真 CSS 场景,工具类表达不了,
+   故用变量)。带 alpha 的淡底组合已全部改回 Tailwind 原生 `bg-X/N` 写法,
+   不需要预置槽 —— 见下方「透明度写法」说明。 */
+:root {
+  /* 细滚动条:中性半透明灰 */
+  --color-scrollbar-thumb: rgba(128, 128, 128, 0.35);
+  --color-scrollbar-thumb-hover: rgba(128, 128, 128, 0.55);
+}
+
+/* ── 层(layer)纪律 ────────────────────────────────────────────────
+   daisyUI 5 的组件规则全部写在 @layer 里(Tailwind 4 的层序:
+   theme → base → components → utilities → daisyui.*)。**无层的裸 CSS
+   恒定压制所有层**,所以下面这几段裸规则其实在压着 daisyUI —— 目前是
+   有意为之(滚动条、body 底色没被 daisyUI 覆盖掉正是靠这个),但脆弱:
+   以后加裸规则时要知道它会盖过 btn/badge 等组件样式。
+   自建的工具类(动画)统一进 @layer utilities,与 daisyUI 同层、按源码
+   顺序正常竞争,不靠「无层」赢。 */
 
 /* 面板底色兜底:自适应高度下「窗口比内容高」的那一段会露出 body ——
    宿主不认 ui.resize、或窗口收敛前的瞬时。它必须与面板同色,否则是一条横贯
-   面板底部、与主题不符的色带。--b2 是 daisyUI 主题的 base-200(oklch 分量,
-   实测形如 `97.3236% .006921 124.447`),与根元素的 bg-base-200 同源。 */
+   面板底部、与主题不符的色带。--color-base-200 是 daisyUI 5 主题的 base-200
+   (完整颜色值),与根元素的 bg-base-200 同源。
+
+   注:daisyUI 的 base 层会把 :root 设成 --root-bg(=base-100),此处用
+   html,body 覆写成 base-200 并因「无层 > 有层」而生效。语义上 body 才是
+   可见底,故意保留这层压制,不要改成 :root。 */
 html,
 body {
-  background-color: oklch(var(--b2));
+  background-color: var(--color-base-200);
   /* 视口不参与滚动 —— 这条不只为外观,是为断掉一条抖动回环:
      窗口一旦比内容矮,视口就会长出滚动条(本项目 4px 且占位),内容可用宽度随之
      变窄 → 中文重排 → 内容变高 → 面板请求更高 → 滚动条消失 → 宽度回来 → 变矮
      …… 只要视口有滚动条,这条回环就成立。面板本身是固定尺寸的应用面:变长区块
-     (节点列表、日志列表)各自有滚动容器,不需要页面级滚动。 */
+     (节点列表、日志列表)各自有滚动容器,不需要页面级滚动。
+
+     ⚠️ 与上一条配合的**前提**:面板根元素自己必须是滚动容器,否则内容超高时
+     这里会把「本可以滚到的那部分」直接裁掉 —— 内容不是溢出,是消失。
+     见 App.tsx 根元素的 `overflow-y-auto` 与 0014 修订。 */
   overflow: hidden;
 }
 
-/* 细滚动条:引用组件层 token(design-tokens.json → tokens.css) */
+/* 面板根容器:内容超出窗口时由它接管滚动。
+   不用 `body` 承担这件事(上面那条必须留),所以落在这里。
+
+   `overscroll-contain`:滚到两端时不把滚动链交给宿主 iframe ——
+   面板滚到底再继续滑,不该带着设计软件画布一起动。 */
+#root {
+  overscroll-behavior: contain;
+}
+
+/* 细滚动条:引用下方的 --color-scrollbar-thumb 主题槽 */
 * {
   scrollbar-width: thin;
-  scrollbar-color: var(--component-scrollbar-thumb) transparent;
+  scrollbar-color: var(--color-scrollbar-thumb) transparent;
 }
 
 ::-webkit-scrollbar {
@@ -31,56 +212,61 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--component-scrollbar-thumb);
+  background: var(--color-scrollbar-thumb);
   border-radius: 2px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--component-scrollbar-thumb-hover);
+  background: var(--color-scrollbar-thumb-hover);
 }
 
 ::-webkit-scrollbar-track {
   background: transparent;
 }
 
-/* 提示条切换淡入(元素挂载时自动播放) */
-.hint-enter {
-  animation: hintFade 150ms ease;
-}
-
-@keyframes hintFade {
-  from {
-    opacity: 0;
+/* 自建工具类:进 utilities 层,与 daisyUI 的组件规则同层竞争。
+   (类名均带项目私有前缀含义,hint-/drawer-/badge-spin 与 daisyUI 无同名) */
+@layer utilities {
+  /* 提示条切换淡入(元素挂载时自动播放) */
+  .hint-enter {
+    animation: hintFade 150ms ease;
   }
-  to {
-    opacity: 1;
+
+  @keyframes hintFade {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
   }
-}
 
-/* 日志抽屉入场:遮罩与面板各自淡入,盒子再自底部滑一小段 */
-.drawer-enter {
-  animation: drawerUp 180ms ease;
-}
-
-@keyframes drawerUp {
-  from {
-    transform: translateY(8%);
-    opacity: 0;
+  /* 浮层面板入场:遮罩与面板各自淡入,盒子再自底部滑一小段。
+     与日志抽屉等所有浮层共用(CollapsibleSection 的 sheet 形态)。 */
+  .panel-enter {
+    animation: panelUp 180ms ease;
   }
-  to {
-    transform: translateY(0);
-    opacity: 1;
+
+  @keyframes panelUp {
+    from {
+      transform: translateY(8%);
+      opacity: 0;
+    }
+    to {
+      transform: translateY(0);
+      opacity: 1;
+    }
   }
-}
 
-/* 连接中的进行时反馈:只转这个小圈,不牵动面板结构 */
-.badge-spin {
-  animation: badgeSpin 900ms linear infinite;
-}
+  /* 连接中的进行时反馈:只转这个小圈,不牵动面板结构 */
+  .badge-spin {
+    animation: badgeSpin 900ms linear infinite;
+  }
 
-@keyframes badgeSpin {
-  to {
-    transform: rotate(360deg);
+  @keyframes badgeSpin {
+    to {
+      transform: rotate(360deg);
+    }
   }
 }
 

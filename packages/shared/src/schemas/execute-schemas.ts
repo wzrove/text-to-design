@@ -52,7 +52,6 @@ export const childNodeSchema: z.ZodType<ExecuteOp> = z
   })
   .catchall(z.unknown());
 
-// ---- 基础字段(所有节点共享) ----
 const baseNodeFields = {
   name: z.string().optional(),
   x: z.number().optional().describe('schema.executeSchemas.x2'),
@@ -181,8 +180,6 @@ const cornerFields = {
     .optional()
     .describe('schema.executeSchemas.bottomRightRadius'),
 };
-
-// ---- 各类型 schema ----
 
 const frameNodeSchema = z
   .object({

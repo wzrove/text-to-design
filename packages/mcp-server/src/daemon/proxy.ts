@@ -353,8 +353,6 @@ export async function serveProxy(initialClient: Client): Promise<void> {
     }
   };
 
-  // ---- 上游生命周期 ----
-
   const ensureReconnect = (): Promise<void> => {
     if (reconnectPromise) return reconnectPromise;
     reconnectPromise = (async () => {

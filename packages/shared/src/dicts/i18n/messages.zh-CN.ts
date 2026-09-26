@@ -82,13 +82,19 @@ export const MESSAGES_ZH_CN = {
   'conn.wakeCmd':
     '请帮我连接 text-to-design 后台服务:\n\n1. 若尚未注册 MCP 服务:用你工具原生的方式注册一个 stdio MCP server,\n   命令 npx -y text-to-design-mcp@latest(无需手动安装,npx 会自动拉取运行)。\n\n2. 注册后调用 jsd_ping —— 这一步会唤醒(必要时自动拉起)后台常驻服务。\n   若返回「插件未连接」,请提示我在设计软件里运行 text-to-design 插件。',
 
+  // ── 展开面板(所有「标题行 + 可折叠正文」共用,见 0026)──
+  // 触发器是图标按钮,这两个名字只进屏读器/悬浮提示,不上屏 ——
+  // 故不需要区分「展开节点列表」「展开能力表」:按钮就在各自的标题行里,
+  // 上下文由它所在的位置给出,名字再重复一遍只是把同一句话说两遍。
+  'panel.expand': '展开',
+  'panel.collapse': '收起',
+  'panel.close': '关闭',
+
   // ── 选中节点卡 ──
   'selection.title': '选中节点',
   'selection.badge': '{count} 个 · 序列化 {size}',
   'selection.copy': '复制',
   'selection.copied': '✓',
-  'selection.expand': '展开节点列表',
-  'selection.collapse': '收起节点列表',
   'selection.empty.title': '未选中节点',
   'selection.empty.hint': '在画布中点选节点后,这里会实时显示并支持复制',
 
@@ -98,8 +104,6 @@ export const MESSAGES_ZH_CN = {
   'capability.card.badgeTitle':
     '核心能力项数 · 当前平台可用的差异能力 · 平台特有操作个数',
   'capability.card.badge': '核心 {core} · 平台 {host}/{total} · op {ops}',
-  'capability.card.expand': '展开',
-  'capability.card.collapse': '收起',
   'capability.card.coreSection': '核心能力(两平台一致)',
   'capability.card.hostSection': '平台差异能力',
   'capability.card.opTitle': '{op}:当前平台支持',

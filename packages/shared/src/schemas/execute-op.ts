@@ -14,8 +14,6 @@ import type {
 } from './base';
 import type { NodeType } from './node-type';
 
-// ---- 输入 schema ----
-
 export const pingSchema = z.object({});
 
 export const getSelectionSchema = z.object({

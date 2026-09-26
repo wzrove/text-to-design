@@ -35,6 +35,7 @@ import {
   listFonts,
   listStyles,
   makeResponse,
+  normalizeChromeHeight,
   outlineStrokeNodes,
   PANEL_HEIGHT_DEFAULT,
   PANEL_WIDTH,
@@ -162,10 +163,14 @@ export function registerPlugin(
   setTimeout(pushPlatform, 200);
 
   /**
-   * 上报宿主有没有 `ui.resize`,UI 据此在两种布局里二选一(见 shared/panel.ts)。
+   * 上报宿主有没有 `ui.resize`、以及窗口外框里的装饰高(0028),UI 据此决定
+   * 「窗口贴内容」还是「选中节点吃满剩余高度」,并算出真实请求高度。
    *
    * 为什么必须由 code 侧告知:resize 返回 void,宿主就算把请求当空气也不会报错,
    * UI 侧没有任何可观测的判据。能判的只有「符号在不在」,而那只有这里看得到。
+   *
+   * 装饰高在这里**求值一次就下发**,不在 UI 侧每次测量时再问:它是宿主窗口的属性、
+   * 与内容无关,逐次回问只会给测量环加一次跨进程往返,而没有任何刷新时机上的收益。
    */
   function pushUiEnv(): void {
     try {
@@ -173,6 +178,9 @@ export function registerPlugin(
       host.ui.postMessage({
         type: 'ui_env',
         canResize: typeof ui?.resize === 'function',
+        // 装饰高只有 MG 有真源,另两平台的适配器不实现本方法 → 下发 0(不补偿)。
+        // 收口走 normalizeChromeHeight:适配器给什么都不该让荒唐值冲进请求
+        chromeHeight: normalizeChromeHeight(host.ui.chromeHeight?.()),
       });
     } catch (e) {
       console.error('[plugin] 推送面板环境失败', e);
@@ -235,7 +243,9 @@ export function registerPlugin(
     // 错误包,而 UI 侧根本没在等这个回包,等于凭空多一条错误日志。
     if (isUiResizeMessage(raw)) {
       try {
-        // 再夹一次:UI 已夹过,但契约的两端都该能独立站住(0013 的分层边界同样思路)
+        // 再夹一次:UI 已夹过,但契约的两端都该能独立站住(0013 的分层边界同样思路)。
+        // 夹取上限是 `PANEL_HEIGHT_CEILING`(防荒唐值的硬边界),**不是**内容高度的
+        // 截断点 —— 拿后者当上限会让超出部分被宿主裁掉且没有滚动条可救(0014 修订)
         host.ui.resize?.(PANEL_WIDTH, clampPanelHeight(raw.height));
       } catch (e) {
         console.error('[plugin] 面板改尺寸失败', e);

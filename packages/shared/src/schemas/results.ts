@@ -10,7 +10,6 @@ import {
 } from './platform';
 import { serializedNodeSchema } from './serialized-node';
 
-// ---- 结果 schema ----
 export const createdResultSchema = z.object({
   created: z.union([serializedNodeSchema, z.array(serializedNodeSchema)]),
   /** 写时检测到的平台已知问题(如能力门控字段被跳过:创建的节点没带上截断/样式 id) */

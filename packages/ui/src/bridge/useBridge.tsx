@@ -1,7 +1,7 @@
 import type { Accessor, ParentProps } from 'solid-js';
 import { createContext, createSignal, onMount, useContext } from 'solid-js';
 import type { PluginPlatform } from 'text-to-design-shared';
-import { WS_PORT } from 'text-to-design-shared';
+import { UI_CHROME_DEFAULT, WS_PORT } from 'text-to-design-shared';
 import { applyStoredChoice, t } from '../i18n/useLocale';
 import type { BridgeStatus } from './BridgeSocket';
 import { BridgeSocket } from './BridgeSocket';
@@ -29,6 +29,11 @@ export interface BridgeStore {
    * 默认 false = 按历史行为渲染:面板高度固定,剩余高度由选中节点列表填满。
    */
   canResize: Accessor<boolean>;
+  /**
+   * 宿主窗口装饰高(标题栏,0028),单位与测量同。
+   * 0 = 不补偿(无真源的平台,或 `ui_env` 尚未到达)。
+   */
+  chromeHeight: Accessor<number>;
   connect: () => void;
   disconnect: () => void;
   rescan: () => void;
@@ -54,6 +59,14 @@ export function BridgeProvider(props: ParentProps) {
    * 底部会先空一块再被填上,那是能看见的闪。
    */
   const [canResize, setCanResize] = createSignal(false);
+  /**
+   * 宿主窗口外框里的装饰高(0028)。
+   *
+   * 默认 0 = 不补偿,与「宿主没上报」和「适配器没实现」同一个结果:三平台里只有
+   * MasterGo 有真源(`ui.viewport.headerHeight`),Figma / jsDesign 报 0 —— 那两个
+   * 平台的行为因此与 0028 之前完全一致。
+   */
+  const [chromeHeight, setChromeHeight] = createSignal(UI_CHROME_DEFAULT);
 
   let bridge: BridgeSocket | undefined;
   let subscribed = false;
@@ -127,8 +140,10 @@ export function BridgeProvider(props: ParentProps) {
         setPlatform(() => e.platform);
         void refreshCapabilities();
       } else if (e.type === 'log') pushLog(e.line, e.level);
-      else if (e.type === 'ui_env') setCanResize(() => e.canResize);
-      else if (e.type === 'locale_state') applyStoredChoice(e.stored);
+      else if (e.type === 'ui_env') {
+        setCanResize(() => e.canResize);
+        setChromeHeight(() => e.chromeHeight);
+      } else if (e.type === 'locale_state') applyStoredChoice(e.stored);
     });
   });
 
@@ -140,6 +155,7 @@ export function BridgeProvider(props: ParentProps) {
     platform,
     capability,
     canResize,
+    chromeHeight,
     connect: () => getBridge().connect(),
     disconnect: () => getBridge().disconnect(),
     rescan: () => getBridge().rescan(),

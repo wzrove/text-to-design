@@ -41,8 +41,6 @@ export const updateTargetFields = {
 const requiredIds = (tip: string, min = 1) =>
   z.array(z.string()).min(min).describe(tip);
 
-// ---- 节点结构操作(node_op) ----
-
 export const selectNodesSchema = z
   .object({ ids: requiredIds('要设为当前选中的节点 id 列表') })
   .strict();
@@ -145,8 +143,6 @@ export const repairNodesSchema = z
   })
   .strict();
 
-// ---- 组件/实例操作(component_op) ----
-
 export const createComponentSchema = z
   .object({
     ids: z
@@ -238,7 +234,6 @@ export const applyOverridesSchema = z.object(applyOverrideFields).strict();
 
 export const syncOverridesSchema = z.object(applyOverrideFields).strict();
 
-// ---- 属性操作(update_node 的字段子集) ----
 // 每个工具的 props 只含本工具负责的那一组字段;ids/matchName/recursive 定位字段
 // 由 updateTargetFields 统一提供。
 

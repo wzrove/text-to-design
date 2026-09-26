@@ -30,7 +30,6 @@ import { observedNodeTypeSchema } from './node-type';
 import type { BoundVariableAliases, ComponentPropertyValue } from './platform';
 import { boundVariablesSchema, componentPropertyValueSchema } from './platform';
 
-// ---- 序列化节点 (read 侧) ----
 export interface SerializedNode {
   id: string;
   name: string;

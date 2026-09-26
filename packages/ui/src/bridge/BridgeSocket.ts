@@ -1,4 +1,4 @@
-import { WS_PORT } from 'text-to-design-shared';
+import { normalizeChromeHeight, WS_PORT } from 'text-to-design-shared';
 import { t } from '../i18n/useLocale';
 import { ConnectionManager } from './connection';
 import { EventBus } from './events';
@@ -33,7 +33,13 @@ export class BridgeSocket {
     this.router.onPlatform = (platform) =>
       this.events.emit({ type: 'platform', platform });
     this.router.onEnv = (env) =>
-      this.events.emit({ type: 'ui_env', canResize: env.canResize });
+      this.events.emit({
+        type: 'ui_env',
+        canResize: env.canResize,
+        // 缺字段是跨版本常态(新 UI 配旧 code 产物):收口在 shared 的归一函数,
+        // 不在消费点各判一次 —— 缺字段与「值不可信」在这里是同一个结果(0)
+        chromeHeight: normalizeChromeHeight(env.chromeHeight),
+      });
     this.router.onLocale = (stored) =>
       this.events.emit({ type: 'locale_state', stored });
     this.router.onServerStatus = (frame) => {

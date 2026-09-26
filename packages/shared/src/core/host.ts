@@ -340,6 +340,19 @@ export interface DesignHost {
      * `typeof host.ui.resize === 'function'`,不能只看属性是否存在。
      */
     resize?(width: number, height: number): void;
+    /**
+     * 宿主标题栏等装饰占的高度(0028)。
+     *
+     * 为什么必须是**可选**且由平台各自实现:`ui.resize` 收的是**外框**高度(三平台
+     * 同签名同语义),外框里含着宿主自绘的标题栏,而只有 MasterGo 在 typings 里
+     * 暴露了它(`ui.viewport.headerHeight`,`@mastergo/plugin-typings@2.19.2:1761`);
+     * **Figma 与 jsDesign 无此符号**。所以契约是「取得到就取、取不到兜底」,
+     * 兜底值在 `panel.ts`(`UI_CHROME_FALLBACK`)。
+     *
+     * 返回 `unknown`:适配器负责把宿主值过一遍可信性判定,不可信时回该兜底 ——
+     * core 不碰宿主符号,也不替平台猜数值。
+     */
+    chromeHeight?(): unknown;
   };
 }
 

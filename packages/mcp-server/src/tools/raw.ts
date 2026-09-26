@@ -15,7 +15,6 @@ import { LONG_IO_TIMEOUT_MS, MAX_INLINE_DATA_URL_BYTES } from '../config';
 import { bridgeTool, type ToolHandle } from '../core/registry';
 import type { McpI18n } from '../i18n';
 
-/** 由 mimeType/format 推导落盘扩展名 */
 function extFor(mimeType?: string, format?: unknown): string {
   const f = typeof format === 'string' ? format.toLowerCase() : '';
   if (f === 'png' || f === 'svg' || f === 'pdf') return f;
@@ -28,7 +27,6 @@ function extFor(mimeType?: string, format?: unknown): string {
   return 'bin';
 }
 
-/** 原始数据类:导出/填充图片/字体列表 */
 export function registerRawTools(
   server: McpServer,
   bridge: Bridge,

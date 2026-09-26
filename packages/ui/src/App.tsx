@@ -1,5 +1,11 @@
-import { createEffect, createMemo, createSignal, Show } from 'solid-js';
-import { PANEL_HEIGHT_LOG, PLATFORM_LABEL } from 'text-to-design-shared';
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  onCleanup,
+  Show,
+} from 'solid-js';
+import { PANEL_HEIGHT_OVERLAY, PLATFORM_LABEL } from 'text-to-design-shared';
 import { BridgeProvider, useBridge } from './bridge/useBridge';
 import CapabilityCard from './components/CapabilityCard';
 import ConnectionHint from './components/ConnectionHint';
@@ -21,6 +27,7 @@ function Shell() {
     rescan,
     clearLog,
     canResize,
+    chromeHeight,
   } = useBridge();
 
   const [logOpen, setLogOpen] = createSignal(false);
@@ -51,6 +58,22 @@ function Shell() {
     // 焦点还给入口:抽屉是模态,关掉后焦点不能掉在 body 上
     triggerEl?.focus();
   };
+
+  /**
+   * Escape 关日志抽屉。
+   *
+   * 挂在这里而不是抽屉组件里:抽屉的关闭要连带把焦点还给页头的入口,而那两个端点
+   * (浮层 / 页头按钮)分处两个组件 —— 只有同时握着它们的 App 能一次做完。
+   * 抽屉自身的遮罩、点外部与焦点接管仍归 `CollapsibleSection`。
+   */
+  createEffect(() => {
+    if (!logOpen()) return;
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') closeLog();
+    };
+    document.addEventListener('keydown', onKey);
+    onCleanup(() => document.removeEventListener('keydown', onKey));
+  });
 
   let rootEl: HTMLDivElement | undefined;
 
@@ -84,14 +107,18 @@ function Shell() {
     /*
       两种布局由宿主有没有 ui.resize 决定(见 docs/design-decisions/0014):
       - 有 → 根元素不定高(高度即内容高度),由 PanelHeightSync 量出来推给窗口收缩;
-      - 没有 → h-screen 撑满固定窗口,剩余高度交给 SelectionCard 的 fill 吃掉。
+      - 没有 → 屏幕撑满固定窗口,剩余高度交给 SelectionCard 的 fill 吃掉。
       差别只在「谁承担剩余高度」,区块本身不变。
+
+      **根元素是滚动容器**(`overflow-y-auto`):窗口高度有硬边界,内容超过它时
+      得有人接管 —— 而 `html, body` 的 `overflow: hidden` 是为断宽度重排回环用的,
+      不能撤。少了这一条,超限内容会既没滚动条也够不着,直接消失(0014 修订)。
     */
     <div
       ref={(el) => {
         rootEl = el;
       }}
-      class={`flex flex-col gap-3 bg-base-200 p-4 ${
+      class={`flex flex-col gap-3 overflow-y-auto bg-base-200 p-4 ${
         canResize() ? '' : 'h-screen'
       }`}
     >
@@ -161,14 +188,15 @@ function Shell() {
       />
 
       {/*
-        高度只由内容决定,日志抽屉是 fixed 浮层、不进流 —— 所以它打开时窗口不会自己变高,
-        得由 floor 显式抬下限(见 0015)。抽屉取窗口的 85%,面板内容短到下限 300 时
-        drawer 就只剩 255px,几乎看不了几行日志。
+        高度只由内容决定,浮层不进流 —— 所以它打开时窗口不会自己变高,
+        得由 floor 显式抬下限(见 0015)。浮层取窗口的 85%,面板内容短到下限 300 时
+        就只剩 255px,几乎看不了几行日志。
       */}
       <PanelHeightSync
         active={canResize()}
         target={() => rootEl}
-        floor={() => (logOpen() ? PANEL_HEIGHT_LOG : 0)}
+        floor={() => (logOpen() ? PANEL_HEIGHT_OVERLAY : 0)}
+        chromeHeight={chromeHeight}
       />
     </div>
   );

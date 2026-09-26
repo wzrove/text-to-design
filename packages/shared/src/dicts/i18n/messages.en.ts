@@ -86,12 +86,14 @@ export const MESSAGES_EN = {
   'conn.wakeCmd':
     'Please connect me to the text-to-design background service:\n\n1. If the MCP server is not registered yet: register a stdio MCP server the native way for your tool,\n   with the command `npx -y text-to-design-mcp@latest` (no manual install; npx fetches and runs it).\n\n2. Then call jsd_ping — that wakes the background daemon (starting it if needed).\n   If it reports "plugin not connected", tell me to run the text-to-design plugin inside my design app.',
 
+  'panel.expand': 'Expand',
+  'panel.collapse': 'Collapse',
+  'panel.close': 'Close',
+
   'selection.title': 'Selected nodes',
   'selection.badge': '{count} nodes · {size} serialized',
   'selection.copy': 'Copy',
   'selection.copied': '✓',
-  'selection.expand': 'Expand node list',
-  'selection.collapse': 'Collapse node list',
   'selection.empty.title': 'No nodes selected',
   'selection.empty.hint':
     'Select nodes on the canvas and they show up here, ready to copy',
@@ -101,8 +103,6 @@ export const MESSAGES_EN = {
   'capability.card.badgeTitle':
     'Core capability count · platform-specific capabilities available · platform op count',
   'capability.card.badge': 'core {core} · platform {host}/{total} · op {ops}',
-  'capability.card.expand': 'Expand',
-  'capability.card.collapse': 'Collapse',
   'capability.card.coreSection': 'Core capabilities (same on both platforms)',
   'capability.card.hostSection': 'Platform differences',
   'capability.card.opTitle': '{op}: supported on the current platform',

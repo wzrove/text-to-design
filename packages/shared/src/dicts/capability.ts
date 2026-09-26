@@ -78,8 +78,7 @@ export const CAPABILITY_GATED_PROPS: Record<
   // jsDesign **未**声明,但理由不是「没有这个语义」—— 它的 typings 里
   // `combineAsVariants` 与 Figma 同形。真因是**运行时必崩**(2026-09-24 真机:
   // 三种姿势全部报 `in get_booleanOperation: Value is not a string`,与组件结构
-  // 无关)。语义差异是猜的,平台缺陷是验过的 —— 别把后者写成前者
-  // (见 `mcp-tdd/references/platform-limits.md` 的 B 类行)。
+  // 无关)。语义差异是猜的,平台缺陷是验过的 —— 别把后者写成前者。
   inPlaceVariants: [],
 };
 

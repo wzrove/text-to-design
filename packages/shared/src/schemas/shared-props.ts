@@ -16,8 +16,6 @@ import {
   paintSchema,
 } from './base';
 
-// ---- 共享 schema (execute / update 共用) ----
-
 export const transformPropsSchema = z.object({
   x: z
     .number()

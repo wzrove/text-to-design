@@ -11,3 +11,5 @@ catalog:
   vite: ^8.2.2
   concurrently: 10.0.4
   vitest: ^5.0.1
+minimumReleaseAgeExclude:
+  - daisyui@5.7.46

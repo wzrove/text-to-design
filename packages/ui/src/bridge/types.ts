@@ -40,7 +40,8 @@ export type BridgeEvent =
   | { type: 'log'; level: LogLevel; line: string }
   | { type: 'selection'; data: unknown }
   | { type: 'platform'; platform: PluginPlatform }
-  | { type: 'ui_env'; canResize: boolean }
+  /** `chromeHeight` 已过 readChromeHeight 收口(缺省 → 兜底值,见 shared/panel.ts) */
+  | { type: 'ui_env'; canResize: boolean; chromeHeight: number }
   /** 宿主里存着的语言选择(code 侧启动时推一次;见 shared/locale-channel.ts) */
   | { type: 'locale_state'; stored: LocaleChoice | null };
 

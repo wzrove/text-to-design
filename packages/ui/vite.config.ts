@@ -11,8 +11,17 @@ function reorderCss(): Plugin {
   const out = resolve(import.meta.dirname, 'dist/ui.html');
   return {
     name: 'reorder-css',
-    closeBundle() {
-      const html = readFileSync(out, 'utf-8');
+    // 必须挂 writeBundle:closeBundle 在 vite 8 / rolldown 下会早于产物落盘,
+    // readFileSync 直接 ENOENT(实测)。writeBundle 拿到的是已写入磁盘的产物。
+    writeBundle() {
+      let html: string;
+      try {
+        html = readFileSync(out, 'utf-8');
+      } catch {
+        // 产物缺失不该让整个构建红;这条只是把 <style> 提到 <title> 之后
+        // 的观感优化(见 0012 的样式顺序),拿不到就跳过
+        return;
+      }
       const styleRe = /<style[^>]*>[\s\S]*?<\/style>/;
       const match = html.match(styleRe);
       if (!match) return;
@@ -41,13 +50,12 @@ export default defineConfig(({ mode }): UserConfig => {
   const entry = PLATFORM_ENTRIES[mode];
   if (entry != null) {
     const platform = mode as PluginPlatform;
-    // jsDesign 沙箱(Proxy 作用域,决策 0012)用 zodSandboxFix 把模块顶层
-    // globalThis.__zod_globalConfig/Registry 替换为模块局部 const 宿主,
-    // 绕开沙箱对全局标识符的拦截。figma / mastergo 沙箱不拦截,无需挂载。
+    // zodSandboxFix 处理两类「沙箱缺宿主设施」:① 裸 globalThis 标识符被
+    // jsDesign 的 Proxy scoped evaluator 影子化(决策 0012,仅 jsdesign);
+    // ② `BigInt` 全局三平台都缺,而 zod 顶层 `BIGINT_FORMAT_RANGES` 直接
+    // 裸调 `BigInt(...)`(决策 0027)。②是三平台共有,所以三个分支统一挂载。
     const platformPlugins: Plugin[] = [manifestPlugin(platform)];
-    if (platform === 'jsdesign') {
-      platformPlugins.push(zodSandboxFix());
-    }
+    platformPlugins.push(zodSandboxFix());
     return {
       plugins: platformPlugins,
       define: {
