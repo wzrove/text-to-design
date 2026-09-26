@@ -9,7 +9,7 @@ catalog:
   typescript: ^7.0.2
   '@types/node': ^26.6.1
   vite: ^8.2.2
-  concurrently: 10.0.4
+  concurrently: 10.0.5
   vitest: ^5.0.1
 minimumReleaseAgeExclude:
   - daisyui@5.7.46
