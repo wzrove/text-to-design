@@ -278,6 +278,10 @@ importers:
         version: 7.0.2
 
   packages/ui:
+    dependencies:
+      lucide-solid:
+        specifier: ^1.48.0
+        version: 1.48.0(solid-js@1.9.15)
     devDependencies:
       '@figma/plugin-typings':
         specifier: ^1.137.0
@@ -1780,6 +1784,11 @@ packages:
 
   lru-cache@5.1.1:
     resolution: {integrity: sha512-KpNARQA3Iwv+jTA0utUVVbrh+Jlrr1Fv0e56GGzAFOXN7dk/FviaDW8LHmK52DlcH4WP2n6gI8vN1aesBFgo9w==}
+
+  lucide-solid@1.48.0:
+    resolution: {integrity: sha512-tes5UEPXUpMYwk8MRgFS9EtV90miJ8P/19H8NR4hhaiVDBfZY39YG0zm7Ofxv3YVNNdKP95XckdYXXc0CtQaoQ==}
+    peerDependencies:
+      solid-js: ^1.4.7
 
   lucide-static@1.48.0:
     resolution: {integrity: sha512-ZUGgZ4rzlLfVbhN2Zi37TMrTaSpXAbWx6Y/xZxKSDLPiqxtTK7Mw2M+oBJa0gjV8p3+CWBHh48u+IC9+jKlUjA==}
@@ -3396,6 +3405,10 @@ snapshots:
   lru-cache@5.1.1:
     dependencies:
       yallist: 3.1.1
+
+  lucide-solid@1.48.0(solid-js@1.9.15):
+    dependencies:
+      solid-js: 1.9.15
 
   lucide-static@1.48.0: {}
 

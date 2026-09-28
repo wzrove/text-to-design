@@ -4,6 +4,8 @@ import type { PluginError } from './dicts/error-code';
 import type { LogLevel } from './dicts/log';
 import type * as s from './schemas';
 
+/* 相机锁定(UI 发意图,code 侧在 viewport 契约层拦截) */
+export * from './camera-lock';
 /* 连接层协议(端口/握手帧/重连节奏):daemon 与插件 UI 的唯一真源 */
 export * from './connection';
 /* 平台无关核心逻辑(DesignHost 接口 + 序列化/建节点/组件/更新,无平台 typings 依赖) */

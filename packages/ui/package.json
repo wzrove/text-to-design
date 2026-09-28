@@ -34,5 +34,8 @@
     "vite-plugin-singlefile": "^2.3.3",
     "vite-plugin-solid": "^2.11.14",
     "zod": "catalog:"
+  },
+  "dependencies": {
+    "lucide-solid": "^1.48.0"
   }
 }

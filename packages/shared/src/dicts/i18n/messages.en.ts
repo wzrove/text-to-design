@@ -59,12 +59,14 @@ export const MESSAGES_EN = {
     'Reconnect to the background service now instead of waiting for the backoff',
   'header.reclaim': 'Reclaim',
   'header.reclaim.title': 'Reclaim the channel from the other plugin panel',
-  'header.meta': '{platform} · :{port}',
-  'header.meta.portOnly': ':{port}',
-  'header.meta.title':
-    'Platform {platform} · MCP bridge port {port} (override with TEXT_TO_DESIGN_MCP_PORT)',
-  'header.meta.titleUnknown':
-    'Platform unknown · MCP bridge port {port} (override with TEXT_TO_DESIGN_MCP_PORT)',
+  'header.theme.toDark': 'Switch to dark theme',
+  'header.theme.toLight': 'Switch to light theme',
+  'header.cameraLock.locked': 'Camera locked',
+  'header.cameraLock.unlocked': 'Camera follows',
+  'header.cameraLock.title.locked':
+    'Camera locked: canvas operations do not move your viewport (click to follow)',
+  'header.cameraLock.title.unlocked':
+    'Camera follows: canvas operations scroll and zoom to the result (click to lock)',
 
   'conn.connected':
     'Connected. Select nodes on the canvas, click "Copy", then paste into your AI assistant — e.g. "make me another card in this node style"',

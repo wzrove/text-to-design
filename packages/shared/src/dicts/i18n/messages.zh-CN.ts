@@ -55,12 +55,14 @@ export const MESSAGES_ZH_CN = {
   'header.retry.title': '立即重连后台服务,不必等自动重连的退避间隔',
   'header.reclaim': '夺回',
   'header.reclaim.title': '夺回被另一个插件面板占用的通道',
-  'header.meta': '{platform} · :{port}',
-  'header.meta.portOnly': ':{port}',
-  'header.meta.title':
-    '运行平台 {platform} · MCP 桥接端口 {port}(可用环境变量 TEXT_TO_DESIGN_MCP_PORT 修改)',
-  'header.meta.titleUnknown':
-    '运行平台未知 · MCP 桥接端口 {port}(可用环境变量 TEXT_TO_DESIGN_MCP_PORT 修改)',
+  'header.theme.toDark': '切换到暗色主题',
+  'header.theme.toLight': '切换到亮色主题',
+  'header.cameraLock.locked': '相机已锁定',
+  'header.cameraLock.unlocked': '相机跟随',
+  'header.cameraLock.title.locked':
+    '相机已锁定:操作画布时不移动你的视口(点击改为跟随)',
+  'header.cameraLock.title.unlocked':
+    '相机跟随:操作画布后视口滚动缩放到结果(点击锁定)',
 
   // ── 连接提示条 ──
   'conn.connected':

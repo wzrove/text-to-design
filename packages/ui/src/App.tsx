@@ -5,8 +5,9 @@ import {
   onCleanup,
   Show,
 } from 'solid-js';
-import { PANEL_HEIGHT_OVERLAY, PLATFORM_LABEL } from 'text-to-design-shared';
+import { PANEL_HEIGHT_OVERLAY } from 'text-to-design-shared';
 import { BridgeProvider, useBridge } from './bridge/useBridge';
+import CameraLockToggle from './components/CameraLockToggle';
 import CapabilityCard from './components/CapabilityCard';
 import ConnectionHint from './components/ConnectionHint';
 import LocaleSwitch from './components/LocaleSwitch';
@@ -15,20 +16,12 @@ import LogTrigger from './components/LogTrigger';
 import PanelHeightSync from './components/PanelHeightSync';
 import SelectionCard from './components/SelectionCard';
 import StatusBadge from './components/StatusBadge';
+import ThemeToggle from './components/ThemeToggle';
 import { locale, t } from './i18n/useLocale';
 
 function Shell() {
-  const {
-    port,
-    log,
-    selection,
-    platform,
-    status,
-    rescan,
-    clearLog,
-    canResize,
-    chromeHeight,
-  } = useBridge();
+  const { log, selection, status, rescan, clearLog, canResize, chromeHeight } =
+    useBridge();
 
   const [logOpen, setLogOpen] = createSignal(false);
 
@@ -86,23 +79,6 @@ function Shell() {
     document.documentElement.lang = locale();
   });
 
-  /**
-   * 平台名 + 端口合成一行排查上下文。
-   * 平台由插件 code 侧上报,首帧还没有 —— 此时只留端口,不留孤零零的分隔符。
-   */
-  const meta = createMemo(() => {
-    const p = platform();
-    return p
-      ? t('header.meta', { platform: PLATFORM_LABEL[p], port: port() })
-      : t('header.meta.portOnly', { port: port() });
-  });
-  const metaTitle = createMemo(() => {
-    const p = platform();
-    return p
-      ? t('header.meta.title', { platform: PLATFORM_LABEL[p], port: port() })
-      : t('header.meta.titleUnknown', { port: port() });
-  });
-
   return (
     /*
       两种布局由宿主有没有 ui.resize 决定(见 docs/design-decisions/0014):
@@ -123,12 +99,12 @@ function Shell() {
       }`}
     >
       {/*
-        页头只承载「状态 / 元信息 / 工具」三类,不再重复宿主的身份信息:标题栏已
-        给出插件名与图标,面板里再排一遍 Logo + 标题是把同一句话说两遍,而 360 宽
-        下标题只会被 truncate 成省略号噪声 —— 挤掉的正是唯一要看的连接状态。
+        页头只承载「状态 / 工具」两类,不再重复宿主的身份信息:标题栏已给出插件名
+        与图标;平台与端口曾是排查上下文,但常态下是噪声,已移除(端口仍可在
+        日志抽屉的连接行里看到)。
 
         读序即优先级(左 → 右):状态徽章(全页唯一色块)→ 它的挽救动作(仅
-        「没连上」时出现)→ 平台与端口(mono 小字,排查用)→ 语言 → 日志入口(最右)。
+        「没连上」时出现)→ 弹性留白 → 相机锁 → 主题 → 语言 → 日志入口(最右)。
       */}
       <header class="flex shrink-0 items-center gap-2">
         <StatusBadge />
@@ -136,7 +112,7 @@ function Shell() {
         {/*
           重连动作紧贴状态徽章:状态与它的出路读成一件事。
           连上后整颗隐藏而非置灰 —— 常态面板里一颗永远不可用的按钮只是噪声;
-          隐藏也不会挤动右侧工具簇(它右侧是 ml-auto 的弹性留白)。
+          隐藏也不会挤动右侧工具簇(它左侧是 ml-auto 的弹性留白)。
         */}
         <Show when={status() !== 'connected'}>
           <button
@@ -155,23 +131,19 @@ function Shell() {
           </button>
         </Show>
 
-        <span
-          class="ml-auto min-w-0 truncate font-mono text-[10px] text-base-content/60"
-          title={metaTitle()}
-        >
-          {meta()}
-        </span>
-
-        <LocaleSwitch />
-
-        <LogTrigger
-          ref={(el) => {
-            triggerEl = el;
-          }}
-          unread={unread()}
-          open={logOpen()}
-          onClick={openLog}
-        />
+        <div class="ml-auto flex shrink-0 items-center gap-0.5">
+          <CameraLockToggle />
+          <ThemeToggle />
+          <LocaleSwitch />
+          <LogTrigger
+            ref={(el) => {
+              triggerEl = el;
+            }}
+            unread={unread()}
+            open={logOpen()}
+            onClick={openLog}
+          />
+        </div>
       </header>
 
       <ConnectionHint />

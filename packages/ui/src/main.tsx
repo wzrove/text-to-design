@@ -1,16 +1,11 @@
 import { render } from 'solid-js/web';
 import App from './App';
 import './index.css';
+import { initTheme } from './theme';
 
-// 主题跟随系统:daisyUI 双主题(textdesign / textdesign_dark),启动即设避免闪白
-const themeQuery = window.matchMedia('(prefers-color-scheme: dark)');
-const applyTheme = (): void =>
-  document.documentElement.setAttribute(
-    'data-theme',
-    themeQuery.matches ? 'textdesign_dark' : 'textdesign',
-  );
-applyTheme();
-themeQuery.addEventListener('change', applyTheme);
+// 主题:daisyUI 双主题(textdesign / textdesign_dark),用户在页头手动切换,
+// 没选过时跟随系统;启动即设避免闪白(见 theme.ts)
+initTheme();
 
 const root = document.getElementById('root');
 if (!root) throw new Error('root element not found');

@@ -11,6 +11,7 @@ import type {
 } from 'text-to-design-shared';
 import {
   applyCachedOverrides,
+  CAMERA_LOCK_DEFAULT,
   CORE_CAPABILITIES,
   clampPanelHeight,
   cloneNodes,
@@ -28,6 +29,7 @@ import {
   getPageStructure,
   groupNodes,
   importComponentNodes,
+  isCameraLockSetMessage,
   isLocaleSetMessage,
   isUiResizeMessage,
   LOCALE_CHOICE_STORAGE_KEY,
@@ -52,6 +54,7 @@ import {
   toStoredChoice,
   trySerialize,
   updateSelection,
+  withCameraLock,
 } from 'text-to-design-shared';
 
 const UI_OPTIONS = { width: PANEL_WIDTH, height: PANEL_HEIGHT_DEFAULT };
@@ -78,10 +81,16 @@ type PropRequest = Extract<PluginRequest, { method: PropMethod }>;
 
 /** 平台无关插件外壳:注入平台 host,接插件生命周期与消息路由 */
 export function registerPlugin(
-  host: DesignHost,
+  rawHost: DesignHost,
   platform: PluginPlatform,
   meta: PlatformMeta,
 ): void {
+  // 相机锁:面板用户切换(camera_lock_set 旁路消息),默认锁定 —— MCP 操作
+  // 画布时不移动相机。拦截收口在 host.viewport 契约层(见 shared/camera-lock.ts),
+  // core 的各 scrollAndZoomIntoView 调用点不感知锁的存在。
+  let cameraLocked = CAMERA_LOCK_DEFAULT;
+  const host = withCameraLock(rawHost, () => cameraLocked);
+
   // 一次运行的显式上下文:core 的「字段是否生效」判定与 ping 上报的能力表同源,
   // 由这里组装成对象沿着调用链传下去(此前是模块级可变全局 setHostCapabilities,
   // 谁都能改、改完无从追查,也无法同时存在两个平台的实例)。
@@ -256,6 +265,12 @@ export function registerPlugin(
     // 因为 clientStorage 只有 code 侧摸得到
     if (isLocaleSetMessage(raw)) {
       await writeStoredChoice(raw.choice);
+      return;
+    }
+    // 相机锁:同款旁路消息(见 shared/camera-lock.ts)。状态只存 here(进程内),
+    // UI 侧持久化并在挂载时补发,code 侧无需跨会话记忆
+    if (isCameraLockSetMessage(raw)) {
+      cameraLocked = raw.locked;
       return;
     }
     const msg = raw as PluginRequest;

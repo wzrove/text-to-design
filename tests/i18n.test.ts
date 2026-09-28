@@ -236,12 +236,12 @@ describe('t()', () => {
     const en = createT('en');
     expect(zh('log.trigger')).toBe('日志');
     expect(en('log.trigger')).toBe('Log');
-    expect(zh('header.meta.portOnly', { port: 47812 })).toBe(':47812');
+    expect(zh('locale.title.fixed', { locale: '中文' })).toBe('界面语言:中文');
     expect(zh('log.drawer.count', { shown: 2, total: 5 })).toBe('2 / 5 条');
   });
 
   it('缺参数时保留 {name} 字面(不静默吞掉)', () => {
-    expect(createT('en')('header.meta.portOnly')).toBe(':{port}');
+    expect(createT('en')('locale.title.fixed')).toBe('Language: {locale}');
     expect(createT('en')('log.drawer.count', { shown: 1 })).toBe('1 / {total}');
   });
 
