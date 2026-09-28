@@ -1,5 +1,21 @@
 # text-to-design-ui
 
+## 0.7.2
+
+### Patch Changes
+
+- [`9039a4a`](https://github.com/wzrove/text-to-design/commit/9039a4ab20db304319cba9d258c1fbcb8df5e783) Thanks [@wzrove](https://github.com/wzrove)! - refactor: 三处展开面板收口为受控组件 CollapsibleSection（图标触发器 + 正文常驻，见 0026）
+
+- [`80e05bc`](https://github.com/wzrove/text-to-design/commit/80e05bce09a347d7bcd70645ef6160238cedc214) Thanks [@wzrove](https://github.com/wzrove)! - feat: implement camera lock functionality and theme toggle in UI
+
+- [`9039a4a`](https://github.com/wzrove/text-to-design/commit/9039a4ab20db304319cba9d258c1fbcb8df5e783) Thanks [@wzrove](https://github.com/wzrove)! - fix: 面板高度夹取上限与建议收缩点分离，新增 PANEL_HEIGHT_CEILING
+
+- [`9039a4a`](https://github.com/wzrove/text-to-design/commit/9039a4ab20db304319cba9d258c1fbcb8df5e783) Thanks [@wzrove](https://github.com/wzrove)! - fix: 自适应高度下窗口底部的区块被裁掉一截（`SelectionCard` / `CapabilityCard` 下沿不可见）。`ui.resize(width, height)` 的 `height` 在三个平台都是**外框**高度，外框里含着宿主自绘的标题栏，而测量侧只发了内容高度。现把「装饰高」提升为 `ui_env` 契约成员 `chromeHeight`：**只有 MasterGo 有真源**（`ui.viewport.headerHeight`）并实现上报；Figma / jsDesign 的 typings 里没有该符号，故不实现，缺省 `0` = 不补偿（行为与改前一致）。`PanelHeightSync` 按「内容高 + 装饰高」请求，缺字段与不可信值统一走 `normalizeChromeHeight` 收成 0（见 0028）
+
+- [`9039a4a`](https://github.com/wzrove/text-to-design/commit/9039a4ab20db304319cba9d258c1fbcb8df5e783) Thanks [@wzrove](https://github.com/wzrove)! - fix: 面板高度夹取不再截断超限内容，测量改用 scrollHeight 断掉自锁（见 0014 修订）
+
+- [`9039a4a`](https://github.com/wzrove/text-to-design/commit/9039a4ab20db304319cba9d258c1fbcb8df5e783) Thanks [@wzrove](https://github.com/wzrove)! - fix: 三平台插件加载即崩于 zod 顶层裸 `BigInt()`（`ReferenceError: 'BigInt' is not defined`）。插件沙箱不提供 `BigInt` 全局，而 `zod@4.6.x` 的 `BIGINT_FORMAT_RANGES` 是模块顶层 export const、初始化表达式里裸调 `BigInt(...)`。把 `vite-plugin-zod-sandbox` 从「globalThis 单点替换」扩写为三平台通用的沙箱适配器：注入 `typeof BigInt === 'function' ? BigInt : (v) => v` 探测桩并把模块体内裸 `BigInt` 改指向它；同时把 zod 路径正则从锁死 `4.5.4` 改为按包名匹配（见 0027）
+
 ## 0.7.1
 
 ### Patch Changes
