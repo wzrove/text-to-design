@@ -28,7 +28,7 @@
 
 - 使用带 TTL/lease 的一致性存储。
 - 处理领导权丢失和 fencing token。
-- 不要假设“当选后永远是 leader”。
+- 不要假设「当选后永远是 leader」。
 
 ## 常见误用
 
@@ -50,7 +50,7 @@ acquireLease(); while leaseValid: runCoordinator()
 ## 深度分析
 
 ### 变化压力
-Leader Election 只适合“同一时刻必须单活”的协调任务，如分片调度或维护作业；能设计成幂等并行时，优先不要选举。进程内 Singleton 不能提供跨实例唯一性。
+Leader Election 只适合「同一时刻必须单活」的协调任务，如分片调度或维护作业；能设计成幂等并行时，优先不要选举。进程内 Singleton 不能提供跨实例唯一性。
 
 ### 结构与协作
 实例通过带 TTL 的 lease/lock 竞争，续租失败立即停止写入；当选者携带递增 fencing token 写资源，存储端拒绝旧 token。任务状态、接管和重试必须可恢复，不能依赖 leader 永不重启。

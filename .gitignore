@@ -33,3 +33,5 @@ dist-ssr
 # CLI 首用时自动重建目录与 README（见 .agents/skills/mcp-tdd/scripts/mcp-tdd.mjs 的 init/ensure），
 # 所以新克隆的仓库不需要它也能正常工作。
 docs/mcp-errors/
+
+docs/*

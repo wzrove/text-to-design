@@ -51,7 +51,7 @@ timeout -> limited retry -> circuit breaker -> fallback
 ## 深度分析
 
 ### 变化压力
-Circuit Breaker 解决下游持续失败时“每个请求仍等待并重试”造成的资源耗尽。它不是通用错误处理，也不应把一次业务拒绝误判为依赖故障。
+Circuit Breaker 解决下游持续失败时「每个请求仍等待并重试」造成的资源耗尽。它不是通用错误处理，也不应把一次业务拒绝误判为依赖故障。
 
 ### 结构与协作
 每个依赖或故障域维护 CLOSED、OPEN、HALF_OPEN 状态；按时间窗口、失败率/连续失败和最小样本数触发，OPEN 冷却后只放少量探测。超时、有限重试、熔断和 fallback 的顺序要固定并记录原因。

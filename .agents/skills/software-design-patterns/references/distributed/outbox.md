@@ -51,7 +51,7 @@ TX: update order + insert outbox_event; publisher later sends event
 ## 深度分析
 
 ### 变化压力
-Transactional Outbox 解决本地数据库提交与消息发送之间的双写窗口，目标是“至少最终送达”，不是 exactly-once。没有跨进程事件需求时不应引入。
+Transactional Outbox 解决本地数据库提交与消息发送之间的双写窗口，目标是「至少最终送达」，不是 exactly-once。没有跨进程事件需求时不应引入。
 
 ### 结构与协作
 应用事务同时写业务数据和 outbox 记录；发布器按状态/锁/游标批量读取、发送并确认，失败可重试。事件带稳定 ID、schema 版本和关联 ID；消费者必须幂等，清理策略不能早于重放/审计窗口。

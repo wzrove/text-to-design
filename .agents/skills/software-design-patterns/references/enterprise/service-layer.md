@@ -14,7 +14,7 @@
 
 ## 什么时候不要使用
 
-- 业务极其简单，额外层只会一比一转发。
+- 业务太简单，加一层只是原样转发。
 - 把所有领域规则都塞进 Service 导致贫血模型。
 
 ## 识别信号
@@ -50,7 +50,7 @@ CheckoutService.checkout(command)
 ## 深度分析
 
 ### 变化压力
-Service Layer 定义应用用例边界，解决多个入口重复编排、事务边界混乱和表现层耦合。它不等于“所有逻辑都放 Service”。
+Service Layer 定义应用用例边界，解决多个入口重复编排、事务边界混乱和表现层耦合。它不等于「所有逻辑都放 Service」。
 
 ### 结构与协作
 Controller、消息消费者和 CLI 都调用面向用例的方法；服务协调授权、事务、Repository、领域对象和事件发布，并返回稳定结果。领域规则留在 Entity/Value Object/Domain Service，技术依赖通过端口注入。

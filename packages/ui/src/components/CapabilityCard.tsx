@@ -1,14 +1,12 @@
 import { createSignal, For, Show } from 'solid-js';
 import {
   CORE_CAPABILITIES,
+  CORE_CAPABILITY_SPEC,
   HOST_CAPABILITIES,
+  HOST_CAPABILITY_SPEC,
   type HostCapabilityKey,
 } from 'text-to-design-shared';
 import { useBridge } from '../bridge/useBridge';
-import {
-  CORE_CAPABILITY_KEY,
-  HOST_CAPABILITY_KEY,
-} from '../i18n/capabilityKeys';
 import { t } from '../i18n/useLocale';
 import CollapsibleSection, { Trigger } from './CollapsibleSection';
 
@@ -81,7 +79,7 @@ export default function CapabilityCard() {
             <For each={CORE_CAPABILITIES}>
               {(cap) => (
                 <li class="rounded bg-base-200 px-1.5 py-0.5 text-base-content/80">
-                  {t(CORE_CAPABILITY_KEY[cap])}
+                  {t(CORE_CAPABILITY_SPEC[cap].labelKey)}
                 </li>
               )}
             </For>
@@ -101,7 +99,7 @@ export default function CapabilityCard() {
                   )}
                 >
                   <span aria-hidden="true">{isOn(cap) ? '✓' : '—'}</span>{' '}
-                  {t(HOST_CAPABILITY_KEY[cap])}
+                  {t(HOST_CAPABILITY_SPEC[cap].labelKey)}
                   <span class="ml-1 font-mono text-[10px] text-base-content/40">
                     {cap}
                   </span>

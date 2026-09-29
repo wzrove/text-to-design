@@ -12,6 +12,10 @@ import { figmaOps } from './ops';
  * 并入组件集的是实例所指的那些 COMPONENT 本身,已有实例链接不断、页面不残留
  * 冗余原件。core 的 combine_as_variants 据此把「原位」提到首选姿势(jsDesign
  * 没有这个语义,保持克隆兜底顺序)。
+ *
+ * 不声明 `platformOps` 能力位(0029):「本平台有 op 通道」这件事由下面的
+ * `platformOps` 数组**本身**表达,再挂一个能力位就是同一事实的第二份载体,
+ * 且 MG 侧会立刻出现「有 5 个 op 却不 claim」的自相矛盾。
  */
 export const meta: PlatformMeta = {
   capabilities: [
@@ -19,7 +23,6 @@ export const meta: PlatformMeta = {
     'textTruncation',
     'componentProperties',
     'variables',
-    'platformOps',
     'inPlaceVariants',
   ],
   platformOps: figmaOps,

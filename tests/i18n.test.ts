@@ -11,8 +11,8 @@ import {
   resolveMcpLocale,
 } from '../packages/mcp-server/src/i18n';
 import {
-  CORE_CAPABILITIES,
-  HOST_CAPABILITIES,
+  CORE_CAPABILITY_SPEC,
+  HOST_CAPABILITY_SPEC,
   PLATFORMS,
 } from '../packages/shared/src/dicts';
 import {
@@ -124,14 +124,14 @@ describe('i18n 文案表', () => {
         missing.push(`platform.${platform}`);
       }
     }
-    for (const cap of HOST_CAPABILITIES) {
-      if (!(`capability.host.${cap}` in MESSAGES_ZH_CN)) {
-        missing.push(`capability.host.${cap}`);
-      }
-    }
-    for (const cap of CORE_CAPABILITIES) {
-      if (!(`capability.core.${cap}` in MESSAGES_ZH_CN)) {
-        missing.push(`capability.core.${cap}`);
+    // 能力文案键从规格表读(拼 `${'capability.host.' + cap}` 的约定已删):
+    // 写错键不再是「拼串取到 undefined」,而是编译期报错 + 这里查存在
+    for (const spec of [
+      ...Object.values(HOST_CAPABILITY_SPEC),
+      ...Object.values(CORE_CAPABILITY_SPEC),
+    ]) {
+      if (!(spec.labelKey in MESSAGES_ZH_CN)) {
+        missing.push(spec.labelKey);
       }
     }
     expect(missing).toEqual([]);

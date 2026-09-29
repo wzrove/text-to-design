@@ -50,7 +50,7 @@ eligible = adult.and(active).and(notBlocked); eligible.isSatisfiedBy(user)
 ## 深度分析
 
 ### 变化压力
-Specification 适合具有领域名称、需要组合并可能在验证与筛选之间复用的谓词。它把“是否满足”从散落条件提升为可解释、可测试的规则对象。
+Specification 适合具有领域名称、需要组合并可能在验证与筛选之间复用的谓词。它把「是否满足」从散落条件提升为可解释、可测试的规则对象。
 
 ### 结构与协作
 基础规约只描述一个纯条件，组合规约实现 AND/OR/NOT；内存求值与数据库表达式翻译分层，避免把 ORM 类型带入领域。规格可以作为策略输入或 Repository 查询条件，但不应执行副作用。

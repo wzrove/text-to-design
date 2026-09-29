@@ -1,5 +1,6 @@
 import type { z } from 'zod';
 import type { BooleanOperation } from '../dicts/boolean-operation';
+import type { HostCapabilityKey } from '../dicts/capability';
 import type * as shared from '../schemas';
 
 /**
@@ -376,8 +377,13 @@ export interface PlatformOp {
   run(host: DesignHost, params: unknown): Promise<unknown>;
 }
 
-/** 平台元数据:adapter 所在平台声明的能力与特有操作(registerPlugin 第三参注入) */
+/**
+ * 平台元数据:adapter 所在平台声明的能力与特有操作(registerPlugin 第三参注入)。
+ *
+ * `capabilities` 只收 `HostCapabilityKey`(取值表 = 线格式枚举,同宽):adapter 与 MCP
+ * 一起发版,退役的取值(`platformOps`)两边都不认,插件的重载与 MCP 的升级要同步。
+ */
 export interface PlatformMeta {
-  capabilities: readonly shared.HostCapability[];
+  capabilities: readonly HostCapabilityKey[];
   platformOps: readonly PlatformOp[];
 }

@@ -25,7 +25,6 @@ export const MESSAGES_ZH_CN = {
   'capability.host.textTruncation': '文本截断',
   'capability.host.componentProperties': '组件属性',
   'capability.host.variables': '变量',
-  'capability.host.platformOps': '平台特有操作',
   'capability.host.inPlaceVariants': '原位合并变体',
 
   // ── 语言选择器 ──
@@ -106,7 +105,7 @@ export const MESSAGES_ZH_CN = {
   'capability.card.badgeTitle':
     '核心能力项数 · 当前平台可用的差异能力 · 平台特有操作个数',
   'capability.card.badge': '核心 {core} · 平台 {host}/{total} · op {ops}',
-  'capability.card.coreSection': '核心能力(两平台一致)',
+  'capability.card.coreSection': '核心能力',
   'capability.card.hostSection': '平台差异能力',
   'capability.card.opTitle': '{op}:当前平台支持',
   'capability.card.opTitleOff': '{op}:当前平台不支持',

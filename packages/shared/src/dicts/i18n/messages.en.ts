@@ -29,7 +29,6 @@ export const MESSAGES_EN = {
   'capability.host.textTruncation': 'Text truncation',
   'capability.host.componentProperties': 'Component properties',
   'capability.host.variables': 'Variables',
-  'capability.host.platformOps': 'Platform-specific ops',
   'capability.host.inPlaceVariants': 'In-place variants',
 
   'locale.system': 'System',
@@ -105,7 +104,7 @@ export const MESSAGES_EN = {
   'capability.card.badgeTitle':
     'Core capability count · platform-specific capabilities available · platform op count',
   'capability.card.badge': 'core {core} · platform {host}/{total} · op {ops}',
-  'capability.card.coreSection': 'Core capabilities (same on both platforms)',
+  'capability.card.coreSection': 'Core capabilities',
   'capability.card.hostSection': 'Platform differences',
   'capability.card.opTitle': '{op}: supported on the current platform',
   'capability.card.opTitleOff': '{op}: not supported on the current platform',

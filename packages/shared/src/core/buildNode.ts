@@ -1,3 +1,4 @@
+import { CAPABILITY_OF_GATED_PROP } from '../dicts/capability';
 import type { ExecuteOp } from '../schemas';
 import { isGatedPropUnsupported } from './capabilities';
 import type { ContainerSkeleton, DesignHost, NodeSkeleton } from './host';
@@ -14,15 +15,17 @@ import {
 } from './props/writers';
 import type { RuntimeContext } from './runtime';
 
-/** 创建路径上受平台能力门控的 spec 字段(与 dicts/capability.ts 的属性表对应) */
-const GATED_SPEC_KEYS = [
-  'fillStyleId',
-  'strokeStyleId',
-  'textStyleId',
-  'effectStyleId',
-  'textTruncation',
-  'maxLines',
-] as const satisfies readonly (keyof ExecuteOp)[];
+/**
+ * 创建路径上受平台能力门控的 spec 字段。
+ *
+ * 取值**从能力表的属性面派生**(此前是手抄的 6 项 + 一句「与 dicts/capability.ts 对应」
+ * 的注释,靠人同步)。排除 `componentProperties` 的理由:它只由修改路径的实例属性入口
+ * 写入,`ExecuteOp` 里没有这个字段,放进名单恒为 undefined;其余键在 `spec[key] == null`
+ * 处自然跳过,故此处不必再按 ExecuteOp 的字段面筛一遍。
+ */
+const GATED_SPEC_KEYS = Object.keys(CAPABILITY_OF_GATED_PROP).filter(
+  (key): key is keyof ExecuteOp => key !== 'componentProperties',
+);
 
 /**
  * 尺寸回读的容差:引擎会把尺寸夹到整数/做亚像素取整,1px 内的差异不算被改写。

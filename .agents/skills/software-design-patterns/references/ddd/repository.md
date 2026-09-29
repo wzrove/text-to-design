@@ -49,7 +49,7 @@ OrderRepository.byId(id) -> Order aggregate
 ## 深度分析
 
 ### 变化压力
-DDD Repository 的边界是“按聚合根获取和保存”，用于隔离 ORM、查询和持久化生命周期。它不是每张表一个 DAO，也不应承担报表查询。
+DDD Repository 的边界是「按聚合根获取和保存」，用于隔离 ORM、查询和持久化生命周期。它不是每张表一个 DAO，也不应承担报表查询。
 
 ### 结构与协作
 领域层定义按领域语言命名的端口，如 byId、save、nextPending；基础设施实现映射、事务和分页。Application Service 通过 UoW 调用，Repository 不自行提交，也不泄漏 IQueryable、ORM Session 或数据库异常。

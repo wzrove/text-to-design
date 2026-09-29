@@ -50,7 +50,7 @@ process() = validate -> transform* -> persist -> notify*
 ## 深度分析
 
 ### 变化压力
-Template Method 适合流程骨架稳定、少数步骤变化，并且需要强制顺序和不变量。它依赖继承，因此先确认扩展者可控且不会形成脆弱基类。
+Template Method 适合流程骨架稳定、少数步骤变化，并且需要强制顺序和不变量。它依赖继承，所以得先确认扩展者可控、不会变成脆弱基类。
 
 ### 结构与协作
 基类 final/template 方法控制生命周期，hook 只暴露局部差异；子类不得跳过必须步骤。若步骤需要运行时组合，改用 Strategy/显式 Pipeline，避免把可变流程锁死在继承层。

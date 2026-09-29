@@ -7,10 +7,13 @@ export const pluginPlatformSchema = z.enum(PLATFORMS);
 export type PluginPlatform = z.infer<typeof pluginPlatformSchema>;
 
 /**
- * 平台能力枚举:adapter 声明当前平台支持哪些超集能力(供 ping/capabilities 上报)。
+ * 平台能力枚举(线格式):adapter 声明当前平台支持哪些超集能力(供 ping/capabilities 上报)。
  *
  * 取值表在 ../dicts/capability.ts(与「能力门控的属性表」同一份真源);core 的
- * 超集字段判定也吃这张表 —— 由插件入口 setHostCapabilities 注入,不再是两套事实。
+ * 超集字段判定也吃这张表 —— 由插件入口经 RuntimeContext 注入(见 0002),不再是两套事实。
+ *
+ * 与取值表**同宽**:插件与 MCP 一起发版,不作跨版本容忍 —— 退役的取值(`platformOps`)
+ * 在这里就是非法值,不设第二份「只读不写」的名单。
  *
  * 语义边界 —— 只列**调用方能实际用上**的能力面:
  * - 不含 `getMainComponentAsync`:manifest 已走 dynamic-page(决策 0011),core 的

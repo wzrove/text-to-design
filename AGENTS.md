@@ -19,8 +19,8 @@ Rules:
 
 ## 验证命令（不产出编译产物）
 
-- 类型检查（只查不产出）：`pnpm run typecheck`（即 `tsc --noEmit`）。
-- 跨包不变式测试：`pnpm run test`（含技能文档体积门禁，见下）。
+- 只做类型检查（只查不产出）：`pnpm run typecheck`（即 `tsc --noEmit`）。
+- 不允许全量测试,及lint检查
 
 ## 改动验证
 

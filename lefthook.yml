@@ -6,6 +6,8 @@ pre-commit:
       run: pnpm exec biome check --write --unsafe   {staged_files}
     typecheck:
       run: pnpm typecheck
+    test: 
+      run: pnpm run test
 
 commit-msg:
   commands:

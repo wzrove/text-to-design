@@ -1,8 +1,9 @@
-# 模式索引（60 条）
+# 模式索引（52 条）
 
 > 何时读：SKILL.md 的「快速路由」给了候选，要打开对应模式文件核对
 > `什么时候使用` / `什么时候不要使用` / `常见误用` / `退出条件` 时。
-> **按候选单条打开，不要整目录读** —— 60 个文件加起来远超一次对话的预算。
+> **按候选单条打开，不要整目录读**。52 个文件加起来远超一次对话的预算。
+> 表里没有 `Timeout`，超时预算写在 [retry.md](distributed/retry.md)，不用去找 `timeout.md`。
 
 ## GoF / 创建型
 
@@ -18,11 +19,11 @@
 
 ## 企业应用模式
 
-- [Repository](enterprise/repository.md) · [Service Layer](enterprise/service-layer.md) · [Unit of Work](enterprise/unit-of-work.md) · [Data Mapper](enterprise/data-mapper.md) · [Active Record](enterprise/active-record.md) · [DTO](enterprise/dto.md) · [Dependency Injection](enterprise/dependency-injection.md) · [MVC](enterprise/mvc.md)
+- [Repository](enterprise/repository.md)（无聚合根的查询/CRUD 封装） · [Service Layer](enterprise/service-layer.md) · [Unit of Work](enterprise/unit-of-work.md) · [Data Mapper](enterprise/data-mapper.md) · [Active Record](enterprise/active-record.md) · [DTO](enterprise/dto.md) · [Dependency Injection](enterprise/dependency-injection.md) · [MVC](enterprise/mvc.md)
 
 ## DDD 模式
 
-- [Entity](ddd/entity.md) · [Value Object](ddd/value-object.md) · [Aggregate](ddd/aggregate.md) · [Aggregate Root](ddd/aggregate-root.md) · [DDD Repository](ddd/repository.md) · [Domain Service](ddd/domain-service.md) · [Domain Event](ddd/domain-event.md) · [Application Service](ddd/application-service.md) · [DDD Factory](ddd/factory.md) · [Specification](ddd/specification.md)
+- [Entity](ddd/entity.md) · [Value Object](ddd/value-object.md) · [Aggregate](ddd/aggregate.md) · [Aggregate Root](ddd/aggregate-root.md)（同一决策，前者定边界、后者定入口，推荐时算一个） · [DDD Repository](ddd/repository.md)（按聚合根取存） · [Domain Service](ddd/domain-service.md) · [Domain Event](ddd/domain-event.md) · [Application Service](ddd/application-service.md) · [DDD Factory](ddd/factory.md) · [Specification](ddd/specification.md)
 
 ## 分布式系统模式
 

@@ -50,7 +50,7 @@ with uow: repoA.save(a); repoB.save(b); uow.commit()
 ## 深度分析
 
 ### 变化压力
-Unit of Work 把一次业务用例中多个对象的变更作为一个本地提交单元，解决“各 Repository 各自 commit”造成的部分成功。它的边界应短而明确。
+Unit of Work 把一次业务用例中多个对象的变更作为一个本地提交单元，解决「各 Repository 各自 commit」造成的部分成功。它的边界应短而明确。
 
 ### 结构与协作
 应用服务创建/注入 UoW，Repository 共享同一会话和事务；领域对象只记录变化，commit 时统一 flush、写 outbox、处理并发版本，失败则 rollback 并释放资源。跨服务不要把网络调用包进长本地事务。

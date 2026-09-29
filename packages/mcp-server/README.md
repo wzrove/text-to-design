@@ -197,7 +197,7 @@ pkill -f text-to-design-mcp
 - 看日志:`tail -f /tmp/text-to-design-mcp.log`(请求/响应耗时、HTTP 状态码、插件连接、二进制组装都会记)
 - 要更细的连接日志,启动时设 `TEXT_TO_DESIGN_MCP_LOG_LEVEL=debug`(默认 info);该开关只减落盘量,面板推送不受限制
 - 插件面板自带连接状态和日志:服务端日志实时推送,档位默认隐藏 debug,切「全部」可见帧级明细;插件离线期间的日志会先缓冲,上线后按顺序回放
-- 面板还有可折叠的「能力」区块:核心能力(两平台一致)、当前平台可用的差异能力、平台特有 op 名单 —— 数据与 MCP 侧 `capabilities` / `platformOps` 同源
+- 面板还有可折叠的「能力」区块:核心能力、当前平台可用的差异能力、平台特有 op 名单 —— 数据与 MCP 侧 `capabilities` / `platformOps` 同源
 
 ### 构建与开发
 
