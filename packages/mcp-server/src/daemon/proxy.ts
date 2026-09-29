@@ -138,6 +138,20 @@ export async function serveProxy(initialClient: Client): Promise<void> {
       ...(initialClient.getInstructions()
         ? { instructions: initialClient.getInstructions() }
         : {}),
+      /**
+       * shim 的目录**不是**静态的:它是上游目录的镜像,syncTools/syncPrompts/
+       * syncResources 会按上游变化增删注册。所以这里与 daemon 侧(schema.ts 给了
+       * 5 分钟)相反 —— 全部 ttlMs=0,不许下游缓存目录;变化靠 registerTool/remove
+       * 自带的 list_changed 广播,而不是靠 TTL 过期。
+       * resources/read 同样恒 0:内容来自画布实时读取。
+       */
+      cacheHints: {
+        'tools/list': { ttlMs: 0, cacheScope: 'private' },
+        'prompts/list': { ttlMs: 0, cacheScope: 'private' },
+        'resources/list': { ttlMs: 0, cacheScope: 'private' },
+        'resources/templates/list': { ttlMs: 0, cacheScope: 'private' },
+        'resources/read': { ttlMs: 0, cacheScope: 'private' },
+      },
     },
   );
 

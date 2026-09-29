@@ -25,8 +25,15 @@ export function registerPlatformTools(
     method: 'platform_op',
     inputSchema: platformOpParamsSchema,
     outputSchema: platformOpResultSchema,
-    // 变量/样式多与团队库等外部实体打交道
-    annotations: { readOnlyHint: false, openWorldHint: true },
+    // op 名与参数形状由 ping 的 platformOps 下发;op 集合随平台演进,重复调用不保证无副作用
+    // (变量/样式写是追加语义),故不声明幂等。openWorldHint 恒 false:它操作的是**当前文档**
+    // 的变量与样式表,不发网络请求 —— 标成 open world 会让客户端以为要联网而弹确认。
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
     followUp: {
       type: 'tool',
       tool: 'jsd_get_selection',

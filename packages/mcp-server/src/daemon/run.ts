@@ -4,7 +4,7 @@ import {
   localhostOriginValidation,
   toNodeHandler,
 } from '@modelcontextprotocol/node';
-import { createMcpHandler } from '@modelcontextprotocol/server';
+import { createMcpHandler, type McpServer } from '@modelcontextprotocol/server';
 import type { Bridge } from '../bridge';
 import {
   DAEMON_POLL_MS,
@@ -75,7 +75,25 @@ export async function runDaemon(bridge: Bridge): Promise<void> {
   await bridge.start(PORT);
   log(`daemon: 插件 WS ws://localhost:${bridge.port}`);
 
-  const handler = createMcpHandler(() => buildServer(bridge));
+  /**
+   * 装配**一次**,整个 daemon 复用同一个 McpServer(0030)。
+   *
+   * 为什么不是 `() => buildServer(bridge)`:2026-07-28 的 `createMcpHandler` 按
+   * **每个 HTTP 请求**调这个工厂,而装配一次要 51.7 ms(53 个工具的 schema + i18n
+   * 投影全量重建)。实测把工厂写成 per-request 时,一次 tools/call 是 50.6 ms、
+   * 一次 tools/list 是 86.8 ms;只装一次后两者都落到数毫秒级。
+   *
+   * `legacy: 'reject'` 是**实例复用不变式的一部分**:一个实例只能服务一个 era,
+   * 2025 的 initialize 握手会把实例的 negotiated version 改掉,与在途的 modern
+   * 请求互相踩。47820 上的客户端只有本项目的 shim,而它用 `versionNegotiation:
+   * mode='auto'` 先探 `server/discover`(见 daemon/probe.ts)→ 必是 modern 路径;
+   * 真来了 2025 客户端,明确拒收比静默串味强。
+   */
+  let assembled: McpServer | null = null;
+  const handler = createMcpHandler(
+    () => (assembled ??= buildServer(bridge)),
+    { legacy: 'reject' },
+  );
   const nodeHandler = toNodeHandler(handler);
   const validateHost = localhostHostValidation();
   const validateOrigin = localhostOriginValidation();

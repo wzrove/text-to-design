@@ -48,12 +48,18 @@ export interface ToolHook {
 /** 钩子工厂:每次调用产出一个新实例 */
 export type ToolHookFactory = () => ToolHook;
 
-/** MCP ToolAnnotations 的子集(hint 均为可选) */
+/**
+ * MCP ToolAnnotations(2026-07-28)。**四个 hint 全部必填**:协议对每个 hint 都有缺省值
+ * (`readOnlyHint=false` / `destructiveHint=true` / `idempotentHint=false` /
+ * `openWorldHint=true`),不显式声明就等于让客户端按保守默认去猜 —— 后果是「只读工具
+ * 被当成会动数据」「幂等 setter 被当成不可重试的破坏性操作」。必填由类型守住:
+ * 新增工具不写注解过不了类型检查,不靠人记。
+ */
 export interface ToolHints {
-  readOnlyHint?: boolean;
-  destructiveHint?: boolean;
-  idempotentHint?: boolean;
-  openWorldHint?: boolean;
+  readOnlyHint: boolean;
+  destructiveHint: boolean;
+  idempotentHint: boolean;
+  openWorldHint: boolean;
 }
 
 /**
@@ -104,7 +110,8 @@ export interface BridgeToolDef {
   method?: PluginMethod;
   inputSchema?: z.ZodType;
   outputSchema: z.ZodType;
-  annotations?: ToolHints;
+  /** 四个 hint 全部必填(见 ToolHints) */
+  annotations: ToolHints;
   /** 超时毫秒数;缺省用 PendingManager 默认(30s) */
   timeout?: number;
   /** 语义标记:该工具在插件离线时也应可用(如 jsd_ping);目录已不随连接门控 */
@@ -295,7 +302,7 @@ export function bridgeTool(
           ? { inputSchema: localizeSchema(def.inputSchema, t) }
           : {}),
         outputSchema: localizeSchema(def.outputSchema, t),
-        ...(def.annotations ? { annotations: def.annotations } : {}),
+        annotations: def.annotations,
       },
       // 注意:SDK 对「无 inputSchema」的工具会以 callback(ctx) 形态调用
       // (ctx 作为唯一入参),有 inputSchema 时才是 callback(args, ctx)。

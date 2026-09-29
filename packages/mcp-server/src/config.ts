@@ -27,6 +27,14 @@ export const DAEMON_REPLACE_MS = 6000;
 export const PING_TIMEOUT_MS = 5_000;
 export const LONG_IO_TIMEOUT_MS = 60_000;
 
+/**
+ * 目录类结果(tools/list、prompts/list、resources/list)的缓存提示(2026-07-28 的
+ * `ttlMs`/`cacheScope`)。目录在同一 daemon 版本下是静态的(固定注册清单 + 调用期
+ * 平台门控),所以客户端可以安全地拿住一份目录 —— 目录本身 1.3 MB,每次重拉都是纯浪费。
+ * 画布类资源(jsd://canvas/selection 等)不吃这个值:resources/read 恒为 0(不缓存)。
+ */
+export const CATALOG_TTL_MS = 300_000;
+
 /** jsd_export 内联 base64(dataURL)的体积上限(字节)。
  *  超出该值一律不内联,改为落盘并返回路径引用。
  *  背景:内联大 base64 会随工具结果进入会话历史并常驻内存,

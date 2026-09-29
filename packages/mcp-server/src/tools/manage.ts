@@ -28,7 +28,7 @@ export function registerManageTools(
     inputSchema: manageNodesSchema,
     outputSchema: manageNodesResultSchema,
     // remove/flatten/repair 会删改结构,如实标注破坏性
-    annotations: { readOnlyHint: false, destructiveHint: true },
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
     // 结构变更类的漂移复核:聚合入口此前**没挂**这个钩子,于是「走 jsd_batch 里的
     // jsd_manage_nodes{op:'remove'}」这一步不复核,而固定 op 小工具有复核 ——
     // 同一份暴露面两种待遇(见 0003 与 drift-watch.ts)。DriftWatch.before 已按
@@ -48,7 +48,7 @@ export function registerManageTools(
     method: 'component_op',
     inputSchema: manageComponentsSchema,
     outputSchema: manageComponentsResultSchema,
-    annotations: { readOnlyHint: false, destructiveHint: true },
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
     followUp: {
       type: 'tool',
       tool: 'jsd_set_instance_properties',

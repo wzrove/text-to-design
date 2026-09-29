@@ -92,7 +92,8 @@ export interface PropToolDef {
   /** 属性引擎方法名;本工具负责的字段集由 PROP_METHOD_FIELDS[method] 唯一决定 */
   method: PropMethod;
   inputSchema: z.ZodType;
-  annotations?: ToolHints;
+  /** 四个 hint 全部必填(见 core/registry 的 ToolHints) */
+  annotations: ToolHints;
   /** 工具结果的 followUp 引导(指向推荐的下一个工具) */
   followUp?: FollowUp;
 }

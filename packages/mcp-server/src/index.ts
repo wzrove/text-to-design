@@ -2,16 +2,16 @@
 import { Bridge } from './bridge';
 import type { ServiceOptions } from './daemon';
 import { installService, runDaemon, runShim, uninstallService } from './daemon';
-import { error, setLogSink } from './logger';
+import { error, log, setLogSink } from './logger';
 import { clearPlatformState, refreshPlatformState } from './platform-state';
-import { syncToolAvailability } from './server';
 
 const bridge = new Bridge();
 
-// 插件上线/掉线 → 通知所有会话(工具目录保持稳定,可用性由运行时兜底),
-// 并在上线时自动探测一次平台状态缓存(断开即清空,避免拿旧平台判断新连接)
+// 插件上线/掉线 → 刷新/清空平台状态缓存,并留一行日志。
+// 工具目录**不跟着动**(可用性下沉到运行时:离线时 Bridge.request 快速失败),
+// 所以这里不发 list_changed —— 目录在同一 daemon 版本下恒定,那条广播从没有过内容(0030)。
 bridge.onConnectionChange = (connected) => {
-  syncToolAvailability(connected);
+  log(`连接状态变化: ${connected ? '插件上线' : '插件离线'}(工具目录不变)`);
   if (connected) {
     void refreshPlatformState(bridge);
     return;

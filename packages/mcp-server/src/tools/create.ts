@@ -68,7 +68,6 @@ type CreateNodeDef = Pick<
   | 'name'
   | 'title'
   | 'description'
-  | 'annotations'
   | 'followUp'
   | 'platforms'
   | 'platformNote'
@@ -92,10 +91,13 @@ function createNodeTool(
       const ops = [{ type, ...node }];
       return placement !== undefined ? { ops, placement } : { ops };
     },
+    // 10 个 per-type create 共享同一组 hint:新增节点、不可逆(重复调用会多出节点)、
+    // 只动本地画布。写在这里而不是逐条声明 —— 逐条抄就是 10 份同一事实。
     annotations: {
       readOnlyHint: false,
       destructiveHint: false,
-      ...def.annotations,
+      idempotentHint: false,
+      openWorldHint: false,
     },
     ...def,
   };
@@ -198,7 +200,7 @@ export function registerCreateTools(
     method: 'create_svg',
     inputSchema: createSvgSchema,
     outputSchema: createdResultSchema,
-    annotations: { readOnlyHint: false, destructiveHint: false },
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
     payload: ({ svg, name }) => ({
       svg,
       name: name ?? 'svg-design',
@@ -213,7 +215,7 @@ export function registerCreateTools(
       '按名称/别名/语义模糊匹配并插入 Lucide 内置图标;查无时返回候选名。默认 24px 黑色描边 2px。建多个根节点/复杂树用 jsd_batch 编排',
     inputSchema: createIconSchema,
     outputSchema: createdResultSchema,
-    annotations: { readOnlyHint: false, destructiveHint: false },
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
     run: async (args, bridge_, signal) => {
       const { icon, size, color, strokeWidth, name } = args as {
         icon: string;
@@ -251,7 +253,7 @@ export function registerCreateTools(
     description: 'htmlToDesign.description',
     inputSchema: htmlToDesignSchema,
     outputSchema: createdResultSchema,
-    annotations: { readOnlyHint: false, destructiveHint: false },
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
     run: async (args, bridge_, signal) => {
       const { html, name } = args as { html: string; name?: string };
       const svg = htmlToSvg(html);

@@ -198,7 +198,7 @@ export function registerBatchTools(
     inputSchema: batchSchema,
     outputSchema: batchResultSchema,
     // calls 里可能带 remove/flatten 等破坏性 op,如实标注
-    annotations: { readOnlyHint: false, destructiveHint: true },
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
     followUp: {
       type: 'tool',
       tool: 'jsd_get_selection',

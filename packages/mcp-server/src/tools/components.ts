@@ -28,7 +28,10 @@ type ComponentOpKind = z.infer<typeof manageComponentsSchema>['op'];
 type ComponentOpDef = Pick<
   BridgeToolDef,
   'name' | 'title' | 'description' | 'inputSchema' | 'followUp'
-> & { annotations?: ToolHints };
+> & {
+  /** 四个 hint 全部必填(见 core/registry 的 ToolHints) */
+  annotations: ToolHints;
+};
 
 /** 构造「固定 op」工具定义:args 原样透传并注入 op 字面量,插件协议不变 */
 function opTool(op: ComponentOpKind, rest: ComponentOpDef): BridgeToolDef {
@@ -55,7 +58,7 @@ export function registerComponentTools(
       title: 'createComponent.title',
       description: 'createComponent.description',
       inputSchema: createComponentSchema,
-      annotations: { readOnlyHint: false, destructiveHint: false },
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
       followUp: {
         type: 'tool',
         tool: 'jsd_resize_node',
@@ -68,7 +71,7 @@ export function registerComponentTools(
       description:
         '按 COMPONENT 节点生成实例并返回新 id。同类实例样式/文案批量套用用 jsd_sync_overrides,变体属性用 jsd_set_instance_properties',
       inputSchema: createInstanceSchema,
-      annotations: { readOnlyHint: false, destructiveHint: false },
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
       followUp: {
         type: 'tool',
         tool: 'jsd_set_instance_properties',
@@ -81,7 +84,7 @@ export function registerComponentTools(
       description:
         '把实例(INSTANCE)转成可自由编辑的普通节点,之后与组件不再联动。⚠ 已知平台缺陷(实测):引擎报错时已内置克隆副本兜底,仍失败按报错提示操作;需要可编辑副本也可用 jsd_create_rectangle / jsd_create_text 等手工重建',
       inputSchema: detachInstanceSchema,
-      annotations: { readOnlyHint: false, destructiveHint: true },
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
       followUp: {
         type: 'tool',
         tool: 'jsd_set_fill_color',
@@ -97,6 +100,7 @@ export function registerComponentTools(
       annotations: {
         readOnlyHint: false,
         destructiveHint: false,
+        idempotentHint: false,
         openWorldHint: true,
       },
       followUp: {
@@ -111,7 +115,7 @@ export function registerComponentTools(
       description:
         '把实例换绑到另一个组件(componentId 为 COMPONENT 节点 id),会丢弃目标实例既有覆盖(破坏性)。只想套样式不换绑用 jsd_apply_overrides 且 swapToSource=false',
       inputSchema: swapComponentSchema,
-      annotations: { readOnlyHint: false, destructiveHint: true },
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
       followUp: {
         type: 'tool',
         tool: 'jsd_set_instance_properties',
@@ -124,7 +128,7 @@ export function registerComponentTools(
       description:
         '设置实例的变体/组件属性。属性名与可选值先 jsd_find / jsd_get_selection 读 variantProperties(变体,如 {"状态":["a0","a1"]})与 componentProperties(布尔/文本/换绑),名字必须完全匹配(宿主侧键可能是属性 id 如 Property 1#1:0,传名字即可,adapter/门面会自动归一)。值:变体属性传字符串(如 {"状态":"禁用"}),布尔属性传布尔({"显示图标":false}),需要显式类型或换绑候选时传 {"type":"INSTANCE_SWAP","value":"1:2"}。平台差异:变体属性三平台都走同名入口(jsDesign 缺专用入口时由引擎降级为变体属性+可见样式);布尔/文本/换绑属性在 Figma 与 MasterGo 生效(两端原生 setProperties 都收 string|boolean),jsDesign 无对应能力',
       inputSchema: setInstancePropertiesSchema,
-      annotations: { readOnlyHint: false, destructiveHint: false },
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
       followUp: {
         type: 'tool',
         tool: 'jsd_sync_overrides',
@@ -137,7 +141,7 @@ export function registerComponentTools(
       description:
         '把多个组件合并为变体集(分量)。必须传 COMPONENT 节点,实例不能直接合成。**两平台行为不同,按能力位 inPlaceVariants 分流**:①声明该能力的平台(如 Figma,原生 combineAsVariants 即原位合并)—— 并入集合的就是实例所指的 COMPONENT 本身,**已有实例链接不断、页面不残留冗余原件**,这是首选姿势,直接调即可;②未声明的平台(jsDesign,平台缺陷:引擎内部把节点按 BOOLEAN_OPERATION 取属性 → get_booleanOperation: Value is not a string,与组件结构无关)会退化为「克隆并入 / 克隆移入后合并」兜底 —— 兜底成功时页面上会同时留下**原件与集合内克隆**,已有实例仍指向原件,需自行 swap 到克隆变体后再删原件;全败时返回可执行出口,别重试、也别去改组件结构。jsDesign 上变体集的替代做法:每个状态各做一个 COMPONENT,按「族名 / 状态」命名(如 Nav / Inbox、Nav / Me),调用方按名字取用。「一个主件 + 每屏改子节点颜色」这条捷径同样不通(实例子节点样式 override 不保证渲染生效)',
       inputSchema: combineAsVariantsSchema,
-      annotations: { readOnlyHint: false, destructiveHint: true },
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
       followUp: {
         type: 'tool',
         tool: 'jsd_create_component',
@@ -151,7 +155,7 @@ export function registerComponentTools(
       description:
         '把源实例的覆盖(变体/组件属性/可见样式文本)复制为快照并缓存,返回 snapshotId(=源实例 id)。要先审后套或多次套用同一快照时用它,随后 jsd_apply_overrides;一次性复制+套用用 jsd_sync_overrides',
       inputSchema: copyOverridesSchema,
-      annotations: { readOnlyHint: true, destructiveHint: false },
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
       followUp: {
         type: 'tool',
         tool: 'jsd_apply_overrides',
@@ -164,7 +168,7 @@ export function registerComponentTools(
       description:
         '按 sourceId(先前 jsd_copy_overrides 返回的 snapshotId)把快照批量套用到目标实例。缓存 miss 会报错,需先 copy;swapToSource=true 会把目标换绑成源组件(丢失目标既有覆盖,需显式开启)',
       inputSchema: applyOverridesSchema,
-      annotations: { readOnlyHint: false, destructiveHint: false },
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
       followUp: {
         type: 'tool',
         tool: 'jsd_sync_overrides',
@@ -177,7 +181,7 @@ export function registerComponentTools(
       description:
         '无状态一次性「复制+套用」:sourceId 源实例,ids 全部目标实例。不写缓存,适合 jsd_batch 编排;需要多次套用同一快照时用 jsd_copy_overrides + jsd_apply_overrides',
       inputSchema: syncOverridesSchema,
-      annotations: { readOnlyHint: false, destructiveHint: false },
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
       followUp: {
         type: 'tool',
         tool: 'jsd_get_selection',
