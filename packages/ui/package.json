@@ -18,13 +18,13 @@
     "typecheck": "tsc --noEmit && tsc -p src/code/figma/tsconfig.json && tsc -p src/code/mastergo/tsconfig.json"
   },
   "devDependencies": {
-    "@figma/plugin-typings": "^1.137.0",
+    "@figma/plugin-typings": "^1.140.0",
     "@jsdesigndeveloper/plugin-typings": "^1.0.12",
     "@mastergo/plugin-typings": "^2.19.2",
     "@tailwindcss/postcss": "^4.3.3",
     "@types/node": "catalog:",
     "concurrently": "catalog:",
-    "daisyui": "^5.7.46",
+    "daisyui": "^5.7.47",
     "postcss": "^8.5.26",
     "solid-js": "^1.9.15",
     "tailwindcss": "^4.3.3",
@@ -36,6 +36,6 @@
     "zod": "catalog:"
   },
   "dependencies": {
-    "lucide-solid": "^1.48.0"
+    "lucide-solid": "^1.49.0"
   }
 }
