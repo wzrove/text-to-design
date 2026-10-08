@@ -34,4 +34,3 @@ dist-ssr
 # 所以新克隆的仓库不需要它也能正常工作。
 docs/mcp-errors/
 
-docs/*
