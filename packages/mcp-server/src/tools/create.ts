@@ -30,7 +30,7 @@ import { htmlToSvg } from '../htmlToDesign';
 import type { McpI18n } from '../i18n';
 import { findIcon, iconToSvg, suggestIcons } from '../icons';
 
-/** 各节点类型的 per-type 子 schema(取 shape 去掉 type 字面量,再挂 placement)。
+/** 各节点类型的 per-type 子 schema(取 shape,type 口径按 0034 覆盖,再挂 placement)。
  *  类型只用到 .shape 重建同形 object,故只声明 shape 这一必需成员,避免 any 逃逸类型检查;
  *  子 schema 带 refine/strict 包装,不能收窄成 z.ZodObject。
  */
@@ -51,15 +51,17 @@ const PER_TYPE_NODE_SCHEMA: Record<CreatableNodeType, PerTypeNodeSchema> = {
 
 /**
  * 单节点 per-type 入参 schema:复用该类型 executeNodeSchema 子类型的字段集合,
- * 去掉 type 字面量(工具已固化该类型)、挂上可选 placement。children 等 lazy 字段
- * 原样保留,strict 拒绝越界字段。zod4 的 .omit 不支持含 refine 的 object,故用
- * shape 重建。
+ * 顶层 type 改「可选但必须等于该工具固化的类型」(0034)——同一字段在 children[] 内
+ * 必填、在 jsd_batch 的 args 里无约束,唯独顶层禁止,是调用方唯一看不到的一条;
+ * 实测一次会话因此连撞 5 次,且模型会重写整份入参而不是删该字段。挂上可选 placement,
+ * children 等 lazy 字段原样保留,strict 拒绝其余越界字段。zod4 的 .omit 不支持含
+ * refine 的 object,故用 shape 重建。
  */
-function nodeCreateInputSchema(type: CreatableNodeType): z.ZodType {
+export function nodeCreateInputSchema(type: CreatableNodeType): z.ZodType {
   const shape: Record<string, unknown> = {
     ...PER_TYPE_NODE_SCHEMA[type].shape,
+    type: z.literal(type).optional(),
   };
-  delete shape.type;
   return z.object({ ...shape, placement: placementSchema.optional() }).strict();
 }
 
@@ -82,8 +84,11 @@ function createNodeTool(
     inputSchema: nodeCreateInputSchema(type),
     outputSchema: createdResultSchema,
     payload: (args) => {
-      const { placement, ...node } = args as Record<string, unknown>;
-      const ops = [{ type, ...node }];
+      const { placement, ...rest } = args as Record<string, unknown>;
+      // 剔除调用方传入的 type(0034):schema 已放行它,但展开在后会**覆盖**工具固化的
+      // 类型 —— 不删就成「给 jsd_create_frame 传 TEXT 能建出 TEXT」的静默串味
+      delete rest.type;
+      const ops = [{ type, ...rest }];
       return placement !== undefined ? { ops, placement } : { ops };
     },
     // 10 个 per-type create 共享同一组 hint:新增节点、不可逆(重复调用会多出节点)、

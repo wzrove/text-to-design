@@ -3,7 +3,7 @@
 历史只增不改。结论变了就新建记录并取代旧编号，旧记录保留原文。
 
 读法：每条决策**先读本索引**定位受影响的既有记录（含下面的依赖关系），再打开单条。
-下表只列**最近 10 条**（2026-09-24 及以后）；更早的 0001–0016 见 [`INDEX-2026.md`](INDEX-2026.md)。
+下表只列**最近 10 条**（2026-09-24 及以后）；更早的 0001–0023 见 [`INDEX-2026.md`](INDEX-2026.md)。
 
 维护阈值：本表 ≤ 15 KB 或 ≤ 40 条，超限**按年拆档**（全量行移入 `INDEX-<年>.md`，本表只留现行有效 + 最近 10 条）；
 单条记录的「变更历史」> 10 行时压成一行摘要 + 指向被取代的记录。完整机制见
@@ -11,13 +11,6 @@
 
 | 编号 | 标题 | 状态 | 影响范围 | 最后更新 |
 |---|---|---|---|---|
-| [0017](0017-第三平台MasterGo接入：门面投影加契约两处异步化.md) | 第三平台 MasterGo 接入：节点门面投影 + 契约两处异步化 | 已采纳（代码已落地并通过类型检查/不变式测试/三平台构建；**运行期已联调**——2026-09-24 首发并复验） | `shared/`（platform / node-type dict、i18n、`core/host.ts`）、`ui/`（新增 `src/code/mastergo/`、三侧 host 与 `sync-guarantee.ts`、构建配置）、`mcp-server/`（平台门控） | 2026-10-08 |
-| [0018](0018-实例变体写入：MG上改为集合内换绑加回读校验.md) | 实例变体写入：MG 上改为「集合内换绑 + 回读校验」 | 已采纳（**MG 真机复验通过**：2026-09-29 与 0033 同轮，建实例 → 写变体属性 → 回读命中；「增维/改值」未决项由 0033 接掉） | `ui/src/code/mastergo/`（新增 `variant-swap.ts` 与其测试、门面的 `applyInstanceProps`）、`platform-limits.md`、`0017-*.md` | 2026-09-24 |
-| [0019](0019-MasterGo平台特有操作：组件属性管理.md) | MasterGo 平台特有操作：组件属性管理（add / edit / delete） | 已采纳（MG 真机复验通过 2026-09-24；2026-09-29 ping 复核 platformOps 5→11，组件属性 5 op 沿用原结论；「变体集管理」范围外项已由 0033 接掉） | `ui/src/code/mastergo/`（新增 `ops.ts`、`meta.ts`）、`mcp-server/tools/platform.ts`（归属加 mastergo）、`platform-limits.md`、`0017-*.md` | 2026-09-24 |
-| [0020](0020-平台差异不重定义工具：三档机制继续承载，建组件改由core统一带子节点.md) | 平台差异不重定义工具：三档机制继续承载，建组件改由 core 统一带子节点 | 已采纳（**三平台真机复验**：2026-09-29 MG/Figma；2026-10-08 jsDesign 带内容建组件成立；「合进变体集」半支在 jsDesign 受引擎缺陷不可达(见 0021)） | `shared/`（`execute-schemas.ts`、`split-ops.ts`、`core/component.ts`）、`ui/code/plugin.ts`、i18n | 2026-10-08 |
-| [0021](0021-布局字段放开到COMPONENT与COMPONENT_SET：按平台类型逐项核对后不引入能力位.md) | 布局字段放开到 COMPONENT / COMPONENT_SET：逐平台类型核对后**不引入**能力位 | 已采纳（**三平台真机复验**：2026-09-29 MG/Figma 集合与组件都放通；2026-10-08 两条遗留全清——① 适用性点名接进 `updateSelection` 并去重；② `settle` 回读扩到 `itemSpacing`/`padding*`(Figma 5 项 + MG 2 例通过，不再靠人工 `jsd_find`)；jsDesign 侧 COMPONENT 放通、COMPONENT_SET 因引擎做不出集合而不达） | `shared/`（`dicts/*`、`schemas/shared-props.ts`、`core/{update,props/writers}.ts`、两个 `__tests__`）、`mcp-server/tools/{props,update-common}.ts` | 2026-10-08 |
-| [0022](0022-平台类型事实收敛为声明表，值域与适用性判定归位到-core-写路径.md) | 平台类型事实收敛为声明表，值域与适用性判定归位到 core 写路径 | 已采纳（代码已落地并通过类型检查/不变式测试/三平台构建；**MG / jsDesign 真机已逐条复验**——MG 2026-09-24 并 2026-10-08 复跑，jsDesign 2026-10-08 补跑；Figma 2026-10-08 复跑，三平台齐） | `shared/`（新增 `dicts/platform-value-domain.ts`、`core/props/`、`schemas/*`、`core/normalize.ts`）、`ui/`（三侧 `sync-guarantee.ts`、MG 门面）、`platform-limits.md` | 2026-10-08 |
-| [0023](0023-组件属性读形态与写形态之间要有单点映射，套用覆盖不再隐式换变体.md) | 组件属性「读形态 ≠ 写形态」：单点映射 + 套用覆盖不再隐式换变体 | 已采纳（Figma 真机已复验） | `shared/src/core/component.ts`、`ui/src/code/figma/ops.ts`、`schemas/results.ts` |
 | [0024](0024-变量绑定进入读路径：boundVariables-按引擎词汇原样透传，不引入归一化层.md) | 变量绑定进入读路径：`boundVariables` 按引擎词汇原样透传，不引入归一化层 | 已采纳（**Figma 真机复验通过**：2026-09-29 建变量→绑定→回读得 `{type:'VARIABLE_ALIAS', id:'VariableID:…'}`，未归一化；变量集合无删除入口，属 op 能力缺口） | `shared/`（`schemas/{platform,serialized-node}.ts`、`core/{host,serialize}.ts`、`write-path` 单测）、`ui/code/figma/sync-guarantee.ts` | 2026-09-25 |
 | [0025](0025-Figma补上组件属性的定义入口：一个op承担定义即绑定，不照搬MG的四段式.md) | Figma 补上组件属性**定义**入口：一个 op 承担「定义 + 绑定」，不照搬 MG 四段式 | 已采纳（**Figma 真机复验通过**：2026-09-25 验 INSTANCE_SWAP / TEXT 两槽，2026-09-29 补测 BOOLEAN 槽(可见性)，属性确实驱动图层） | `ui/code/figma/{ops,sync-guarantee}.ts`、`mcp-server/tools/nodes.ts`、`mcp-server/README.md` | 2026-09-25 |
 | [0029](0029-能力字典改规格表：kind-判别加-labelKey-收口，删死代码与重复事实.md) | 能力字典改规格表：kind 判别 + labelKey 收口 | 已采纳（类型检查 + 不变式测试通过） | `shared/`（`dicts/capability.ts`、`core/{capabilities,buildNode}.ts`、i18n 少一键）、`ui/`（删 `i18n/capabilityKeys.ts`、`CapabilityCard`、`figma/meta.ts` 少一位） | 2026-09-29 |
@@ -25,6 +18,7 @@
 | [0031](0031-MCP-声明面照-2026-07-28-补齐：目录缓存提示-+-工具注解四-hint-必填.md) | MCP 声明面照 2026-07-28 补齐：目录缓存提示 + 工具注解四 hint 必填 | 已采纳（类型检查 + 本包 24 例不变式测试通过；真机复验待插件重载） | `mcp-server/`（`config.ts`、`server.ts`、`daemon/proxy.ts`、`core/registry.ts`、`tools/*.ts` 全 53 个工具的注解） | 2026-09-29 |
 | [0032](0032-平台事实三域收敛为声明表：prompts-与工具描述共用单一投影点.md) | 平台事实三域收敛为声明表：prompts 与工具描述共用单一投影点 | 已采纳（类型检查 + 12 例不变式 + i18n/目录体积回归通过；2026-10-08 真机：jsDesign 侧 boolean 一项**不可隔离**（无属性可设）、MG/Figma 侧配方分流通过） | `shared/`（新增 `dicts/platform-knowledge.ts`、`platform-value-domain.ts` 第四类登记、`core/host.ts`、i18n 三键）、`ui/`（三侧 `sync-guarantee.ts`）、`mcp-server/`（新增 `tools/platform-facts.ts`、`tools/{prompts,components,platform}.ts`、`README.md`）、`tests/platform-knowledge.test.ts` | 2026-10-08 |
 | [0033](0033-MG-集合级变体管理接入-platformOps：原生建维改值替代改名副作用.md) | MG 集合级变体管理接入 platformOps：原生建维改值替代改名副作用 | 已采纳（类型检查 + 18 例新单测 + 40 例既有 MG 单测 + 事实表/i18n/目录体积回归 + 三平台构建通过；**真机复验通过**——MG 客户端 7 项全通，`platformOps` 5→11、画布已清干净） | `ui/src/code/mastergo/`（`ops.ts` 6 个 op、新增 `variant-set.ts` 与其单测、`meta.ts`、`sync-guarantee.ts`）、`shared/dicts/platform-knowledge.ts`、`mcp-server/`（`tools/{platform-facts,prompts}.ts`、`README.md`）、`tests/platform-knowledge.test.ts` | 2026-09-29 |
+| [0034](0034-单类型-create-工具容忍并校验-type：三处口径统一加越界字段点名.md) | 单类型 create 工具容忍并校验 `type`：三处口径统一 + 越界字段点名 | 已采纳（类型检查 + 8 例新单测 + 266 例回归 + 三平台构建通过；**Figma 真机三条路径复验通过** 2026-10-08，jsDesign / MasterGo 待补） | `mcp-server/`（`tools/create.ts`、`core/registry.ts`）、`shared/src/schemas/batch.ts` | 2026-10-08 |
 
 
 ## 依赖关系
@@ -84,6 +78,10 @@
                         （platformOps 通道），形制沿 0019 的组件属性 op 组、出口纪律沿 0007（本平台有「回包成功、
                         值没变」的前科，故每个 op 写完回读）；拒绝「按平台出新工具族」沿 0020、拒绝「扩
                         combine_as_variants 入参」同因；登记进 0032 的三域事实表，提示词据此分流
+0034 (单类型 create 容忍 type) ── 口径统一沿 0022/0032「一个事实一份」；报错出口沿 0013（出口改写不外扩）；
+                        排除「10 条描述各写一句」是撞 0006 的体积口径；工具面不动沿 0020；
+                        ② 与 daemon/friendly-schema 同为出口改写但输入源不同（zod shape vs 线格式 JSON Schema），
+                        两层不互相引用，故不构成第二份事实
 ```
 
 更早的记录（0001–0016）见 [`INDEX-2026.md`](INDEX-2026.md)。

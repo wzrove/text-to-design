@@ -102,6 +102,67 @@ export function executorNames(): string[] {
   return [...executors.keys()].sort();
 }
 
+/** 越界字段点名上限(超过就只说个数,不做无限铺表) */
+const UNEXPECTED_KEY_LIMIT = 8;
+/** 允许键名超过这个数就不列全表(jsd_create_frame 有 46 个),只给数量 */
+const ALLOWED_KEY_LIST_LIMIT = 20;
+
+/**
+ * 从 zod object 根 schema 取允许的顶层键名。联合 schema(jsd_manage_nodes 这类按 op
+ * 分发)与非 object 根返回 null,由调用方退回原始报错 —— 猜错的键名清单比不写更糟。
+ */
+function allowedTopKeys(schema: z.ZodType): string[] | null {
+  const shape = (schema as { shape?: unknown }).shape;
+  if (shape == null || typeof shape !== 'object') return null;
+  const keys = Object.keys(shape as Record<string, unknown>);
+  return keys.length > 0 ? keys : null;
+}
+
+/**
+ * 入参校验失败的「人话」改写(zod 出口)。
+ *
+ * 背景:调 tools/call 的常规路径已由 SDK 的 validateToolInput 拦下,但
+ * **jsd_batch 直调内层工具**会绕过它(见下方 executeTool 的说明),此时 strict schema
+ * 拒字段只给一句 `(root): Unrecognized key: "type"`,不回显「到底哪个键越界、该删谁」。
+ * 实测后果:调用方(尤其 LLM)把整份入参重写一遍,而不是删掉那一个字段 ——
+ * 一次会话内同一份坏载荷因此连试 5 次。
+ *
+ * 输入源是 **zod shape**(工具执行出口)。shim 边界那份 `daemon/friendly-schema.ts` 是
+ * 同为出口改写、但输入源为线格式 JSON Schema 的另一层,两者不互相引用也不共用 helper
+ * (合并会造出 core→daemon 的反向依赖)。
+ *
+ * 只在能确定越界字段时改写;否则原样返回原始 detail(缺必填字段等场景保持原状)。
+ */
+export function describeInvalidArgs(
+  inputSchema: z.ZodType,
+  args: unknown,
+  detail: string,
+): string {
+  const keys = allowedTopKeys(inputSchema);
+  if (
+    keys == null ||
+    args == null ||
+    typeof args !== 'object' ||
+    Array.isArray(args)
+  ) {
+    return detail;
+  }
+  const received = Object.keys(args as Record<string, unknown>);
+  const allowed = new Set(keys);
+  const unexpected = received.filter((k) => !allowed.has(k));
+  if (unexpected.length === 0) return detail;
+  const named = unexpected.slice(0, UNEXPECTED_KEY_LIMIT).join(', ');
+  const more =
+    unexpected.length > UNEXPECTED_KEY_LIMIT
+      ? ` 等 ${unexpected.length} 个`
+      : '';
+  const list =
+    keys.length <= ALLOWED_KEY_LIST_LIMIT
+      ? `该工具接受: [${keys.join(', ')}]。`
+      : `该工具接受 ${keys.length} 个字段(完整清单见其 schema),本次收到的 [${received.join(', ')}] 里只有上述字段越界。`;
+  return `字段 [${named}]${more} 不被该工具接受,请删掉后重试(其余字段本身合法)。${list}原始校验: ${detail}`;
+}
+
 export interface BridgeToolDef {
   name: string;
   title: string;
@@ -202,6 +263,8 @@ export function bridgeTool(
         // 成本可忽略),这里补齐 jsd_batch 直调 executor 的路径——内层工具的
         // inputSchema 不生效,坏载荷(颜色带 a / 0-255 / 渐变带 color / 缺
         // blendMode 等)会原样穿透到引擎抛 in set_fills/set_effects。
+        // 这条路径**唯一**的出口就是下面的报错,故越界字段在此点名(0034):
+        // SDK 那层被绕过,再不给可删的动作,调用方只能猜。
         if (def.inputSchema != null) {
           const parsed = def.inputSchema.safeParse(args);
           if (!parsed.success) {
@@ -210,7 +273,7 @@ export function bridgeTool(
               .join('; ');
             throw new BridgeError(
               'invalid_args',
-              `参数校验失败(${def.name}): ${detail}`,
+              `参数校验失败(${def.name}): ${describeInvalidArgs(def.inputSchema, args, detail)}`,
             );
           }
           args = parsed.data as Record<string, unknown>;

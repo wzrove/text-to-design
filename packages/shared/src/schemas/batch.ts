@@ -18,7 +18,7 @@ export const batchCallSchema = z.object({
     .record(z.string(), z.unknown())
     .optional()
     .describe(
-      '该工具的完整入参;任意位置的字符串值里可放双花括号占位符(步骤id.字段路径)引用先前步骤结果',
+      '该工具的完整入参;任意位置的字符串值里可放双花括号占位符(步骤id.字段路径)引用先前步骤结果。注意:jsd_create_* 是单类型工具,节点类型已固化在工具名里(jsd_create_frame=FRAME),args 不必再传 type',
     ),
   continueOnError: z
     .boolean()
