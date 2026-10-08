@@ -1,5 +1,4 @@
 import {
-  applicabilityMissNotice,
   PROP_APPLICABILITY,
   PROP_METHOD_FIELDS,
   type PropMethod,
@@ -38,29 +37,12 @@ export function updateFeedback(
   for (const w of warnings) {
     blocks.push({ type: 'text', text: `⚠ ${w}` });
   }
-  // 类型不匹配的属性被 runtime 静默跳过,这里显式点名,避免调用方误以为生效
-  //
-  // 修订:原条件 `updated.length > 0 && requested.length === 0` 写反 —— 实际
-  // 触发于「调用方传了非类型门控字段(strokes / fills / effects 等)且至少 1 个节点
-  // 被改」的常见路径,与上一行「已更新 N 个节点」互相矛盾。`requested` 只统计
-  // PROP_APPLICABILITY(类型门控)字段,所以 strokes/fills 永远 0,误报恒出。
-  // 改成「真的什么都没改」才报,且只取「未改 + 也没传适用属性」这一格。
+  // 类型不匹配的属性被 runtime 静默跳过,点名现在由 core 的写路径统一报
+  // (shared/core/update.ts 的 applicabilityMisses,两条路径同一句文案)。
+  // 这里不再按 `updated` 反推:core 已报,再报一遍就是同一事实印两次
+  // (实测回包里出现 ⚠ 行 + 无 ⚠ 行各一条)。一个事实一份,此处只保留「真的什么都没改」这一格。
   if (updated.length === 0 && requested.length === 0) {
     blocks.push({ type: 'text', text: '未传入任何属性,本次未修改' });
-  } else if (updated.length > 0 && requested.length > 0) {
-    const skipped = requested.filter((k) => {
-      const applicable = PROP_APPLICABILITY[k];
-      return (
-        applicable != null &&
-        !updated.some(
-          (n) => n.type != null && applicable.some((t) => t === n.type),
-        )
-      );
-    });
-    if (skipped.length > 0) {
-      const notice = applicabilityMissNotice(skipped);
-      if (notice != null) blocks.push({ type: 'text', text: notice });
-    }
   }
   if (requestedIds.length > 0) {
     const got = new Set(updated.map((n) => n.id));

@@ -90,10 +90,9 @@ export async function runDaemon(bridge: Bridge): Promise<void> {
    * 真来了 2025 客户端,明确拒收比静默串味强。
    */
   let assembled: McpServer | null = null;
-  const handler = createMcpHandler(
-    () => (assembled ??= buildServer(bridge)),
-    { legacy: 'reject' },
-  );
+  const handler = createMcpHandler(() => (assembled ??= buildServer(bridge)), {
+    legacy: 'reject',
+  });
   const nodeHandler = toNodeHandler(handler);
   const validateHost = localhostHostValidation();
   const validateOrigin = localhostOriginValidation();

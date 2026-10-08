@@ -112,6 +112,32 @@ function isTransportError(e: unknown): boolean {
 }
 
 /**
+ * 上游 prompt 的参数声明 → shim 侧注册用的 zod schema。
+ *
+ * **必须保住可选性**:上游把参数声明成 `required: false`(如 `design-strategy` 的
+ * `screen`、`variant-set` 的 `family`),镜像时一律写成 `z.string()` 会让下游
+ * 「不填就调不动」—— 而这些配方的用法恰恰是「参数留空 = 只要纪律」。
+ * 2026-09-29 实测:镜像丢失可选性时 `getPrompt({name:'design-strategy', arguments:{}})`
+ * 被本层拒成 `screen: Invalid input: expected string, received undefined`,
+ * 而 `prompts/list` 也把每个参数都报成 `required: true`。
+ *
+ * MCP 的 prompt 参数在线上都是字符串,故这里一律 `z.string()`;真正的取值校验仍在
+ * 上游(它有原始 schema),本层只负责把「要不要填」如实转达给下游。
+ */
+export function promptArgsSchema(
+  args:
+    | readonly { name: string; description?: string; required?: boolean }[]
+    | undefined,
+): z.ZodType {
+  const shape: Record<string, z.ZodType> = {};
+  for (const arg of args ?? []) {
+    const field = z.string().describe(arg.description ?? '');
+    shape[arg.name] = arg.required === true ? field : field.optional();
+  }
+  return z.object(shape);
+}
+
+/**
  * shim 模式:stdio 与 daemon 之间的 MCP 代理(McpServer 动态重注册)。
  *
  * 本地注册表只承担「目录」职责,工具调用始终实时转发 daemon;目录新鲜度由三重
@@ -264,16 +290,12 @@ export async function serveProxy(initialClient: Client): Promise<void> {
       if (known && known.raw === raw) continue;
       known?.handle.remove();
       promptHandles.delete(p.name);
-      const shape: Record<string, z.ZodType> = {};
-      for (const arg of p.arguments ?? []) {
-        shape[arg.name] = z.string().describe(arg.description ?? '');
-      }
       const handle = mcp.registerPrompt(
         p.name,
         {
           title: p.title,
           description: p.description,
-          argsSchema: z.object(shape),
+          argsSchema: promptArgsSchema(p.arguments),
         },
         (args) =>
           withUpstream((c) =>

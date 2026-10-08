@@ -39,7 +39,12 @@ export function registerRawTools(
     inputSchema: exportSchema,
     outputSchema: exportResultSchema,
     // 画布只读;但会写本地文件,不标 readOnly
-    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
     timeout: LONG_IO_TIMEOUT_MS,
     followUp: {
       type: 'tool',
@@ -137,7 +142,12 @@ export function registerRawTools(
     description: 'fillImage.description',
     inputSchema: fillImageSchema,
     outputSchema: updatedResultSchema,
-    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
     timeout: LONG_IO_TIMEOUT_MS,
     followUp: {
       type: 'tool',
@@ -175,7 +185,12 @@ export function registerRawTools(
     // **静默丢掉**(实测:传了 family/limit,插件收到的是空 params,分页/过滤双双失效)
     inputSchema: listFontsSchema,
     outputSchema: listFontsResultSchema,
-    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
     followUp: {
       type: 'tool',
       tool: 'jsd_set_text',

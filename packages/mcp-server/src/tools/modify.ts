@@ -22,7 +22,12 @@ export function registerModifyTools(
     method: 'find',
     inputSchema: findSchema,
     outputSchema: findResultSchema,
-    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
     followUp: {
       type: 'tool',
       tool: 'jsd_select_nodes',

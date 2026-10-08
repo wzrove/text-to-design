@@ -19,7 +19,12 @@ export function registerSessionTools(
     title: i18n.t('ping.title', { client: CLIENT.label }),
     description: i18n.t('ping.description', { client: CLIENT.label }),
     outputSchema: pingResultSchema,
-    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
     alwaysEnabled: true,
     timeout: PING_TIMEOUT_MS,
     followUp: {
@@ -65,7 +70,12 @@ export function registerSessionTools(
     // (实测:传 depth 与不传结果一样,永远是默认层级)
     inputSchema: getSelectionSchema,
     outputSchema: getSelectionResultSchema,
-    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
     followUp: {
       type: 'tool',
       tool: 'jsd_find',

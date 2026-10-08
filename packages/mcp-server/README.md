@@ -136,8 +136,8 @@ pkill -f text-to-design-mcp
 | `jsd_detach_instance` | 取消实例链接,得到可自由编辑的普通节点 |
 | `jsd_import_component` | 按 key 从团队库导入组件 |
 | `jsd_swap_component` | 换绑组件(丢弃目标既有覆盖) |
-| `jsd_set_instance_properties` | 设置变体属性(属性名需与 variantGroupProperties 完全匹配) |
-| `jsd_combine_as_variants` | 合并为变体集(仅 COMPONENT,实例不能直接合成)。⚠ 本引擎必然失败(平台缺陷),全败时返回可执行出口:改用「族名 / 状态」命名的多个独立主件 |
+| `jsd_set_instance_properties` | 设置实例的变体/组件属性。属性名与可选值先读 `variantProperties`(本节点取值)与 `variantGroupProperties`(组件集上的可选值);**能传哪种值取决于本平台 `setProperties` 签名**:Figma 收 string/boolean/变量别名,MG 收 string/boolean,jsDesign 只收 string(登记在 `shared/src/dicts/platform-value-domain.ts` 的第四类表,由 `sync-guarantee` 双向断言守) |
+| `jsd_combine_as_variants` | 合并为变体集(仅 COMPONENT,实例不能直接合成)。按能力位 `inPlaceVariants` 分流:声明的平台原位合并(首选,直接调);未声明的平台合成路径做不出来,改用「族名 / 状态」命名的多个独立主件 |
 | `jsd_copy_overrides` | 复制源实例覆盖为快照,返回 snapshotId(缓存) |
 | `jsd_apply_overrides` | 按 snapshotId 批量套用,可 swapToSource |
 | `jsd_sync_overrides` | 无状态一次性「复制+套用」,适合 jsd_batch |
@@ -146,17 +146,26 @@ pkill -f text-to-design-mcp
 | `jsd_export` | 导出节点为 PNG/JPG/SVG/PDF(导出失败的 id 在文本里点名) |
 | `jsd_list_fonts` | 列出可用字体:families 与各族的可用字型 `fonts:[{family,styles}]`(写 fontName 前照这份取组合,family+style 需精确匹配,猜错会静默退回默认字重) |
 | `jsd_fill_image` | 用本地图片填充节点 |
-| `jsd_platform_op` | 平台特有能力的通用通道(Figma 变量/本地样式/组件属性**定义与设值**)。先读 `jsd_ping` 的 `platformOps` 名单再传 op 名;插件平台不适用(如即时设计)时由 daemon 直接拦截并给出替代路径,不发插件往返 |
+| `jsd_platform_op` | 平台特有能力的通用通道(Figma 变量/本地样式/组件属性**定义与设值**;MasterGo 组件属性管理与**集合级变体管理**——建维度/加成分/改取值/删维度)。先读 `jsd_ping` 的 `platformOps` 名单再传 op 名;插件平台不适用(如即时设计)时由 daemon 直接拦截并给出替代路径,不发插件往返 |
 
 ### 配方 prompt(`prompts/list`)
 
 带参数的操作引导词,让 AI 少猜流程细节;策略类以 assistant 身份下发,配方式以 user 身份下发。
+
+**平台感知**:配方在**调用期**读当前平台(daemon 缓存的 ping 结果),只讲当前平台那一支 ——
+Figma 用户不会再读到 jsDesign 的兜底细节;平台未探测时给「先 jsd_ping 读能力位」的保守说法。
+平台事实与句子**不写在配方里**:数据在 `shared/src/dicts/platform-knowledge.ts`(三平台 ×
+变量/组件/变体,含读路径、写入口、替代路径、证据行号),句子在 `mcp-server/src/tools/platform-facts.ts`
+(工具描述走同一份句子)。改动理由与守卫见 `docs/design-decisions/0032-*.md`。
 
 | prompt | 用途 |
 | --- | --- |
 | `design-strategy` | 设计策略总纲:命名/层级/间距字号阶梯/出错回滚,附登录页示例结构树 |
 | `text-replace-strategy` | 大改文案:jsd_clone_node 留底 → 语义分块 → jsd_set_text 批量替换 → 逐块导小图复核 |
 | `variant-sync` | 把一个实例的样式/文案批量套用到多个同类实例(优先 jsd_sync_overrides / copy+apply,手工 jsd_set_* 兜底) |
+| `variable-binding` | 变量绑定与批量套用:按本平台变量面分流(读写都通 / typings 有 API 但未接 / 接不了),含批量绑定与回读复核 |
+| `variant-set` | 变体集构建:按能力位 `inPlaceVariants` 分流(原位合并 / 多主件兜底);有集合级管理 op 的平台(见 `platformOps`)直接建维度、加成分、改取值,不靠改名字,含建后回读 |
+| `component-property` | 组件属性的定义与设值:定义走 platform op、设值走 jsd_set_instance_properties,并给出本平台能收的值形态 |
 | `html-to-design` | HTML 转设计稿,含保真度取舍说明 |
 | `icon-grid` | 批量插入 Lucide 图标并排成自动布局网格 |
 | `script-ops` | 脚本化调用纪律:压缩工具往返与上下文占用 |

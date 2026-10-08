@@ -65,12 +65,7 @@ function nodeCreateInputSchema(type: CreatableNodeType): z.ZodType {
 
 type CreateNodeDef = Pick<
   BridgeToolDef,
-  | 'name'
-  | 'title'
-  | 'description'
-  | 'followUp'
-  | 'platforms'
-  | 'platformNote'
+  'name' | 'title' | 'description' | 'followUp' | 'platforms' | 'platformNote'
 >;
 
 /**
@@ -200,7 +195,12 @@ export function registerCreateTools(
     method: 'create_svg',
     inputSchema: createSvgSchema,
     outputSchema: createdResultSchema,
-    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
     payload: ({ svg, name }) => ({
       svg,
       name: name ?? 'svg-design',
@@ -215,7 +215,12 @@ export function registerCreateTools(
       '按名称/别名/语义模糊匹配并插入 Lucide 内置图标;查无时返回候选名。默认 24px 黑色描边 2px。建多个根节点/复杂树用 jsd_batch 编排',
     inputSchema: createIconSchema,
     outputSchema: createdResultSchema,
-    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
     run: async (args, bridge_, signal) => {
       const { icon, size, color, strokeWidth, name } = args as {
         icon: string;
@@ -253,7 +258,12 @@ export function registerCreateTools(
     description: 'htmlToDesign.description',
     inputSchema: htmlToDesignSchema,
     outputSchema: createdResultSchema,
-    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
     run: async (args, bridge_, signal) => {
       const { html, name } = args as { html: string; name?: string };
       const svg = htmlToSvg(html);
