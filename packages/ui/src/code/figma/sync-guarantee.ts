@@ -33,6 +33,8 @@ import type {
   DesignHost,
   FIGMA_ONLY_NODE_TYPES,
   FIGMA_RUNTIME_VALUE_DOMAIN,
+  MethodParamAllowViolations,
+  MethodParamValue,
   NodeSkeleton,
   NodeType,
   PageSkeleton,
@@ -276,4 +278,29 @@ export type FigmaRuntimeGrowMeaningfulCheck = ExpectNever<
 /** 反向覆盖:Figma 声明的 `layoutGrow` 取值域必须整体落在契约里(契约漏了 ⇒ 收窄管不到它) */
 export type FigmaGrowDomainCoverageCheck = ExpectNever<
   Exclude<FigmaLayoutGrow, NonNullable<NodeSkeleton['layoutGrow']>>
+>;
+
+// ---- 6) 契约**方法参数**取值域(第四类登记) ----
+
+/**
+ * Figma 侧**没有登记项**,这本身就是登记内容:`plugin-api.d.ts:11123`
+ * `setProperties(properties: { [propertyName: string]: string | boolean | VariableAlias })`
+ * —— 三种值形态全收,没有收窄可登记(与 `BlendMode` 不需要 deny 补偿同因)。
+ *
+ * 断言方向因此与另两平台**相反**:不是「登记的收不下必须真收不下」,而是
+ * **「三种形态必须真都收得下」** —— 哪天 Figma 收窄了签名,这条先红,提醒去
+ * `dicts/platform-value-domain.ts` 的 `PLATFORM_METHOD_PARAM_DOMAIN` 补登记。
+ *
+ * 「Figma 确实没有登记项」由 `tests/platform-knowledge.test.ts` 直接查表守
+ * (类型层看不到 `Partial` 表里「键不存在」这件事)。
+ */
+type FigmaSetPropsValue = MethodParamValue<InstanceNode['setProperties']>;
+
+export const _figmaSetPropertiesDeclared: Declared<
+  'setProperties',
+  InstanceNode
+> = true;
+
+export type FigmaSetPropsAllKindsAcceptedCheck = ExpectNever<
+  MethodParamAllowViolations<never, FigmaSetPropsValue>
 >;

@@ -17,9 +17,17 @@ import { mastergoOps } from './ops';
  *   (合并后集合的 children 就是传入组件的 id,页面无克隆残留),与 Figma 同语义;
  *   故 claim 它,core 的合并首选顺序据此走原位姿势。
  *
- * platformOps:目前是**组件属性管理**三个 op(见 0019)—— MG 不会把组件的子文本自动暴露成
- * `TEXT` 属性,没有这组 op 就永远造不出第一个属性,`jsd_set_instance_properties` 的
- * 布尔/文本/换绑路径等于摆设。变量(`mg.variables`)仍未接:形状与 Figma 不同、需另开决策。
+ * platformOps:两组,共 11 个 op。
+ * - **组件属性管理**(0019,5 个):MG 不会把组件的子文本自动暴露成 `TEXT` 属性,
+ *   没有这组 op 就永远造不出第一个属性,`jsd_set_instance_properties` 的
+ *   布尔/文本/换绑路径等于摆设;
+ * - **集合级变体管理**(0033,6 个):建维度 / 加成分 / 改维度名 / 改取值 / 删维度 + 查看。
+ *   这是 MG 三平台独有的面 —— 0018 的换绑只能切到**已有**成分,造新值此前只能靠
+ *   「改成分名字让引擎归一」这种未声明的副作用;接上这组才算有正路。
+ *   两个别名 op(`editVariantPropertiesAlias` / `editVariantPropertyValuesAlias`)
+ *   依赖变量面(`mg.variables`),仍未接 —— 属「可以接、等变量决策」。
+ *
+ * 变量(`mg.variables`)整体仍未接:形状与 Figma 不同、需另开决策。
  */
 export const meta: PlatformMeta = {
   capabilities: ['styles', 'inPlaceVariants'],

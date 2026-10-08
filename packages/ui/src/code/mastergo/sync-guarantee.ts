@@ -20,6 +20,7 @@ type RuntimeImagePaint = ImagePaint;
 type RuntimeAutoLayout = AutoLayout;
 type RuntimeInstanceNode = InstanceNode;
 type RuntimeComponentNode = ComponentNode;
+type RuntimeComponentSetNode = ComponentSetNode;
 type RuntimeVariantProperty = VariantProperty;
 type RuntimeLayoutMixin = LayoutMixin;
 type RuntimeEllipseNode = EllipseNode;
@@ -32,9 +33,13 @@ type RuntimeBlurEffect = BlurEffect;
 
 import type {
   DesignHost,
+  MASTERGO_METHOD_PARAM_DOMAIN,
   MASTERGO_PROP_TYPE_EXCLUSION,
   MASTERGO_RUNTIME_VALUE_DOMAIN,
   MASTERGO_VALUE_DOMAIN,
+  MethodParamAllowViolations,
+  MethodParamDenyViolations,
+  MethodParamValue,
   NodeSkeleton,
   NodeType,
   PageSkeleton,
@@ -457,4 +462,76 @@ export type RuntimeCrossAlignMeaningfulCheck = ExpectNever<
 >;
 export type RuntimeCrossAlignInTypingsCheck = ExpectNever<
   Exclude<MgCrossAlign, RuntimeAutoLayout['crossAxisAlignItems']>
+>;
+
+// ---- 6) 契约**方法参数**取值域(第四类登记) ----
+
+/**
+ * 依据:`dist/index.d.ts:3097`
+ * `setProperties(properties: { [propertyId: string]: string | boolean }): void`
+ * —— 收字符串与布尔,**不收变量别名**(Figma 的签名多一个 `VariableAlias`)。
+ *
+ * 与另两平台的差别值得记下:MG 的签名键是 **propertyId**(不是属性名),名字归一
+ * 在门面里(0017);取值域这条只谈值形态,键名差异归门面,两者不要混。
+ *
+ * 退出条件同 jsDesign:签名收宽(`…DenyAbsentCheck` 编译失败)即删 deny 项。
+ */
+type MgSetPropsValue = MethodParamValue<RuntimeInstanceNode['setProperties']>;
+type MgSetPropsDenied =
+  (typeof MASTERGO_METHOD_PARAM_DOMAIN)['setProperties']['deny'][number];
+
+export const _mastergoSetPropertiesDeclared: Declared<
+  'setProperties',
+  RuntimeInstanceNode
+> = true;
+
+export type MgSetPropsDenyAbsentCheck = ExpectNever<
+  MethodParamDenyViolations<MgSetPropsDenied, MgSetPropsValue>
+>;
+
+export type MgSetPropsAllowPresentCheck = ExpectNever<
+  MethodParamAllowViolations<MgSetPropsDenied, MgSetPropsValue>
+>;
+
+// ---- 7) 集合级变体管理入口(0033):登记的 7 个符号必须真在 typings 里 ----
+
+/**
+ * 依据:`@mastergo/plugin-typings@2.19.2` `dist/index.d.ts:3072-3085` 的 `ComponentSetNode`。
+ *
+ * 为什么两个「未接」的别名入口也断言:它们不是遗忘,而是**等变量面**(绑的是变量别名,
+ * 而 `mg.variables` 本仓未接)—— 登记成断言,官方哪天删/改名时不会静默变成幻影符号;
+ * 变量面接上时,这里就是「可以接的清单」。
+ *
+ * 断言失败会打出具体键名(`Type '"xxx"' does not satisfy the constraint 'never'`),
+ * 对应 0033 的退出条件:宿主改了入口名 → 先红在类型层,不靠人记。
+ */
+type VariantSetMethod =
+  | 'createVariantComponent'
+  | 'createVariantProperties'
+  | 'editVariantProperties'
+  | 'editVariantPropertyValues'
+  | 'deleteVariantProperty'
+  | 'editVariantPropertiesAlias'
+  | 'editVariantPropertyValuesAlias';
+
+/**
+ * 缺席项必须为空 —— 用 `Missing`(缺席映射成**键名**)而不是 `Declared`:
+ * 后者只在类型位置可用,且把成功与失败映射成 `true | never` 后求并集会**恒为 `true`**
+ * (失败的 `never` 被并掉了),那种断言看着在守、其实永远通过。
+ */
+type MissingVariantSetMethods = {
+  [K in VariantSetMethod]: Missing<K, RuntimeComponentSetNode>;
+}[VariantSetMethod];
+
+export type MastergoVariantSetMethodsCheck =
+  ExpectNever<MissingVariantSetMethods>;
+
+/**
+ * 读面的依据:集合的维度与可选值只能从 `componentPropertyValues` 读
+ * (`ComponentPropertyValue.variantOptions`,typings 3011-3026 行)——
+ * **必须**断言 `variantGroupProperties` 在 MG typings 里真的不存在,否则实现里
+ * 那条「别去读它」的注释就是没根据的(而另两平台确实有该字段,极易顺手抄过来)。
+ */
+export type MgHasNoVariantGroupPropertiesCheck = ExpectNever<
+  Declared<'variantGroupProperties', RuntimeComponentSetNode>
 >;

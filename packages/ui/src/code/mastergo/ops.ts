@@ -4,6 +4,22 @@ import {
   resolveNodes,
 } from 'text-to-design-shared';
 import { z } from 'zod';
+import {
+  describeDimensions,
+  duplicateDimensions,
+  findDimension,
+  type MemberView,
+  missingDimensions,
+  newMembers,
+  readDimensions,
+  resolveValueTarget,
+  toMemberView,
+  unknownRenameSources,
+  type VariantDimension,
+  verifyDelete,
+  verifyRename,
+  verifyValueEdit,
+} from './variant-set';
 
 /**
  * MasterGo 特有流程级操作:走 MCP 的 `platform_op` 通用通道(与 figma/ops.ts 同一套契约)。
@@ -178,6 +194,11 @@ interface RawLayer {
   width?: number;
   height?: number;
   children?: RawLayer[];
+  /**
+   * 变体取值(原生是 `Array<VariantProperty>`,typings 3056 行)—— 成分侧读它就知道
+   * 「这个成分代表哪一组值」。类型留 `unknown`:投影(`readVariantProperties`)负责收窄。
+   */
+  variantProperties?: unknown;
   findAll?: (cb?: (n: RawLayer) => boolean) => RawLayer[];
   findChildren?: (cb?: (n: RawLayer) => boolean) => RawLayer[];
 }
@@ -630,6 +651,367 @@ async function listSublayersOp(
   };
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// 集合级变体管理:MG 的三平台独有面(决策 0033)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * 为什么这组 op 存在:0018 把 MG 的变体**写入**落成「集合内换绑 + 回读校验」—— 能切到集合里
+ * **已有**的成分,但造不出新维度/新值。当时造第二个值的唯一手段是「把成分改名成 `属性 1=备选`,
+ * 靠 MG 自己归一」:那是把引擎内部行为当 API 用,属未声明的副作用(0007 明令根除的形态)。
+ *
+ * 而 typings 里本来就有整套集合级入口(`@mastergo/plugin-typings@2.19.2` `dist/index.d.ts:3072-3085`),
+ * 本仓此前一个没接 —— 0018 的「未决」把它明确留成「属新能力,需要时另开决策」,0033 就是那条决策。
+ *
+ * | 宿主入口 | 用途 | 本仓 |
+ * |---|---|---|
+ * | `createVariantProperties(names)` | 建维度(随带默认值) | 接 |
+ * | `createVariantComponent()` | 往集合加新成分(新值组合) | 接 |
+ * | `editVariantProperties({旧:新})` | 维度改名 | 接 |
+ * | `editVariantPropertyValues({属性:{oldValue,newValue}})` | 改某维度下的值名 | 接 |
+ * | `deleteVariantProperty(属性)` | 删维度 | 接 |
+ * | `editVariantPropertiesAlias` / `editVariantPropertyValuesAlias` | 绑变量别名 | **未接**:依赖变量面(另开决策) |
+ *
+ * 两条实现纪律:
+ * 1. **读面用 `componentPropertyValues` 的 VARIANT 项**:MG **没有** `variantGroupProperties`
+ *    (typings 全文零命中,与 Figma / jsDesign 不同),集合「有哪些维度、每个维度有哪些值」
+ *    只能从那里读(见 `PropertyEntry.variantOptions`)—— 去找那个字段就是找错平台了;
+ * 2. **每个 op 写完回读**:本平台有「回包成功、值没变」的前科(0018 记的两条实例写入入口),
+ *    回读对不上就抛错,绝不把「成功」返回给调用方。
+ *
+ * ⚠ 键用**属性名**:`editVariantPropertyValues` 的入参本身就是「属性名 → {oldValue,newValue}」
+ * 的映射,故这一族统一按名字传(`deleteVariantProperty(property)` 同理解读)。
+ * **真机已验证(2026-09-29,MG 客户端)**:建维 / 加成分 / 改取值 / 改名 / 删维五个 op 全部
+ * 按名字生效并回读一致 —— 这条不再存疑;若哪天宿主改成要 propertyId,回读会当场报错并列出
+ * id 与名字,届时只改传参那一行。
+ */
+
+/** 集合级变体管理的宿主能力面(只声明用到的部分) */
+interface VariantSetHostNode {
+  id: string;
+  type?: string;
+  name?: string;
+  componentPropertyValues?: unknown;
+  createVariantProperties?: (properties: string[]) => void;
+  createVariantComponent?: () => void;
+  editVariantProperties?: (properties: Record<string, string>) => void;
+  editVariantPropertyValues?: (
+    properties: Record<string, { oldValue: string; newValue: string }>,
+  ) => void;
+  deleteVariantProperty?: (property: string) => void;
+  findChildren?: (cb?: (n: RawLayer) => boolean) => RawLayer[];
+  children?: RawLayer[];
+}
+
+const VARIANT_SET_METHODS = {
+  create_property: 'createVariantProperties',
+  create_component: 'createVariantComponent',
+  edit_property: 'editVariantProperties',
+  edit_value: 'editVariantPropertyValues',
+  delete_property: 'deleteVariantProperty',
+} as const;
+
+/** 取要操作的**变体集**(没有对应方法就直接说清是节点类型不对,别炸在实现深处) */
+async function resolveVariantSet(
+  host: DesignHost,
+  nodeId: string,
+  need: keyof typeof VARIANT_SET_METHODS,
+): Promise<VariantSetHostNode> {
+  const nodes = (await resolveNodes(host, [
+    nodeId,
+  ])) as unknown as VariantSetHostNode[];
+  const node = nodes[0];
+  if (node == null) throw new Error(`找不到节点 ${nodeId}`);
+  const field = VARIANT_SET_METHODS[need];
+  if (typeof node[field] !== 'function') {
+    throw new Error(
+      `节点 ${nodeId}(${node.type ?? '未知类型'})没有集合级变体能力(${field} 不存在):只有 COMPONENT_SET 有。`.concat(
+        node.type === 'COMPONENT_SET'
+          ? '宿主可能改了这个入口的名字,见 0033 的退出条件。'
+          : '先 jsd_find 确认它是变体集,不是单个组件或实例;要「切变体」用 jsd_set_instance_properties(走集合内换绑,见 0018)。',
+      ),
+    );
+  }
+  return node;
+}
+
+/** 集合的变体维度表:读**原始** `componentPropertyValues`(判定逻辑在 `variant-set.ts`,纯函数可单测) */
+function readSetDimensions(node: VariantSetHostNode): VariantDimension[] {
+  return readDimensions(node.componentPropertyValues);
+}
+
+/**
+ * 集合的**成员**(成分):只取**直接子层**里的 COMPONENT。
+ * 深度遍历(`findAll`)会把成分内部的图层也捞进来,故这里用 `findChildren` 只看一层
+ * (0019 实测:组件/实例读不到 `children`,`findChildren` 可用且只搜一层 —— 正是这里要的语义)。
+ */
+function listVariantMembers(node: VariantSetHostNode): {
+  members: RawLayer[];
+  source: string;
+} {
+  const direct =
+    typeof node.findChildren === 'function' ? node.findChildren() : undefined;
+  if (Array.isArray(direct)) {
+    return {
+      members: direct.filter((n) => n.type === 'COMPONENT'),
+      source: 'findChildren(直接子层)',
+    };
+  }
+  if (Array.isArray(node.children)) {
+    return {
+      members: node.children.filter((n) => n.type === 'COMPONENT'),
+      source: 'children(直接子层)',
+    };
+  }
+  return { members: [], source: '无可用遍历入口' };
+}
+
+/** 回读校验的**统一出口**:有问题就抛,消息由 `variant-set.ts` 的判定给出 */
+function assertNoProblems(problems: readonly string[], prefix: string): void {
+  if (problems.length > 0) {
+    throw new Error(`${prefix}(${problems.join(';')})`);
+  }
+}
+
+async function listVariantProperties(
+  host: DesignHost,
+  params: unknown,
+): Promise<{
+  node: { id: string; type?: string; name?: string };
+  source: string;
+  properties: Array<{
+    name: string;
+    id: string;
+    options: string[];
+    optionAlias?: string[];
+  }>;
+  totalProperties: number;
+  members: MemberView[];
+  totalMembers: number;
+  note: string;
+}> {
+  const p = params as { nodeId: string; memberLimit?: number };
+  const node = await resolveVariantSet(host, p.nodeId, 'create_property');
+  const dims = readSetDimensions(node);
+  const { members, source } = listVariantMembers(node);
+  const limit = p.memberLimit ?? 20;
+  return {
+    node: { id: node.id, type: node.type, name: node.name },
+    source,
+    properties: dims.map((d) => ({
+      name: d.name,
+      id: d.id,
+      options: d.options,
+      ...(d.optionsAlias != null ? { optionAlias: d.optionsAlias } : {}),
+    })),
+    totalProperties: dims.length,
+    members: members.slice(0, limit).map(toMemberView),
+    totalMembers: members.length,
+    // 「读不到维度」与「这个集合确实没有维度」是两件事,让调用方能分辨
+    note:
+      dims.length === 0
+        ? '集合上读不到任何 VARIANT 属性:要么它还没有维度(先 mg_create_variant_property 建),要么这个节点不是变体集'
+        : '维度与可选值读自 componentPropertyValues 的 VARIANT 项(MG 没有 variantGroupProperties 字段,别去读它)',
+  };
+}
+
+async function createVariantProperty(
+  host: DesignHost,
+  params: unknown,
+): Promise<{
+  created: string[];
+  properties: Array<{ name: string; options: string[] }>;
+}> {
+  const p = params as { nodeId: string; names: string[] };
+  const node = await resolveVariantSet(host, p.nodeId, 'create_property');
+  const before = readSetDimensions(node);
+  const dup = duplicateDimensions(before, p.names);
+  if (dup.length > 0) {
+    throw new Error(
+      `维度 ${dup.join('、')} 已存在(现有:${describeDimensions(before)})。改名用 mg_edit_variant_property`,
+    );
+  }
+  node.createVariantProperties?.(p.names);
+  const after = readSetDimensions(node);
+  const missing = missingDimensions(after, p.names);
+  if (missing.length > 0) {
+    throw new Error(
+      `建维度 ${missing.join('、')} 后回读不到(现有:${describeDimensions(after)})。宿主可能静默忽略,或把名字归一成了别的写法`,
+    );
+  }
+  return {
+    created: p.names,
+    // 新维度随带一个默认值,调用方据此知道下一步能改哪些值
+    properties: after.map((d) => ({ name: d.name, options: d.options })),
+  };
+}
+
+async function createVariantComponent(
+  host: DesignHost,
+  params: unknown,
+): Promise<{ created: MemberView[]; totalMembers: number; note: string }> {
+  const p = params as { nodeId: string; count?: number };
+  const node = await resolveVariantSet(host, p.nodeId, 'create_component');
+  const count = p.count ?? 1;
+  const beforeIds = listVariantMembers(node).members.map((m) => m.id);
+  for (let i = 0; i < count; i += 1) node.createVariantComponent?.();
+  const { members, source } = listVariantMembers(node);
+  // `createVariantComponent()` 返回 void,新成分只能靠前后比 id 认领
+  const created = newMembers(beforeIds, members);
+  if (created.length === 0) {
+    throw new Error(
+      `加成分后回读不到新成分(调用前 ${beforeIds.length} 个,调用后 ${members.length} 个,来源:${source})。宿主可能静默忽略`,
+    );
+  }
+  return {
+    created,
+    totalMembers: members.length,
+    note: '新成分代表哪一组取值看它的 variantProperties。若不是你要的组合:先 mg_list_variant_properties 看清维度的可选值,再用 mg_create_variant_property / mg_edit_variant_property_value 调;「改成分名字会驱动取值」这条引擎行为(0018 记录)是**副作用**,不是 API,别依赖它',
+  };
+}
+
+async function editVariantProperty(
+  host: DesignHost,
+  params: unknown,
+): Promise<{
+  renamed: Record<string, string>;
+  properties: Array<{ name: string; options: string[] }>;
+}> {
+  const p = params as { nodeId: string; rename: Record<string, string> };
+  const node = await resolveVariantSet(host, p.nodeId, 'edit_property');
+  const before = readSetDimensions(node);
+  const unknownOld = unknownRenameSources(before, p.rename);
+  if (unknownOld.length > 0) {
+    throw new Error(
+      `维度 ${unknownOld.join('、')} 不存在(现有:${describeDimensions(before)})。旧名必须与读到的完全一致`,
+    );
+  }
+  node.editVariantProperties?.(p.rename);
+  const after = readSetDimensions(node);
+  assertNoProblems(
+    verifyRename(after, p.rename),
+    `改维度名后回读不一致;现有:${describeDimensions(after)}`,
+  );
+  return {
+    renamed: p.rename,
+    properties: after.map((d) => ({ name: d.name, options: d.options })),
+  };
+}
+
+async function editVariantPropertyValue(
+  host: DesignHost,
+  params: unknown,
+): Promise<{
+  property: string;
+  oldValue: string;
+  newValue: string;
+  options: string[];
+}> {
+  const p = params as {
+    nodeId: string;
+    property: string;
+    oldValue: string;
+    newValue: string;
+  };
+  const node = await resolveVariantSet(host, p.nodeId, 'edit_value');
+  const before = readSetDimensions(node);
+  const target = resolveValueTarget(before, p.property, p.oldValue);
+  if ('message' in target) throw new Error(target.message);
+  const dimension = target.dimension;
+  node.editVariantPropertyValues?.({
+    [dimension.name]: { oldValue: p.oldValue, newValue: p.newValue },
+  });
+  const after = readSetDimensions(node);
+  assertNoProblems(
+    verifyValueEdit(after, dimension.name, p.oldValue, p.newValue),
+    `改取值后回读不一致:期望「${p.oldValue}」→「${p.newValue}」`,
+  );
+  return {
+    property: dimension.name,
+    oldValue: p.oldValue,
+    newValue: p.newValue,
+    options: findDimension(after, dimension.name)?.options ?? [],
+  };
+}
+
+async function deleteVariantProperty(
+  host: DesignHost,
+  params: unknown,
+): Promise<{ removed: string; properties: string[] }> {
+  const p = params as { nodeId: string; property: string };
+  const node = await resolveVariantSet(host, p.nodeId, 'delete_property');
+  const before = readSetDimensions(node);
+  const entry = findDimension(before, p.property);
+  if (entry == null) {
+    throw new Error(
+      `集合没有维度「${p.property}」(现有:${describeDimensions(before)})`,
+    );
+  }
+  node.deleteVariantProperty?.(entry.name);
+  const after = readSetDimensions(node);
+  assertNoProblems(
+    // 消息带上 id/名字两种形态:真机若证明这个入口收的是 id,一眼就知道该改哪一行
+    verifyDelete(after, entry.name).map(
+      (m) => `${m}(名字 ${entry.name} / id ${entry.id})`,
+    ),
+    `删维度后回读仍在,宿主可能静默忽略或收的键不是名字;现有:${describeDimensions(after)}`,
+  );
+  return { removed: entry.name, properties: after.map((d) => d.name) };
+}
+
+const variantSetNodeFields = {
+  nodeId: z.string().min(1).describe('变体集(COMPONENT_SET)节点 id'),
+};
+
+const listVariantPropertiesSchema = z.object({
+  ...variantSetNodeFields,
+  memberLimit: z
+    .number()
+    .int()
+    .min(1)
+    .max(200)
+    .optional()
+    .describe('最多返回几个成员(成分),默认 20'),
+});
+
+const createVariantPropertySchema = z.object({
+  ...variantSetNodeFields,
+  names: z
+    .array(z.string().min(1))
+    .min(1)
+    .describe('要建的维度名,如 ["状态","尺寸"];每个维度随带一个默认值'),
+});
+
+const createVariantComponentSchema = z.object({
+  ...variantSetNodeFields,
+  count: z
+    .number()
+    .int()
+    .min(1)
+    .max(20)
+    .optional()
+    .describe('加几个成分(新值组合),默认 1'),
+});
+
+const editVariantPropertySchema = z.object({
+  ...variantSetNodeFields,
+  rename: z
+    .record(z.string(), z.string())
+    .describe('维度改名表 {旧名: 新名};旧名必须与读到的完全一致'),
+});
+
+const editVariantPropertyValueSchema = z.object({
+  ...variantSetNodeFields,
+  property: z.string().min(1).describe('维度名(与读到的完全一致)'),
+  oldValue: z.string().min(1).describe('该维度下现有的取值'),
+  newValue: z.string().min(1).describe('要改成的取值'),
+});
+
+const deleteVariantPropertySchema = z.object({
+  ...variantSetNodeFields,
+  property: z.string().min(1).describe('要删的维度名(或它的 id)'),
+});
+
 export const mastergoOps: PlatformOp[] = [
   {
     name: 'mg_list_sublayers',
@@ -670,5 +1052,53 @@ export const mastergoOps: PlatformOp[] = [
       'MasterGo 特有:删组件属性。params: { nodeIds, propertyId(属性 id 或属性名) }。写完回读确认已消失',
     inputSchema: deletePropertySchema,
     run: deleteComponentProperty,
+  },
+  {
+    name: 'mg_list_variant_properties',
+    title: '查看变体集维度与成分',
+    description:
+      'MasterGo 特有:列出变体集的**变体维度与可选值**、以及各成分(成员)的当前取值。params: { nodeId(COMPONENT_SET), memberLimit? }。**动手前的摸底入口**,也是另几个变体 op 的回读面。维度与可选值读自 `componentPropertyValues` 的 VARIANT 项 —— MG **没有** `variantGroupProperties` 字段(与 Figma / jsDesign 不同),别去读它',
+    inputSchema: listVariantPropertiesSchema,
+    run: listVariantProperties,
+  },
+  {
+    name: 'mg_create_variant_property',
+    title: '新建变体维度',
+    description:
+      'MasterGo 特有:给变体集新建维度(每个维度随带一个默认值;真机 2026-09-29 实测默认值名就是「默认」)。params: { nodeId(COMPONENT_SET), names: string[] }。建完回读确认维度出现并回传各自的默认值;已存在的维度会报错。**有了维度才能加成分/改取值**',
+    inputSchema: createVariantPropertySchema,
+    run: createVariantProperty,
+  },
+  {
+    name: 'mg_create_variant_component',
+    title: '新增变体成分',
+    description:
+      'MasterGo 特有:往变体集里加新成分(新值组合)。params: { nodeId(COMPONENT_SET), count? }。返回新成分的 id/名字/当前取值。**这是「造出第二个值」的正路**:以前只能靠改写成分名字让引擎归一(副作用,见 0018),现在用它。⚠ **加成分会顺带给第一个维度自动造一个新取值**(真机 2026-09-29:值名由引擎生成,如「状态3」),其余维度取各自默认值 —— 要精确控制组合,加完再用 mg_edit_variant_property_value 把那个自动值改成你要的,别依赖改名',
+    inputSchema: createVariantComponentSchema,
+    run: createVariantComponent,
+  },
+  {
+    name: 'mg_edit_variant_property',
+    title: '变体维度改名',
+    description:
+      'MasterGo 特有:改变体维度的名字。params: { nodeId(COMPONENT_SET), rename: {旧名: 新名} }。旧名必须与读到的完全一致(不存在会报错并列出当前维度);改完回读确认旧名消失、新名出现。⚠ 改名会影响成分的 variantProperties 组成,改完用 mg_list_variant_properties 复核',
+    inputSchema: editVariantPropertySchema,
+    run: editVariantProperty,
+  },
+  {
+    name: 'mg_edit_variant_property_value',
+    title: '改变体取值',
+    description:
+      'MasterGo 特有:改某个维度下的取值名。params: { nodeId(COMPONENT_SET), property(维度名), oldValue, newValue }。旧取值必须在该维度的可选值里(不在会报错并列出可选值);改完回读确认新取值出现、旧取值消失。⚠ **这是重命名,不是新建**:带该取值的成分名字会同步改名(真机 2026-09-29),已切到该取值的实例通过换绑跟随',
+    inputSchema: editVariantPropertyValueSchema,
+    run: editVariantPropertyValue,
+  },
+  {
+    name: 'mg_delete_variant_property',
+    title: '删除变体维度',
+    description:
+      'MasterGo 特有:删掉一个变体维度。params: { nodeId(COMPONENT_SET), property(维度名或 id;真机 2026-09-29 验证**按名字生效**) }。写完回读确认维度消失。⚠ 维度被删后,该维度的取值组合从集合里消失,引用这些组合的实例会落到哪个成分由引擎决定 —— 删完用 mg_list_variant_properties 复核,必要时逐个实例 jsd_set_instance_properties 重切',
+    inputSchema: deleteVariantPropertySchema,
+    run: deleteVariantProperty,
   },
 ];

@@ -29,8 +29,12 @@
  */
 import type {
   DesignHost,
+  JSDESIGN_METHOD_PARAM_DOMAIN,
   JSDESIGN_RUNTIME_VALUE_DOMAIN,
   JSDESIGN_VALUE_DOMAIN,
+  MethodParamAllowViolations,
+  MethodParamDenyViolations,
+  MethodParamValue,
   NodeSkeleton,
   NodeType,
   PageSkeleton,
@@ -41,6 +45,8 @@ import type {
 
 // 捕获宿主全局类型(在 import 覆盖前):运行时取值域断言要拿它比
 type RuntimeLayoutMixin = LayoutMixin;
+// 同上:契约方法参数取值域断言(第四类登记)要拿实例签名的值类型比
+type RuntimeInstanceNode = InstanceNode;
 
 // ---- 1) 线格式的字段面与取值域必须被运行时覆盖 ----
 
@@ -320,4 +326,44 @@ export type GrowDomainCoverageCheck = ExpectNever<
     RuntimeLayoutMixin['layoutGrow'],
     NonNullable<NodeSkeleton['layoutGrow']>
   >
+>;
+
+// ---- 6) 契约**方法参数**取值域(第四类登记) ----
+
+/**
+ * 依据:`plugin-api.d.ts:1093`
+ * `setProperties(properties: { [property: string]: string }): void` —— **只收字符串**。
+ *
+ * 这条登记为什么必须存在:契约侧 `shared/core/host.ts` 的注释曾写「两平台原生入口都收
+ * `string | boolean`」,那是第三平台(0017)接入之前的说法;jsDesign 的实际签名只收
+ * 字符串,于是「布尔值写进去会怎样」这件事在仓里长期**没有归属**。登记进
+ * `JSDESIGN_METHOD_PARAM_DOMAIN` 之后,本节两条断言把「签名到底收什么」钉在类型层:
+ * 登记说收不下就必须真收不下,没登记的就必须真收得下。
+ *
+ * ⚠ 只声明**类型事实**,不断言运行时行为 —— 传布尔过去究竟静默忽略还是报错,
+ * 2026-09-29 未做真机验证,故消费方文案只能写「本平台签名只声明字符串」。
+ *
+ * **退出条件**:jsDesign 哪天把签名收宽(加 `boolean` / `VariableAlias`),
+ * `…DenyAbsentCheck` 立刻编译失败 → 删掉对应 deny 项即可(信号自动给出,不靠人记)。
+ */
+type JsDesignSetPropsValue = MethodParamValue<
+  RuntimeInstanceNode['setProperties']
+>;
+type JsDesignSetPropsDenied =
+  (typeof JSDESIGN_METHOD_PARAM_DOMAIN)['setProperties']['deny'][number];
+
+/** `setProperties` 必须真在 jsDesign 的 `InstanceNode` 上(幻影符号会让上面两条断言失去意义) */
+export const _jsdesignSetPropertiesDeclared: Declared<
+  'setProperties',
+  RuntimeInstanceNode
+> = true;
+
+/** ① 登记的「收不下」项必须真不在签名取值域里 */
+export type JsDesignSetPropsDenyAbsentCheck = ExpectNever<
+  MethodParamDenyViolations<JsDesignSetPropsDenied, JsDesignSetPropsValue>
+>;
+
+/** ② 没登记的形态必须真收得下(漏登记 = 静默收窄) */
+export type JsDesignSetPropsAllowPresentCheck = ExpectNever<
+  MethodParamAllowViolations<JsDesignSetPropsDenied, JsDesignSetPropsValue>
 >;
