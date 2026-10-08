@@ -82,6 +82,12 @@
   8. 读面确认：`mg_list_variant_properties` 从 `componentPropertyValues` 的 VARIANT 项读出维度、`variantOptions`、`optionAlias`（空串数组，别名未绑 = 与「变量面未接」一致）与每个成分的取值，`source: findChildren(直接子层)` ⇒ 「MG 没有 `variantGroupProperties`」这条读法成立。
   9. 收尾：脚本按记录 id 删除 + 按名字兜底清理，最终页面只剩用户原有的 1 个顶层节点。
 - **指标与日志**：无新增；op 经 `platform_op` 通道，沿用既有日志。
+- **复跑（2026-10-08，MasterGo 客户端 + 插件重载）**：上面 7 项**逐条复现**，同时充当「重建产物与原产物等价」的证据（当天 lefthook 事故后，`mastergo/ops.ts` 与 `variant-set.ts` 是从编辑历史快照重建回来的）——
+  `platformOps` 11；建维 `created:['尺寸']` + 回读 `尺寸=[默认]`；加成分得 `属性 1[a2]=状态3,尺寸[a0]=默认`
+  （**引擎自造值名「状态3」与 09-29 记录逐字一致**）；改取值 `TDDmgV1→小` 后成分名同步变 `属性 1[a0]=小`
+  （重命名语义）；维度改名 `尺寸→大小`；删维度**按名字**生效、回读只剩 `['大小']`；
+  实例链 `set_instance_properties{属性 1:'TDDmgV2'}` → `variantProperties:{属性 1:'TDDmgV2',尺寸:'默认'}`、
+  `mainComponentId 67:500→67:502`。收尾删净，`jsd_find name:'TDD'` 回 0 条。
 
 ## 变更历史
 
