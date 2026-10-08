@@ -8,9 +8,21 @@
  * 只在**回读证据成立**时才被引用(readback.ok === false):引擎若真的吃下了值,
  * 这里一个字都不会出现,不靠"我猜它会丢"来报警。
  */
+/**
+ * 四边 padding 共用一条修法(四个键一个事实,不抄四遍)。
+ */
+const PADDING_HINT =
+  '容器没有生效的 auto-layout 时(layoutMode 为 NONE)padding 不参与布局,引擎可能根本不落值。处理:先 jsd_find 回读该容器的 layoutMode,把 layoutMode 与四边 padding **放在同一次 jsd_set_layout 里**重传;已是布局容器则以 jsd_find 回读到的值为准(它才是渲染用的真源)';
+
 export const UNAPPLIED_PROP_HINT: Readonly<Record<string, string>> = {
   layoutMode:
     '引擎在布局重算后会回写容器方向(已重试写入一次仍不一致):子节点会按**回读到的**方向排布,方向错了会全叠在同一点(渲染上只看得见一个)。处理:用 jsd_find 复核该容器的 layoutMode,再单独调一次 jsd_set_layout(只传 layoutMode)重设',
+  itemSpacing:
+    '容器没有生效的 auto-layout 时(layoutMode 为 NONE)itemSpacing 不参与布局,引擎可能根本不落值。处理:先 jsd_find 回读该容器的 layoutMode,不是 HORIZONTAL/VERTICAL 就把 layoutMode 与 itemSpacing **放在同一次 jsd_set_layout 里**重传;已是布局容器则用 jsd_find 取实际值,它才是子项间距的真源',
+  paddingTop: PADDING_HINT,
+  paddingRight: PADDING_HINT,
+  paddingBottom: PADDING_HINT,
+  paddingLeft: PADDING_HINT,
   fontName:
     '引擎没解析这个 family/style(渲染退回默认字面,而回显看起来是成功的)。**写法约定(实测 2026-09-19)**:`family` 取 `jsd_list_fonts` 的 `fonts[].family`(形如 `SourceHanSansCN_family`),`style` 取同一项 `styles` 里的**全名**(形如 `SourceHanSansCN-Bold`)—— 解析成功引擎会规范化成短名(回读 `{family:"SourceHanSansCN", style:"Bold"}` 属正常,不报警);把 `style` 写成简称 `"Bold"` 或写一个不存在的族时,引擎**原样保留请求值**且渲染用默认字面。处理:照 `fonts[]` 原样取 family + style 重写一次,关键文字另配一次 jsd_export 目检(字重/字面的差异只在小图上看得出)',
   width:

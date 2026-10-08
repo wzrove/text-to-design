@@ -52,8 +52,17 @@ export const HOST_CAPABILITY_SPEC = {
     labelKey: 'capability.host.componentProperties',
   },
   // 变量:走平台 op 通道,不落在节点属性上。
-  // 为什么不删:它没有重复物 —— 「这个平台有变量能力面」是独立声明(MG 的
-  // `mg.variables` 存在但未接,故不 claim);core 不据此判定字段,属展示位。
+  // 为什么不删:它没有重复物 —— 「这个平台有变量能力面」是独立声明;core 不据此判定
+  // 字段,属展示位。
+  //
+  // ⚠ 三平台**缺的形态不同**,别一句话糊过去(逐个核对 typings,2026-09-29):
+  //   - Figma:读写都通(读 boundVariables,写两个 platformOp)⇒ 声明;
+  //   - MG:typings 里有整套 `mg.variables`(集合 / Mode),但本仓一个 op 都没接
+  //     ⇒ 不 claim(claim 等于空口)—— 属「**可以接、还没接**」;
+  //   - jsDesign:`@jsdesigndeveloper/plugin-typings@1.0.12` 全文**没有任何** variable
+  //     声明(grep -in variable 零命中)⇒ 属「**接不了**」,与 MG 那种缺席不是一回事。
+  // 三域的完整事实(读路径 / 写入口 / 替代路径 / 证据行号)在
+  // `dicts/platform-knowledge.ts`,那是唯一真源;本文件只回答「这条能力位叫什么、门控谁」。
   variables: {
     kind: 'channel',
     labelKey: 'capability.host.variables',

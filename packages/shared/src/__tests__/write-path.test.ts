@@ -121,6 +121,17 @@ describe('修改路径 updateSelection', () => {
     ]);
   });
 
+  it('适用性不匹配(给 TEXT 写布局字段):回包点名,不静默忽略', async () => {
+    // 0007:以前 set_layout 这类走 updateSelection 的工具是「回包 ok、零提示」
+    const text = makeText();
+    host = makeHost([text]);
+    const r = await updateSelection(host, ctx, {
+      ids: [text.id],
+      props: { layoutMode: 'HORIZONTAL' },
+    });
+    expect(r.warnings?.join()).toMatch(/与目标节点类型不匹配/);
+  });
+
   it('方法名即字段分组:越界字段直接拒绝,不静默忽略', async () => {
     const rect = makeRect();
     host = makeHost([rect]);
@@ -557,6 +568,46 @@ describe('创建路径的写后回收(0007)', () => {
       { mode: 'manual' },
     );
     expect(r.warnings).toBeUndefined();
+  });
+
+  it('创建 TEXT 不传 fontName:先加载节点当前字体,再写 characters', async () => {
+    // 判别力:Figma 写 characters 本身就要求字体已加载(实测不加载直接抛
+    // `Cannot write to node with unloaded font`),旧实现只在「传了 fontName」时才加载 →
+    // 不传 fontName 的创建整次失败
+    host = makeHost();
+    const r = await executeOps(
+      host,
+      ctx,
+      { type: 'TEXT', name: '标签', characters: '确定' },
+      { mode: 'manual' },
+    );
+    expect(host.fontCalls).toEqual([
+      { family: 'PingFang SC', style: 'Regular' },
+    ]);
+    expect(host.registry.get(r.created[0].id)?.characters).toBe('确定');
+    expect(r.warnings).toBeUndefined();
+  });
+
+  it('characters 写入抛 unloaded font:创建不失败,告警点名', async () => {
+    host = makeHost();
+    const t = makeText(`${host.registry.size + 1}:text`);
+    Object.defineProperty(t, 'characters', {
+      get: () => '',
+      set: () => {
+        throw new Error(
+          'in set_characters: Cannot write to node with unloaded font "Inter Regular"',
+        );
+      },
+    });
+    host.createText = () => t;
+    const r = await executeOps(
+      host,
+      ctx,
+      { type: 'TEXT', name: '标签', characters: '确定' },
+      { mode: 'manual' },
+    );
+    expect(r.created).toHaveLength(1);
+    expect(r.warnings?.join()).toMatch(/文本内容未写入/);
   });
 
   it('短名对请求被引擎接受(实测 `{SourceHanSansCN, Bold}`)→ 不误报', async () => {
@@ -1036,6 +1087,123 @@ describe('布局对齐的写后校验(只改对齐也要点名)', () => {
     );
     expect(frame.primaryAxisAlignItems).toBe('CENTER');
     expect(r.warnings).toBeUndefined();
+  });
+});
+
+/**
+ * 布局的 spacing / padding 写后校验(0021 的遗留补齐,2026-10-08)。
+ *
+ * 此前 `layoutWriter.settle` 只回读 layoutMode + 两轴对齐,`itemSpacing` / `padding*`
+ * 写没写进去调用方只能自己调 `jsd_find` 看(0021 真机复验就是这么验的)。
+ * 这组用例钉住三条:
+ * ① 引擎吃掉 spacing/padding → 点名(0007 的「不允许静默失效」);
+ * ② 真落库 → 一个字都不报(拿回读当证据,不靠猜);
+ * ③ 没请求过的键**不对账** —— 创建路径没开 auto-layout、修改路径没给,都不许
+ *    拿请求值去比(否则会自造「回读不一致」)。
+ */
+describe('布局 spacing/padding 的写后校验(0021 遗留补齐)', () => {
+  /** 复刻「引擎静默忽略这个字段」:set 不生效,get 恒为原值 */
+  function frozen<T extends NodeSkeleton, K extends keyof T>(
+    node: T,
+    key: K,
+    value: T[K],
+  ): void {
+    Object.defineProperty(node, key, {
+      get: () => value,
+      set: () => {},
+      configurable: true,
+    });
+  }
+
+  it('只改 spacing/padding(不传 layoutMode)也必须回读校验 —— 被引擎丢掉要点名', async () => {
+    const frame = makeFrame();
+    frozen(frame, 'itemSpacing', 0);
+    frozen(frame, 'paddingTop', 0);
+    host = makeHost([frame]);
+    const r = await updateSelection(
+      host,
+      ctx,
+      { ids: [frame.id], props: { itemSpacing: 24, paddingTop: 12 } },
+      'set_layout',
+    );
+    const warn = r.warnings?.join('') ?? '';
+    expect(warn, 'spacing/padding 的落库此前只能靠人工 jsd_find').toContain(
+      'itemSpacing',
+    );
+    expect(warn).toContain('paddingTop');
+  });
+
+  it('spacing/padding 真的落库 → 不产生告警', async () => {
+    const frame = makeFrame();
+    host = makeHost([frame]);
+    const r = await updateSelection(
+      host,
+      ctx,
+      {
+        ids: [frame.id],
+        props: {
+          layoutMode: 'HORIZONTAL',
+          itemSpacing: 24,
+          paddingTop: 12,
+          paddingRight: 12,
+          paddingBottom: 12,
+          paddingLeft: 12,
+        },
+      },
+      'set_layout',
+    );
+    expect(r.warnings).toBeUndefined();
+    expect(frame.itemSpacing).toBe(24);
+    expect(frame.paddingLeft).toBe(12);
+  });
+
+  it('修改路径没请求 spacing/padding → 不对账(容器上原有的值不该被报成没生效)', async () => {
+    const frame = makeFrame();
+    frame.itemSpacing = 24;
+    frame.paddingTop = 10;
+    host = makeHost([frame]);
+    const r = await updateSelection(
+      host,
+      ctx,
+      { ids: [frame.id], props: { layoutMode: 'VERTICAL' } },
+      'set_layout',
+    );
+    expect(r.warnings).toBeUndefined();
+    expect(frame.itemSpacing).toBe(24);
+  });
+
+  it('创建路径开了 auto-layout:未声明的 spacing/padding 归零也在回读面内,不误报', async () => {
+    host = makeHost();
+    const r = await executeOps(
+      host,
+      ctx,
+      {
+        type: 'FRAME',
+        name: 'row',
+        width: 300,
+        height: 80,
+        layoutMode: 'VERTICAL',
+      },
+      { mode: 'absolute', x: 0, y: 0 },
+    );
+    expect(r.warnings).toBeUndefined();
+    const created = host.registry.get(r.created[0].id);
+    expect(created?.paddingTop).toBe(0);
+    expect(created?.itemSpacing).toBe(0);
+  });
+
+  it('创建路径没开 auto-layout → 一个布局字段都没写,不许拿请求值对账', async () => {
+    host = makeHost();
+    const r = await executeOps(
+      host,
+      ctx,
+      // 没给 layoutMode:write() 直接返回,padding 落不下去 —— 此时点名「没生效」
+      // 只是复述「你没开布局」,对账口径必须与写路径同源,故这里静默
+      { type: 'FRAME', name: 'plain', width: 300, height: 80, paddingTop: 12 },
+      { mode: 'absolute', x: 0, y: 0 },
+    );
+    expect(r.warnings).toBeUndefined();
+    expect(host.registry.get(r.created[0].id)?.paddingTop).toBe(0);
   });
 });
 

@@ -12,6 +12,7 @@ export * from './i18n';
 export * from './log';
 export * from './node-type';
 export * from './platform';
+export * from './platform-knowledge';
 export * from './platform-value-domain';
 export * from './prop-applicability';
 export * from './search-scope';

@@ -1,4 +1,8 @@
 import { CAPABILITY_OF_GATED_PROP } from '../dicts/capability';
+import {
+  applicabilityMissNotice,
+  propAppliesTo,
+} from '../dicts/prop-applicability';
 import type { PropMethod, SerializedNode, UpdateNodeProps } from '../schemas';
 import { PROP_METHOD_FIELDS } from '../schemas';
 import { resolveNodes } from './access';
@@ -121,6 +125,8 @@ export async function updateSelection(
   const selfMutated: string[] = [];
   const selfMutatedProps = new Set<string>();
   const layoutModeMissed: string[] = [];
+  // 适用性不匹配(如给 TEXT 写布局字段):整批点名一次,文案由同一张表派生
+  const applicabilityMisses = new Set<string>();
   // 除 layoutMode 外的回读不一致项(如 fontName)与 writer 自述告警 —— 与创建路径
   // 共用同一份文案(见 core/props/outcome.ts),不再只认 layoutMode 一个字段
   const unapplied: UnappliedProp[] = [];
@@ -130,7 +136,12 @@ export async function updateSelection(
     for (const key of Object.keys(props)) {
       if (isGatedPropUnsupported(ctx, key, node)) {
         ignoredSuperset.add(key);
+        continue;
       }
+      // 领域适用性不匹配:writeProp 静默返回 false(口径见 dicts/prop-applicability)。
+      // 点名此前只接在创建路径(execute.ts)与 tools/update-common.ts 上,而 set_layout
+      // 这类走本路径的工具是「回包 ok、没有任何提示」—— 0007 明令根除的静默失效。
+      if (!propAppliesTo(key, node.type)) applicabilityMisses.add(key);
     }
     // includeSelf=true 时容器自身也在 targets 里,描边/填充会直接画在容器上
     if (
@@ -252,6 +263,8 @@ export async function updateSelection(
   }
   const unappliedMsg = unappliedWarning(unapplied);
   if (unappliedMsg != null) warnings.push(unappliedMsg);
+  const missMsg = applicabilityMissNotice([...applicabilityMisses]);
+  if (missMsg != null) warnings.push(missMsg);
   // writer 自述类告警(WriteOutcome.warnings):0004 预留的出口,此前两条路径都没接
   warnings.push(...messages);
   return {

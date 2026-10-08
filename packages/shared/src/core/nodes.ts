@@ -253,6 +253,22 @@ function minimalOrFull(node: NodeSkeleton, depth: number): SerializedNode {
   }
 }
 
+/** findAll 不可用时的兜底遍历:子节点 getter 抛的节点只丢它自己,不连带整次查找 */
+function walkChildren(node: NodeSkeleton): NodeSkeleton[] {
+  const out: NodeSkeleton[] = [];
+  let kids: readonly NodeSkeleton[] = [];
+  try {
+    kids = node.children ?? [];
+  } catch {
+    return out;
+  }
+  for (const child of kids) {
+    out.push(child);
+    out.push(...walkChildren(child));
+  }
+  return out;
+}
+
 export async function findNodes(
   host: DesignHost,
   params: FindParams,
@@ -273,14 +289,30 @@ export async function findNodes(
     const pages =
       params.scope === 'document' ? host.root.children : [host.currentPage];
     const collect = (page: PageSkeleton): NodeSkeleton[] => {
-      if (params.type != null) {
-        // 类型名由调用方给(读路径全表):本仓建模的 14 类 + Figma 独有只读类型都能筛,
-        // 未知类型名由引擎返回空集,不必在此拦
-        return page.findAllWithCriteria({
-          types: [params.type as ObservedNodeType],
-        });
+      try {
+        if (params.type != null) {
+          // 类型名由调用方给(读路径全表):本仓建模的 14 类 + Figma 独有只读类型都能筛,
+          // 未知类型名由引擎返回空集,不必在此拦
+          return page.findAllWithCriteria({
+            types: [params.type as ObservedNodeType],
+          });
+        }
+        return page.findAll();
+      } catch {
+        // 引擎的 findAll 会因**文档里任何一个坏节点**整体抛(实测 Figma:残留一个出错的
+        // 组件集 → `in findAll: The node with id "…" does not exist`,整页一个节点都拿不到,
+        // 连「查出来再删掉它」这条路都断了)。退化成自己走 children:坏节点只丢它自己。
+        const all = walkChildren(page as unknown as NodeSkeleton);
+        return params.type == null
+          ? all
+          : all.filter((n) => {
+              try {
+                return n.type === params.type;
+              } catch {
+                return false;
+              }
+            });
       }
-      return page.findAll();
     };
     nodes = pages.flatMap(collect);
   }

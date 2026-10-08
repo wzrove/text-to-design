@@ -404,9 +404,24 @@ export const textWriter: PropWriter = {
           );
         }
         // 判定不在这里:写入瞬间回读是原样回显,见 textStabilizeWriter.settle
+      } else if (node.fontName !== MIXED) {
+        // 没指定字体也要先加载节点**当前**字体:Figma 写 characters 本身就要求字体已加载
+        // (实测:`in set_characters: Cannot write to node with unloaded font "Inter Regular"`,
+        // 创建期不传 fontName 时整次创建直接失败)。MG 读不到新节点的默认字体 → 读不到就照写,
+        // 由下面的 try/catch 点名。
+        const current = node.fontName as FontName | undefined;
+        if (current?.family != null) {
+          fontReady = await loadFont(ctx.host, current.family, current.style);
+        }
       }
-      node.characters =
-        typeof src.characters === 'string' ? src.characters : 'text';
+      try {
+        node.characters =
+          typeof src.characters === 'string' ? src.characters : 'text';
+      } catch (e) {
+        ctx.outcome.warnings.push(
+          `文本内容未写入(${e instanceof Error ? e.message : String(e)}):该平台要求写 characters 前字体已加载,请传 fontName(取 jsd_list_fonts 的 fonts[] 成对值)。`,
+        );
+      }
       if (fontReady) {
         apply(STYLE_KEYS, 16);
       } else {
@@ -539,6 +554,36 @@ export const layoutWriter: PropWriter = {
       ctx.outcome.readback.push({
         key,
         ok: !(key in node) || node[key] === expectedAlign,
+      });
+    }
+    // itemSpacing / 四边 padding 的回读(2026-10-08 补,0021 的遗留):此前只回读
+    // layoutMode + 两轴对齐,这两个值落没落库只能靠调用方自己调 jsd_find —— 而它们
+    // 恰恰是「引擎静默吃掉」的高危区(容器没有生效的 auto-layout 时它们不参与布局)。
+    for (const key of [
+      'itemSpacing',
+      'paddingTop',
+      'paddingRight',
+      'paddingBottom',
+      'paddingLeft',
+    ] as const) {
+      const declared = src[key];
+      // 期望值口径必须与 write() 同源,否则会拿一个根本没往下写的值去对账:
+      // 创建路径只有开了 auto-layout 才写布局字段(未声明的 spacing/padding 显式归零),
+      // 没开则一个布局字段都没写 → 没有可对账的请求;修改路径只写显式给的键。
+      let expected: unknown = declared;
+      if (ctx.create) {
+        expected = src.layoutMode == null ? undefined : (declared ?? 0);
+      }
+      if (expected == null) continue;
+      if (!propAppliesTo(key, node.type)) continue;
+      // 被平台判定拒过的值不许在回压里复活(与对齐同口径)
+      if (platformRejectsProp(ctx, key, expected) != null) continue;
+      if (key in node && field(node, key) !== expected) {
+        setField(node, key, expected);
+      }
+      ctx.outcome.readback.push({
+        key,
+        ok: !(key in node) || field(node, key) === expected,
       });
     }
     if (src.layoutMode == null) return;

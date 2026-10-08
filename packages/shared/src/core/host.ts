@@ -119,10 +119,21 @@ export interface NodeSkeleton extends ContainerSkeleton {
    * 实例属性:变体值传字符串,布尔/文本/换绑属性传标量(布尔也是标量),
    * 需要显式类型或换绑候选时传 `ComponentPropertyValue` 对象。
    *
-   * 为什么三种都收:两平台原生入口都收 `string | boolean`
-   * (Figma `setProperties({[名]: string|boolean})`、MG `setProperties({[propertyId]: string|boolean})`,
-   * 后者见 `@mastergo/plugin-typings` 3097 行),收窄成字符串会让布尔属性在两边都设不了。
+   * 契约签名是**超集**(三种形态都收),但**每个平台实际收什么由宿主签名决定**,
+   * 差异登记在 `dicts/platform-value-domain.ts` 的**第四类表**
+   * (`PLATFORM_METHOD_PARAM_DOMAIN`,按「平台 → 方法 → 值形态」),并由三侧
+   * `sync-guarantee.ts` 双向断言守(登记的收不下必须真收不下、没登记的必须真收得下):
+   * - Figma `setProperties({[名]: string | boolean | VariableAlias})`(`plugin-api.d.ts:11123`);
+   * - MG `setProperties({[propertyId]: string | boolean})`(`dist/index.d.ts:3097`);
+   * - jsDesign `setProperties({[名]: string})`(`plugin-api.d.ts:1093`)**只收字符串**。
+   *
+   * ⚠ 本注释曾写「两平台原生入口都收 `string | boolean`」—— 那是第三平台(0017)接入
+   * **之前**的说法,之后没回填,于是「jsDesign 只收字符串」这条差异长期没有归属。
+   * 别再在这里手写平台差异:写进上面那张表,让类型检查守(0032)。
+   *
    * 对象形态只有 Figma 收(MG 会把 boolean 之外的形态拒掉),故由 adapter/门面负责整形。
+   * jsDesign 收到布尔值究竟静默忽略还是报错,2026-09-29 未做真机验证 —— 故只声明
+   * 「签名只收字符串」这个类型事实,不写「引擎不收」。
    */
   setProperties(
     properties: Record<

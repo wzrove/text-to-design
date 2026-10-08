@@ -335,3 +335,140 @@ export function platformValueRejectionHint(
   if (accepted.length > 0) parts.push(`实测/类型支持 ${accepted.join(' / ')}`);
   return parts.join(';');
 }
+
+/**
+ * 契约**方法参数**的取值域收窄(第四类登记,与前三张表分开)。
+ *
+ * 为什么不能塞进前三张:那三张表一律以**节点字段**为键,回答的是「这个值写进节点
+ * 会不会生效」;这张表以**契约方法**为键,回答的是「这个方法收不收这种值形态」。
+ * 宿主 typings 里它们本来就是两类声明(节点的属性 vs 方法的签名),混一张表只能靠
+ * 键名是否撞上同一个字符串来区分 —— 判据不在表里,在读者的记忆里。
+ *
+ * 首条登记(2026-09-29 逐个核对 typings):
+ * - jsDesign `InstanceNode.setProperties(properties: { [property: string]: string })`
+ *   —— `@jsdesigndeveloper/plugin-typings@1.0.12` `plugin-api.d.ts:1093`,**只收字符串**;
+ * - MasterGo `setProperties(properties: { [propertyId: string]: string | boolean })`
+ *   —— `@mastergo/plugin-typings@2.19.2` `dist/index.d.ts:3097`,收字符串与布尔;
+ * - Figma `setProperties(properties: { [propertyName: string]: string | boolean | VariableAlias })`
+ *   —— `@figma/plugin-typings@1.139.0` `plugin-api.d.ts:11123`,三种都收 ⇒ **无收窄,不登记**
+ *   (与前三张表「只登记收窄项」同口径)。
+ *
+ * 这条登记的**出现原因值得记下**:`core/host.ts` 的契约注释曾写「两平台原生入口都收
+ * `string | boolean`」,那是第三平台(0017)接入之前的说法,之后没回填 —— 于是
+ * 「jsDesign 只收字符串」这条差异在仓里长期没有归属,只能靠读 typings 才发现。
+ *
+ * **只声明类型事实,不断言运行时行为**:jsDesign 收到布尔值究竟是静默忽略还是报错,
+ * 2026-09-29 未做真机验证,故消费方(文案/表)只能写「本平台签名只声明字符串」,
+ * **不许写「引擎不收」** —— 后者要等实测。断言方向同 {@link PLATFORM_VALUE_DOMAIN}
+ * (登记项必须真不在该方法签名的取值域里),由三侧 `sync-guarantee.ts` 守。
+ */
+export const METHOD_PARAM_VALUE_KINDS = [
+  'string',
+  'boolean',
+  'variableAlias',
+] as const;
+
+export type MethodParamValueKind = (typeof METHOD_PARAM_VALUE_KINDS)[number];
+
+/** 一条方法参数规则:`deny` = 本平台签名收不了这些值形态 */
+export interface MethodParamDomainRule {
+  readonly deny: readonly MethodParamValueKind[];
+}
+
+type MethodParamDomainTable = Readonly<Record<string, MethodParamDomainRule>>;
+
+export const JSDESIGN_METHOD_PARAM_DOMAIN = {
+  /** 签名只有 `string`(`plugin-api.d.ts:1093`)⇒ 布尔与变量别名都不在取值域里 */
+  setProperties: { deny: ['boolean', 'variableAlias'] },
+} as const satisfies MethodParamDomainTable;
+
+export const MASTERGO_METHOD_PARAM_DOMAIN = {
+  /** 签名是 `string | boolean`(`dist/index.d.ts:3097`)⇒ 只排除变量别名 */
+  setProperties: { deny: ['variableAlias'] },
+} as const satisfies MethodParamDomainTable;
+
+export const PLATFORM_METHOD_PARAM_DOMAIN: Readonly<
+  Partial<Record<PlatformKey, MethodParamDomainTable>>
+> = {
+  jsdesign: JSDESIGN_METHOD_PARAM_DOMAIN,
+  mastergo: MASTERGO_METHOD_PARAM_DOMAIN,
+};
+
+/** 该平台这个方法收不收这种值形态;未登记(或平台未知)一律放行(沿 0022 的 fail-open) */
+export function platformMethodParamAllowed(
+  platform: PlatformKey | null,
+  method: string,
+  kind: MethodParamValueKind,
+): boolean {
+  if (platform == null) return true;
+  const deny = PLATFORM_METHOD_PARAM_DOMAIN[platform]?.[method]?.deny;
+  if (deny == null) return true;
+  return !deny.some((k) => k === kind);
+}
+
+/**
+ * 该平台这个方法**实收**的值形态(白名单形态,供「能传什么」的文案用)。
+ * 未登记 = 无收窄 ⇒ 返回全量;平台未知返回 `null`(调用方据此不作承诺)。
+ */
+export function platformMethodParamAcceptedKinds(
+  platform: PlatformKey | null,
+  method: string,
+): readonly MethodParamValueKind[] | null {
+  if (platform == null) return null;
+  const deny = PLATFORM_METHOD_PARAM_DOMAIN[platform]?.[method]?.deny ?? [];
+  return METHOD_PARAM_VALUE_KINDS.filter((k) => !deny.some((d) => d === k));
+}
+
+/**
+ * 值形态 → 探测宿主方法签名用的**结构类型**。
+ *
+ * `variableAlias` 用线格式的形状而不是 Figma 的原生 `VariableAlias`:jsDesign / MG
+ * 的 typings 里根本没有这个类型名(它们压根不声明变量别名),写成原生名会让那两侧的
+ * 断言文件无法通过类型检查。两者结构一致(`{ type: 'VARIABLE_ALIAS'; id: string }`,
+ * 见 `@figma/plugin-typings@1.139.0` `plugin-api.d.ts:11572-11575`),故结构匹配成立。
+ */
+export interface MethodParamKindProbe {
+  readonly string: string;
+  readonly boolean: boolean;
+  readonly variableAlias: {
+    readonly type: 'VARIABLE_ALIAS';
+    readonly id: string;
+  };
+}
+
+/** 取方法**第一个参数的值类型**(`setProperties(properties: {...})` 的 `{...}` 值) */
+export type MethodParamValue<F> = F extends (
+  p: Record<string, infer V>,
+) => unknown
+  ? V
+  : never;
+
+/**
+ * 「登记的 deny 项其实收得下」的键名联合会集(空 = 登记诚实)。
+ *
+ * 返回**违法的键名**而不是布尔:断言失败时 `tsc` 报的是键名本身,不用回头翻表。
+ * 同时它是**退出条件**的信号 —— 宿主把签名收宽 (如 jsDesign 哪天收下 boolean),
+ * 这条立刻编译失败,提醒把该项从 deny 里删掉。
+ */
+export type MethodParamDenyViolations<
+  Denied extends MethodParamValueKind,
+  Value,
+> = {
+  [K in Denied]: MethodParamKindProbe[K] extends Value ? K : never;
+}[Denied];
+
+/**
+ * 「没登记 deny 的形态其实收不下」的键名联合会集(空 = 没有漏登记)。
+ *
+ * 与上一条方向相反:漏登记 = 静默收窄(调用方按「能传」写出去了、宿主却不收),
+ * 属 0007 要根除的形态,故两个方向都要守。
+ */
+export type MethodParamAllowViolations<
+  Denied extends MethodParamValueKind,
+  Value,
+> = {
+  [K in Exclude<
+    MethodParamValueKind,
+    Denied
+  >]: MethodParamKindProbe[K] extends Value ? never : K;
+}[Exclude<MethodParamValueKind, Denied>];
