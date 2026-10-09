@@ -2,7 +2,7 @@ pre-commit:
   parallel: true
   commands:
     lint:
-      glob: "*.{js,ts,tsx,mjs,cjs,json,jsonc}"
+      glob: "*.{js,ts,tsx,mjs,cjs,json,jsonc,css}"
       run: pnpm exec biome check --write --unsafe   {staged_files}
     typecheck:
       run: pnpm typecheck

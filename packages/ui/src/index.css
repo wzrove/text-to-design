@@ -268,11 +268,11 @@ body {
    气泡落在暗面板上等于隐形,上面那道浅黑投影在暗底上同样看不见。故暗主题
    改取 base-300 提亮一档做「抬升面」(暗底上的浮起靠变亮表达),投影同步
    加深到暗底上仍可见。文字仍是 neutral-content(浅色),对比度约 6.5:1。 */
-[data-theme='textdesign_dark'] .tooltip[data-tip] {
+[data-theme="textdesign_dark"] .tooltip[data-tip] {
   --tt-bg: color-mix(in srgb, var(--color-base-300) 88%, white);
 }
 
-[data-theme='textdesign_dark'] .tooltip[data-tip]::before {
+[data-theme="textdesign_dark"] .tooltip[data-tip]::before {
   box-shadow: 0 4px 14px rgb(0 0 0 / 0.45);
 }
 
@@ -281,7 +281,7 @@ body {
    像禁用/按下。焦点态更彻底:`.btn:focus-visible` 直接把底色设成 base-200,与面板
    同色,暗色下键盘焦点等于不可见。故暗主题下这两态统一取 base-300 做抬升面
    (与上方暗色气泡同一档),既亮起又保留层次。 */
-[data-theme='textdesign_dark'] .btn-ghost:is(:hover, :focus-visible) {
+[data-theme="textdesign_dark"] .btn-ghost:is(:hover, :focus-visible) {
   --btn-bg: var(--color-base-300);
 }
 
