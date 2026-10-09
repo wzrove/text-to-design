@@ -1,5 +1,31 @@
 # text-to-design-mcp
 
+## 0.10.0
+
+### Minor Changes
+
+- [`87ba59c`](https://github.com/wzrove/text-to-design/commit/87ba59ce14d55758614c23e9e74c682b9a4f445d) - feat(mcp): 新增 jsd_get_page 工具,补齐「当前页顶层」这一层漂移复核
+  
+  `jsd_get_page` 把既有资源 `jsd://page` 同一个能力开成工具(资源给「客户端主动读上下文」,工具给「模型明确要读」,同 `jsd_get_selection` / `jsd://canvas/selection` 一对)。
+  
+  - 名字不是随便起的:结构变更复核(`drift-watch`)的「当前页顶层」这一层按 `jsd_get_page` 走 `lookupExecutor`。该工具此前**不存在**,`lookupExecutor` 返 `undefined` → 该层被判 `dead`,**复核从未执行过且日志里一个字都没有** —— 而 `jsd_batch` 的描述一直写着「含当前页顶层」。改名/删名会再次静默打断它。
+  - 无参工具也显式给 `inputSchema`(不给会走 SDK 的 `callback(ctx)` 形态,工具目录里也看不出「这个工具不收参数」)。
+  - `jsd://page` 资源的描述补一句「等价于 jsd_get_page」,避免两条通路被当成两件事。
+  
+  守门:`__tests__/drift-hook.test.ts` 新增一条不测「漂移能不能查出来」,而测「这条路真的走通了」—— 断言 `jsd_get_page` 已注册,且删节点后复核确实读了一次 `get_page`。
+
+- [`69d6431`](https://github.com/wzrove/text-to-design/commit/69d64316b52c7247284de4d5b353530948c8c43a) - feat(mcp): 配方经 MCP resource 暴露 + 创作纪律改写为「结构分层、调用分批」
+  
+  配方原先只走 prompt 与 `mcp.instructions` 两条通路,对模型都不够用:`mcp.instructions` 实测被多数宿主读完即弃(不进上下文),MCP prompt 只落成用户侧的斜杠命令;工具描述里那句「完整配方见 prompt `chart-by-code`」对模型是个**不可执行**的指针。补上 resource 这一层才算闭环 —— 宿主把 `ListMcpResources` / `ReadMcpResource` 当普通工具给模型,资源本体按需读取、不占常驻上下文。
+  
+  - 新增只读资源 `jsd://recipes`(索引:每条配方的「何时用」与参数)与 `jsd://recipes/{id}`(正文),共 10 条,与既有 prompt 一一对应。正文**只在** `tools/prompts.ts` 的 render 函数里写一份,`tools/recipe-catalog.ts` 只承载「何时用 / 参数占位」这类资源层元数据,不复制正文。
+  - 配方资源**不依赖插件连接**(插件离线时仍可读),与画布状态资源(jsd://page 等)分工不同。
+  - `jsd_create_svg` 的描述从硬编码字符串收进 i18n 键 `createSvg.description`,并把图表路由改成可执行的资源指针 `jsd://recipes/chart-by-code`。
+  - 创作纪律同步改口径:**层级要建够**(屏 → 语义分区 → 卡片 → 卡内图元), `children` 只用于「容器 + 其直属子节点」这类小结构,分层分批走 `jsd_batch` + `jsd_reparent_nodes`;并明确「元素不许直挂屏根」「name 必传且语义化」。落点三处同源:`mcp.instructions`、`jsd_batch` 描述、9 个 per-type create 工具描述,以及 `design-strategy` / `chart-by-code` 两条配方正文。
+  - 死路指针一并清掉:工具描述不再写「见 prompt `chart-by-code`」,改指向资源 URI —— 旧写法模型够不着,会退化成临场拼工具。
+  
+  守门:`__tests__/recipe-resource.test.ts` 断言①目录与 prompt 注册表一一对应(漂开则模型读到不存在的配方,静默失效);②工具描述里的指针是可执行的资源 URI;③配方资源不读画布(否则插件离线时通路上一起废掉)。
+
 ## 0.9.0
 
 ### Minor Changes
