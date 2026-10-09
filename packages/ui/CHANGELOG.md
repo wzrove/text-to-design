@@ -1,5 +1,29 @@
 # text-to-design-ui
 
+## 0.9.0
+
+### Minor Changes
+
+- [`59972f4`](https://github.com/wzrove/text-to-design/commit/59972f4154b9b0b753eb18da86facfdbe778b7c7) Thanks [@wzrove](https://github.com/wzrove)! - feat(ui): 页头提示改用 daisyUI tooltip,操作结果统一走 toast(见 0037)
+  
+  **提示**:页头五颗功能按钮(重连/夺回、相机锁、主题、语言、日志)的说明从原生 `title` 换成 daisyUI `tooltip` —— 原生提示延迟约一秒、样式由宿主定,而这几句都是长句(相机锁那句 26 个字),在 360 宽面板里会被 iframe 边缘裁掉半截。统一经新的 `Tooltip` 组件:`data-tip`、贴边方位(右侧工具簇贴右、左侧那颗贴左,居中放两头都会伸出面板)与包装元素的职责都收在一处;键盘可达沿用 daisyUI 的 `:has(:focus-visible)`,可访问名仍由各按钮自己的 `aria-label` 给出。气泡宽度在 `index.css` 收口到 12rem(daisyUI 默认 20rem 必然越界),那条规则写在层外,理由见文件内注释。
+  
+  **反馈**:操作成功后的提示原先有四种写法(选中卡 `✓`、连接引导 `✓ 已复制`、日志行 `✓`、能力表刷新不出声,`setTimeout` 时长还不一致),现在统一到一个出口:`utils/toast.ts`(模块级唯一状态源,同文案只留最新一条并重新计时)+ `components/Toast.tsx`(唯一挂载点,daisyUI `toast` 提供定位/堆叠/入场动画,条目沿用面板的「淡底组合」而非 `.alert-*` 的语义实心底)+ `copyWithToast`(复制成败 → 文案 + 级别的唯一映射)。
+  
+  尺子写死在 0037:只在**结果不可见或极易忽略**的操作上弹(复制、相机锁),界面本身已经变了的不弹(开合抽屉、切主题、清空日志、重连)。`fixed` 定位不进流,故弹提示不改变 `PanelHeightSync` 量出的内容高度。
+  
+  i18n:增 `toast.copy.done` / `toast.copy.failed`,删已无引用的 `conn.copied` / `selection.copied`(键化沿 0016,两键删净不留在表里)。mcp 侧只是 dist 里跟着换一份 catalog,行为不变,故 patch。
+
+- [`59972f4`](https://github.com/wzrove/text-to-design/commit/59972f4154b9b0b753eb18da86facfdbe778b7c7) Thanks [@wzrove](https://github.com/wzrove)! - feat(版本升级提示): 落后于 npm 最新版时,页头挂出升级入口,点开 Modal 给分步清单并支持复制给 AI 助手(见 0038)
+  
+  **谁去查**:面板 iframe 直连 npm registry 在 Figma 上必被 `networkAccess` 白名单挡住(只有 localhost),jsDesign 未声明、MasterGo 无该字段 —— 所以改由 **daemon 代查**:`mcp-server/src/version-check.ts` 带超时与进程内缓存(查询周期 `VERSION_CHECK_MS`),结果经新的推送帧 `version` 发给面板,投递跟心跳(30s)、查询按缓存周期,故面板刚连上就能拿到结论而 registry 不被心跳打。查不到(超时/非 200/无 version)一律返回 `null` 并 warn —— **不提示**,宁可闭嘴也不给错的升级建议。
+  
+  **比什么**:插件侧比自己(构建期 `define` 注入 `__APP_VERSION__`,比 `import package.json` 稳,避开 `resolveJsonModule`),服务侧比 daemon 自报的 status 帧版本;两侧独立,只升了一个也照常提示。比较走 `utils/version.ts` 的纯数字段比较(`0.9.0 < 0.10.0`),预发布后缀砍掉后与正式版同档。`latest` 为 `null` 的一侧不参与。
+  
+  **入口**:只在确有新版本时挂载(沿页头「重连」钮的纪律:常态面板里一颗点不出东西的按钮是噪声),纯图标不带文字以免页头抖动;气泡走既有 `Tooltip`。Modal 用 daisyUI 的原生 `<dialog>`(要它的 top-layer 盖住 `z-50` 的 toast,顺带有原生 Esc),遮罩仍是真 `<button>` + `form method=dialog`,Esc/关闭后焦点归还页头那颗钮(与日志抽屉同一条纪律)。复制走既有 `copyWithToast`,指令里带上两侧当前版本与最新版本。
+  
+  **不做**:不自动升级、不代跑命令、不做「忽略此版本」持久化、只认 `latest` dist-tag。
+
 ## 0.8.0
 
 ### Minor Changes
