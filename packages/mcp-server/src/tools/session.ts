@@ -1,7 +1,9 @@
 import type { McpServer } from '@modelcontextprotocol/server';
 import {
+  getPageStructureSchema,
   getSelectionResultSchema,
   getSelectionSchema,
+  pageStructureResultSchema,
   pingResultSchema,
 } from 'text-to-design-shared';
 import type { Bridge } from '../bridge';
@@ -83,5 +85,39 @@ export function registerSessionTools(
     },
   });
 
-  return [ping(server, bridge, i18n), getSelection(server, bridge, i18n)];
+  /**
+   * 页面结构总览。与 `jsd://page` 资源同一件事(资源是给「客户端主动读上下文」的,
+   * 工具是给「模型明确要读」的,同 jsd_get_selection / jsd://canvas/selection 一对)。
+   *
+   * 名字不是随便起的:drift-watch 的「当前页顶层」复核按 `jsd_get_page` 走
+   * `lookupExecutor`,此前该工具**不存在** —— lookupExecutor 返 undefined,
+   * 那一层静默进 dead,复核从未执行过。改名/删名会再次静默打断它。
+   */
+  const getPage = bridgeTool({
+    name: 'jsd_get_page',
+    title: 'getPage.title',
+    description: 'getPage.description',
+    method: 'get_page',
+    // 无参工具也显式给 inputSchema:不给的话 SDK 走 callback(ctx) 形态,
+    // 目录里也看不出「这个工具不收参数」(同 jsd_get_selection 的注释)
+    inputSchema: getPageStructureSchema,
+    outputSchema: pageStructureResultSchema,
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+    followUp: {
+      type: 'tool',
+      tool: 'jsd_find',
+      description: 'getPage.followUp',
+    },
+  });
+
+  return [
+    ping(server, bridge, i18n),
+    getSelection(server, bridge, i18n),
+    getPage(server, bridge, i18n),
+  ];
 }

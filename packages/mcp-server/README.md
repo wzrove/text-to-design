@@ -105,6 +105,7 @@ pkill -f text-to-design-mcp
 | --- | --- |
 | `jsd_ping` | 检查插件是否在线,返回三张能力表(核心能力 / 平台差异能力 / 平台特有 op 名单);回包被 daemon 缓存,后续可读 `jsd://platform/state` |
 | `jsd_get_selection` | 读取画布当前选中的节点 |
+| `jsd_get_page` | 读取当前页结构(顶层节点轻量摘要 + 文档级页面总览;等价 `jsd://page` 资源) |
 | `jsd_find` | 按名称/类型/id 查找节点 |
 | `jsd_create_nodes` | 按描述创建节点(frame/rect/text 等,支持阴影/描边/渐变/文本样式) |
 | `jsd_create_svg` | 直接导入 SVG(保留 path/矢量数据,不经降级)。来源二选一:`svg` 内联字符串,或 `svgPath` 本地文件路径(**图表一律走这条**:脚本按 `chart-by-code` 配方算好、落盘,再传路径) |

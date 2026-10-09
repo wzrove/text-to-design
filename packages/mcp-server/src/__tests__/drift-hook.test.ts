@@ -152,4 +152,60 @@ describe('结构变更复核钩子', () => {
       expect(lookupExecutor(tool), `${tool} 未注册`).toBeDefined();
     }
   });
+
+  /**
+   * 「当前页顶层」这一层复核走 `callExecutor('jsd_get_page')` —— 工具名写错时
+   * `lookupExecutor` 返 undefined → `readLayer` 返 null → 该层被标 `dead`,
+   * **复核从那一天起静默不执行**,日志里一个字都不会有(实测就是如此:
+   * 该名字一度不存在于工具面,而 batch 描述一直写着「含当前页顶层」)。
+   *
+   * 所以这里不测「漂移能不能查出来」,测的是**这条路真的走通了**:读到了 get_page。
+   */
+  it('当前页顶层复核真的发生(jsd_get_page 必须真实注册)', async () => {
+    expect(
+      lookupExecutor('jsd_get_page'),
+      'jsd_get_page 未注册 —— 当前页顶层复核会静默失效',
+    ).toBeDefined();
+
+    bridge.request = async (method, params) => {
+      calls.push({ method, params });
+      if (method === 'node_op') return { removed: ['1:2'] };
+      // parentId 缺省 = 顶层(复核据此判定要记「当前页」这一层)
+      if (method === 'find') {
+        return {
+          nodes: [
+            {
+              id: '1:2',
+              name: 'card',
+              type: 'FRAME',
+              x: 24,
+              y: 720,
+              parentId: '',
+            },
+          ],
+          total: 1,
+        };
+      }
+      if (method === 'get_page') {
+        return {
+          pageName: 'P',
+          nodes: [
+            { id: '1:2', name: 'card', type: 'FRAME', x: 24, y: 720, z: 0 },
+          ],
+          count: 1,
+        };
+      }
+      return {};
+    };
+
+    const exec = lookupExecutor('jsd_delete_node');
+    expect(exec).toBeDefined();
+    calls.length = 0;
+    await exec?.({ ids: ['1:2'] }, undefined);
+
+    expect(
+      calls.filter((c) => c.method === 'get_page').length,
+      '当前页顶层复核没读 get_page(该层被视为 dead)',
+    ).toBeGreaterThan(0);
+  });
 });

@@ -79,7 +79,7 @@ export function registerResources(
     {
       title: 'resources.title4',
       description:
-        '当前页顶层节点的轻量摘要(名称/类型/位置/尺寸/子节点数),不递归;另附文档级页面总览(pages:各页名与顶层节点数,动态页文档首次读取会全量加载并在 note 点名成本)。从头设计整页前先读这里看页面已有内容',
+        '当前页顶层节点的轻量摘要(名称/类型/位置/尺寸/子节点数),不递归;另附文档级页面总览(pages:各页名与顶层节点数,动态页文档首次读取会全量加载并在 note 点名成本)。从头设计整页前先读这里看页面已有内容;等价于 jsd_get_page',
       mimeType: 'application/json',
     },
     async () => {
