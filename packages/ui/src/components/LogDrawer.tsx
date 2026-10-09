@@ -3,7 +3,7 @@ import { LOG_LEVEL_ORDER, type MessageKey } from 'text-to-design-shared';
 import type { LogLevel } from '../bridge/types';
 import type { LogEntry } from '../bridge/useBridge';
 import { t } from '../i18n/useLocale';
-import { copyText } from '../utils/clipboard';
+import { copyWithToast } from '../utils/clipboard';
 import CollapsibleSection from './CollapsibleSection';
 
 /** 过滤档位与级别排序:all=不过滤,其余为「该级别及以上」 */
@@ -64,7 +64,6 @@ const LONG_LINE_CHARS = 120;
 function LogEntryItem(props: { entry: LogEntry }) {
   const level = props.entry.level ?? 'info';
   const [expanded, setExpanded] = createSignal(false);
-  const [copied, setCopied] = createSignal(false);
   const isLong = () => props.entry.line.length > LONG_LINE_CHARS;
 
   /** 行正文 + 级别标记 + 去重计数徽标(折叠/展开两分支共用) */
@@ -88,10 +87,7 @@ function LogEntryItem(props: { entry: LogEntry }) {
   };
 
   const onCopy = (): void => {
-    if (copyText(props.entry.line)) {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1200);
-    }
+    copyWithToast(props.entry.line);
   };
 
   return (
@@ -139,7 +135,7 @@ function LogEntryItem(props: { entry: LogEntry }) {
         class="absolute top-0.5 right-0.5 z-10 rounded bg-base-100/90 px-1 text-base-content/60 text-[10px] opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100 hover:text-base-content"
         onClick={onCopy}
       >
-        {copied() ? '✓' : t('log.drawer.copy')}
+        {t('log.drawer.copy')}
       </button>
     </div>
   );

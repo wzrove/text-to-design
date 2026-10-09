@@ -82,6 +82,17 @@ export default defineConfig(({ mode }): UserConfig => {
   // 默认(development/production) → UI 面板构建
   return {
     plugins: [solid(), viteSingleFile(), reorderCss()],
+    // 面板自身版本(升级提示要比对的那一侧,见 0038)。用 define 而非
+    // `import package.json`:本包 tsconfig 没开 resolveJsonModule,走导入会 TS2732。
+    define: {
+      __APP_VERSION__: JSON.stringify(
+        (
+          JSON.parse(
+            readFileSync(resolve(import.meta.dirname, 'package.json'), 'utf-8'),
+          ) as { version: string }
+        ).version,
+      ),
+    },
     build: {
       outDir: 'dist',
       emptyOutDir: false,

@@ -353,7 +353,54 @@ export async function setSelection(
 }
 
 /**
- * 页面结构总览:当前页顶层节点的轻量摘要(serializeNode depth=0,不递归子节点)。
+ * 顶层节点的轻量摘要:只读本函数回传的那几个字段。
+ *
+ * 不能再走 `trySerialize(node, 0)`:depth 只挡子节点递归,`serializeNode` 对**每个**
+ * 节点照样读 fills/strokes/effects/layoutGrids/boundVariables/children 等几十处引擎
+ * 属性,还会为 z 回查一次父级 children(`childIndexOf` 逐兄弟比 id)。后者在页面顶层
+ * 是 O(n²) 次跨边界属性读 —— 实测症状是 `jsd_get_page` 直接顶穿 UI 侧 25s 转发超时
+ * (`ok=false error=forward_timeout`),而它自称「轻量摘要」。
+ * z 由调用方按下标给出,单节点成本降到「本行字段数」。
+ */
+function lightTopLevel(
+  n: NodeSkeleton,
+  z: number,
+): PageStructureResult['nodes'][number] {
+  const out: PageStructureResult['nodes'][number] = {
+    id: n.id,
+    name: n.name,
+    type: n.type,
+    x: 0,
+    y: 0,
+    z,
+  };
+  try {
+    out.x = Math.round(n.x) || 0;
+    out.y = Math.round(n.y) || 0;
+  } catch {
+    // 失效节点:坐标退化成 0,其余字段照常
+  }
+  try {
+    if ('width' in n) {
+      out.width = Math.round(n.width);
+      out.height = Math.round(n.height);
+    }
+  } catch {
+    // 同上:尺寸读不到就不给
+  }
+  try {
+    if ('children' in n) {
+      const c = n.children?.length ?? 0;
+      if (c > 0) out.childCount = c;
+    }
+  } catch {
+    // 同上
+  }
+  return out;
+}
+
+/**
+ * 页面结构总览:当前页顶层节点的轻量摘要(不回读子节点,见 lightTopLevel)。
  *
  * 0011 批次 5:读取前显式门控 `loadAllPagesAsync`(幂等,重复调用不重复加载),
  * 附带文档级页面总览(pages)—— dynamic-page 下这是唯一安全的跨页读法;
@@ -367,30 +414,7 @@ export async function getPageStructure(
   const nodes: PageStructureResult['nodes'] = [];
   // 下标 = 绘制顺序(z):顶层节点没有父级可回查,这里按页面 children 顺序直接给出
   for (const [z, c] of children.entries()) {
-    const s = trySerialize(c, 0);
-    if (s) {
-      nodes.push({
-        id: s.id,
-        name: s.name,
-        type: s.type,
-        x: s.x,
-        y: s.y,
-        z,
-        ...(s.width != null ? { width: s.width } : {}),
-        ...(s.height != null ? { height: s.height } : {}),
-        ...(s.childCount != null ? { childCount: s.childCount } : {}),
-      });
-    } else {
-      // 失效节点最小壳,不整体扑灭页面总览
-      nodes.push({
-        id: c.id,
-        name: c.name,
-        type: c.type,
-        x: Math.round(c.x) || 0,
-        y: Math.round(c.y) || 0,
-        z,
-      });
-    }
+    nodes.push(lightTopLevel(c, z));
   }
   return {
     pageName: host.currentPage.name,

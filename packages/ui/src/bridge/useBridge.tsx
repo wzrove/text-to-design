@@ -34,6 +34,13 @@ export interface BridgeStore {
    * 0 = 不补偿(无真源的平台,或 `ui_env` 尚未到达)。
    */
   chromeHeight: Accessor<number>;
+  /**
+   * npm 上两个包的最新版本(daemon 代查后推来,见 0038)。
+   * 任一项为 `null` = 没查到,面板据此**不**提示升级。
+   */
+  latest: Accessor<{ ui: string | null; mcp: string | null }>;
+  /** daemon 自报版本(status 帧);空串 = 尚未连上,无从比对 */
+  daemonVersion: Accessor<string>;
   connect: () => void;
   disconnect: () => void;
   rescan: () => void;
@@ -67,6 +74,11 @@ export function BridgeProvider(props: ParentProps) {
    * 平台的行为因此与 0028 之前完全一致。
    */
   const [chromeHeight, setChromeHeight] = createSignal(UI_CHROME_DEFAULT);
+  const [latest, setLatest] = createSignal<{
+    ui: string | null;
+    mcp: string | null;
+  }>({ ui: null, mcp: null });
+  const [daemonVersion, setDaemonVersion] = createSignal('');
 
   let bridge: BridgeSocket | undefined;
   let subscribed = false;
@@ -134,8 +146,14 @@ export function BridgeProvider(props: ParentProps) {
         // 被顶替同样要清 —— 面板已不再持有通道,快照不再代表任何真实连接
         if (e.status === 'disconnected' || e.status === 'superseded') {
           setCapability(() => null);
+          // 版本结论同样随通道失效:daemon 都不在了,「有新版」无从谈起
+          setDaemonVersion(() => '');
+          setLatest(() => ({ ui: null, mcp: null }));
+        } else {
+          setDaemonVersion(() => b.daemonVersion);
         }
       } else if (e.type === 'selection') setSelection(() => e.data);
+      else if (e.type === 'version') setLatest(() => e.latest);
       else if (e.type === 'platform') {
         setPlatform(() => e.platform);
         void refreshCapabilities();
@@ -156,6 +174,8 @@ export function BridgeProvider(props: ParentProps) {
     capability,
     canResize,
     chromeHeight,
+    latest,
+    daemonVersion,
     connect: () => getBridge().connect(),
     disconnect: () => getBridge().disconnect(),
     rescan: () => getBridge().rescan(),

@@ -224,6 +224,67 @@ body {
   background: transparent;
 }
 
+/* 悬浮提示气泡的宽度收口(见 0037)。
+   daisyUI 的 tooltip 气泡默认 `max-width: 20rem`(320px),而本面板宽约 360 ——
+   页头那几句说明(「相机已锁定:操作画布时不移动你的视口(点击改为跟随)」)会
+   横穿整屏,再被根滚动容器的 overflow(auto)从两侧裁掉,读不全。收到 12rem
+   让它折行,配合 Tooltip 组件的贴边对齐,气泡始终落在面板内。
+
+   精致度收口(同为压层裸规则,见下):daisyUI 默认 4px 小圆角 + 文字居中 +
+   padding .25rem/.5rem + 行高 1.25,长中文提示折行后犬牙交错、显得糙。改:
+   - 圆角升到 radius-box(0.5rem),与面板其他浮层一致;
+   - 左对齐:长句居中折行后左右边缘参差,读起点不固定;
+   - 行高 1.6 + 加大 padding:CJK 正文在 1.25 里挤成一团;
+   - 字号 12px:气泡是辅助信息,不该比正文(12px)还大;
+   - 轻投影 + 微透明底 + backdrop blur:纯实心块浮在面板上像贴纸,
+     微透明 + 模糊让它融入主题;暗主题下这套不成立(neutral 与面板底同明度),
+     单独分支见下方。
+
+   **这些故意写在层外**:它们与 daisyUI 的 `.tooltip[data-tip]:before` 同特异度,
+   谁赢只能靠「无层压制所有层」;写进 @layer utilities 后胜负就取决于两段 CSS
+   的先后,改一次文件顺序便会静默失效(气泡变宽、文字被裁,而不报任何错误)。
+   与上面的滚动条、body 底色同属「有意压在 daisyUI 之上」的那一小撮规则。 */
+.tooltip[data-tip] {
+  --tt-radius: var(--radius-box);
+  --tt-bg: color-mix(in srgb, var(--color-neutral) 92%, transparent);
+}
+
+.tooltip[data-tip]::before {
+  max-width: 12rem;
+  text-align: left;
+  padding-block: 0.4375rem;
+  padding-inline: 0.625rem;
+  font-size: 0.75rem;
+  line-height: 1.6;
+  /* 折行取「好看」而非「贪心」:贪心断行会把长句末尾两三个字甩到第二行,
+     中文尤其明显。老 webview 不认这条时退化为默认断行,不影响其余样式。 */
+  text-wrap: pretty;
+  box-shadow: 0 4px 14px rgb(0 0 0 / 0.16);
+  backdrop-filter: blur(6px);
+}
+
+/* 暗色气泡必须「抬起来」而不是「压下去」:daisyUI 的气泡底色是 neutral,
+   暗主题 neutral(#2f3640)与面板底 base-200(#222931)明度几乎相同 —— 深色
+   气泡落在暗面板上等于隐形,上面那道浅黑投影在暗底上同样看不见。故暗主题
+   改取 base-300 提亮一档做「抬升面」(暗底上的浮起靠变亮表达),投影同步
+   加深到暗底上仍可见。文字仍是 neutral-content(浅色),对比度约 6.5:1。 */
+[data-theme='textdesign_dark'] .tooltip[data-tip] {
+  --tt-bg: color-mix(in srgb, var(--color-base-300) 88%, white);
+}
+
+[data-theme='textdesign_dark'] .tooltip[data-tip]::before {
+  box-shadow: 0 4px 14px rgb(0 0 0 / 0.45);
+}
+
+/* 暗色幽灵钮的高亮方向要反过来:daisyUI 的 `.btn:hover` 是「base-200 压暗 7%」,
+   而面板底就是 base-200 —— 暗色下这一压不是亮起,是挖一个比面板更暗的坑,读起来
+   像禁用/按下。焦点态更彻底:`.btn:focus-visible` 直接把底色设成 base-200,与面板
+   同色,暗色下键盘焦点等于不可见。故暗主题下这两态统一取 base-300 做抬升面
+   (与上方暗色气泡同一档),既亮起又保留层次。 */
+[data-theme='textdesign_dark'] .btn-ghost:is(:hover, :focus-visible) {
+  --btn-bg: var(--color-base-300);
+}
+
 /* 自建工具类:进 utilities 层,与 daisyUI 的组件规则同层竞争。
    (类名均带项目私有前缀含义,hint-/drawer-/badge-spin 与 daisyUI 无同名) */
 @layer utilities {

@@ -8,8 +8,13 @@ import type {
   ServerPush,
   ServerStatusFrame,
   UiEnvMessage,
+  VersionPushFrame,
 } from 'text-to-design-shared';
-import { toStoredChoice, UI_FORWARD_TIMEOUT_MS } from 'text-to-design-shared';
+import {
+  isVersionPushFrame,
+  toStoredChoice,
+  UI_FORWARD_TIMEOUT_MS,
+} from 'text-to-design-shared';
 import { t } from '../i18n/useLocale';
 import { extractBytes, stripBytes } from './binary';
 import { postToCode, readCodeMessage } from './codeChannel';
@@ -44,6 +49,9 @@ export class Router {
    * 语义不同 —— 混用会让「谁在什么时候把状态改成 connected」无从追查。
    */
   onServerPong: (() => void) | null = null;
+
+  /** daemon 代查到的 npm 最新版本(见 0038);查不到时两项为 null */
+  onVersion: ((frame: VersionPushFrame) => void) | null = null;
 
   constructor(conn: Conn, log: (level: LogLevel, line: string) => void) {
     this.conn = conn;
@@ -84,6 +92,10 @@ export class Router {
     if (msg.type === 'log') {
       // daemon 侧日志实时推送:直接进面板(级别过滤/去重由 LogDrawer 承接)
       this.log(msg.level, msg.line);
+      return;
+    }
+    if (isVersionPushFrame(msg)) {
+      this.onVersion?.(msg);
       return;
     }
     if (

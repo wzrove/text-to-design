@@ -3,6 +3,7 @@ import type { ServerStatusFrame } from './connection';
 import type { PluginError } from './dicts/error-code';
 import type { LogLevel } from './dicts/log';
 import type * as s from './schemas';
+import type { VersionPushFrame } from './version-channel';
 
 /* 相机锁定(UI 发意图,code 侧在 viewport 契约层拦截) */
 export * from './camera-lock';
@@ -18,6 +19,8 @@ export * from './locale-channel';
 export * from './panel';
 /* 重新导出 zod schemas(唯一真源,供 MCP 运行时校验复用) */
 export * from './schemas';
+/* 版本升级提示的跨侧契约(daemon 代查 npm latest → 推送给面板,见 0038) */
+export * from './version-channel';
 
 // 由 schema 推导的领域类型
 export type PingParams = z.infer<typeof s.pingSchema>;
@@ -227,7 +230,8 @@ export type PluginResponse<D = unknown> = {
 /** 服务器主动下发的推送帧(daemon → 插件 UI,单向通知,无需回包) */
 export type ServerPush =
   | { type: 'log'; level: LogLevel; line: string }
-  | ServerStatusFrame;
+  | ServerStatusFrame
+  | VersionPushFrame;
 export function makeResponse<D>(
   id: string,
   ok: boolean,

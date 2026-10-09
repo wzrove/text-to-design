@@ -3,7 +3,7 @@
 历史只增不改。结论变了就新建记录并取代旧编号，旧记录保留原文。
 
 读法：每条决策**先读本索引**定位受影响的既有记录（含下面的依赖关系），再打开单条。
-下表只列**最近 10 条**（2026-09-24 及以后）；更早的 0001–0023 见 [`INDEX-2026.md`](INDEX-2026.md)。
+下表只列**最近 10 条**；更早的 0001–0024 见 [`INDEX-2026.md`](INDEX-2026.md)。
 
 维护阈值：本表 ≤ 15 KB 或 ≤ 40 条，超限**按年拆档**（全量行移入 `INDEX-<年>.md`，本表只留现行有效 + 最近 10 条）；
 单条记录的「变更历史」> 10 行时压成一行摘要 + 指向被取代的记录。完整机制见
@@ -11,7 +11,6 @@
 
 | 编号 | 标题 | 状态 | 影响范围 | 最后更新 |
 |---|---|---|---|---|
-| [0024](0024-变量绑定进入读路径：boundVariables-按引擎词汇原样透传，不引入归一化层.md) | 变量绑定进入读路径：`boundVariables` 按引擎词汇原样透传，不引入归一化层 | 已采纳（**Figma 真机复验通过**：2026-09-29 建变量→绑定→回读得 `{type:'VARIABLE_ALIAS', id:'VariableID:…'}`，未归一化；变量集合无删除入口，属 op 能力缺口） | `shared/`（`schemas/{platform,serialized-node}.ts`、`core/{host,serialize}.ts`、`write-path` 单测）、`ui/code/figma/sync-guarantee.ts` | 2026-09-25 |
 | [0025](0025-Figma补上组件属性的定义入口：一个op承担定义即绑定，不照搬MG的四段式.md) | Figma 补上组件属性**定义**入口：一个 op 承担「定义 + 绑定」，不照搬 MG 四段式 | 已采纳（**Figma 真机复验通过**：2026-09-25 验 INSTANCE_SWAP / TEXT 两槽，2026-09-29 补测 BOOLEAN 槽(可见性)，属性确实驱动图层） | `ui/code/figma/{ops,sync-guarantee}.ts`、`mcp-server/tools/nodes.ts`、`mcp-server/README.md` | 2026-09-25 |
 | [0029](0029-能力字典改规格表：kind-判别加-labelKey-收口，删死代码与重复事实.md) | 能力字典改规格表：kind 判别 + labelKey 收口 | 已采纳（类型检查 + 不变式测试通过） | `shared/`（`dicts/capability.ts`、`core/{capabilities,buildNode}.ts`、i18n 少一键）、`ui/`（删 `i18n/capabilityKeys.ts`、`CapabilityCard`、`figma/meta.ts` 少一位） | 2026-09-29 |
 | [0030](0030-MCP-服务实例一次装配、跨请求复用（目录不再按请求重建）.md) | MCP 服务实例一次装配、跨请求复用（目录不再按请求重建） | 已采纳（类型检查 + 本包 24 例不变式测试通过；真机复验待插件重载） | `mcp-server/`（`daemon/run.ts` 装配改一次、`server.ts` 删 `liveSessions`/`syncToolAvailability` + 加 `cacheHints`、`index.ts` 连接变化回调）、`daemon/proxy.ts` 注释 | 2026-09-29 |
@@ -21,6 +20,8 @@
 | [0034](0034-单类型-create-工具容忍并校验-type：三处口径统一加越界字段点名.md) | 单类型 create 工具容忍并校验 `type`：三处口径统一 + 越界字段点名 | 已采纳（类型检查 + 8 例新单测 + 266 例回归 + 三平台构建通过；**Figma 真机三条路径复验通过** 2026-10-08，jsDesign / MasterGo 待补） | `mcp-server/`（`tools/create.ts`、`core/registry.ts`）、`shared/src/schemas/batch.ts` | 2026-10-08 |
 | [0035](0035-图表支持：服务端单向编译加复用-SVG-导入通道，骨架原生绘图区-SVG，不引入模式.md) | 图表支持：服务端单向编译 + 复用 SVG 导入通道（骨架原生 / 绘图区 SVG）；另开配方 prompt + `jsd_create_svg` 文件来源覆盖任意种类 | 已被取代（被 [0036](0036-删掉内置图表编译器：图表一律走代码生成-SVG-再导入配方.md) 取代：主路径「内置编译器优先」被删，只留配方那条路；`jsd_create_svg` 的 `svgPath` 来源按原文保留） | `shared/`（新增 `dicts/chart.ts`、`schemas/chart.ts`、`schemas/execute.ts` 新增 `createSvgInputSchema`、i18n 三键）、`mcp-server/`（新增 `src/charts.ts`、`tools/chart.ts`、`prompts.ts` 的 `chart-by-code`、`tools/create.ts` 的 `svgPath`、`config.ts` 体积护栏、`tools/index.ts`、2 个测试文件、`smoke-chart.ts`） | 2026-10-09 |
 | [0036](0036-删掉内置图表编译器：图表一律走代码生成-SVG-再导入配方.md) | 删掉内置图表编译器：图表一律走代码生成 SVG 再导入配方 | 已采纳（类型检查 + 全量 vitest + 三平台构建通过；配方不点名图形库、配色指向画布既有变量；真机待验项沿 0035：SVG 的 `path`/`C`/`circle` 保真、`<text>` 字体回落） | `shared/`（删 `schemas/chart.ts`、删 `dicts/chart.ts`、出口各摘一条、i18n 少一键）、`mcp-server/`（删 `src/charts.ts`、`tools/chart.ts`、`smoke-chart.ts`、`__tests__/chart.test.ts`、`tools/index.ts` 注册、`tools/prompts.ts` 配方重写、`tools/create.ts` 描述）、两个 `README.md` | 2026-10-09 |
+| [0037](0037-提示反馈收口：页头改用-daisyUI-tooltip，操作结果统一走-toast-出口.md) | 提示反馈收口：页头改用 daisyUI tooltip，操作结果统一走 toast 出口 | 已采纳（类型检查通过；真机待验：气泡宽度/贴边、toast 层级与连点去重） | `ui/`（新增 `components/{Tooltip,Toast}.tsx`、`utils/toast.ts`，`index.css` 加一条气泡宽度规则；页头四组件 + `App.tsx`；`SelectionCard` / `ConnectionHint` / `LogDrawer` 的复制反馈）、`shared/`（i18n 增 2 键、删 2 键） | 2026-10-10 |
+| [0038](0038-版本升级提示：daemon代查npm-latest，页头条件挂载升级入口，Modal给分步清单与复制给LLM.md) | 版本升级提示：daemon 代查 npm latest，页头条件挂载升级入口，Modal 给分步清单与复制给 LLM | 已采纳（类型检查 + 守卫/比较单测 + i18n 门禁通过；真机待验：按钮出现时机、Modal 与焦点归还、registry 不可达时不提示） | `shared/`（新增 `version-channel.ts`、i18n 增键）、`mcp-server/`（新增 `version-check.ts`，`bridge.ts` 加推送、`daemon/run.ts` 起周期）、`ui/`（`vite.config.ts` 注入 `__APP_VERSION__`、新增 `utils/version.ts` 与 `components/{UpgradeButton,UpgradeModal}.tsx`、bridge 四处、`App.tsx`） | 2026-10-10 |
 
 
 ## 依赖关系
@@ -88,6 +89,13 @@
                         不新增执行面 ⇒ 0020 的三档机制一档都不用；工具数 −1，目录体积取向沿 0006；失败出口沿 0007
                         「不允许静默失效」（`svgPath` 的读失败/为空/超限仍是人话报错）；字典收窄沿 0029/0032
                         「一个事实一份」；排除 daemon 内 vm 沙箱的结论直接继承 0035，未重开
+0037 (提示反馈收口) ── 不引模式，只做两处收口（Tooltip 组件 / toast 出口）；浮层不进流沿 0014/0015，
+                        文案键化沿 0016，模块级状态的口径取自 0002 与 `theme.ts` 的既有取舍；
+                        「同一交互只留一个实现」的取向与 0026 同源（该编号是空号，仅代码引用）
+0038 (版本升级提示) ── 不引模式（Strategy/Retry/Observer 均排除）；daemon 代查是宿主网络白名单下的唯一可行路径，
+                        面板直连在 Figma 必被挡；「一个事实一份」沿 0008/0009/0032，推送帧形状照 0033 的旁路消息；
+                        浮层不进流沿 0014，文案键化沿 0016，复制反馈沿 0037 的 `copyWithToast`；
+                        查询失败「不提示」而非报错，是 0007「不允许静默失效」的另一半：留痕但不给错的结论
 ```
 
-更早的记录（0001–0016）见 [`INDEX-2026.md`](INDEX-2026.md)。| 0036 | 删掉内置图表编译器：图表一律走代码生成 SVG 再导入配方 | 提议 | 待补充 | 2026-10-09 |
+更早的记录（0001–0024）见 [`INDEX-2026.md`](INDEX-2026.md)。

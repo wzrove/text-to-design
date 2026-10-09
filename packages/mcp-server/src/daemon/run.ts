@@ -5,6 +5,7 @@ import {
   toNodeHandler,
 } from '@modelcontextprotocol/node';
 import { createMcpHandler, type McpServer } from '@modelcontextprotocol/server';
+import { HEARTBEAT_MS } from 'text-to-design-shared';
 import type { Bridge } from '../bridge';
 import {
   DAEMON_POLL_MS,
@@ -17,6 +18,7 @@ import {
 } from '../config';
 import { debug, error, log } from '../logger';
 import { buildServer } from '../server';
+import { latestVersions } from '../version-check';
 import {
   delay,
   fetchDaemonHealth,
@@ -97,9 +99,35 @@ export async function runDaemon(bridge: Bridge): Promise<void> {
   const validateHost = localhostHostValidation();
   const validateOrigin = localhostOriginValidation();
   let httpServer: ReturnType<typeof createServer> | null = null;
+  let versionTimer: ReturnType<typeof setInterval> | null = null;
+
+  /**
+   * 版本提示:查一次(缓存未过期就不真查),连着就把结论推下去。
+   *
+   * **三个触发点,各有分工**:
+   * - 启动:只为**预热缓存** —— 此刻面板通常还没连上,但不查的话面板连上时要现等
+   *   一次 registry 往返(最坏 4s)才看得到提示;
+   * - 面板连上:立刻推,缓存是热的,这就是「一打开就看到」的那一次;
+   * - 心跳:兜住「会话中途发了新版」—— 面板一直开着时,只有它还会再推。
+   *
+   * 查询频率由 `latestVersions` 内的 VERSION_CHECK_MS 缓存守着,投递才跟心跳。
+   */
+  const syncLatest = (): void => {
+    void latestVersions().then((latest) => {
+      const brief = `ui=${latest.ui ?? '未查到'} mcp=${latest.mcp ?? '未查到'}`;
+      if (!bridge.isConnected) {
+        log(`版本同步: ${brief} (面板未连接,只更新缓存)`);
+        return;
+      }
+      bridge.pushVersion({ type: 'version', latest });
+      log(`版本同步: ${brief} (已推送面板)`);
+    });
+  };
+  bridge.onPluginConnect = syncLatest;
 
   const shutdown = (reason: string): void => {
     log(`daemon 退出: ${reason}`);
+    if (versionTimer != null) clearInterval(versionTimer);
     // 关闭是尽力而为:失败也必须退出,但不能静默(见决策 0007/0013)
     void handler.close().catch((e) => {
       debug(
@@ -149,6 +177,10 @@ export async function runDaemon(bridge: Bridge): Promise<void> {
 
   log(`daemon: MCP HTTP http://127.0.0.1:${HTTP_PORT}/mcp`);
   log('daemon 就绪,常驻运行(更新时由版本自检自动替换)');
+
+  versionTimer = setInterval(syncLatest, HEARTBEAT_MS);
+  // 先查一次把缓存预热(此刻多半还没连面板,推不出去也值得查)
+  syncLatest();
 
   process.on('SIGINT', () => shutdown('SIGINT'));
 }

@@ -63,6 +63,34 @@ export const MESSAGES_ZH_CN = {
   'header.cameraLock.title.unlocked':
     '相机跟随:操作画布后视口滚动缩放到结果(点击锁定)',
 
+  // ── 版本升级提示(0038) ──
+  // 只在「确有新版本」时出现:daemon 代查 npm latest,查不到就不挂这颗钮。
+  'upgrade.title': '有新版本可用(点击查看升级步骤)',
+  'upgrade.modal.title': '升级到最新版本',
+  'upgrade.current': '当前 {version}',
+  'upgrade.latest': '最新 {version}',
+  'upgrade.plugin.label': '插件',
+  'upgrade.service.label': '后台服务',
+  // 两条升级路径不一样,别写成同一句:mcp 由 AI 工具用 npx latest 自动拉取(重启
+  // 会话即可),ui 是插件包,得下载到本地再在设计软件里导入 manifest。
+  // 文案按「一句话一个动作」写:不解释原理,不总结升华,不用破折号与冒号。
+  'upgrade.step.service':
+    '① 后台服务,重启 AI 会话就行。它跑的是 npx -y text-to-design-mcp@latest,每次都是最新的',
+  // ② 拆成 head / tail 两段:中间那颗 `text-to-design-ui` 是 releases 链接,
+  // 不能整句当一个字符串渲染(那样只能整句可点或整句不可点)
+  'upgrade.step.plugin.head': '② 插件要手动换。下载',
+  'upgrade.step.plugin.tail': '最新版解压,在设计软件里导入对应平台的 manifest',
+  'upgrade.step.verify': '③ 重新运行插件,顶部的升级图标没了就是对齐了',
+  'upgrade.copy': '复制给 AI 助手',
+  'upgrade.prompt':
+    '我在用 text-to-design,插件 text-to-design-ui 当前 {ui}、最新 {uiLatest},后台服务 text-to-design-mcp 当前 {mcp}、最新 {mcpLatest}。帮我升到最新:① 确认 MCP 配置里的命令带 latest,然后重启 AI 会话;② 下载 text-to-design-ui 最新版(npm pack 或 GitHub Releases 的 zip)解压,告诉我即时设计 / Figma / MasterGo 分别该导入 dist 下哪份 manifest.json;③ 完成后回报两个版本号。',
+
+  // ── 轻提示(操作结果,不用管是哪颗按钮弹的) ──
+  // 只在「做完了但看不出来」的操作上弹:复制的结果在系统剪贴板里,相机锁只换个
+  // 14px 图标。界面本身变了的(开合抽屉、切主题、清空日志)不弹,那是噪声。
+  'toast.copy.done': '已复制',
+  'toast.copy.failed': '复制失败',
+
   // ── 连接提示条 ──
   'conn.connected':
     '已连接。选中画布节点后点「复制」,把内容发给 AI 助手——例如:「按这个节点样式帮我再做一张卡片」',
@@ -72,7 +100,6 @@ export const MESSAGES_ZH_CN = {
   'conn.disconnected.tutorial': '安装教程',
   'conn.copyAi': '① 复制给 AI 助手',
   'conn.copyDaemon': '② 复制启动命令',
-  'conn.copied': '✓ 已复制',
   'conn.copyAi.hint': '发给 AI,让它调用 jsd_ping 唤醒后台服务',
   'conn.daemon.note':
     '在本机终端执行即常驻到下次重启;重复执行安全(已有实例会自动跳过)。',
@@ -95,7 +122,6 @@ export const MESSAGES_ZH_CN = {
   'selection.title': '选中节点',
   'selection.badge': '{count} 个 · 序列化 {size}',
   'selection.copy': '复制',
-  'selection.copied': '✓',
   'selection.empty.title': '未选中节点',
   'selection.empty.hint': '在画布中点选节点后,这里会实时显示并支持复制',
 
@@ -137,6 +163,8 @@ export const MESSAGES_ZH_CN = {
   'bridge.log.superseded':
     '通道已被另一个插件面板接管,自动重连已停止(点面板顶部的「夺回」可切回)',
   'bridge.log.confirmed': '服务已确认连接(版本 {version})',
+  'bridge.log.versionPush': '收到 npm 最新版本: 插件 {ui}、服务 {mcp}',
+  'bridge.log.versionUnknown': '未查到',
   'bridge.log.handshakeTimeout': 'WS 握手超时({ms}ms),放弃本次连接: {port}',
   'bridge.log.serverConnected':
     'MCP server 已连接,等待服务确认: ws://localhost:{port}',

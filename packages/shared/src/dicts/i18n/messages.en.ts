@@ -67,6 +67,27 @@ export const MESSAGES_EN = {
   'header.cameraLock.title.unlocked':
     'Camera follows: canvas operations scroll and zoom to the result (click to lock)',
 
+  'upgrade.title': 'A newer version is available (click for upgrade steps)',
+  'upgrade.modal.title': 'Upgrade to the latest version',
+  'upgrade.current': 'Current {version}',
+  'upgrade.latest': 'Latest {version}',
+  'upgrade.plugin.label': 'Plugin',
+  // 单列宽度放不下 `Background service`(版本对照是两列一行),收到 `Service`
+  'upgrade.service.label': 'Service',
+  'upgrade.step.service':
+    '① Service, just restart the AI session. It runs npx -y text-to-design-mcp@latest, so it is always the newest',
+  'upgrade.step.plugin.head': '② Plugin is a manual swap. Download the latest',
+  'upgrade.step.plugin.tail':
+    ', unzip it, then import the manifest for your platform',
+  'upgrade.step.verify':
+    '③ Run the plugin again. No upgrade icon up top means both sides match',
+  'upgrade.copy': 'Copy for AI assistant',
+  'upgrade.prompt':
+    'I use text-to-design. Plugin text-to-design-ui is {ui}, latest {uiLatest}; service text-to-design-mcp is {mcp}, latest {mcpLatest}. Help me get both to the latest: ① check the MCP config command pins latest, then restart the AI session; ② download and unzip the latest text-to-design-ui (npm pack, or the zip from GitHub Releases), and tell me which manifest.json under dist/ to import for jsDesign / Figma / MasterGo; ③ report both version numbers when done.',
+
+  'toast.copy.done': 'Copied',
+  'toast.copy.failed': 'Copy failed',
+
   'conn.connected':
     'Connected. Select nodes on the canvas, click "Copy", then paste into your AI assistant — e.g. "make me another card in this node style"',
   'conn.superseded':
@@ -75,7 +96,6 @@ export const MESSAGES_EN = {
   'conn.disconnected.tutorial': 'Install guide',
   'conn.copyAi': '① Copy prompt for AI',
   'conn.copyDaemon': '② Copy start command',
-  'conn.copied': '✓ Copied',
   'conn.copyAi.hint':
     'Send it to your AI so it calls jsd_ping to wake the service',
   'conn.daemon.note':
@@ -94,7 +114,6 @@ export const MESSAGES_EN = {
   'selection.title': 'Selected nodes',
   'selection.badge': '{count} nodes · {size} serialized',
   'selection.copy': 'Copy',
-  'selection.copied': '✓',
   'selection.empty.title': 'No nodes selected',
   'selection.empty.hint':
     'Select nodes on the canvas and they show up here, ready to copy',
@@ -136,6 +155,9 @@ export const MESSAGES_EN = {
     'Another plugin panel took over the channel; auto-reconnect stopped (click "Reclaim" in the panel header to switch back)',
   'bridge.log.confirmed':
     'Service confirmed the connection (version {version})',
+  'bridge.log.versionPush':
+    'Latest npm versions received: plugin {ui}, service {mcp}',
+  'bridge.log.versionUnknown': 'unknown',
   'bridge.log.handshakeTimeout':
     'WS handshake timed out ({ms}ms), giving up on this connection: {port}',
   'bridge.log.serverConnected':

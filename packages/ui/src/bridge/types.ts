@@ -43,7 +43,12 @@ export type BridgeEvent =
   /** `chromeHeight` 已过 readChromeHeight 收口(缺省 → 兜底值,见 shared/panel.ts) */
   | { type: 'ui_env'; canResize: boolean; chromeHeight: number }
   /** 宿主里存着的语言选择(code 侧启动时推一次;见 shared/locale-channel.ts) */
-  | { type: 'locale_state'; stored: LocaleChoice | null };
+  | { type: 'locale_state'; stored: LocaleChoice | null }
+  /** npm 上两个包的最新版本(daemon 代查后推来,见 0038;任一项可为 null) */
+  | {
+      type: 'version';
+      latest: { ui: string | null; mcp: string | null };
+    };
 
 export type Conn = {
   port: number;

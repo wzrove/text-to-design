@@ -22,6 +22,8 @@ export class BridgeSocket {
   private router: Router;
   private connection: ConnectionManager;
   private scanner: Scanner;
+  /** daemon 自报的版本(来自 status 帧);未连上时为空串 = 无从比对 */
+  private serverVersion = '';
 
   constructor(port = WS_PORT) {
     this.conn = { port, ws: null, binaryIn: null };
@@ -47,6 +49,8 @@ export class BridgeSocket {
         this.connection.markSuperseded();
         return;
       }
+      // 留 daemon 版本:升级提示要比对它(面板版本自己知道,daemon 版本只有这里给)
+      this.serverVersion = frame.version;
       // daemon 每 HEARTBEAT_MS 重发 ready;只有从非 connected 首次确认才打日志,
       // 避免每次心跳都刷「服务已确认连接」
       const alreadyConnected = this.connection.status === 'connected';
@@ -60,6 +64,20 @@ export class BridgeSocket {
       }
     };
     this.router.onServerPong = () => this.connection.markConfirmed();
+    this.router.onVersion = (frame) => {
+      this.events.emit({
+        type: 'log',
+        level: 'info',
+        line: t('bridge.log.versionPush', {
+          ui: frame.latest.ui ?? t('bridge.log.versionUnknown'),
+          mcp: frame.latest.mcp ?? t('bridge.log.versionUnknown'),
+        }),
+      });
+      this.events.emit({
+        type: 'version',
+        latest: { ui: frame.latest.ui, mcp: frame.latest.mcp },
+      });
+    };
     this.connection = new ConnectionManager(
       this.conn,
       this.router,
@@ -84,6 +102,11 @@ export class BridgeSocket {
 
   get lastConfirmedAt(): number {
     return this.connection.lastConfirmedAt;
+  }
+
+  /** daemon 自报版本(升级提示的比对侧之一,见 0038);空串 = 尚未收到 status 帧 */
+  get daemonVersion(): string {
+    return this.serverVersion;
   }
 
   subscribe(cb: (e: BridgeEvent) => void): () => void {

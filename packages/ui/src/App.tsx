@@ -17,13 +17,45 @@ import PanelHeightSync from './components/PanelHeightSync';
 import SelectionCard from './components/SelectionCard';
 import StatusBadge from './components/StatusBadge';
 import ThemeToggle from './components/ThemeToggle';
+import ToastHost from './components/Toast';
+import Tooltip from './components/Tooltip';
+import UpgradeButton from './components/UpgradeButton';
+import UpgradeModal from './components/UpgradeModal';
 import { locale, t } from './i18n/useLocale';
+import { APP_VERSION, isOutdated } from './utils/version';
 
 function Shell() {
-  const { log, selection, status, rescan, clearLog, canResize, chromeHeight } =
-    useBridge();
+  const {
+    log,
+    selection,
+    status,
+    rescan,
+    clearLog,
+    canResize,
+    chromeHeight,
+    latest,
+    daemonVersion,
+  } = useBridge();
 
   const [logOpen, setLogOpen] = createSignal(false);
+  const [upgradeOpen, setUpgradeOpen] = createSignal(false);
+
+  /**
+   * 有没有新版本:插件侧比**自己**的版本(构建期注入),服务侧比 daemon 自报的
+   * 版本(status 帧)。两侧独立 —— 用户可能只升了其中一个(见 0038)。
+   *
+   * `latest` 为 null 的一侧不参与:没查到就是没事实,不提示。
+   */
+  const hasUpgrade = (): boolean =>
+    isOutdated(APP_VERSION, latest().ui) ||
+    isOutdated(daemonVersion(), latest().mcp);
+
+  const closeUpgrade = (): void => {
+    setUpgradeOpen(false);
+    upgradeEl?.focus();
+  };
+
+  let upgradeEl: HTMLButtonElement | undefined;
 
   /**
    * 未读水位按「错误条数累计」记,而不是最大 id:同一行日志会被 pushLog 合并成
@@ -63,6 +95,22 @@ function Shell() {
     if (!logOpen()) return;
     const onKey = (e: KeyboardEvent): void => {
       if (e.key === 'Escape') closeLog();
+    };
+    document.addEventListener('keydown', onKey);
+    onCleanup(() => document.removeEventListener('keydown', onKey));
+  });
+
+  /**
+   * 升级弹窗的关闭收口:焦点还给页头那颗钮。
+   *
+   * 弹窗没有走 `showModal()`(那会把 dialog 送进 top-layer 盖住 toast,见
+   * UpgradeModal 的类注释),原生 Esc 因此不可用 —— Esc 与日志抽屉同一条纪律,
+   * 收口放在这里是因为「弹窗 / 页头按钮」分处两个组件,只有 App 同时握着两端。
+   */
+  createEffect(() => {
+    if (!upgradeOpen()) return;
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') closeUpgrade();
     };
     document.addEventListener('keydown', onKey);
     onCleanup(() => document.removeEventListener('keydown', onKey));
@@ -113,25 +161,42 @@ function Shell() {
           重连动作紧贴状态徽章:状态与它的出路读成一件事。
           连上后整颗隐藏而非置灰 —— 常态面板里一颗永远不可用的按钮只是噪声;
           隐藏也不会挤动右侧工具簇(它左侧是 ml-auto 的弹性留白)。
+
+          提示气泡贴左缘(align=start):这颗按钮在面板左侧,居中放会有一段
+          伸到面板外被裁掉(见 Tooltip)。
         */}
         <Show when={status() !== 'connected'}>
-          <button
-            type="button"
-            class="btn btn-ghost btn-xs shrink-0 px-1.5 text-base-content/70 hover:text-base-content"
-            title={
+          <Tooltip
+            class="shrink-0"
+            align="start"
+            tip={
               status() === 'superseded'
                 ? t('header.reclaim.title')
                 : t('header.retry.title')
             }
-            onClick={() => rescan()}
           >
-            {status() === 'superseded'
-              ? t('header.reclaim')
-              : t('header.retry')}
-          </button>
+            <button
+              type="button"
+              class="btn btn-ghost btn-xs shrink-0 px-1.5 text-base-content/70 hover:text-base-content"
+              onClick={() => rescan()}
+            >
+              {status() === 'superseded'
+                ? t('header.reclaim')
+                : t('header.retry')}
+            </button>
+          </Tooltip>
         </Show>
 
         <div class="ml-auto flex shrink-0 items-center gap-0.5">
+          {/* 有新版本才挂:常态不占页头宽度(见 0038) */}
+          <Show when={hasUpgrade()}>
+            <UpgradeButton
+              ref={(el) => {
+                upgradeEl = el;
+              }}
+              onClick={() => setUpgradeOpen(true)}
+            />
+          </Show>
           <CameraLockToggle />
           <ThemeToggle />
           <LocaleSwitch />
@@ -157,6 +222,17 @@ function Shell() {
         entries={log()}
         onClose={closeLog}
         onClear={clearLog}
+      />
+
+      {/* 操作结果的提示:浮层,不进流,面板高度不受影响(0014) */}
+      <ToastHost />
+
+      {/* 升级步骤:浮层,不进流,面板高度不受影响(0014) */}
+      <UpgradeModal
+        open={upgradeOpen()}
+        current={{ ui: APP_VERSION, mcp: daemonVersion() }}
+        latest={latest()}
+        onClose={closeUpgrade}
       />
 
       {/*

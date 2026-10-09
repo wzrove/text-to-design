@@ -11,6 +11,7 @@ import {
   systemLocale,
   t,
 } from '../i18n/useLocale';
+import Tooltip from './Tooltip';
 
 /**
  * 语言切换器:紧凑下拉(`跟随系统` / `中文` / `English`)。
@@ -61,7 +62,7 @@ export default function LocaleSwitch() {
     if (e.key === 'Escape') close();
   };
 
-  const title = (): string =>
+  const tip = (): string =>
     choice() === SYSTEM_CHOICE
       ? t('locale.title.followSystem', {
           locale: labelOf(systemLocale() ?? locale()),
@@ -71,23 +72,25 @@ export default function LocaleSwitch() {
   return (
     // biome-ignore lint/a11y/noStaticElementInteractions: 纯转发 Escape,真正的交互元素都在内部
     <div class="relative shrink-0" onKeyDown={onKeyDown}>
-      <button
-        ref={(el) => {
-          triggerEl = el;
-        }}
-        type="button"
-        class="btn btn-ghost btn-xs shrink-0 gap-0.5 px-1 text-base-content/60 hover:text-base-content/80"
-        aria-label={t('locale.menu')}
-        aria-haspopup="menu"
-        aria-expanded={open()}
-        title={title()}
-        onClick={() => setOpen((v) => !v)}
-      >
-        <span class="font-mono text-[10px]">{abbr()}</span>
-        <span class="text-[8px] leading-none" aria-hidden="true">
-          ▾
-        </span>
-      </button>
+      {/* 提示只包触发器:包住整块的话,在展开的下拉上悬停也会冒气泡 */}
+      <Tooltip tip={tip()} align="end">
+        <button
+          ref={(el) => {
+            triggerEl = el;
+          }}
+          type="button"
+          class="btn btn-ghost btn-xs shrink-0 gap-0.5 px-1 text-base-content/60 hover:text-base-content/80"
+          aria-label={t('locale.menu')}
+          aria-haspopup="menu"
+          aria-expanded={open()}
+          onClick={() => setOpen((v) => !v)}
+        >
+          <span class="font-mono text-[10px]">{abbr()}</span>
+          <span class="text-[8px] leading-none" aria-hidden="true">
+            ▾
+          </span>
+        </button>
+      </Tooltip>
 
       <Show when={open()}>
         {/* 点面板内任何别处即收起;遮罩 fixed 且零占位,不影响面板高(0014) */}

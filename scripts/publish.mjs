@@ -52,15 +52,21 @@ for (const dir of PUBLISHABLE) {
   const tag = `${name}@${version}`;
   const taggedAt = gitRevParse(`refs/tags/${tag}`);
 
-  if (taggedAt && taggedAt !== HEAD) {
-    throw new Error(
-      `tag ${tag} 已指向 ${taggedAt},当前 HEAD 为 ${HEAD} —— 命名空间被复用,拒绝静默跳过`,
-    );
-  }
+  // 顺序要紧:先问「这个版本发出去没有」,再问「tag 对不对」。
+  // 只有另一个包升版时,没升的那个版本号不变、tag 自然落在旧提交上 —— 那是**正常**的,
+  // 若先查 tag 就会把它误判成复用而中断整轮发布(mcp 已发、ui 卡死的半发布状态即由此来)。
+  const published = isPublished(name, version);
 
-  if (isPublished(name, version)) {
-    console.log(`\nskip ${name}@${version} (已发布)`);
+  if (published) {
+    console.log(`\nskip ${name}@${version} (已发布,版本未变)`);
   } else {
+    // 到这里是「真要发」:tag 已存在却指向别的提交 = 同名版本装着不同内容,
+    // 必须报错而不是静默跳过(那样会发成功却没 tag,见上方命名空间说明)
+    if (taggedAt && taggedAt !== HEAD) {
+      throw new Error(
+        `tag ${tag} 已指向 ${taggedAt},当前 HEAD 为 ${HEAD} —— 命名空间被复用,拒绝静默跳过`,
+      );
+    }
     // pnpm publish 会把 catalog:/workspace: 协议替换为真实版本号,npm publish 不支持
     run('pnpm', ['publish', '--access', 'public', '--no-git-checks'], {
       cwd: resolve(ROOT, dir),

@@ -1,4 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
   componentFaceText,
@@ -34,7 +35,9 @@ import {
  * - 投影不吐 undefined:表里缺项时渲染会漏出 `undefined` 三个字,那比没有这句话更糟。
  */
 
-const ROOT = new URL('..', import.meta.url).pathname;
+// `new URL(...).pathname` 在 Windows 上给的是 `/D:/...`,再拼进 fs 会变成 `D:\D:\...`
+// (ENOENT,证据全部「指向不存在的文件」);用 fileURLToPath 拿平台原生路径。
+const ROOT = fileURLToPath(new URL('..', import.meta.url));
 
 /** 一条域事实的全部字段(用于「不许写成 undefined」的巡检) */
 const FACT_KEYS = [

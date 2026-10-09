@@ -1,4 +1,8 @@
-import type { LogLevel, ServerPush } from 'text-to-design-shared';
+import type {
+  LogLevel,
+  ServerPush,
+  VersionPushFrame,
+} from 'text-to-design-shared';
 import { BridgeError } from './core/bridge-error';
 import { log, warn } from './logger';
 import type { PluginMethod, RequestOptions } from './pending';
@@ -19,6 +23,15 @@ export class Bridge {
   /** 插件连接状态变化(true=已连上,false=断开),用于日志/状态推送与目录同步 */
   onConnectionChange: ((connected: boolean) => void) | null = null;
 
+  /**
+   * 面板刚连上(每次新连接一次)。
+   *
+   * 单独开一个钩子而不是复用 `onConnectionChange`:那个槽已被 `index.ts` 用来刷
+   * 平台状态,是**单槽赋值**,再赋一次就是静默顶替。版本提示要的是「面板一打开
+   * 就立刻拿到结论」,不能等下一次心跳(见 0038 变更 2026-10-10)。
+   */
+  onPluginConnect: (() => void) | null = null;
+
   constructor() {
     this.pending = new PendingManager((text, binary) => {
       this.transport.send(text);
@@ -32,6 +45,7 @@ export class Bridge {
       // 先回放离线日志,再广播连接状态变化:随后的「连接状态变化: 插件上线」
       // 会排在历史之后,面板时间线不倒挂
       this.replayLogs();
+      this.onPluginConnect?.();
       this.onConnectionChange?.(true);
     };
     this.transport.onDisconnect = (err) => {
@@ -84,6 +98,22 @@ export class Bridge {
       return;
     }
     this.sendLogPush(push);
+  }
+
+  /**
+   * 把 npm 最新版本推给面板(见 0038)。
+   *
+   * 离线时**直接丢弃,不进环形缓冲**:版本结论不是日志,回放一条几分钟前的结论
+   * 没有意义 —— 面板连上后下一个心跳周期就会拿到新的;而排队的旧结论一旦比缓存
+   * 还旧,反而会给出错的升级建议。
+   */
+  pushVersion(frame: VersionPushFrame): void {
+    if (!this.transport.isConnected) return;
+    try {
+      this.transport.sendPush(JSON.stringify(frame));
+    } catch (e) {
+      warn(`版本推送失败: ${e instanceof Error ? e.message : String(e)}`);
+    }
   }
 
   /** 上线回放:按入队顺序补发离线日志(只补一次,发送失败不重试) */

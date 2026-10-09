@@ -1,8 +1,17 @@
 import { appendFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { LOG_LEVEL_ORDER, type LogLevel } from 'text-to-design-shared';
 
+/**
+ * 落盘路径:走 `os.tmpdir()` 而不是写死 `/tmp` —— Node 在 Windows 上会把
+ * `/tmp/...` 解析成 `C:\tmp\...`,而那个目录通常不存在,`appendFileSync` 抛错又被
+ * 下面那个 catch 吞掉,结果是**整个 daemon 在 Windows 上没有任何日志可查**
+ * (macOS/Linux 恰好有个真的 /tmp,所以这个盲区只在 Windows 上暴露)。
+ */
 const FILE =
-  process.env.TEXT_TO_DESIGN_MCP_LOG ?? '/tmp/text-to-design-mcp.log';
+  process.env.TEXT_TO_DESIGN_MCP_LOG ??
+  join(tmpdir(), 'text-to-design-mcp.log');
 
 type Level = LogLevel;
 
