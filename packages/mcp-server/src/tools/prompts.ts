@@ -54,7 +54,10 @@ export function registerPrompts(
           role: 'user' as const,
           content: {
             type: 'text' as const,
-            text: `请把下面的 HTML 转成设计稿。默认走 jsd_html_to_design(SVG 保真,忽略复杂样式);需要可编辑图层时才改用 per-type create 工具(jsd_create_frame 等)手工映射(容器→FRAME、文本→TEXT、图形→VECTOR)后 reparent 归组。\n\nHTML:\n\`\`\`\n${String(html)}\n\`\`\`${name == null ? '' : `\n节点名:${String(name)}`}`,
+            text: htmlToDesignRecipe(
+              String(html),
+              name == null ? undefined : String(name),
+            ),
           },
         },
       ],
@@ -83,7 +86,11 @@ export function registerPrompts(
           role: 'user' as const,
           content: {
             type: 'text' as const,
-            text: `请插入图标网格:1) jsd_create_frame 建一个 FRAME 容器;2) 每个图标各调一次 jsd_create_icon(size=${Number(size) || 24});3) jsd_reparent_nodes 把全部图标移入容器;4) jsd_set_layout 给容器设 auto-layout(layoutMode=HORIZONTAL,itemSpacing=${Number(gap) || 16},counterAxisAlignItems=CENTER)。\n图标列表: ${String(icons)}`,
+            text: iconGridRecipe(
+              String(icons),
+              Number(size) || 24,
+              Number(gap) || 16,
+            ),
           },
         },
       ],
@@ -121,7 +128,7 @@ export function registerPrompts(
     {
       title: i18n.t('prompt.designStrategy.title'),
       description:
-        '画布创作的通用纪律:先摸底、一层只建一层、语义化命名、归组后再布局、间距与字号阶梯、出错回滚,附示例结构树',
+        '画布创作的通用纪律:先摸底、结构分层(成品该多深就多深,调用才分批)、语义化命名、归组后再布局、间距与字号阶梯、出错回滚,附示例结构树',
       argsSchema: z.object({
         screen: z
           .string()
@@ -343,7 +350,7 @@ export function registerPrompts(
  * 为什么不能提到装配期:`buildServer` 在插件连接之前就跑完了(0030),那时缓存必然
  * 是空的 —— 提前读等于把「不区分平台」变成「永远没有平台」。
  */
-function currentPlatform(): PlatformKey | null {
+export function currentPlatform(): PlatformKey | null {
   return getPlatformState()?.platform ?? null;
 }
 
@@ -354,8 +361,24 @@ function claims(
   return getPlatformState()?.capabilities.includes(capability) === true;
 }
 
+/**
+ * HTML 转设计稿配方。
+ *
+ * 抽成导出函数而非内联在 registerPrompt 里:同一份文案还要作为资源
+ * `jsd://recipes/html-to-design` 提供(宿主普遍不注入 mcp.instructions,
+ * 资源是模型能自己 `ReadMcpResource` 摘到的通路)。两份文案必须同源。
+ */
+export function htmlToDesignRecipe(html: string, name?: string): string {
+  return `请把下面的 HTML 转成设计稿。默认走 jsd_html_to_design(SVG 保真,忽略复杂样式);需要可编辑图层时才改用 per-type create 工具(jsd_create_frame 等)手工映射(容器→FRAME、文本→TEXT、图形→VECTOR)后 reparent 归组。\n\nHTML:\n\`\`\`\n${html}\n\`\`\`${name == null ? '' : `\n节点名:${name}`}`;
+}
+
+/** 图标网格配方;同 `htmlToDesignRecipe`,资源 `jsd://recipes/icon-grid` 复用本函数 */
+export function iconGridRecipe(icons: string, size = 24, gap = 16): string {
+  return `请插入图标网格:1) jsd_create_frame 建一个 FRAME 容器;2) 每个图标各调一次 jsd_create_icon(size=${size});3) jsd_reparent_nodes 把全部图标移入容器;4) jsd_set_layout 给容器设 auto-layout(layoutMode=HORIZONTAL,itemSpacing=${gap},counterAxisAlignItems=CENTER)。\n图标列表: ${icons}`;
+}
+
 /** 脚本化调用配方:压缩工具往返次数与上下文占用 */
-function scriptRecipe(task?: string): string {
+export function scriptRecipe(task?: string): string {
   const head =
     task == null
       ? '请按以下「脚本化」纪律调用 text-to-design 工具:'
@@ -367,7 +390,7 @@ function scriptRecipe(task?: string): string {
 }
 
 /** 设计策略总纲:把 server.ts 里 INSTRUCTIONS 的三条纪律展开成可照着走的完整流程 */
-function designStrategyRecipe(
+export function designStrategyRecipe(
   screen: string | undefined,
   platform: PlatformKey | null,
 ): string {
@@ -380,10 +403,10 @@ function designStrategyRecipe(
   return `# 画布创作纪律
 
 1) 先摸底再动手:jsd_get_selection(depth=2) 看现状(名称/类型/尺寸/填充/子结构),已有节点用 jsd_find 精确定位,不要重复创建同名元素。
-2) 一层只建一层:每个界面先建主容器 FRAME,再分区放内容。复杂结构用 jsd_batch 编排多个 per-type create 步骤一次建完,不要用 children 深嵌套(易整体失败)。
+2) 结构分层,调用分批:**成品该多深就多深** —— 屏 → 语义分区 → 卡片 → 卡内图元,四层都要建出来,别只做到「屏 + 分区」就收手。受限的只是**单次调用的传参方式**:children 只用于「容器 + 其直属子节点」这类小结构,别在一次 create 里塞整棵树(易整批失败);分层分批用 jsd_batch 编排多个 per-type create 步骤,每批建完即用 jsd_reparent_nodes 归到父容器。
 3) 命名语义化:用「登录页 / Logo 容器 / 邮箱输入 / 主按钮」这类说明用途的名字,不用「矩形 1」「Frame 2」;同一批元素命名风格保持一致。
 3.5) 抽组件:同类单元 ≥2 个且结构一致(按钮 / 输入框 / 列表项 / 图标底)先提 COMPONENT、再用 INSTANCE 铺开,别逐个复制;命名走「组件族/状态」。
-4) 归组后再布局:jsd_reparent_nodes 把文本等元素移入目标容器(**parentId 显式传容器 id**,别依赖「当前选中第一个」的缺省值;跨父级移动会保持节点绝对位置,不用手动摆回 x/y,移入 auto-layout 容器时位置交给布局);auto-layout(layoutMode/itemSpacing/padding*/primaryAxisAlignItems 等)最后用 jsd_set_layout 单独设,别在建节点时混着传。
+4) 归组后再布局:**元素不许直挂屏根** —— 屏内每个语义分区(侧栏 / 顶栏 / 筛选条 / KPI 行 / 每张卡片)各自是一个容器,卡片内部的图元再按语义编组(GROUP:坐标轴 / 网格 / 数据系列 / 图例各一组)。一层不套、几十个元素平铺是后续最难改的形态,别走这个极端。做法:先建容器与元素,再用 jsd_reparent_nodes 逐层归入(**parentId 显式传目标容器 id**,别依赖「当前选中第一个」的缺省值;跨父级移动会保持节点绝对位置,不用手动摆回 x/y,移入 auto-layout 容器时位置交给布局);auto-layout(layoutMode/itemSpacing/padding*/primaryAxisAlignItems 等)最后用 jsd_set_layout 单独设,别在建节点时混着传。
 5) 间距与字号阶梯:主标题 > 正文标签 > 按钮文本 > 辅助说明;同级元素间距一致,用 itemSpacing 统一控制,不靠手调坐标凑。**长段落要换行**:TEXT 缺省按内容撑开(textAutoResize 缺省 WIDTH_AND_HEIGHT),只给 width 会被引擎改成 NONE 且高度不随内容重算 —— 要固定宽+自动换行传 width + textAutoResize:"HEIGHT",要固定框尺寸传 "NONE"。**字体取 jsd_list_fonts 的 fonts[] 成对值**:family 用 fonts[].family 原样(如 SourceHanSansCN_family),style 用同一项的全名(如 SourceHanSansCN-Bold,不是简称 "Bold")—— 写错会被静默忽略、退回默认字面,结果 warnings 会点名。
 6) 视觉顺序:自上而下按阅读顺序排布,主操作按钮放在输入项之后,次要链接(忘记密码/注册)放最后。
 7) 层序与遮挡:序列化里每个节点都带 \`z\`(= 父级 children 下标 = 绘制顺序,0 = 最底层,越大越靠上),判断谁压谁直接读 z。要调层序用 jsd_reparent_nodes + index(= 目标 z);auto-layout 容器同样支持,若引擎没落位会明确报错,那就改 itemSpacing / 对齐。别靠「新建一个节点压上去」改遮挡。
@@ -406,7 +429,7 @@ ${target}按这条链走;多步合并时优先用 jsd_batch 编排,中间 id 不
 }
 
 /** 文本批量替换策略:安全副本 + 语义分块 + 逐块复核,避免一次性全改后无法回退 */
-function textReplaceRecipe(rootId?: string): string {
+export function textReplaceRecipe(rootId?: string): string {
   const root =
     rootId == null
       ? '当前选中(先用 jsd_get_selection 拿到根 id)'
@@ -433,7 +456,10 @@ function textReplaceRecipe(rootId?: string): string {
 }
 
 /** 同类实例样式批量同步:取源实例属性 → 定位目标 → 批量套用,变体属性走组件操作 */
-function variantSyncRecipe(sourceId?: string, targetType?: string): string {
+export function variantSyncRecipe(
+  sourceId?: string,
+  targetType?: string,
+): string {
   const source =
     sourceId == null
       ? '当前选中(先 jsd_get_selection 确认)'
@@ -463,7 +489,7 @@ function variantSyncRecipe(sourceId?: string, targetType?: string): string {
 }
 
 /** 变量绑定与批量套用:本平台变量面取自事实表,做法是通用的调用纪律 */
-function variableBindingRecipe(
+export function variableBindingRecipe(
   target: string | undefined,
   platform: PlatformKey | null,
 ): string {
@@ -505,7 +531,7 @@ ${howto}`;
 }
 
 /** 变体集构建:分流依据是能力位,兜底写法取自事实表 */
-function variantSetRecipe(
+export function variantSetRecipe(
   family: string | undefined,
   platform: PlatformKey | null,
 ): string {
@@ -539,7 +565,7 @@ function variantSetRecipe(
 }
 
 /** 组件属性的定义与设值:能收的值形态取自第四类登记,不在这里手写平台差异 */
-function componentPropertyRecipe(
+export function componentPropertyRecipe(
   target: string | undefined,
   platform: PlatformKey | null,
 ): string {
@@ -657,7 +683,10 @@ const CHART_CODE_EXAMPLE = [
  * 产出侧要求**按语义层切 \`<g id>\`**(第 5 节):导入只有一个节点,层级能否保住由引擎
  * 决定(未验),故配方把「导入后回读判明」写进步骤与复核清单,而不是断言一定分好组。
  */
-function chartByCodeRecipe(chart: string, svgPath: string | undefined): string {
+export function chartByCodeRecipe(
+  chart: string,
+  svgPath: string | undefined,
+): string {
   const out = svgPath ?? '/tmp/chart.svg';
   return `# 用代码画图表 / 数据可视化:算出 SVG → 落盘 → 导入画布
 
@@ -701,8 +730,9 @@ function chartByCodeRecipe(chart: string, svgPath: string | undefined): string {
   - 字号三档:标题 16px / 正文 12–13px / 刻度 11–12px;画布 640×360 起(内容多再调),内边距 24。
 
 ## 5. 分组:SVG 里就按语义层切 \`<g>\`,导入后才好改
+- 「别平铺、按语义分层」是**通用**纪律,不是 SVG 专属(画布侧口径见配方 \`jsd://recipes/design-strategy\` 第 4 条);本节只讲 SVG 源码里怎么切。
 - **每个语义层一个 \`<g>\`,各带一个 ASCII 语义 \`id\`**:\`title\` / \`plot\` / \`grid\` / \`axis-x\` / \`axis-y\` / \`series-<名>\` / \`axis-labels\` / \`legend\`。id 是你在源码里定位那一层的把手,用英文别用中文。
-- **别走两个极端**:整张图套一个 \`<g>\` 等于没分组;一层不套、几百个元素平铺,后续最难受。同一系列的点/线/柱放同一层,不同系列各一层 —— 「把某条折线加粗」「把网格线调淡」就都变成一层的事。
+- **同一系列的点/线/柱放同一层,不同系列各一层** —— 「把某条折线加粗」「把网格线调淡」就都变成一层的事。切到「一层 = 之后会单独改的一个语义单位」为止:整张图套一个 \`<g>\` 是切少了,一层不套是切没了。
 - **平移/缩放只写最外层那一个 \`transform\`**:绘图区统一 \`<g transform="translate(px,py)">\`,内部坐标一律从 0 起。手动挪图、改内边距只动这一个数,不用在满文件里找散落的坐标。
 - **导入后读一次,判明层级有没有保住**:\`jsd_create_svg\` 回的是**一个**节点(工具面只声明这一个),里面的 \`<g>\` 是否落成子分组由引擎决定,**本仓未验**。故导入后立刻 \`jsd_find({ ids: [created.id], depth: 2 })\` 看一眼 —— 按 id 读子树要用 \`jsd_find\`(\`jsd_get_selection\` 只读当前选中、且只收 depth):
   - 有子层 → 直接用,顺手 \`jsd_rename_node\` 起成上面那套语义名;

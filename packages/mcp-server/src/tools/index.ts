@@ -12,6 +12,7 @@ import { registerPlatformTools } from './platform';
 import { registerPrompts } from './prompts';
 import { registerPropTools } from './props';
 import { registerRawTools } from './raw';
+import { registerRecipeResources } from './recipe-resources';
 import { registerResources } from './resources';
 import { registerSessionTools } from './session';
 
@@ -41,6 +42,7 @@ export const toolRegistrars: RegisterTools[] = [
   registerBatchTools,
   registerPlatformTools,
   registerResources,
+  registerRecipeResources,
   // 配方 prompt 不依赖插件连接,恒可用
   (server, _bridge, i18n) => registerPrompts(server, i18n),
 ];

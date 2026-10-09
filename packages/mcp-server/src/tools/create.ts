@@ -206,10 +206,7 @@ export function registerCreateTools(
   const createSvg = bridgeTool({
     name: 'jsd_create_svg',
     title: 'createSvg.title',
-    description:
-      '将 SVG 直接导入画布为可编辑图层(createNodeFromSvg 原生解析,保留路径/渐变/描边)。来源二选一:svg(内联字符串)或 svgPath(本地 .svg 文件路径,由后台服务读盘)。' +
-      '**图表 / 数据可视化一律走 svgPath**(折线图、柱状图、饼图 / 环形图、散点图、雷达图、面积图、仪表盘、看板……):没有内置图表工具 —— 先自己写脚本把 SVG 算好、落到本地文件,再传路径;完整配方见 prompt `chart-by-code`。' +
-      '建多个根节点/复杂树用 jsd_batch 编排',
+    description: 'createSvg.description',
     inputSchema: createSvgInputSchema,
     outputSchema: createdResultSchema,
     annotations: {
