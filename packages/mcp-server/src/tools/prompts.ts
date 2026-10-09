@@ -290,6 +290,39 @@ export function registerPrompts(
   );
 
   // 配方是静态引导词,不依赖插件连接 → 恒可用
+  const chartByCode = server.registerPrompt(
+    'chart-by-code',
+    {
+      title: i18n.t('prompt.chartByCode.title'),
+      description: i18n.t('prompt.chartByCode.description'),
+      argsSchema: z.object({
+        chart: z
+          .string()
+          .describe(
+            '要画什么图 / 数据可视化(种类 + 数据 + 口径),如「按月的毛利率与净利率双轴折线」「各地区销售额占比环形图」「日活趋势面积图」',
+          ),
+        svgPath: z
+          .string()
+          .optional()
+          .describe('生成的 .svg 落盘路径,缺省 /tmp/chart.svg'),
+      }),
+    },
+    ({ chart, svgPath }) => ({
+      messages: [
+        {
+          role: 'user' as const,
+          content: {
+            type: 'text' as const,
+            text: chartByCodeRecipe(
+              String(chart),
+              svgPath == null ? undefined : String(svgPath),
+            ),
+          },
+        },
+      ],
+    }),
+  );
+
   return [
     htmlToDesign,
     iconGrid,
@@ -300,6 +333,7 @@ export function registerPrompts(
     variableBinding,
     variantSet,
     componentProperty,
+    chartByCode,
   ].map((handle) => Object.assign(handle, { alwaysEnabled: true }));
 }
 
@@ -551,4 +585,146 @@ ${valueHint}
 - 回读 componentProperties / variantProperties 的 value 与期望比对 —— 写后回读才算验收;
 - 实例子节点(INSTANCE 内)的样式覆盖不保证渲染生效:命中时结果 warnings 会给出主组件里对应子节点的 id,改主组件即全实例继承;
 - warnings 一律读:被忽略的字段、回读不一致(fontName 字重降级等)都在那里点名。`;
+}
+
+/**
+ * 示例脚本(单系列折线):**零依赖、刻意用字符串拼接**。
+ *
+ * 不用模板串:模型照着写时,模板串里的 `${}` 会被宿主 shell / 编辑器再插值一轮,
+ * 是最常见的一类翻车。不引任何图形库:配方不指定库(0036 的变更历史),
+ * 示例必须证明「原生 Math + 数组方法」就够画一张图。
+ *
+ * 分层写进示例而不是只写在正文里(配方第 5 节):模型照抄示例的概率远高于照抄散文,
+ * 而「按语义层切 `<g id>`」这件事只有落在示例里才看得见。
+ */
+const CHART_CODE_EXAMPLE = [
+  '// /tmp/chart.mjs —— 跑:node /tmp/chart.mjs',
+  "import { writeFileSync } from 'node:fs';",
+  '',
+  'const data = [12, 18, 15, 26, 31, 28, 36];',
+  "const labels = ['一','二','三','四','五','六','日'];",
+  'const W = 640, H = 360, PAD = 24, YW = 44, XH = 20, TITLE = 22, GAP = 16;',
+  'const px = PAD + YW, py = PAD + TITLE + GAP;        // 绘图区原点',
+  'const pw = W - PAD - px, ph = H - PAD - XH - py;    // 绘图区尺寸',
+  'const half = pw / data.length / 2;',
+  '',
+  '// 比例自己算:值域 → 像素区间,就这两行',
+  'const x = (i) => half + ((pw - half * 2) * i) / (data.length - 1);',
+  'const y = (v) => ph - (ph * v) / Math.max(...data);',
+  '',
+  '// 折线:M 起点,其余逐段 L',
+  'const d = data',
+  "  .map((v, i) => (i === 0 ? 'M' : 'L') + x(i).toFixed(1) + ' ' + y(v).toFixed(1))",
+  "  .join(' ');",
+  '',
+  'const parts = [];',
+  "parts.push('<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"' + W + '\" height=\"' + H + '\" viewBox=\"0 0 ' + W + ' ' + H + '\">');",
+  '// 一个语义层一个 <g id>:导入后对得上,手改只进这一层(见第 5 节)',
+  'parts.push(\'<g id="title">\');',
+  'parts.push(\'<text x="\' + PAD + \'" y="\' + (PAD + 16) + \'" font-family="-apple-system, PingFang SC, sans-serif" font-size="16" fill="#111827">周活跃</text>\');',
+  "parts.push('</g>');",
+  '// 绘图区的 translate 只在最外层这一处,层内坐标从 0 起 —— 挪图只改这一个数',
+  "parts.push('<g id=\"plot\" transform=\"translate(' + px + ',' + py + ')\">');",
+  'parts.push(\'<g id="axis">\');',
+  'parts.push(\'<rect x="0" y="\' + (ph - 1) + \'" width="\' + pw + \'" height="1" fill="#D1D5DB"/>\');',
+  "parts.push('</g>');",
+  'parts.push(\'<g id="series-active">\');',
+  'parts.push(\'<path d="\' + d + \'" fill="none" stroke="#3B82F6" stroke-width="2" stroke-linejoin="round"/>\');',
+  'for (const [i, v] of data.entries()) {',
+  '  parts.push(\'<circle cx="\' + x(i).toFixed(1) + \'" cy="\' + y(v).toFixed(1) + \'" r="3" fill="#3B82F6"/>\');',
+  '}',
+  "parts.push('</g>');",
+  'parts.push(\'<g id="axis-labels">\');',
+  'for (const [i, t] of labels.entries()) {',
+  '  parts.push(\'<text x="\' + x(i).toFixed(1) + \'" y="\' + (ph + 14) + \'" font-size="11" fill="#6B7280" text-anchor="middle" font-family="-apple-system, sans-serif">\' + t + \'</text>\');',
+  '}',
+  "parts.push('</g>');",
+  "parts.push('</g></svg>');",
+  '',
+  "const svg = parts.join('');",
+  "writeFileSync('/tmp/chart.svg', svg);",
+  "console.log('bytes', Buffer.byteLength(svg));",
+].join('\n');
+
+/**
+ * 图表配方:自己写代码算几何 → 落盘 SVG → 走 `jsd_create_svg` 导入。
+ *
+ * **这是画图的唯一路径**(0036 起删掉了内置 `jsd_create_chart` 编译器):本仓不枚举
+ * 种类、不引任何图形库、也不执行调用方给的代码 —— 几何在调用方自己的执行环境里算。
+ * 刻意**不点名库**:指名就把模型绑到某一个包上,而能跑出字符串的写法有无穷多种。
+ * 配色与字号**取自画布上已有的样式/变量**(读 \`jsd://styles\` 与 \`boundVariables\`),
+ * 本仓不再维护一套自己的图表色板 —— 图的皮要跟文档走,不是跟本仓走。
+ * 产出侧要求**按语义层切 \`<g id>\`**(第 5 节):导入只有一个节点,层级能否保住由引擎
+ * 决定(未验),故配方把「导入后回读判明」写进步骤与复核清单,而不是断言一定分好组。
+ */
+function chartByCodeRecipe(chart: string, svgPath: string | undefined): string {
+  const out = svgPath ?? '/tmp/chart.svg';
+  return `# 用代码画图表 / 数据可视化:算出 SVG → 落盘 → 导入画布
+
+## 0. 前提:没有内置图表工具,这条路就是主路径
+- 图表一律这样画:**你自己写代码算几何、自己拼 SVG 字符串、落盘,再用 \`jsd_create_svg\` 导入**。本仓没有内置图表工具(别去找、也别试着调)。
+- 前提是**你能执行本地命令**。做不到就改用原生图元(FRAME / RECTANGLE / TEXT / POLYGON)摆一张近似图,或换一个有 shell 的宿主。
+- **不指定库**:用你最顺手的写法 —— 原生 \`Math\` 与数组方法手算坐标就够(见第 7 节的零依赖示例,它同时演示了第 5 节的分层);要用第三方包也行,唯一的判断标准是**它能不能在没有浏览器的环境里跑出字符串**。
+- **不要**手算坐标硬拼几十 KB 的 SVG 再内联进 \`svg\` 入参:既费上下文又容易在换行、转义上翻车 —— 落盘传路径就是为了避开这件事。
+
+## 1. 三步
+1. 写一个脚本(什么语言都行,只要能写出文件;示例给的是 Node ESM),自己算几何、拼出 SVG **字符串**,写到本地文件。
+2. **确认写成功了**(文件非空、\`<svg\` 开头):空文件是最常见的失败,别跳过这一步。
+3. \`jsd_create_svg({ svgPath: "${out}", name: "<图名>" })\`。
+4. \`jsd_export({ ids: [<上一步返回的 created.id>], format: "png" })\` **目视验收**:空图、元素越界、文字被裁只有导出才看得见,工具回显不算验收。
+
+需求:${chart}
+
+## 2. 与库无关的坑(纯计算环境都会踩)
+- **没有 DOM**。凡是依赖 \`document\`/\`window\`/选择器/布局测量的代码都跑不了 —— 这类库(多是面向浏览器的图表库)直接排除;要么用它的纯计算部分,要么换写法。
+- 别为了绕过这条去引 jsdom / headless 浏览器:多一层依赖、多一处失败点,而画布只要一个**静态** SVG。
+- 坐标、比例、刻度、弧角**全部自己算**:先求 min/max,再线性映射到像素区间;没有任何"自动布局"可依赖。
+- 画完就固定:没有交互、没有动画、没有 hover 效果 —— 输出是一次性的静态图。
+
+## 3. 引擎侧的硬约束(违反会静默画不出来)
+- 根元素必须带 \`xmlns\` 与显式 \`width\`/\`height\`/\`viewBox\`:没有尺寸时引擎解析不出节点大小。
+- 颜色只用 hex(如 \`#3B82F6\`):不要 CSS 变量、命名色、\`currentColor\`。
+- 不要外链:不引外部图片 / 字体 / script(\`<image href="http://…">\`、\`@import\`)。
+- 文字用 \`<text>\` **并显式写** \`font-family\` 与 \`font-size\`(≥10)。SVG 里的文字最终由引擎的解析器渲染,**不保证按你写的字体走** —— 关键文案少而大。
+- 画布尺寸 ≤ 2000×2000;数据点先抽稀(几千个 \`<circle>\` 既慢又逼近入参体积上限)。
+- 曲线/弧用 \`C\`/\`Q\` 自己近似,**不要依赖 \`A\` 指令**(本仓 \`vectorPaths\` 的已知口径就是不支持 A,引擎 SVG 导入对 A 未验)。
+
+## 4. 配色与字号:优先用画布上已有的,别自创
+- **先查再画**。动手前看这张文档本来在用哪套颜色与字号,新图跟它对齐:
+  - 本地样式:读资源 \`jsd://styles\`(PAINT / TEXT / EFFECT / GRID,含 id / name / type)。
+  - 变量:先 \`jsd_ping\` 看本平台的变量面(\`platformOps\` 里的变量 op 名单 + \`capabilities\`),再用 \`jsd_find\` / \`jsd_get_selection\` 读相邻节点上的 \`boundVariables\` —— 键是引擎的可绑定字段名,值里的 id **可直接回喂**变量 op,不用改名。
+  - 字体:\`jsd_list_fonts\`(或资源 \`jsd://fonts\`)拿 family 与 style 的**成对全名**。
+- **有参照就照抄**:颜色、字号从相邻或同层级元素上取(标题 / 正文 / 辅助三档对齐),比自己定一套更容易融进既有设计。
+- **SVG 里的色值是死值**:整张图导入后,里面的 \`fill\` 不会跟着变量走。要真绑变量,就把色块按第 6 节另建原生节点再绑;否则取变量的**当前取值**写进 SVG 即可。
+- **没有参照时才回退**(平台没有变量面,或文档里本来就没建):
+  - 颜色只写 hex —— **不要** CSS 变量、命名色、\`currentColor\`(引擎的 SVG 解析器不认这些写法);同系列从一支主色出发,相邻值拉开明度即可。
+  - 字号三档:标题 16px / 正文 12–13px / 刻度 11–12px;画布 640×360 起(内容多再调),内边距 24。
+
+## 5. 分组:SVG 里就按语义层切 \`<g>\`,导入后才好改
+- **每个语义层一个 \`<g>\`,各带一个 ASCII 语义 \`id\`**:\`title\` / \`plot\` / \`grid\` / \`axis-x\` / \`axis-y\` / \`series-<名>\` / \`axis-labels\` / \`legend\`。id 是你在源码里定位那一层的把手,用英文别用中文。
+- **别走两个极端**:整张图套一个 \`<g>\` 等于没分组;一层不套、几百个元素平铺,后续最难受。同一系列的点/线/柱放同一层,不同系列各一层 —— 「把某条折线加粗」「把网格线调淡」就都变成一层的事。
+- **平移/缩放只写最外层那一个 \`transform\`**:绘图区统一 \`<g transform="translate(px,py)">\`,内部坐标一律从 0 起。手动挪图、改内边距只动这一个数,不用在满文件里找散落的坐标。
+- **导入后读一次,判明层级有没有保住**:\`jsd_create_svg\` 回的是**一个**节点(工具面只声明这一个),里面的 \`<g>\` 是否落成子分组由引擎决定,**本仓未验**。故导入后立刻 \`jsd_find({ ids: [created.id], depth: 2 })\` 看一眼 —— 按 id 读子树要用 \`jsd_find\`(\`jsd_get_selection\` 只读当前选中、且只收 depth):
+  - 有子层 → 直接用,顺手 \`jsd_rename_node\` 起成上面那套语义名;
+  - 只有一层(整图一个矢量节点)→ 要么接受它,要么按第 6 节把「一定会改」的文字/色块另建原生节点。
+- **别用引用式复用**:\`<use>\` / \`<symbol>\` 的引用解析**未验**,别为省几行去用;\`<defs>\` 里放渐变照常(\`jsd_create_svg\` 的工具面声明保留渐变)。
+- 分层不亏:引擎保留就白得一套层级;不保留,SVG 本身也还是一份能读能改的源码,不妨碍后面的手工编辑。
+
+## 6. 要能单独改的文字,导入后另建原生节点
+- 整张图按**一个** SVG 节点导入(里面的 \`<g>\` 能不能保住成子层,见第 5 节的回读判据):里面的 \`<text>\` **不能保证**单独选中改文案,字体也由引擎解析器决定。
+- 标题 / 图例 / 坐标轴这类「用户一定会改」的文字,导入后另用 \`jsd_create_text\` 建原生节点(位置自己按同一套内边距算),色块用 \`jsd_create_rectangle\` 补;柱 / 折线 / 弧 / 网格这类几何留在 SVG 里。
+- 只是要一张能看的图就别拆 —— 拆开是为了「可编辑」,不是为了好看。
+
+## 7. 最小可跑示例(零依赖:只用 \`Math\` 与数组;改 \`data\` 即可)
+\`\`\`js
+${CHART_CODE_EXAMPLE}
+\`\`\`
+
+## 8. 复核清单
+- [ ] 文件非空、\`<svg\` 开头 \`</svg>\` 结尾;日志里的 bytes 是合理量级(KB 级,不是 0);
+- [ ] 分层齐了(见第 5 节):每个语义层一个 \`<g id>\`,绘图区的 \`transform\` 只在最外层那一处;
+- [ ] \`jsd_create_svg\` 结果里有 \`created.id\`(没有=没真导入);
+- [ ] 导入后 \`jsd_find({ ids:[created.id], depth:2 })\` 看过层级:有子层就用,只有一层就按第 6 节另建要改的原生节点;
+- [ ] \`jsd_export\` 出的图肉眼过一遍:轴、刻度、文字都在,没有元素跑到画布外;
+- [ ] 文字要不要可编辑(见第 6 节)—— 要就把标题/图例另建原生节点,别全塞进 SVG 图层。`;
 }

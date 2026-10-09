@@ -47,6 +47,14 @@ export const MAX_INLINE_DATA_URL_BYTES = Number(
 /** jsd_batch 整批上限:每步仍受自身 timeout 约束,此处只封顶整次编排 */
 export const BATCH_TIMEOUT_MS = 120_000;
 
+/** jsd_create_svg 的 SVG 源码体积上限(字节)。
+ *  代码生成的图表常见几十 KB(正常),但坏掉的脚本会输出指数级膨胀的节点串,
+ *  整份经文本帧下发会一路吃掉宿主内存。超限时不静默截断,直接报错并给抽稀建议。
+ *  可用环境变量 TEXT_TO_DESIGN_MCP_MAX_SVG_BYTES 覆盖。 */
+export const MAX_SVG_SOURCE_BYTES = Number(
+  process.env.TEXT_TO_DESIGN_MCP_MAX_SVG_BYTES ?? 4 * 1024 * 1024,
+);
+
 /**
  * 设计客户端:插件平台(即时设计/Figma/MasterGo)只有连上后由 ping 回包才可知,
  * 此处只放「平台未知时」的中性兜底与工具前缀 —— 具体平台名走

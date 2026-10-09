@@ -19,6 +19,8 @@
 | [0032](0032-平台事实三域收敛为声明表：prompts-与工具描述共用单一投影点.md) | 平台事实三域收敛为声明表：prompts 与工具描述共用单一投影点 | 已采纳（类型检查 + 12 例不变式 + i18n/目录体积回归通过；2026-10-08 真机：jsDesign 侧 boolean 一项**不可隔离**（无属性可设）、MG/Figma 侧配方分流通过） | `shared/`（新增 `dicts/platform-knowledge.ts`、`platform-value-domain.ts` 第四类登记、`core/host.ts`、i18n 三键）、`ui/`（三侧 `sync-guarantee.ts`）、`mcp-server/`（新增 `tools/platform-facts.ts`、`tools/{prompts,components,platform}.ts`、`README.md`）、`tests/platform-knowledge.test.ts` | 2026-10-08 |
 | [0033](0033-MG-集合级变体管理接入-platformOps：原生建维改值替代改名副作用.md) | MG 集合级变体管理接入 platformOps：原生建维改值替代改名副作用 | 已采纳（类型检查 + 18 例新单测 + 40 例既有 MG 单测 + 事实表/i18n/目录体积回归 + 三平台构建通过；**真机复验通过**——MG 客户端 7 项全通，`platformOps` 5→11、画布已清干净） | `ui/src/code/mastergo/`（`ops.ts` 6 个 op、新增 `variant-set.ts` 与其单测、`meta.ts`、`sync-guarantee.ts`）、`shared/dicts/platform-knowledge.ts`、`mcp-server/`（`tools/{platform-facts,prompts}.ts`、`README.md`）、`tests/platform-knowledge.test.ts` | 2026-09-29 |
 | [0034](0034-单类型-create-工具容忍并校验-type：三处口径统一加越界字段点名.md) | 单类型 create 工具容忍并校验 `type`：三处口径统一 + 越界字段点名 | 已采纳（类型检查 + 8 例新单测 + 266 例回归 + 三平台构建通过；**Figma 真机三条路径复验通过** 2026-10-08，jsDesign / MasterGo 待补） | `mcp-server/`（`tools/create.ts`、`core/registry.ts`）、`shared/src/schemas/batch.ts` | 2026-10-08 |
+| [0035](0035-图表支持：服务端单向编译加复用-SVG-导入通道，骨架原生绘图区-SVG，不引入模式.md) | 图表支持：服务端单向编译 + 复用 SVG 导入通道（骨架原生 / 绘图区 SVG）；另开配方 prompt + `jsd_create_svg` 文件来源覆盖任意种类 | 已被取代（被 [0036](0036-删掉内置图表编译器：图表一律走代码生成-SVG-再导入配方.md) 取代：主路径「内置编译器优先」被删，只留配方那条路；`jsd_create_svg` 的 `svgPath` 来源按原文保留） | `shared/`（新增 `dicts/chart.ts`、`schemas/chart.ts`、`schemas/execute.ts` 新增 `createSvgInputSchema`、i18n 三键）、`mcp-server/`（新增 `src/charts.ts`、`tools/chart.ts`、`prompts.ts` 的 `chart-by-code`、`tools/create.ts` 的 `svgPath`、`config.ts` 体积护栏、`tools/index.ts`、2 个测试文件、`smoke-chart.ts`） | 2026-10-09 |
+| [0036](0036-删掉内置图表编译器：图表一律走代码生成-SVG-再导入配方.md) | 删掉内置图表编译器：图表一律走代码生成 SVG 再导入配方 | 已采纳（类型检查 + 全量 vitest + 三平台构建通过；配方不点名图形库、配色指向画布既有变量；真机待验项沿 0035：SVG 的 `path`/`C`/`circle` 保真、`<text>` 字体回落） | `shared/`（删 `schemas/chart.ts`、删 `dicts/chart.ts`、出口各摘一条、i18n 少一键）、`mcp-server/`（删 `src/charts.ts`、`tools/chart.ts`、`smoke-chart.ts`、`__tests__/chart.test.ts` + 新增 `chart-prompt.test.ts`、`tools/index.ts` 注册、`tools/prompts.ts` 配方重写、`tools/create.ts` 描述）、两个 `README.md` | 2026-10-09 |
 
 
 ## 依赖关系
@@ -82,6 +84,10 @@
                         排除「10 条描述各写一句」是撞 0006 的体积口径；工具面不动沿 0020；
                         ② 与 daemon/friendly-schema 同为出口改写但输入源不同（zod shape vs 线格式 JSON Schema），
                         两层不互相引用，故不构成第二份事实
+0036 (删内置图表编译器) ── 取代 0035 的主路径：只留配方 prompt + `jsd_create_svg` 的 `svgPath`（这一条按 0035 原文保留）。
+                        不新增执行面 ⇒ 0020 的三档机制一档都不用；工具数 −1，目录体积取向沿 0006；失败出口沿 0007
+                        「不允许静默失效」（`svgPath` 的读失败/为空/超限仍是人话报错）；字典收窄沿 0029/0032
+                        「一个事实一份」；排除 daemon 内 vm 沙箱的结论直接继承 0035，未重开
 ```
 
-更早的记录（0001–0016）见 [`INDEX-2026.md`](INDEX-2026.md)。
+更早的记录（0001–0016）见 [`INDEX-2026.md`](INDEX-2026.md)。| 0036 | 删掉内置图表编译器：图表一律走代码生成 SVG 再导入配方 | 提议 | 待补充 | 2026-10-09 |

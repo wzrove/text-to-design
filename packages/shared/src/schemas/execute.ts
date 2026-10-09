@@ -48,6 +48,11 @@ export const executeSchema = z
   })
   .strict();
 
+/**
+ * 插件线格式:导入 SVG。**`svg` 在这里是必填** —— 到插件这一步,来源之争已经
+ * 在 MCP 侧解完了(见下面的 `createSvgInputSchema`),插件只收字符串。
+ * 把来源选择放进这个 schema 会让插件也要处理「路径」,而它没有读盘能力。
+ */
 export const createSvgSchema = z.object({
   svg: z
     .string()
@@ -56,6 +61,42 @@ export const createSvgSchema = z.object({
     ),
   name: z.string().optional().describe('schema.execute.name'),
 });
+
+/**
+ * `jsd_create_svg` 的入参:来源**二选一** —— 内联字符串 `svg`,或本地文件 `svgPath`。
+ *
+ * 为什么要开文件来源:代码生成的图表动辄几十 KB,整份塞进入参既费上下文、
+ * 又容易在换行与转义上出错;落盘后只传路径,读盘这件事与 `jsd_fill_image` 的
+ * `sourcePath` 同构(读盘的是后台服务,不是模型)。
+ *
+ * 两者都传、或都不传时**明确报错**而不是猜一个 —— 静默取其一,调用方会以为
+ * 自己传的那份生效了。
+ */
+export const createSvgInputSchema = z
+  .object({
+    svg: z.string().optional().describe('完整 SVG 字符串(与 svgPath 二选一)'),
+    svgPath: z
+      .string()
+      .optional()
+      .describe(
+        '本地 .svg 文件路径,由后台服务读取(与 svg 二选一)。**代码生成的大 SVG 走这条**',
+      ),
+    name: z.string().optional().describe('schema.execute.name'),
+  })
+  .strict()
+  .superRefine((val, ctx) => {
+    const has = (v: string | undefined): boolean =>
+      typeof v === 'string' && v.trim() !== '';
+    if (has(val.svg) === has(val.svgPath)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: has(val.svg)
+          ? 'svg 与 svgPath 只能传一个:svgPath 是给「SVG 已在本地文件里」用的'
+          : '必须传 svg(内联 SVG 字符串)或 svgPath(本地 .svg 文件路径),二选一',
+        path: ['svg'],
+      });
+    }
+  });
 
 export const htmlToDesignSchema = z.object({
   html: z.string().describe('schema.execute.html'),

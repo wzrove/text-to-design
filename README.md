@@ -95,7 +95,7 @@ text-to-design 能让 AI 助手(比如 opencode、Claude)直接在你的设计�
 | `jsd_ping` | 检查插件是否在线,返回核心能力 / 平台差异能力 / 平台特有 op 三张表 |
 | `jsd_get_selection` / `jsd_find` | 读取当前选中 / 按名称类型 id 查找节点 |
 | `jsd_create_nodes` | 执行声明式设计指令(frame/rect/text/... 节点树) |
-| `jsd_create_svg` / `jsd_create_icon` / `jsd_html_to_design` | 导入 SVG / 插入内置图标 / HTML 转设计节点 |
+| `jsd_create_svg` / `jsd_create_icon` / `jsd_html_to_design` | 导入 SVG(内联字符串或本地文件路径)/ 插入内置图标 / HTML 转设计节点;**图表走这里**(自己写代码算好 SVG 落盘再导入,配方见 prompt `chart-by-code`) |
 | `jsd_set_fill_color` / `jsd_set_stroke` / `jsd_set_cornerRadius` | 填充 / 描边 / 圆角 |
 | `jsd_set_text` / `jsd_move_node` / `jsd_resize_node` | 文本内容排版 / 位置 / 尺寸 |
 | `jsd_set_layout` / `jsd_set_effects` / `jsd_set_visibility` / `jsd_rename_node` | 自动布局 / 阴影等效果 / 显隐锁定 / 重命名 |

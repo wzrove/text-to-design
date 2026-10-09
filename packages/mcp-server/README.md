@@ -107,7 +107,7 @@ pkill -f text-to-design-mcp
 | `jsd_get_selection` | 读取画布当前选中的节点 |
 | `jsd_find` | 按名称/类型/id 查找节点 |
 | `jsd_create_nodes` | 按描述创建节点(frame/rect/text 等,支持阴影/描边/渐变/文本样式) |
-| `jsd_create_svg` | 直接导入 SVG 字符串(保留 path/矢量数据,不经降级) |
+| `jsd_create_svg` | 直接导入 SVG(保留 path/矢量数据,不经降级)。来源二选一:`svg` 内联字符串,或 `svgPath` 本地文件路径(**图表一律走这条**:脚本按 `chart-by-code` 配方算好、落盘,再传路径) |
 | `jsd_create_icon` | 按名称/别名模糊匹配插入 Lucide 内置图标,查无时返回候选名 |
 | `jsd_html_to_design` | 把 HTML 转成设计节点 |
 | `jsd_set_fill_color` | 填充(fills 整体替换)、混合模式、填充样式 |
@@ -167,6 +167,7 @@ Figma 用户不会再读到 jsDesign 的兜底细节;平台未探测时给「先
 | `variant-set` | 变体集构建:按能力位 `inPlaceVariants` 分流(原位合并 / 多主件兜底);有集合级管理 op 的平台(见 `platformOps`)直接建维度、加成分、改取值,不靠改名字,含建后回读 |
 | `component-property` | 组件属性的定义与设值:定义走 platform op、设值走 jsd_set_instance_properties,并给出本平台能收的值形态 |
 | `html-to-design` | HTML 转设计稿,含保真度取舍说明 |
+| `chart-by-code` | **画图的主路径**:自己写代码算几何 → 落盘 SVG → `jsd_create_svg(svgPath)` 导入,含零依赖可跑示例与引擎侧硬约束(不用 `A` 指令、**不指定图形库**、配色与字号取自画布既有变量/本地样式) |
 | `icon-grid` | 批量插入 Lucide 图标并排成自动布局网格 |
 | `script-ops` | 脚本化调用纪律:压缩工具往返与上下文占用 |
 

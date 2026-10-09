@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import type { McpServer } from '@modelcontextprotocol/server';
 import {
   BOOLEAN_OPERATION_LIST,
@@ -5,7 +6,7 @@ import {
   type CreatableNodeType,
   createdResultSchema,
   createIconSchema,
-  createSvgSchema,
+  createSvgInputSchema,
   ellipseNodeSchema,
   frameNodeSchema,
   groupNodeSchema,
@@ -20,6 +21,7 @@ import {
 } from 'text-to-design-shared';
 import { z } from 'zod';
 import type { Bridge } from '../bridge';
+import { LONG_IO_TIMEOUT_MS, MAX_SVG_SOURCE_BYTES } from '../config';
 import {
   type BridgeToolDef,
   bridgeTool,
@@ -192,13 +194,23 @@ export function registerCreateTools(
     }),
   ];
 
+  /**
+   * 来源二选一(0035 引入,0036 起成为画图的唯一通道):`svg` 内联,或 `svgPath` 由本进程读盘。
+   *
+   * 为什么要有文件来源:代码生成的图表动辄几十 KB,整份塞进工具入参
+   * 既费上下文、又容易在换行与转义上出错;落盘后只传路径,读盘这件事与
+   * `jsd_fill_image` 的 sourcePath 同构(读盘的是服务,不是模型)。
+   * 内容为空时**明确报错**:引擎拿到空串只会抛一句难懂的解析错(实测报
+   * "Cannot read properties of null"),报错点离真正原因很远。
+   */
   const createSvg = bridgeTool({
     name: 'jsd_create_svg',
     title: 'createSvg.title',
     description:
-      '将 SVG 字符串直接导入画布为可编辑图层(createNodeFromSvg 原生解析,保留路径/渐变/描边)。建多个根节点/复杂树用 jsd_batch 编排',
-    method: 'create_svg',
-    inputSchema: createSvgSchema,
+      '将 SVG 直接导入画布为可编辑图层(createNodeFromSvg 原生解析,保留路径/渐变/描边)。来源二选一:svg(内联字符串)或 svgPath(本地 .svg 文件路径,由后台服务读盘)。' +
+      '**图表 / 数据可视化一律走 svgPath**(折线图、柱状图、饼图 / 环形图、散点图、雷达图、面积图、仪表盘、看板……):没有内置图表工具 —— 先自己写脚本把 SVG 算好、落到本地文件,再传路径;完整配方见 prompt `chart-by-code`。' +
+      '建多个根节点/复杂树用 jsd_batch 编排',
+    inputSchema: createSvgInputSchema,
     outputSchema: createdResultSchema,
     annotations: {
       readOnlyHint: false,
@@ -206,10 +218,43 @@ export function registerCreateTools(
       idempotentHint: false,
       openWorldHint: false,
     },
-    payload: ({ svg, name }) => ({
-      svg,
-      name: name ?? 'svg-design',
-    }),
+    timeout: LONG_IO_TIMEOUT_MS,
+    run: async (args, bridge_, signal) => {
+      const { svg, svgPath, name } = args as {
+        svg?: string;
+        svgPath?: string;
+        name?: string;
+      };
+      let content: string;
+      if (svgPath != null && svgPath.trim() !== '') {
+        try {
+          content = readFileSync(svgPath, 'utf8');
+        } catch (e) {
+          throw new Error(
+            `读取 SVG 文件失败(${svgPath}): ${e instanceof Error ? e.message : String(e)}`,
+          );
+        }
+      } else {
+        content = svg ?? '';
+      }
+      if (content.trim() === '') {
+        throw new Error(
+          svgPath != null
+            ? `SVG 文件是空的:${svgPath}(脚本可能没写成功,或写到了另一个路径)`
+            : 'svg 为空字符串;要导入本地文件请改用 svgPath',
+        );
+      }
+      if (content.length > MAX_SVG_SOURCE_BYTES) {
+        throw new Error(
+          `SVG 源码 ${content.length} 字节 > 上限 ${MAX_SVG_SOURCE_BYTES}:先瘦身再导入(散点抽稀 / 合并 path / 去掉逐点坐标),或调大 TEXT_TO_DESIGN_MCP_MAX_SVG_BYTES`,
+        );
+      }
+      return bridge_.request(
+        'create_svg',
+        { svg: content, name: name ?? 'svg-design' },
+        { signal, timeout: LONG_IO_TIMEOUT_MS },
+      );
+    },
     followUp: CREATE_BATCH_FOLLOWUP,
   });
 
