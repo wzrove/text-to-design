@@ -63,6 +63,12 @@ export const MESSAGES_ZH_CN = {
   'header.cameraLock.title.unlocked':
     '相机跟随:操作画布后视口滚动缩放到结果(点击锁定)',
 
+  // ── 轻提示(操作结果,不用管是哪颗按钮弹的) ──
+  // 只在「做完了但看不出来」的操作上弹:复制的结果在系统剪贴板里,相机锁只换个
+  // 14px 图标。界面本身变了的(开合抽屉、切主题、清空日志)不弹,那是噪声。
+  'toast.copy.done': '已复制',
+  'toast.copy.failed': '复制失败',
+
   // ── 连接提示条 ──
   'conn.connected':
     '已连接。选中画布节点后点「复制」,把内容发给 AI 助手——例如:「按这个节点样式帮我再做一张卡片」',
@@ -72,7 +78,6 @@ export const MESSAGES_ZH_CN = {
   'conn.disconnected.tutorial': '安装教程',
   'conn.copyAi': '① 复制给 AI 助手',
   'conn.copyDaemon': '② 复制启动命令',
-  'conn.copied': '✓ 已复制',
   'conn.copyAi.hint': '发给 AI,让它调用 jsd_ping 唤醒后台服务',
   'conn.daemon.note':
     '在本机终端执行即常驻到下次重启;重复执行安全(已有实例会自动跳过)。',
@@ -95,7 +100,6 @@ export const MESSAGES_ZH_CN = {
   'selection.title': '选中节点',
   'selection.badge': '{count} 个 · 序列化 {size}',
   'selection.copy': '复制',
-  'selection.copied': '✓',
   'selection.empty.title': '未选中节点',
   'selection.empty.hint': '在画布中点选节点后,这里会实时显示并支持复制',
 

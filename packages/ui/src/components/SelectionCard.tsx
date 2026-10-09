@@ -1,7 +1,7 @@
 import { createEffect, createMemo, createSignal, For, Show } from 'solid-js';
 import type { NodeType } from 'text-to-design-shared';
 import { t } from '../i18n/useLocale';
-import { copyText } from '../utils/clipboard';
+import { copyWithToast } from '../utils/clipboard';
 import CollapsibleSection, { Trigger } from './CollapsibleSection';
 
 interface SelectedNode {
@@ -71,13 +71,6 @@ export default function SelectionCard(props: {
     if (nodes().length > AUTO_COLLAPSE_COUNT) setOpen(false);
   });
 
-  const [copiedId, setCopiedId] = createSignal<string | null>(null);
-  const copyId = (id: string) => {
-    copyText(id);
-    setCopiedId(id);
-    window.setTimeout(() => setCopiedId(null), 1500);
-  };
-
   return (
     /*
       收起时整块退回标题行(`CollapsibleSection`):`fill` 的 `flex-1` 挂在**卡片**上,
@@ -112,7 +105,7 @@ export default function SelectionCard(props: {
               <button
                 type="button"
                 class="btn btn-xs btn-primary"
-                onClick={() => copyText(payload())}
+                onClick={() => copyWithToast(payload())}
               >
                 {t('selection.copy')}
               </button>
@@ -161,12 +154,10 @@ export default function SelectionCard(props: {
               </div>
               <button
                 type="button"
-                class={`btn btn-xs btn-ghost shrink-0 ${copiedId() === n.id ? 'text-success' : ''}`}
-                onClick={() => copyId(n.id)}
+                class="btn btn-xs btn-ghost shrink-0"
+                onClick={() => copyWithToast(n.id)}
               >
-                {copiedId() === n.id
-                  ? t('selection.copied')
-                  : t('selection.copy')}
+                {t('selection.copy')}
               </button>
             </div>
           )}

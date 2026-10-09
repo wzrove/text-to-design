@@ -1,3 +1,6 @@
+import { t } from '../i18n/useLocale';
+import { showToast } from './toast';
+
 /** 复制文本到剪贴板:优先 navigator.clipboard,插件 iframe 受限时走 execCommand 兜底 */
 export function copyText(text: string): boolean {
   try {
@@ -25,4 +28,19 @@ export function copyText(text: string): boolean {
   } catch {
     return false;
   }
+}
+
+/**
+ * 复制 + 结果提示:面板里每一处复制的唯一出口(见 0037)。
+ *
+ * 成败判定与文案、级别三者的对应关系只写在这里。原先四个调用点各写一遍
+ * 「✓ 已复制」的局部态:同一件事四份实现,而且成功那半只改按钮自己的字 ——
+ * 复制的结果在系统剪贴板里,那个字一淡出就什么都不剩了。
+ */
+export function copyWithToast(text: string): void {
+  const ok = copyText(text);
+  showToast(
+    t(ok ? 'toast.copy.done' : 'toast.copy.failed'),
+    ok ? 'success' : 'error',
+  );
 }

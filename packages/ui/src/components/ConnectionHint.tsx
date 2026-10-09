@@ -1,9 +1,9 @@
-import { createMemo, createSignal } from 'solid-js';
+import { createMemo } from 'solid-js';
 import type { MessageKey } from 'text-to-design-shared';
 import type { BridgeStatus } from '../bridge/BridgeSocket';
 import { useBridge } from '../bridge/useBridge';
 import { t } from '../i18n/useLocale';
-import { copyText } from '../utils/clipboard';
+import { copyWithToast } from '../utils/clipboard';
 
 /**
  * 给 AI 的指令:注册 + 唤醒。
@@ -20,8 +20,6 @@ import { copyText } from '../utils/clipboard';
 const DAEMON_CMD = 'npx -y text-to-design-mcp@latest daemon';
 
 const GITHUB_URL = 'https://github.com/wzrove/text-to-design';
-
-type CopyKind = 'ai' | 'daemon';
 
 /**
  * 提示条形态只有三种。
@@ -53,13 +51,6 @@ const ANNOUNCE: Record<BridgeStatus, MessageKey> = {
 /** 连接引导:未连接给两条可执行路径;已连接给使用引导;被顶替给夺回动作 */
 export default function ConnectionHint() {
   const { status } = useBridge();
-  const [copied, setCopied] = createSignal<CopyKind | null>(null);
-
-  const copy = (kind: CopyKind, text: string) => {
-    copyText(text);
-    setCopied(kind);
-    window.setTimeout(() => setCopied((c) => (c === kind ? null : c)), 1500);
-  };
 
   const variant = createMemo<Variant>(() => {
     const s = status();
@@ -124,10 +115,10 @@ export default function ConnectionHint() {
           <div class="mt-2 flex flex-wrap items-center gap-1.5">
             <button
               type="button"
-              class={`btn btn-xs btn-outline ${copied() === 'ai' ? 'text-success' : ''}`}
-              onClick={() => copy('ai', t('conn.wakeCmd'))}
+              class="btn btn-xs btn-outline"
+              onClick={() => copyWithToast(t('conn.wakeCmd'))}
             >
-              {copied() === 'ai' ? t('conn.copied') : t('conn.copyAi')}
+              {t('conn.copyAi')}
             </button>
             <span class="text-warning-content/80">{t('conn.copyAi.hint')}</span>
           </div>
@@ -135,10 +126,10 @@ export default function ConnectionHint() {
           <div class="mt-1.5 flex flex-wrap items-center gap-1.5">
             <button
               type="button"
-              class={`btn btn-xs btn-outline ${copied() === 'daemon' ? 'text-success' : ''}`}
-              onClick={() => copy('daemon', DAEMON_CMD)}
+              class="btn btn-xs btn-outline"
+              onClick={() => copyWithToast(DAEMON_CMD)}
             >
-              {copied() === 'daemon' ? t('conn.copied') : t('conn.copyDaemon')}
+              {t('conn.copyDaemon')}
             </button>
             <code
               class="min-w-0 truncate rounded bg-base-100/60 px-1 py-0.5 font-mono text-[10px] text-warning-content/80"

@@ -17,6 +17,8 @@ import PanelHeightSync from './components/PanelHeightSync';
 import SelectionCard from './components/SelectionCard';
 import StatusBadge from './components/StatusBadge';
 import ThemeToggle from './components/ThemeToggle';
+import ToastHost from './components/Toast';
+import Tooltip from './components/Tooltip';
 import { locale, t } from './i18n/useLocale';
 
 function Shell() {
@@ -113,22 +115,30 @@ function Shell() {
           重连动作紧贴状态徽章:状态与它的出路读成一件事。
           连上后整颗隐藏而非置灰 —— 常态面板里一颗永远不可用的按钮只是噪声;
           隐藏也不会挤动右侧工具簇(它左侧是 ml-auto 的弹性留白)。
+
+          提示气泡贴左缘(align=start):这颗按钮在面板左侧,居中放会有一段
+          伸到面板外被裁掉(见 Tooltip)。
         */}
         <Show when={status() !== 'connected'}>
-          <button
-            type="button"
-            class="btn btn-ghost btn-xs shrink-0 px-1.5 text-base-content/70 hover:text-base-content"
-            title={
+          <Tooltip
+            class="shrink-0"
+            align="start"
+            tip={
               status() === 'superseded'
                 ? t('header.reclaim.title')
                 : t('header.retry.title')
             }
-            onClick={() => rescan()}
           >
-            {status() === 'superseded'
-              ? t('header.reclaim')
-              : t('header.retry')}
-          </button>
+            <button
+              type="button"
+              class="btn btn-ghost btn-xs shrink-0 px-1.5 text-base-content/70 hover:text-base-content"
+              onClick={() => rescan()}
+            >
+              {status() === 'superseded'
+                ? t('header.reclaim')
+                : t('header.retry')}
+            </button>
+          </Tooltip>
         </Show>
 
         <div class="ml-auto flex shrink-0 items-center gap-0.5">
@@ -158,6 +168,9 @@ function Shell() {
         onClose={closeLog}
         onClear={clearLog}
       />
+
+      {/* 操作结果的提示:浮层,不进流,面板高度不受影响(0014) */}
+      <ToastHost />
 
       {/*
         高度只由内容决定,浮层不进流 —— 所以它打开时窗口不会自己变高,

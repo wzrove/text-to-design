@@ -67,6 +67,9 @@ export const MESSAGES_EN = {
   'header.cameraLock.title.unlocked':
     'Camera follows: canvas operations scroll and zoom to the result (click to lock)',
 
+  'toast.copy.done': 'Copied',
+  'toast.copy.failed': 'Copy failed',
+
   'conn.connected':
     'Connected. Select nodes on the canvas, click "Copy", then paste into your AI assistant — e.g. "make me another card in this node style"',
   'conn.superseded':
@@ -75,7 +78,6 @@ export const MESSAGES_EN = {
   'conn.disconnected.tutorial': 'Install guide',
   'conn.copyAi': '① Copy prompt for AI',
   'conn.copyDaemon': '② Copy start command',
-  'conn.copied': '✓ Copied',
   'conn.copyAi.hint':
     'Send it to your AI so it calls jsd_ping to wake the service',
   'conn.daemon.note':
@@ -94,7 +96,6 @@ export const MESSAGES_EN = {
   'selection.title': 'Selected nodes',
   'selection.badge': '{count} nodes · {size} serialized',
   'selection.copy': 'Copy',
-  'selection.copied': '✓',
   'selection.empty.title': 'No nodes selected',
   'selection.empty.hint':
     'Select nodes on the canvas and they show up here, ready to copy',
