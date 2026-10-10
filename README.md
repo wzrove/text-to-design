@@ -2,7 +2,7 @@
 
 <p align="center"><img src="logo.svg" width="120" alt="text-to-design logo" /></p>
 
-text-to-design 能让 AI 助手(比如 opencode、Claude)直接在你的设计软件里动手干活:读取你选中的内容、按你的描述画新图形、修改样式、导出图片。你只管说人话,它负责操作。
+text-to-design 能让 AI 助手(比如 opencode、Claude)直接在你的设计软件里动手干活:读取你选中的内容、按你的描述画新图形、修改样式、导出图片。你只管描述,它负责操作。
 
 这里说的设计软件,目前支持三个平台:**即时设计(jsDesign)**、**Figma**、**MasterGo(莫高设计)**
 —— 插件包按平台分别构建,导入了哪一份就操作哪个画布。
@@ -63,7 +63,7 @@ text-to-design 能让 AI 助手(比如 opencode、Claude)直接在你的设计�
 
 ## 怎么用
 
-装好后,直接说人话,比如:
+装好后,直接描述,比如:
 
 - 「读取当前画布选中的内容」
 - 「在画布中心画一个 300x200 的卡片,标题叫发布页,背景浅灰」

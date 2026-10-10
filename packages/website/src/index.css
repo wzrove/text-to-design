@@ -1,0 +1,311 @@
+@import "tailwindcss";
+
+@theme {
+  /* 配色承自 packages/ui(COLORS.md 口径):brand = 动作色,coral = 仅品牌图形 */
+  --color-brand: #8ad654;
+  --color-coral: #f76868;
+  --color-ink: #0a0d12;
+  --color-panel: #10151c;
+  --color-raise: #161d26;
+  --color-line: #232c38;
+  --color-txt: #e6ebf2;
+  --color-mute: #8b97a8;
+  --color-code: #a8d8ff;
+
+  --font-mono:
+    ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas,
+    "Liberation Mono", monospace;
+
+  --ease-soft: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@layer base {
+  /* 卡片投影按主题走:暗色靠黑压深,亮色换成低透明冷灰,避免糊成一块 */
+  :root {
+    --shadow-panel:
+      0 0 0 1px rgba(255, 255, 255, 0.02), 0 24px 60px -24px rgba(0, 0, 0, 0.8);
+  }
+
+  :root[data-theme="light"] {
+    --shadow-panel:
+      0 0 0 1px rgba(15, 23, 42, 0.06), 0 24px 60px -28px rgba(15, 23, 42, 0.28);
+  }
+
+  /* 亮色:只换底层变量,Tailwind 工具类读的是 var(--color-*),一处覆盖全局生效
+     品牌绿压深,保证白底上的文字与按钮文字都够 4.5:1 */
+  :root[data-theme="light"] {
+    --color-brand: #3f7a16;
+    --color-coral: #d24747;
+    --color-ink: #f5f7fb;
+    --color-panel: #ffffff;
+    --color-raise: #eef2f7;
+    --color-line: #d9e0ea;
+    --color-txt: #111823;
+    --color-mute: #586675;
+    --color-code: #0b5fa5;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    background-color: var(--color-ink);
+    color: var(--color-txt);
+    font-family:
+      system-ui, -apple-system, "Segoe UI", "PingFang SC", "Hiragino Sans GB",
+      "Microsoft YaHei", sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-brand);
+    outline-offset: 3px;
+  }
+
+  ::selection {
+    background-color: color-mix(in oklab, var(--color-brand) 35%, transparent);
+  }
+}
+
+@utility grid-bg {
+  background-image:
+    linear-gradient(
+      to right,
+      color-mix(in oklab, var(--color-line) 55%, transparent) 1px,
+      transparent 1px
+    ),
+    linear-gradient(
+      to bottom,
+      color-mix(in oklab, var(--color-line) 55%, transparent) 1px,
+      transparent 1px
+    );
+  /* 单值 background-size 会让第二层高度塌成 auto,只剩一个方向有线 */
+  background-size: var(--grid-size, 56px) var(--grid-size, 56px);
+}
+
+@utility mono-label {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--color-mute);
+}
+
+@utility sweep-glow {
+  background-image: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in oklab, var(--color-brand) 26%, transparent),
+    transparent
+  );
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 22px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slide-left {
+  from {
+    opacity: 0;
+    transform: translate3d(-28px, 0, 0);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes slide-right {
+  from {
+    opacity: 0;
+    transform: translate3d(28px, 0, 0);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translate3d(0, 14px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes panel-in {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 12px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes drift {
+  0%,
+  100% {
+    transform: translate3d(-50%, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(-50%, -24px, 0) scale(1.08);
+  }
+}
+
+@keyframes grid-pan {
+  to {
+    background-position: var(--grid-size, 56px) var(--grid-size, 56px);
+  }
+}
+
+/* 宽度是容器的 1/4,故 -100% → 400% 正好扫满一程 */
+@keyframes sweep {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(400%);
+  }
+}
+
+/* 画布选中框的蚂蚁线:四条边各一层虚线渐变,整体位移一个虚线周期 */
+@keyframes ants {
+  to {
+    background-position:
+      12px 0,
+      -12px 100%,
+      0 -12px,
+      100% 12px;
+  }
+}
+
+@keyframes caret {
+  50% {
+    border-right-color: transparent;
+  }
+}
+
+@layer components {
+  [data-reveal] {
+    --reveal-anim: rise;
+    --reveal-delay: 0ms;
+    --reveal-ease: var(--ease-soft);
+  }
+
+  [data-reveal="fade"] {
+    --reveal-anim: fade-in;
+  }
+
+  [data-reveal="left"] {
+    --reveal-anim: slide-left;
+  }
+
+  [data-reveal="right"] {
+    --reveal-anim: slide-right;
+  }
+
+  [data-reveal="scale"] {
+    --reveal-anim: pop-in;
+  }
+
+  /* 只在 JS 就绪后隐藏,脚本挂了内容照样可见 */
+  .js-reveal [data-reveal]:not(.is-in) {
+    opacity: 0;
+  }
+
+  [data-reveal].is-in {
+    animation: var(--reveal-anim) 700ms var(--reveal-ease) var(--reveal-delay)
+      both;
+  }
+
+  details[open] > .reveal-answer {
+    animation: fade-in 260ms var(--ease-soft) both;
+  }
+
+  /* Hero 演示:画布元素默认隐藏,由 GSAP 时间线接管(GSAP 写的是内联样式,优先于此) */
+  /* 画布是「设计软件里的一小块」,网格要比页面背景密,才有画板感 */
+  .demo-canvas {
+    --grid-size: 16px;
+  }
+
+  .js-reveal .demo-canvas .draw-item {
+    opacity: 0;
+  }
+
+  /* gsap 分块没加载成功时的兜底:直接落终态,画布不留空白 */
+  .demo-canvas.is-drawn .draw-item {
+    opacity: 1;
+  }
+
+  .demo-tool {
+    animation: slide-left 320ms var(--ease-soft) both;
+  }
+
+  /* 设计软件里的选中态:虚线框 + 尺寸标签,画完最后一帧才出现 */
+  .demo-select {
+    --ants: color-mix(in oklab, var(--color-brand) 75%, transparent);
+    background-image:
+      repeating-linear-gradient(90deg, var(--ants) 0 6px, transparent 6px 12px),
+      repeating-linear-gradient(90deg, var(--ants) 0 6px, transparent 6px 12px),
+      repeating-linear-gradient(180deg, var(--ants) 0 6px, transparent 6px 12px),
+      repeating-linear-gradient(180deg, var(--ants) 0 6px, transparent 6px 12px);
+    background-size:
+      100% 1px,
+      100% 1px,
+      1px 100%,
+      1px 100%;
+    background-position:
+      0 0,
+      0 100%,
+      0 0,
+      100% 0;
+    background-repeat: no-repeat;
+    animation: ants 700ms linear infinite;
+  }
+
+  .typing-caret {
+    border-right: 2px solid var(--color-brand);
+    animation: caret 1s step-end infinite;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  .js-reveal [data-reveal]:not(.is-in) {
+    opacity: 1;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
