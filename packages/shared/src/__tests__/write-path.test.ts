@@ -1590,7 +1590,7 @@ describe('Figma 运行时收窄与节点序列化容错', () => {
     const good = makeRect('F:good', '好节点');
     host = makeHost([broken, good]);
 
-    const r = await findNodes(host, {});
+    const r = await findNodes(host, ctx, {});
 
     expect(r.total).toBe(2);
     const [bad, ok] = r.nodes;

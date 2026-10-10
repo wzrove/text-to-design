@@ -159,14 +159,99 @@ export function toComponentPropertyWrites(props: Record<string, unknown>): {
   return { writes, skipped };
 }
 
+/** `标题#32:0` → `标题`;没有 `#` 的键原样返回(基名即自身) */
+function basePropertyName(key: string): string {
+  const at = key.lastIndexOf('#');
+  return at > 0 ? key.slice(0, at) : key;
+}
+
+/**
+ * 组件属性**键**归一(0041):把调用方给的短名补成实例上的完整键。
+ *
+ * 为什么需要:引擎对**组件属性**(BOOLEAN / TEXT / INSTANCE_SWAP)只认带唯一后缀的
+ * 完整键。Figma 真机实测,短名一律
+ * `in setProperties: Could not find a component property with name: '标题'` ——
+ * 免后缀只对**变体属性**成立(`variantProperties` 是另一张表),而 0023 已经把
+ * **值**形态收成「一份知识只写一处」,键形态却从没归属:实现里只有 MG 门面做了归一
+ * (`mastergo/node-facade.ts`),且那里自承只兜得住 BOOLEAN/TEXT。这里补齐三个平台。
+ *
+ * 四条纪律,同 0007「不允许静默失效」:
+ * - 精确命中 → 保留(不做任何改写);
+ * - 基名**唯一**命中 → 改写成完整键;
+ * - 命中 **0 个** → **原样透传**。这一支不能报错:变体属性不在 `componentProperties`
+ *   里,而 MG 的实例侧属性表实测经常是空的 —— 按「查不到就拒」会把这两类合法调用
+ *   一起打死(那些键本来就该按原样落到引擎);
+ * - 命中 **≥2 个** → 抛错并列出候选。歧义时替调用方挑一个,等于往写路径里引进
+ *   「回包成功、改错了别的东西」,比报错差得多。
+ *
+ * 泛型只为免去调用方的类型断言:走一圈不改形态。
+ */
+export function normalizeComponentPropertyKeys<T>(
+  props: Record<string, T>,
+  known: Record<string, unknown> | undefined,
+): Record<string, T> {
+  const knownKeys = known == null ? [] : Object.keys(known);
+  if (knownKeys.length === 0) return props; // 没有表可对:不介入
+  const byBaseName = new Map<string, string[]>();
+  for (const key of knownKeys) {
+    const base = basePropertyName(key);
+    const bucket = byBaseName.get(base);
+    if (bucket == null) byBaseName.set(base, [key]);
+    else if (!bucket.includes(key)) bucket.push(key);
+  }
+  const out: Record<string, T> = {};
+  const ambiguous: string[] = [];
+  for (const [name, value] of Object.entries(props)) {
+    if (knownKeys.includes(name)) {
+      out[name] = value;
+      continue;
+    }
+    const candidates = byBaseName.get(name);
+    if (candidates == null || candidates.length === 0) {
+      out[name] = value;
+      continue;
+    }
+    if (candidates.length > 1) {
+      ambiguous.push(`${name}(候选:${candidates.join('、')})`);
+      continue;
+    }
+    out[candidates[0] as string] = value;
+  }
+  if (ambiguous.length > 0) {
+    // i18n-exempt: 随结果上行给模型,不走面板文案
+    throw new Error(
+      `组件属性名有歧义,请传完整键:${ambiguous.join(';')}。本实例可选:${knownKeys.join('、')}`,
+    );
+  }
+  return out;
+}
+
+/**
+ * 读实例上的属性表,读不到就当没有(不归一)。
+ *
+ * 属性表是**摘要性质**:某些节点/平台 getter 会抛(`componentProperties` 在原型上
+ * 可能不存在,MG 实例侧实测常为空)。只读失败不该变成写失败 —— 退回「原样透传」
+ * 与 0023 对坏节点的处置同向。
+ */
+function knownPropertyKeys(
+  inst: NodeSkeleton,
+): Record<string, unknown> | undefined {
+  try {
+    return inst.componentProperties as Record<string, unknown> | undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /**
  * 设置实例的变体/组件属性。
  *
  * `properties` 是**宽类型**(字符串 | 布尔 | `ComponentPropertyValue`),与契约
  * `DesignHost.setProperties` 的签名一致:变体属性是字符串,布尔/文本/换绑属性是标量,
  * 需要显式类型或换绑候选时才传对象。宿主底层只收标量,故这里统一走
- * {@link toComponentPropertyWrites} 整形(0023);MG 还要把名字键归一到 propertyId,
- * 那一层在门面里(见 0017)。
+ * {@link toComponentPropertyWrites} 整形(0023);键再走
+ * {@link normalizeComponentPropertyKeys} 补成完整键(0041);MG 还要把名字键归一到
+ * propertyId,那一层在门面里(见 0017)。
  */
 export async function setInstanceProperties(
   host: DesignHost,
@@ -188,7 +273,13 @@ export async function setInstanceProperties(
       `属性 ${skipped.join('、')} 的值形态无法写成标量(SLOT 属性引擎不收,或值缺少 value)。请用 jsd_find 回读该实例的 componentProperties 取合法项后重试。`,
     );
   }
-  // 运行时校验:属性名必须属于实例的合法变体属性
+  // 运行时校验 + 键归一:**两遍**走,先把每个实例要写的键算完,再统一下笔。
+  // 为什么分两遍:归一的歧义必须**在任何一次写入之前**报出来 —— 否则第一个实例
+  // 已经写完、第二个实例才抛,等于留了半批覆盖(0041「不确定就点名,绝不猜」)。
+  const planned: Array<{
+    inst: NodeSkeleton;
+    props: Record<string, string | boolean>;
+  }> = [];
   for (const inst of instances) {
     // dynamic-page 下 inst.mainComponent 直接抛,必须走异步入口(0011)
     const compSet = (await resolveMainComponent(inst))?.parent;
@@ -207,7 +298,13 @@ export async function setInstanceProperties(
         );
       }
     }
-    inst.setProperties(writes);
+    planned.push({
+      inst,
+      props: normalizeComponentPropertyKeys(writes, knownPropertyKeys(inst)),
+    });
+  }
+  for (const { inst, props } of planned) {
+    inst.setProperties(props);
   }
   return { updated: instances.map((n) => serializeNode(n)) };
 }

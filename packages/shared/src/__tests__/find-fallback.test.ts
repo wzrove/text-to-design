@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { findNodes } from '../core/nodes';
+import { runtimeContext } from '../core/runtime';
 import { type FakeHost, makeFrame, makeHost, makeRect } from './fixtures';
 
 /**
@@ -16,7 +17,7 @@ describe('findNodes 收集阶段', () => {
     host.currentPage.findAll = () => {
       throw new Error('in findAll: The node with id "1:9" does not exist');
     };
-    const r = await findNodes(host, {});
+    const r = await findNodes(host, runtimeContext(null), {});
     expect(r.total).toBe(2);
     expect(r.nodes.map((n) => n.id)).toEqual(['1:1', '1:2']);
   });
@@ -33,7 +34,7 @@ describe('findNodes 收集阶段', () => {
     host.currentPage.findAll = () => {
       throw new Error('nope');
     };
-    const r = await findNodes(host, {});
+    const r = await findNodes(host, runtimeContext(null), {});
     expect(r.total, '两个顶层节点都该在,坏节点只丢它的子树').toBe(2);
   });
 });

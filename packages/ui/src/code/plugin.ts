@@ -318,7 +318,7 @@ export function registerPlugin(
         // 以下 case 的 core 入口全部异步(dynamic-page 文档访问,见决策 0011):
         // 分发本身已在 async handler 内,await 不改变时序,只把解析点收口到 Access 层。
         case 'find': {
-          const r = await findNodes(host, msg.params);
+          const r = await findNodes(host, ctx, msg.params);
           send(id, true, r);
           break;
         }
@@ -519,11 +519,15 @@ export function registerPlugin(
           break;
         }
         case 'list_styles': {
-          send(id, true, await listStyles(host));
+          // 无筛选参数:0042 的单类入口是为「哪一类挂死」取证的探针,0043 把判据换成
+          // 平台能力声明后已摘掉 —— 不该问的平台一个 getter 都不会调(同步 getter
+          // 不可中断,问了不回答就是冻死整条调用)。
+          const r = await listStyles(host, ctx);
+          send(id, true, r);
           break;
         }
         case 'get_page': {
-          send(id, true, await getPageStructure(host));
+          send(id, true, await getPageStructure(host, ctx));
           break;
         }
         case 'platform_op': {

@@ -158,6 +158,20 @@ export interface NodeSkeleton extends ContainerSkeleton {
   effectStyleId?: string;
   componentProperties?: Record<string, shared.ComponentPropertyValue>;
   /**
+   * 组件属性**引用**(0041):本图层由哪个组件属性驱动。与上面那条成对 —— 那条说
+   * 「实例上这个属性等于什么」,这条说「哪个图层会被它改」,写侧选键要看后者
+   * (真机踩过:成对属性里只有连着可见层的那一组会改画面)。
+   *
+   * **同步只读值成员**,与上面几个超集成员同档,0010 的「新增成员一律异步」不适用;
+   * 线格式与槽位归一(`visible`/`characters`/`mainComponent`,吸收 MG 的 `isVisible`)
+   * 见 `schemas/platform.ts` 的 `componentPropertyReferencesSchema`。
+   *
+   * 三平台:有 / 有 / 无 —— Figma `plugin-api.d.ts:6545`、MG `dist/index.d.ts:2406`,
+   * jsDesign `plugin-api.d.ts` 全文零命中(属**接不了**,已登记在
+   * `ui/src/code/jsdesign/sync-guarantee.ts` 的缺席清单)。
+   */
+  componentPropertyReferences?: shared.ComponentPropertyReferences;
+  /**
    * 变量绑定(仅 Figma 运行时存在,其余平台恒 undefined)。**同步只读值成员**,
    * 不是能力签名 —— 故 0010 的「新增成员一律异步」不适用(与上面几个 Figma 超集
    * 成员同档);且 Figma typings 只有同步变体。键 = 写侧 `boundProperty` 的同一套词汇,
@@ -322,6 +336,26 @@ export interface DesignHost {
   getLocalTextStylesAsync?(): Promise<readonly StyleSummary[]>;
   getLocalEffectStylesAsync?(): Promise<readonly StyleSummary[]>;
   getLocalGridStylesAsync?(): Promise<readonly StyleSummary[]>;
+  /**
+   * 本地变量枚举(0039,仅 Figma 运行时存在)。**可选**:没有这个面的平台不实现即可,
+   * Access 层按 `typeof` 探测,取不到返回空数组(不报错)。
+   *
+   * 名字带 `Async` 是契约纪律(0010),不是平台事实:Figma 侧的同步入口
+   * `variables.getLocalVariables()` 在 manifest 声明 dynamic-page 时必抛,
+   * 本仓只接异步那条(同 `getLocalVariableCollectionsAsync` 的处理)。
+   *
+   * 三平台缺席理由**不同**,别一句话糊过去(0032 的三域事实表是唯一真源):
+   * - Figma:读写都通 ⇒ 实现(`figma.variables.getLocalVariablesAsync`,adapter 把
+   *   `Variable` 投影成 {@link shared.AssetRef});
+   * - MG:真源在命名空间下(`mg.variables.getVariables()`)⇒ adapter 投影实现(0039)。
+   *   写侧(建集合 / 建变量 / 绑值)本仓仍未接,故 meta 里不 claim 变量能力位;
+   * - jsDesign:typings 全文**没有任何** variable 声明(实测 `grep -in variable` 零命中)
+   *   ⇒ 结构上接不了,与 MG 那种「有面但写侧没接」不是一回事。
+   *
+   * 所以本成员是**可选**而不是「按平台返回空」:探测判据是 `typeof`,不是平台名 ——
+   * core 不认识平台,也不该认识(0022)。
+   */
+  getLocalVariablesAsync?(): Promise<readonly shared.AssetRef[]>;
   on(event: string, handler: (...args: unknown[]) => void): void;
   /**
    * 宿主键值存储(0016 的语言选择持久化)。两平台符号同名同签名:

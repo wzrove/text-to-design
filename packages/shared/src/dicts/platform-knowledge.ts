@@ -72,11 +72,13 @@ export type ReadShape = 'map' | 'array';
  */
 export interface DomainFact {
   /**
-   * 读路径:节点序列化里的字段名。`null` = 该平台读不到该域的事实
-   * (不是「还没写」,是 typings 里就没有对应声明)。
+   * 读路径:本仓**已接**的读出口。两种形态都登记在这一列 ——
+   * 节点序列化里的字段名(Figma 的 `boundVariables`),或本仓接上的枚举 API
+   * (MG 的 `mg.variables.getVariables()`,供 `get_page` 的资源清单用)。
+   * `null` = 该平台读不到该域的事实(不是「还没写」,是 typings 里就没有对应声明)。
    */
   readonly read: string | null;
-  /** 读路径的原生形态(仅 `read` 非空时有意义;仓内读出口已归一成 map) */
+  /** 读路径的原生形态(`map` = 键值表;`array` = 原生给数组)。仅 `read` 非空时有意义 */
   readonly readShape: ReadShape | null;
   /**
    * **已接**的写入入口:本仓工具名或 platformOp 名(按推荐调用序)。
@@ -167,17 +169,25 @@ export const PLATFORM_KNOWLEDGE: Readonly<
     },
   },
   figma: {
-    // 变量:读有(boundVariables,0024),写走两个 platformOp。三平台里唯一一处读+写都通的。
+    // 变量:两条读出口 + 两个写 op。`read` 是**两个**通道(Figma 比另两家多一条):
+    // ① 节点上的绑定(`boundVariables`,0024,与写侧 `boundProperty` 同源词汇);
+    // ② 0040 补的**库存面** `figma_variables_list`(集合 / 模式 / 值)—— 此前没有它,
+    //    「有哪些变量、值是多少」在画布上根本没有出口,绑变量前只能靠猜 id。
+    // `readShape` 描述的是①(键值表);②返回数组。这个字段是粗粒度提示,两级形态并列时
+    // 以注释为准 —— 若将来第三家也要挂读 op,该把「读 op 名单」拆成独立字段(见 0040「退出条件」)。
     variables: {
-      read: 'boundVariables',
+      read: 'boundVariables / figma_variables_list',
       readShape: 'map',
       write: ['figma_variables_create', 'figma_variables_apply'],
-      nativeUnwired: [],
+      nativeUnwired: [
+        'Variable.setValueForMode / rename / remove(改变量值与生命周期,本仓未接)',
+        'VariableCollection 的模式增删改名(addMode / renameMode / removeMode)',
+      ],
       fallback: null,
       evidence: [
-        'packages/ui/src/code/figma/ops.ts:390 figma_variables_create',
-        'packages/ui/src/code/figma/ops.ts:398 figma_variables_apply',
+        'packages/ui/src/code/figma/ops.ts figma_variables_create / figma_variables_apply(0040 起带 unbind)/ figma_variables_list',
         'packages/shared/src/schemas/platform.ts:90-118 boundVariables 线格式',
+        `${FIG}:2149 getLocalVariablesAsync / :2160 getLocalVariableCollectionsAsync`,
         'docs/design-decisions/0024-变量绑定进入读路径：boundVariables-按引擎词汇原样透传，不引入归一化层.md',
       ],
     },
@@ -214,22 +224,36 @@ export const PLATFORM_KNOWLEDGE: Readonly<
     },
   },
   mastergo: {
-    // 变量:typings 里有整套 `mg.variables`(集合/Mode/变量),但本仓一个 op 都没接,
-    // 故既不 claim 能力位也不给写入口 —— 与「jsDesign 连 API 都没有」是两种不同的缺席,
-    // 消费方要按这条决定是「提替代路径」还是「提可以接」。
+    // 变量:typings 里有整套 `mg.variables`(集合/Mode/变量)。0039 接了**只读枚举**
+    // (`mg.variables.getVariables()` 经 adapter 投影进 `get_page.assets.variables`),
+    // 0040 又补了**写侧**的两个 op —— 三平台里读写都通的第二个。
+    //
+    // ⚠ 这组 op 的**槽位取值**在 typings 里全是裸 `string`,没有任何文档注释可依;
+    // 唯一依据是官方文档 https://developers.mastergo.com/apis/variables(「变量管理」
+    // 「变量绑定与解绑」「图层属性变量」三节),已逐值登记进 `ops.ts` 的 `VARIABLE_SLOTS`。
+    // 另外两处文档与 typings 不一致也记在那边:①文档的 `PluginVariableType` 表少一个
+    // `SPACING`;②`setVariableValue` 的 `modeId` 文档可选、typings 必填(本仓按 typings 走)。
+    //
+    // 与「jsDesign 连 API 都没有」仍是两种不同的缺席:那边只能提替代路径,这边是「可以接、
+    // 大部分还没接」—— 未接项见 `nativeUnwired`(模式/分组/别名/作用域/一步建绑)。
     variables: {
-      read: null,
-      readShape: null,
-      write: [],
+      read: 'mg.variables.getVariables()',
+      readShape: 'array',
+      write: ['mg_variables_create', 'mg_variables_apply'],
       nativeUnwired: [
-        'mg.variables.createCollection / getCollections / getCollectionById / deleteCollection / renameCollection / moveCollection',
-        'mg.variables 的 Mode 相关入口',
+        'mg.variables 的 Mode 管理:addMode / renameMode / deleteMode / setVariableMode / setPageVariableMode(读侧已给 getModes,见 mg_list_variables)',
+        'mg.variables 的分组管理:getGroupList / createGroup / addVariablesToGroup / removeVariablesFromGroup / renameGroup / disbandGroup / deleteGroup',
+        'mg.variables.createVariableInLayer(一步建变量 + 绑图层;与 create + apply 的组合重叠,未接)',
+        'mg.variables.setVariableReference / unlinkVariable(变量引用变量、跨类型别名与复合样式变量的子属性引用)',
+        'mg.variables 的作用域与代码语法:setVariableScopes / setCodeSyntax / getVariableIndexes / addVariableValue(复合变量补子项)',
       ],
       fallback: null,
       evidence: [
         `${MG}:1522 readonly variables: VariableAPI`,
         `${MG}:1098-1108 VariableAPI(Collection / Mode)`,
-        'packages/ui/src/code/mastergo/meta.ts:15 typings 里有但没 op 实现,claim 等于空口',
+        `${MG}:1176 getVariables() / :1874 Variable{id,name,…}`,
+        'packages/ui/src/code/mastergo/ops.ts 三个变量 op 与槽位表(官方文档 URL 见该文件头注释)',
+        'packages/ui/src/code/mastergo/meta.ts capabilities 声明 variables(0040 起)',
       ],
     },
     // 组件:读侧由门面投影成契约形状(原生是数组),写侧有 mg_add_component_property;

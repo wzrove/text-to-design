@@ -8,7 +8,9 @@ import type {
   SerializedNode,
 } from '../schemas';
 import { listStylesAsync, resolveNodes } from './access';
+import { hostCapabilityState } from './capabilities';
 import type { DesignHost } from './host';
+import type { RuntimeContext } from './runtime';
 import { serializeNode } from './serialize';
 
 /**
@@ -135,10 +137,24 @@ export async function listFonts(
 /**
  * 本地样式枚举:两平台 API 同构(PAINT/TEXT/EFFECT/GRID),getter 缺失时跳过。
  * dynamic-page 下同步 getter 会抛,故走 Access 层的异步入口(0011)。
+ *
+ * 未声明 `styleEnumeration` 能力的平台恒回空清单(0043):同步 getter 不可中断,
+ * 问了不回答就等于把整条调用冻死 —— 所以判断必须在调用前由**能力声明**做出,
+ * 而不是靠筛选参数少问几类(0042 的 `kinds` 探针已随 0043 摘掉)。
  */
-export async function listStyles(host: DesignHost): Promise<ListStylesResult> {
+export async function listStyles(
+  host: DesignHost,
+  ctx: RuntimeContext,
+): Promise<ListStylesResult> {
   const styles: ListStylesResult['styles'] = [];
-  for (const s of await listStylesAsync(host)) {
+  if (hostCapabilityState(ctx, 'styleEnumeration') === false) {
+    return {
+      styles,
+      count: 0,
+      note: '本平台未声明本地样式枚举能力,清单恒空:这不代表文档里没有样式(按 id 应用样式仍可用),只是列不出来',
+    };
+  }
+  for (const s of await listStylesAsync(host, ctx)) {
     styles.push({
       id: s.id,
       name: s.name,

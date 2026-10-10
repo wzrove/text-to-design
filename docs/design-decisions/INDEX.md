@@ -22,7 +22,12 @@
 | [0036](0036-删掉内置图表编译器：图表一律走代码生成-SVG-再导入配方.md) | 删掉内置图表编译器：图表一律走代码生成 SVG 再导入配方 | 已采纳（类型检查 + 全量 vitest + 三平台构建通过；配方不点名图形库、配色指向画布既有变量；真机待验项沿 0035：SVG 的 `path`/`C`/`circle` 保真、`<text>` 字体回落） | `shared/`（删 `schemas/chart.ts`、删 `dicts/chart.ts`、出口各摘一条、i18n 少一键）、`mcp-server/`（删 `src/charts.ts`、`tools/chart.ts`、`smoke-chart.ts`、`__tests__/chart.test.ts`、`tools/index.ts` 注册、`tools/prompts.ts` 配方重写、`tools/create.ts` 描述）、两个 `README.md` | 2026-10-09 |
 | [0037](0037-提示反馈收口：页头改用-daisyUI-tooltip，操作结果统一走-toast-出口.md) | 提示反馈收口：页头改用 daisyUI tooltip，操作结果统一走 toast 出口 | 已采纳（类型检查通过；真机待验：气泡宽度/贴边、toast 层级与连点去重） | `ui/`（新增 `components/{Tooltip,Toast}.tsx`、`utils/toast.ts`，`index.css` 加一条气泡宽度规则；页头四组件 + `App.tsx`；`SelectionCard` / `ConnectionHint` / `LogDrawer` 的复制反馈）、`shared/`（i18n 增 2 键、删 2 键） | 2026-10-10 |
 | [0038](0038-版本升级提示：daemon代查npm-latest，页头条件挂载升级入口，Modal给分步清单与复制给LLM.md) | 版本升级提示：daemon 代查 npm latest，页头条件挂载升级入口，Modal 给分步清单与复制给 LLM | 已采纳（类型检查 + 守卫/比较单测 + i18n 门禁通过；真机待验：按钮出现时机、Modal 与焦点归还、registry 不可达时不提示） | `shared/`（新增 `version-channel.ts`、i18n 增键）、`mcp-server/`（新增 `version-check.ts`，`bridge.ts` 加推送、`daemon/run.ts` 起周期）、`ui/`（`vite.config.ts` 注入 `__APP_VERSION__`、新增 `utils/version.ts` 与 `components/{UpgradeButton,UpgradeModal}.tsx`、bridge 四处、`App.tsx`） | 2026-10-10 |
+| [0039](0039-get_page-收窄为顶层几何加资源清单：复用既有契约成员，变量走可选入口.md) | `get_page` 收窄为「顶层几何 + 资源清单」：复用既有契约成员，变量走可选入口 | 已采纳（**2026-10-10 即时设计真机三轮已验并据此修订**：跨页读必挂 25s ⇒ 按能力位 `documentScopeRead` 收口为只扫当前页（符号判据那版被真机推翻：该符号运行时存在且永不返回）；样式那半归 0043。**复验通过**：`get_page` 42ms、`find scope=document` 25ms、`list_styles` 8ms。Figma / MG 变量清单与 MG 能否读非当前页待验） | `shared/`（`schemas/results.ts` 出参改形状、`schemas/derived.ts` 加 `AssetRef`、`core/{host,access,nodes}.ts`、新增 `core/assets.ts`、`core/index.ts` 出口、`dicts/platform-knowledge.ts` 的 MG 变量读路径、i18n `getPage.description` 两语言）、`ui/`（`code/figma/host.ts` 与 `code/mastergo/{host,meta}` 加变量投影、三侧 `sync-guarantee.ts` 缺口/投影登记）、`mcp-server/`（`tools/{resources,platform-facts}.ts`、`README.md` 两行） | 2026-10-10 |
 
+| [0040](0040-MG-变量读写接入-platformOps：op-形制对齐-Figma，槽位取值以官方文档为据.md) | MG 变量读写接入 platformOps：op 形制对齐 Figma，槽位取值以官方文档为据 | 已采纳（三包类型检查通过，含两组新增编译期断言；真机待验：建值/绑槽位/解绑/错槽位点名，见记录「验证」节） | `ui/`（`code/mastergo/{ops,meta,sync-guarantee}.ts`）、`shared/`（`dicts/{platform-knowledge,capability}.ts`）、`mcp-server/`（`tools/{platform-facts,prompts}.ts`、`README.md`） | 2026-10-10 |
+| [0041](0041-组件属性两处静默缺口：写侧键归一回-core，读侧暴露图层引用.md) | 组件属性两处静默缺口：写侧键归一回 core，读侧暴露图层引用 | 已采纳（三包类型检查通过 + 新增 9 例单测通过；真机待验：短名能命中完整键、`jsd_find` 能读到 `componentPropertyReferences`、MG 侧输出 `visible` 而非 `isVisible`） | `shared/`（`core/{component,serialize,host}.ts`、`schemas/{platform,serialized-node,split-ops}.ts`、新增 `__tests__/component-property-keys.test.ts`）、`ui/`（`code/jsdesign/sync-guarantee.ts` 缺口登记）、`mcp-server/`（`tools/{prompts,components}.ts`）、`.changeset/component-property-gaps.md` | 2026-10-10 |
+| [0042](0042-本地样式枚举按类拆分：同步-getter-不可中断，单类入口兼作定位探针.md) | 本地样式枚举按类拆分：同步 getter 不可中断，单类入口兼作定位探针 | 已采纳（**「四类 = 四次独立调用」保留**；探针那一半 —— `kinds` 筛选与 `jsd://styles/{kind}` —— 已随 0043 同批摘掉） | `shared/`（新增 `dicts/style-kind.ts`、`schemas/{inputs,results}.ts`、`core/{access,export}.ts`、`dicts/index.ts`、新增 `__tests__/list-styles.test.ts`）、`ui/`（`code/plugin.ts`）、`mcp-server/`（`tools/resources.ts` 新增 `jsd://styles/{kind}`） | 2026-10-10 |
+| [0043](0043-样式枚举拆出独立能力位：get_page-与-jsd-styles-按平台声明返空.md) | 样式枚举拆出独立能力位：`get_page` 与 `jsd://styles` 按平台声明返空 | 已采纳（三包类型检查通过 + 8 例单测通过；**即时设计真机已验**：`jsd://styles` 11ms / 8ms 返空带 `note`（原 25s 超时）；`get_page` 剩的跨页那一半已由 0039 修订接走并复验通过（42ms）。MG 侧声明待验） | `shared/`（`dicts/capability.ts` 新增 `styleEnumeration`、i18n 两键、`schemas/results.ts` 加两处 `note`、`core/{access,export,assets,nodes}.ts` 的 ctx 透传与闸、新增 `__tests__/assets-capability.test.ts`、`list-styles.test.ts` 补 3 例）、`ui/`（三侧 `meta.ts`、`code/plugin.ts`）、`mcp-server/`（`tools/resources.ts` 描述 + 摘掉 `jsd://styles/{kind}`） | 2026-10-10 |
 
 ## 依赖关系
 
@@ -96,6 +101,34 @@
                         面板直连在 Figma 必被挡；「一个事实一份」沿 0008/0009/0032，推送帧形状照 0033 的旁路消息；
                         浮层不进流沿 0014，文案键化沿 0016，复制反馈沿 0037 的 `copyWithToast`；
                         查询失败「不提示」而非报错，是 0007「不允许静默失效」的另一半：留痕但不给错的结论
+0039 (get_page 收窄) ── 不引模式（Strategy/Factory 撞 0009/0032「一个事实一份」、拆工具撞 0020/0006）；
+                        跨页读门控沿 0011（`ensurePagesLoaded` 幂等）、新契约成员的可选+缺口登记形制沿 0010/0017/0028；
+                        资源枚举复用契约既有成员（`findAllWithCriteria`）与 `core.listStyles`，不造第三条通路；
+                        MG 变量的「命名空间投影」照 0017 的门面投影取向（符号在 `mg.variables` 下）；
+                        「工具名与 nodes[].id/x/y 不许动」沿 0003（drift-watch 靠它配对，改名即静默失效）
+0040 (MG 变量读写) ── 走 0020 的第二档（platformOps 通道，不新造工具族，且平台 op 不进工具目录 ⇒ 不撞 0006）；
+                        op 形制沿 0019/0033，写完回读沿 0018/0007（本平台有「回包成功、值没变」前科）；
+                        槽位取值 typings 无据，以官方文档为唯一依据并落表 + 入参点名（0034 的越界字段点名）；
+                        平台句子从配方挪进「投影点」沿 0022/0032（原配方硬写 Figma 词汇，会让 MG 调用方拿到错参数名）；
+                        与 0039 是同一件事的两半：它接只读枚举，这里接写侧
+0041 (组件属性两处缺口) ── 不引模式：写侧键归一是「一份形态知识只写一处」缺掉的下半格（0023 收了**值**形态，
+                        键形态从没归属；三处文档却已承诺归一）；
+                        读侧槽位归一到一套词汇沿 0025（原样透传会把刚藏起来的 Figma `visible` / MG `isVisible` 重新暴露）；
+                        两条都落在 0007 上：歧义点名不猜、回读要读**可见层**而不是 `componentProperties` 的回显；
+                        「通道不新造」沿 0040 —— 写归一进 core 的既有入口，读引用走既有序列化字段
+0042 (样式枚举按类拆分) ── 不引模式：把「四类」还原成**四次独立调用**（此前被当成一次批量查询，而同步
+                        getter 不可中断 ⇒ 任一个不返回就拖死全部）；
+                        返空不作为默认，沿 0007 —— 与变量面「平台没有该 API」必须区分：前者不需要问就知道是空，
+                        后者是问了没回音，静默空等于假结论；
+                        「单类出口兼作探针」是为 0039 的回归（`get_page` 把样式枚举带进了默认路径）找证据，
+                        证据没到之前不改 `get_page` 的默认路径
+0043 (样式枚举能力位) ── 不引模式：`typeof` 存在性探测答不了「问了没回音」（即时设计四个 getter 全在、
+                        永不返回），判据只能是**平台声明** ⇒ 拆 `styleEnumeration` 与「按 id 应用样式」的
+                        `styles` 分开（合成一位正是 0039 那次事故的机制）；
+                        声明与机制分开沿 0029/0032（能力位本身是既有机制，摘一行即可改，不必动判据），
+                        ctx 注入沿 0002（读路径首次用它，注入点仍是插件那一个）；
+                        「空数组必须点名成因」沿 0007 —— 与 0042 的「返空即撒谎」是同一条的两种兑现：
+                        0042 拒绝在证据前返空，0043 拿到判据后返空但带 `note`
 ```
 
 更早的记录（0001–0024）见 [`INDEX-2026.md`](INDEX-2026.md)。

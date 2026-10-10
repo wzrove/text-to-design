@@ -1,4 +1,5 @@
 import type {
+  ComponentPropertyReferences,
   Paint,
   SerializedNode,
   SerializedNodeType,
@@ -11,6 +12,41 @@ export const MAX_SERIALIZE_DEPTH = 2;
 
 function isMixed(v: unknown): v is typeof MIXED {
   return typeof v === 'string' && (v as string) === MIXED;
+}
+
+/**
+ * 引用槽位名归一到一套词汇(0041):Figma 原生叫 `visible`,MG 原生叫 `isVisible`。
+ * 不做这层归一,读路径就会把 0025 刚决定藏起来的「两套词汇」重新暴露出去。
+ */
+const REFERENCE_SLOT_ALIASES: Record<
+  string,
+  keyof ComponentPropertyReferences
+> = {
+  visible: 'visible',
+  isVisible: 'visible',
+  characters: 'characters',
+  mainComponent: 'mainComponent',
+};
+
+/**
+ * 把引擎给的 `componentPropertyReferences` 整成线格式。
+ *
+ * 值是属性的**完整键**,原样保留 —— 它就是写侧要传的那个键(读写字形一致,同 0024
+ * 对 `boundVariables` 的纪律)。空值 / null 一律丢掉,使「键在 = 至少有一条引用」
+ * 成为可直接依赖的判据;认不出的槽位名也丢掉,不让引擎新增的槽位漏进线格式。
+ */
+function normalizePropertyReferences(
+  raw: unknown,
+): ComponentPropertyReferences {
+  const out: ComponentPropertyReferences = {};
+  if (raw == null || typeof raw !== 'object') return out;
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    const slot = REFERENCE_SLOT_ALIASES[key];
+    if (slot == null) continue;
+    if (typeof value !== 'string' || value.length === 0) continue;
+    out[slot] = value;
+  }
+  return out;
 }
 
 export function trySerialize(
@@ -366,6 +402,21 @@ export function serializeNode(
   }
   if ('componentProperties' in node && node.componentProperties != null) {
     base.componentProperties = { ...node.componentProperties };
+  }
+  // 组件属性**引用**(0041):某图层的哪个槽位由哪个组件属性驱动 —— 与上面那条成对
+  // (那条说「实例上属性等于什么」,这条说「哪个图层会被它改」)。真机踩过:属性成对
+  // 存在(`摘要`/`摘要2`)时只有连着可见层的那一组会改画面,写错那组「回包成功、画布
+  // 不动」—— 读路径里没有这层关系,调用方就只能靠试。摘要字段:平台没有该声明
+  // (jsDesign)或 getter 抛就只丢它,绝不掀翻整份序列化。
+  try {
+    if ('componentPropertyReferences' in node) {
+      const refs = normalizePropertyReferences(
+        node.componentPropertyReferences,
+      );
+      if (Object.keys(refs).length > 0) base.componentPropertyReferences = refs;
+    }
+  } catch {
+    // 引擎 getter 抛:该字段省略,其余字段照常回传
   }
   // 变量绑定(仅 Figma):键就是写侧 figma_variables_apply 的 boundProperty 词汇,
   // 故整对象原样透传,不归一、不改名 —— 写后回读比的就是同一个 variableId(0024)。

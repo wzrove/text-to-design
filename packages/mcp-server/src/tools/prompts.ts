@@ -12,6 +12,10 @@ import type { McpI18n } from '../i18n';
 import { getPlatformState } from '../platform-state';
 import {
   componentWriteText,
+  reuseGuideText,
+  variableBindBulkText,
+  variableBindShapeText,
+  variableBindVerifyText,
   variableFaceText,
   variantStrategyText,
 } from './platform-facts';
@@ -400,12 +404,17 @@ export function designStrategyRecipe(
     platform,
     platform == null ? null : claims(DOMAIN_CAPABILITY.variants),
   );
+  // 复用入口按平台给(句子在 platform-facts,配方只拼接)
+  const reuseGuide = reuseGuideText(platform);
   return `# 画布创作纪律
 
-1) 先摸底再动手:jsd_get_selection(depth=2) 看现状(名称/类型/尺寸/填充/子结构),已有节点用 jsd_find 精确定位,不要重复创建同名元素。
+0) **先查可复用件,再动手**(设计类任务的第一步,别跳):\`jsd_get_page\`(等价资源 \`jsd://page\`)给的是**设计系统资源清单** —— 看 \`assets.summary\` 一眼判断这文档有没有现成的件,再按类取 id 复用。**命中就复用,禁止新建重复件**:同名/同用途的组件、同状态的变体取值、已有的颜色/文字/效果样式、已有的变量,**一律先用现成的**;清单里确实没有,才允许新建(新建出来的件请按「组件族/状态」命名,方便下一次被复用)。
+   复用入口:
+${reuseGuide}
+1) 再摸底:jsd_get_selection(depth=2) 看现状(名称/类型/尺寸/填充/子结构),已有节点用 jsd_find 精确定位,不要重复创建同名元素。
 2) 结构分层,调用分批:**成品该多深就多深** —— 屏 → 语义分区 → 卡片 → 卡内图元,四层都要建出来,别只做到「屏 + 分区」就收手。受限的只是**单次调用的传参方式**:children 只用于「容器 + 其直属子节点」这类小结构,别在一次 create 里塞整棵树(易整批失败);分层分批用 jsd_batch 编排多个 per-type create 步骤,每批建完即用 jsd_reparent_nodes 归到父容器。
 3) 命名语义化:用「登录页 / Logo 容器 / 邮箱输入 / 主按钮」这类说明用途的名字,不用「矩形 1」「Frame 2」;同一批元素命名风格保持一致。
-3.5) 抽组件:同类单元 ≥2 个且结构一致(按钮 / 输入框 / 列表项 / 图标底)先提 COMPONENT、再用 INSTANCE 铺开,别逐个复制;命名走「组件族/状态」。
+3.5) 抽组件:**先回第 0 条的清单**——已有同族组件就直接 jsd_create_instance 铺开,别新建重复组件;要切状态先看 \`assets.variants[].properties\` 里有没有现成取值。清单里确实没有、且同类单元 ≥2 个且结构一致(按钮 / 输入框 / 列表项 / 图标底)时,才提 COMPONENT、再用 INSTANCE 铺开,别逐个复制;命名走「组件族/状态」。
 4) 归组后再布局:**元素不许直挂屏根** —— 屏内每个语义分区(侧栏 / 顶栏 / 筛选条 / KPI 行 / 每张卡片)各自是一个容器,卡片内部的图元再按语义编组(GROUP:坐标轴 / 网格 / 数据系列 / 图例各一组)。一层不套、几十个元素平铺是后续最难改的形态,别走这个极端。做法:先建容器与元素,再用 jsd_reparent_nodes 逐层归入(**parentId 显式传目标容器 id**,别依赖「当前选中第一个」的缺省值;跨父级移动会保持节点绝对位置,不用手动摆回 x/y,移入 auto-layout 容器时位置交给布局);auto-layout(layoutMode/itemSpacing/padding*/primaryAxisAlignItems 等)最后用 jsd_set_layout 单独设,别在建节点时混着传。
 5) 间距与字号阶梯:主标题 > 正文标签 > 按钮文本 > 辅助说明;同级元素间距一致,用 itemSpacing 统一控制,不靠手调坐标凑。**长段落要换行**:TEXT 缺省按内容撑开(textAutoResize 缺省 WIDTH_AND_HEIGHT),只给 width 会被引擎改成 NONE 且高度不随内容重算 —— 要固定宽+自动换行传 width + textAutoResize:"HEIGHT",要固定框尺寸传 "NONE"。**字体取 jsd_list_fonts 的 fonts[] 成对值**:family 用 fonts[].family 原样(如 SourceHanSansCN_family),style 用同一项的全名(如 SourceHanSansCN-Bold,不是简称 "Bold")—— 写错会被静默忽略、退回默认字面,结果 warnings 会点名。
 6) 视觉顺序:自上而下按阅读顺序排布,主操作按钮放在输入项之后,次要链接(忘记密码/注册)放最后。
@@ -501,12 +510,11 @@ export function variableBindingRecipe(
   const howto = hasWrite
     ? `## 3. 批量绑定别逐个往返
 - 建变量时**一次传完**变量列表(失败整体回滚),拿到 collectionId 与 variables[].id;
-- 绑定一次传 \`nodeIds\` 多个节点 + \`boundProperty\` + \`variableId\`,不要一个节点一次调用;
+${variableBindBulkText(platform)}
 - 整条链(建变量 → 绑定 → 回读复核)合并进 jsd_batch,中间 id 用 {{步骤id.字段路径}} 占位符,不回传模型。
 
 ## 4. 复核(写后必须回读)
-- 回读节点上的绑定,比对里面的 variableId 与你要绑的是同一个 —— **回显成功不等于绑上了**;
-- 涉及视觉的改动再 jsd_export({ids:[节点id], scale:0.5}) 导小图目检一次;
+${variableBindVerifyText(platform)}
 - 结果的 warnings 一律读:绑定类字段被忽略时会在这里点名。`
     : `## 3. 本平台没有可用的变量入口,本节跳过
 - 别去试变量 op(daemon 会拦成 platform_unsupported,白跑一趟往返)。
@@ -515,8 +523,7 @@ export function variableBindingRecipe(
 ## 4. 复核
 - 若文档里本来就有绑定(别的平台建的),回读时按字段名比对;本平台读不到绑定字段时,结果里不会出现该键,别把「没有该键」当成「绑定丢了」。`;
   const existsLine = hasWrite
-    ? `- 读路径就是写侧的 \`boundProperty\` 词汇,值里的 id **可直接回喂**写入口,不用改名、不用补名称。
-- 引擎口径原样保留:有**独立圆角**的节点上,圆角绑定会表现为 topLeftRadius / topRightRadius / bottomLeftRadius / bottomRightRadius 四条(不归一成 cornerRadius)。`
+    ? variableBindShapeText(platform)
     : '- 本平台的读侧也不提供绑定字段,所以下面讲的字段形状只在有变量面的平台上成立 —— 看一眼知道有这回事即可,别在本平台找它。';
   return `# 变量绑定与批量套用(${scope})
 
@@ -524,7 +531,6 @@ export function variableBindingRecipe(
 - ${face}
 
 ## 2. 摸清现状再动手
-- 读节点上的变量绑定(字段名见上一节):键是引擎的可绑定字段名,值的三态由引擎决定 —— 标量字段是单个别名;fills / strokes / effects / layoutGrids / textRangeFills 是别名数组;componentProperties 是按属性名索引的别名表。**键在 = 至少有一条绑定**(无绑定或平台不提供该字段时整个键省略)。
 ${existsLine}
 
 ${howto}`;
@@ -601,7 +607,8 @@ ${valueHint}
 ## 4. 读属性名与可选值
 - 先 jsd_find / jsd_get_selection 读:取值读 \`variantProperties\`,组件属性读 \`componentProperties\`(读不到的平台上只有前者);
 - 可选值读**组件集**上的 \`variantGroupProperties\`(属性名 → 可选值集合);
-- 属性名必须与读到的键**完全一致**;宿主侧键可能是属性 id(如 Property 1#1:0),门面会自动归一,传名字即可。
+- **变体属性传名字**(如 \`{"状态":"禁用"}\`);**组件属性(布尔/文本/换绑)传带 \`#\` 后缀的完整键**(如 \`标题#32:0\`)—— 组件属性在引擎侧只认完整键,短名会报 \`Could not find a component property with name\`(Figma 真机实测,TEXT/BOOLEAN/INSTANCE_SWAP 三类都一样;免后缀只对**变体属性**成立,那是另一张表)。传短名时 core 只在基名**唯一**命中时替你补全,有歧义直接报错并列出候选 —— 别指望它猜;
+- **选键之前先读 \`componentPropertyReferences\`**:它标明「**哪个图层由哪个属性驱动**」,这是判断该写哪个键的唯一一手事实(见第 6 节)。
 
 ## 5. 批量设值
 - jsd_set_instance_properties 的 ids 一次传多个同类实例;要把整套覆盖从源实例复制到一批目标用 jsd_sync_overrides;
@@ -609,6 +616,7 @@ ${valueHint}
 
 ## 6. 复核
 - 回读 componentProperties / variantProperties 的 value 与期望比对 —— 写后回读才算验收;
+- ⚠ **回读通过 ≠ 画面变了**:属性可能成对存在(\`摘要\`/\`摘要2\`、\`显示铃铛\`/\`显示铃铛2\`),只有**连着可见图层**的那一组会改画面 —— 写错那组时\`componentProperties\` 全部回读为新值、回包 \`ok=true\`,画布却纹丝不动(Figma 真机实测)。所以第 4 节要先读 \`componentPropertyReferences\` 认准连着可见层的是哪一组,写完再用 jsd_find **深度读节点的实际内容 / 可见性**复核,别只看 \`componentProperties\` 的回显;
 - 实例子节点(INSTANCE 内)的样式覆盖不保证渲染生效:命中时结果 warnings 会给出主组件里对应子节点的 id,改主组件即全实例继承;
 - warnings 一律读:被忽略的字段、回读不一致(fontName 字重降级等)都在那里点名。`;
 }

@@ -39,6 +39,17 @@ export const HOST_CAPABILITY_SPEC = {
     props: ['fillStyleId', 'strokeStyleId', 'textStyleId', 'effectStyleId'],
     labelKey: 'capability.host.styles',
   },
+  // 本地样式**清单**的枚举(get_page 的 assets.styles 与 jsd://styles)。
+  //
+  // 与上面的 `styles` 是**两件事**:那条管「能不能按 id 应用样式」,这条管「能不能列出
+  // 有哪些样式」。拆开是 0043 的结论 —— 即时设计 claim 了 `styles`(按 id 应用正常),
+  // 但四个 `getLocal*Styles` 一个都不返回(同步 getter 不可中断,调用即冻死线程)。
+  // 合成一条,「有样式能力」就会把「能列清单」一起假定下来,而这一假定正是让
+  // `get_page` 在即时设计上全废的原因。
+  styleEnumeration: {
+    kind: 'flow',
+    labelKey: 'capability.host.styleEnumeration',
+  },
   // 文本截断与最大行数(仅 TEXT;类型不匹配的判定见 core/capabilities.ts)
   textTruncation: {
     kind: 'propGate',
@@ -55,17 +66,33 @@ export const HOST_CAPABILITY_SPEC = {
   // 为什么不删:它没有重复物 —— 「这个平台有变量能力面」是独立声明;core 不据此判定
   // 字段,属展示位。
   //
-  // ⚠ 三平台**缺的形态不同**,别一句话糊过去(逐个核对 typings,2026-09-29):
+  // ⚠ 三平台**缺的形态不同**,别一句话糊过去(逐个核对 typings,2026-09-29;MG 侧 2026-10-10 接上读写):
   //   - Figma:读写都通(读 boundVariables,写两个 platformOp)⇒ 声明;
-  //   - MG:typings 里有整套 `mg.variables`(集合 / Mode),但本仓一个 op 都没接
-  //     ⇒ 不 claim(claim 等于空口)—— 属「**可以接、还没接**」;
+  //   - MG:typings 里有整套 `mg.variables`(集合 / Mode / 变量),0040 起本仓接了
+  //     只读枚举 + 建变量 + 绑定图层属性三个 op ⇒ 声明(claim 的含义是「有变量能力面」,
+  //     而写入口真接上了,不再是空口);模式/分组/别名等旁支未接,登记在 nativeUnwired;
   //   - jsDesign:`@jsdesigndeveloper/plugin-typings@1.0.12` 全文**没有任何** variable
-  //     声明(grep -in variable 零命中)⇒ 属「**接不了**」,与 MG 那种缺席不是一回事。
+  //     声明(grep -in variable 零命中)⇒ 属「**接不了**」,与 MG 那种「可以接」不是一回事。
   // 三域的完整事实(读路径 / 写入口 / 替代路径 / 证据行号)在
   // `dicts/platform-knowledge.ts`,那是唯一真源;本文件只回答「这条能力位叫什么、门控谁」。
   variables: {
     kind: 'channel',
     labelKey: 'capability.host.variables',
+  },
+  // 文档范围读:能不能读**非当前页**(跨页遍历、`get_page` 的资源清单与 pages 元数据)。
+  //
+  // 与 0011 的 `loadAllPagesAsync` 是**两件事**,别再拿符号存在性当判据:
+  // 即时设计的 typings 是 Figma API v1 update 40 的 fork(没有该声明),但运行时
+  // `Object.create(native)` 会把原生成员整个透出来 —— 实测该符号**存在且永不返回**:
+  // 2026-10-10 真机 `find scope=document` 25008ms `forward_timeout`,而当前页 find
+  // 只要 44ms。同步调用不可中断 ⇒ 判据只能是声明,这是 0042 那个坑的第二次出现。
+  //
+  // 三平台:Figma 声明(真有 dynamic-page 且能加载);即时设计不声明(实测挂死);
+  // MasterGo 同样不声明 —— 它也没有该入口,且**未真机验过能否跨页**,按保守默认收口,
+  // 验过能跨页再单独放开这一位。
+  documentScopeRead: {
+    kind: 'flow',
+    labelKey: 'capability.host.documentScopeRead',
   },
   // 行为型:原生 combineAsVariants 即**原位合并** —— 并入组件集的就是实例所指的
   // COMPONENT 本身,已有实例链接不断。Figma / MasterGo 声明。

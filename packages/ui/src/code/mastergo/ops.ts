@@ -38,6 +38,12 @@ import {
  *
  * 每个 op 都**写完回读**(本平台有「回包成功、值没变」的前科:变体值那两条入口,见 0018),
  * 对不上就抛错 —— 不把静默失效漏给调用方。
+ *
+ * 变量相关的三条(0040)依据是**官方文档**而非 typings:`mg.variables` 的那一大片方法在
+ * typings 里只有签名、没有一个字的说明,而槽位取值(`strokeProperty: 'all'` 之类)在
+ * 类型上全是裸 `string` —— 照类型猜必然猜错,故按官方文档落表并注明出处:
+ * https://developers.mastergo.com/apis/variables(「变量管理」「变量绑定与解绑」
+ * 「图层属性变量」三节)。文档与 typings 的两处不一致已就地注明(见各自注释)。
  */
 
 /** 可建/可改的组件属性类型(`VARIANT` 由变体集自己产生,不在本组 op 范围) */
@@ -959,10 +965,334 @@ async function deleteVariantProperty(
   return { removed: entry.name, properties: after.map((d) => d.name) };
 }
 
+// ─────── 变量(0040):mg.variables,依据官方文档而非 typings,见文件头 ───────
+
+/**
+ * 变量类型:取值 = typings 的 `VariableType` 全表(`dist/index.d.ts:1832`,12 项)。
+ * ⚠ 官方文档的 `PluginVariableType` 表只列 11 项(**没有 `SPACING`**)—— 文档与 typings
+ * 的这处不一致在本仓按 typings 走(引擎签名以 typings 为准),同宽与否由 `sync-guarantee`
+ * 的双向断言守(`MgVariableType*Check`),所以这份清单改一处就够。
+ *
+ * 前四个是**单值**类型(建的时候可以带 `value`);其余是**复合样式**类型(建出来是空样式,
+ * 文档明说不需要传 value)。
+ */
+export const MG_VARIABLE_TYPES = [
+  'BOOLEAN',
+  'NUMBER',
+  'STRING',
+  'COLOR',
+  'PAINT',
+  'TEXT',
+  'EFFECT',
+  'GRID',
+  'STROKE_WIDTH',
+  'CORNER_RADIUS',
+  'PADDING',
+  'SPACING',
+] as const;
+
+/**
+ * 绑定槽位表:官方文档「属性参数一览」(https://developers.mastergo.com/apis/variables)。
+ *
+ * 为什么非要落表:typings 里这些参数的取值全是裸 `string`,照类型猜一定会写出
+ * `strokeProperty: 'strokeWidth'` 这种不存在的槽位 —— 引擎侧要么静默不生效、要么抛一句
+ * 没有上下文的错。文档给了确切取值,就按文档登记并在错误里点名(0034 的越界字段点名)。
+ */
+const VARIABLE_SLOTS = {
+  baseProperty: ['opacity', 'fillColor', 'visible'],
+  strokeProperty: ['top', 'right', 'bottom', 'left', 'all', 'color'],
+  radiusProperty: ['topLeft', 'topRight', 'bottomRight', 'bottomLeft', 'all'],
+  paddingProperty: [
+    'top',
+    'right',
+    'bottom',
+    'left',
+    'topBottom',
+    'leftRight',
+    'all',
+  ],
+  dimensionProperty: [
+    'width',
+    'height',
+    'maxWidth',
+    'maxHeight',
+    'minWidth',
+    'minHeight',
+  ],
+  effectProperty: ['x', 'y', 'blur', 'spread', 'color'],
+  gridProperty: ['sectionSize', 'count', 'gutterSize', 'offset', 'color'],
+  textProperty: [
+    'fontFamily',
+    'fontWeight',
+    'fontSize',
+    'lineHeight',
+    'letterSpacing',
+    'paragraphSpacing',
+  ],
+} as const;
+
+type SlotKind = keyof typeof VARIABLE_SLOTS;
+
+/**
+ * 槽位键的枚举列表(给 zod 用)。`satisfies` 是**防漂移**的那一环:哪天 `VARIABLE_SLOTS`
+ * 里的键改名/增删,这里编译不过 —— 而不是静默少一个可绑的属性面。
+ */
+const SLOT_KINDS = [
+  'baseProperty',
+  'strokeProperty',
+  'radiusProperty',
+  'paddingProperty',
+  'dimensionProperty',
+  'effectProperty',
+  'gridProperty',
+  'textProperty',
+] as const satisfies readonly SlotKind[];
+
+async function listVariablesOp(
+  _host: DesignHost,
+  params: unknown,
+): Promise<{
+  collections: Array<{
+    id: string;
+    name: string;
+    isExternal: boolean;
+    modes: Array<{ id: string; name: string }>;
+  }>;
+  variables: Array<{
+    id: string;
+    name: string;
+    type: string;
+    collectionId: string;
+    description?: string;
+    /** 各模式下的值(键 = modeId);复合样式变量按子项数组给出,原样透传不归一 */
+    values?: Record<string, unknown>;
+  }>;
+  count: number;
+  truncated?: boolean;
+}> {
+  const p = params as { collectionId?: string; type?: string; limit?: number };
+  const limit = p.limit ?? 200;
+  const filter: { collectionId?: string; type?: never } = {};
+  if (p.collectionId != null) filter.collectionId = p.collectionId;
+  if (p.type != null) filter.type = p.type as never;
+  const all = mg.variables.getVariables(
+    Object.keys(filter).length > 0 ? filter : undefined,
+  );
+  const slice = all.slice(0, limit);
+  return {
+    // 集合恒列全量(它还带模式表,而模式是变量值的索引维度,不是可选信息)
+    collections: mg.variables.getCollections().map((c) => ({
+      id: c.id,
+      name: c.name,
+      isExternal: c.isExternal,
+      modes: c.modes.map((m) => ({ id: m.id, name: m.name })),
+    })),
+    variables: slice.map((v) => ({
+      id: v.id,
+      name: v.name,
+      type: v.type,
+      collectionId: v.collectionId,
+      ...(v.description ? { description: v.description } : {}),
+      values: v.modes as unknown as Record<string, unknown>,
+    })),
+    count: all.length,
+    ...(all.length > slice.length ? { truncated: true } : {}),
+  };
+}
+
+async function createVariables(
+  _host: DesignHost,
+  params: unknown,
+): Promise<{
+  collectionId: string;
+  collectionName: string;
+  variables: Array<{
+    id: string;
+    name: string;
+    type: string;
+    created: boolean;
+  }>;
+}> {
+  const p = params as {
+    collectionName?: string;
+    variables: Array<{
+      name: string;
+      type: string;
+      value?: unknown;
+      description?: string;
+    }>;
+  };
+  if (p.variables == null || p.variables.length === 0) {
+    throw new Error('变量列表为空');
+  }
+  const collectionName = p.collectionName ?? 'Variables';
+  const existing = mg.variables
+    .getCollections()
+    .find((c) => c.name === collectionName);
+  // 文档:createCollection 返回 Promise<Collection>;typings 写着 `Collection | null`,按宽的处理
+  const collection =
+    existing ?? (await mg.variables.createCollection(collectionName));
+  if (collection == null) {
+    throw new Error(`建变量集合失败:宿主没有返回集合(${collectionName})`);
+  }
+  // MG 的 Collection **没有** defaultModeId(与 Figma 不同),只有 modes;
+  // 官方约定「不传 modeId 时用第一个模式」,所以这里显式取第一个并显式传给写入
+  const modeId = collection.modes[0]?.id;
+  const created: Array<{
+    id: string;
+    name: string;
+    type: string;
+    created: boolean;
+  }> = [];
+  try {
+    const before = mg.variables.getVariables({
+      collectionId: collection.id,
+    });
+    for (const v of p.variables) {
+      // 同名同类型就地更新值(幂等补值),避免重复建
+      const same = before.find((x) => x.name === v.name && x.type === v.type);
+      const variable =
+        same ??
+        (await mg.variables.createVariable({
+          name: v.name,
+          type: v.type as never,
+          ...(v.description != null ? { description: v.description } : {}),
+          collectionId: collection.id,
+        }));
+      if (variable == null) throw new Error(`建变量失败:${v.name}`);
+      if (v.value !== undefined) {
+        // typings 里 modeId **必填**、文档里可选 —— 按 typings 走(引擎签名以 typings 为准);
+        // 集合必然带模式,这里取不到就是异常态,点名报错而不是发一次没有模式的值写入
+        if (modeId == null) {
+          throw new Error(
+            `集合「${collection.name}」没有模式,写不了值(变量 ${v.name})`,
+          );
+        }
+        await mg.variables.setVariableValue({
+          id: variable.id,
+          value: v.value as never,
+          modeId,
+        });
+      }
+      created.push({
+        id: variable.id,
+        name: variable.name,
+        type: variable.type,
+        created: same == null,
+      });
+    }
+  } catch (e) {
+    // 只回滚本次新建的集合;复用既有集合时不删 —— 否则会连坐删掉用户已有的变量
+    // (同 figma/ops.ts 的 createVariables 取舍)
+    if (existing == null) mg.variables.deleteCollection(collection.id);
+    throw e;
+  }
+  // 回读:本平台有「回包成功、值没变」的前科(0018),存在性必须再读一次
+  const after = mg.variables.getVariables({ collectionId: collection.id });
+  assertNoProblems(
+    created
+      .filter((c) => !after.some((x) => x.id === c.id))
+      .map((c) => `变量 ${c.name}(${c.id}) 回读不到`),
+    '建/改变量后回读失败',
+  );
+  return {
+    collectionId: collection.id,
+    collectionName: collection.name,
+    variables: created,
+  };
+}
+
+async function applyVariableReference(
+  host: DesignHost,
+  params: unknown,
+): Promise<{
+  applied: string[];
+  failed: string[];
+  collectionId?: string;
+  linkedCollections: Array<{ layerId: string; collectionIds: string[] }>;
+  unverified?: string[];
+  warning?: string;
+}> {
+  const p = params as {
+    nodeIds: string[];
+    variableId?: string;
+    property: SlotKind;
+    value: string;
+    index?: number;
+    unbind?: boolean;
+  };
+  const nodes = await resolveNodes(host, p.nodeIds);
+  if (nodes.length === 0) throw new Error('没有找到要绑变量的节点');
+  const unbind = p.unbind === true;
+  // 解绑不需要变量:unlinkVariableReferenceInLayer 不收 id,语义是「把这个槽位上的绑定摘掉」
+  const variable = unbind
+    ? null
+    : mg.variables.getVariableById(p.variableId ?? '');
+  if (!unbind && (variable == null || p.variableId == null)) {
+    throw new Error(`没有找到变量:${p.variableId ?? '(未给 variableId)'}`);
+  }
+  // 绑定时 id 必给(schema 已守),这里收窄一次供下面用
+  const variableId = p.variableId ?? '';
+  // 槽位按宿主键名原样展开(文档的表就是宿主键名),不在这里改写成别的词汇
+  const slot: Record<string, unknown> = {
+    [p.property]: p.value,
+    ...(p.index != null ? { index: p.index } : {}),
+  };
+  const applied: string[] = [];
+  const failed: string[] = [];
+  for (const n of nodes) {
+    try {
+      if (unbind) {
+        await mg.variables.unlinkVariableReferenceInLayer({
+          layerId: n.id,
+          ...slot,
+        });
+      } else {
+        await mg.variables.setVariableReferenceInLayer({
+          id: variableId,
+          layerId: n.id,
+          ...slot,
+        });
+      }
+      applied.push(n.id);
+    } catch {
+      failed.push(n.id);
+    }
+  }
+  // 回读:MG **没有**「图层属性 ↔ 变量」的反读接口,唯一拿得到的证据是该图层用到了哪些集合
+  // (getLayerVariableModes)。它证明「集合挂上了」,证不了「挂在该属性上」—— 所以绑数组属性
+  // 必须自己给 index,视觉结论交 jsd_export 目视(这条限制写进 op 描述,不留给调用方猜)。
+  const linkedCollections = applied.map((layerId) => ({
+    layerId,
+    collectionIds: mg.variables
+      .getLayerVariableModes(layerId)
+      .map((m) => m.collectionId),
+  }));
+  const collectionId = variable?.collectionId;
+  // 解绑方向不做这条判定:同一个集合可能还被该图层的别的属性用着,「集合还在」不代表没解开
+  const unverified =
+    unbind || collectionId == null
+      ? []
+      : linkedCollections
+          .filter((l) => !l.collectionIds.includes(collectionId))
+          .map((l) => l.layerId);
+  return {
+    applied,
+    failed,
+    ...(collectionId != null ? { collectionId } : {}),
+    linkedCollections,
+    ...(unverified.length > 0
+      ? {
+          unverified,
+          warning: `回读不到变量所属集合(${unverified.join('、')})—— MG 没有「图层属性 ↔ 变量」的反读接口,这条只证明集合挂没挂上;请 jsd_export 目视确认`,
+        }
+      : {}),
+  };
+}
+
 const variantSetNodeFields = {
   nodeId: z.string().min(1).describe('变体集(COMPONENT_SET)节点 id'),
 };
-
 const listVariantPropertiesSchema = z.object({
   ...variantSetNodeFields,
   memberLimit: z
@@ -1011,6 +1341,85 @@ const deleteVariantPropertySchema = z.object({
   ...variantSetNodeFields,
   property: z.string().min(1).describe('要删的维度名(或它的 id)'),
 });
+
+const listVariablesSchema = z.object({
+  collectionId: z.string().optional().describe('只列该集合下的变量'),
+  type: z.enum(MG_VARIABLE_TYPES).optional().describe('只列该类型的变量'),
+  limit: z
+    .number()
+    .int()
+    .min(1)
+    .max(500)
+    .optional()
+    .describe('最多返回几个变量(默认 200);集合那一段恒全量返回'),
+});
+
+const variablesCreateSchema = z.object({
+  collectionName: z
+    .string()
+    .optional()
+    .describe('集合名;同名集合复用(不新建),缺省 "Variables"'),
+  variables: z
+    .array(
+      z.object({
+        name: z.string().min(1),
+        type: z.enum(MG_VARIABLE_TYPES),
+        value: z
+          .unknown()
+          .optional()
+          .describe(
+            '初值。单值类型:BOOLEAN 布尔 / NUMBER 数字 / STRING 字符串 / COLOR 用 {r,g,b,a}(**0-1 浮点,不是 hex**)。复合样式类型可选:走 setVariableValue 的部分更新语义,只带你关心的字段(如 PAINT 传 {type:0,color:{r,g,b,a}}),不传就是空样式',
+          ),
+        description: z.string().optional(),
+      }),
+    )
+    .min(1)
+    .describe('要建的变量;同名同类型已存在时就地更新它的值'),
+});
+
+const variablesApplySchema = z
+  .object({
+    nodeIds: z.array(z.string().min(1)).min(1),
+    variableId: z
+      .string()
+      .min(1)
+      .optional()
+      .describe(
+        '变量 id(本地变量,见 mg_list_variables 或 jsd_get_page 的 assets.variables);`unbind: true` 时不用给',
+      ),
+    property: z.enum(SLOT_KINDS),
+    value: z.string().min(1).describe('该属性面的槽位;取值见工具描述里的表'),
+    index: z
+      .number()
+      .int()
+      .min(0)
+      .optional()
+      .describe(
+        '数组型属性的下标(如 fills);⚠ MG 面板顺序与数组顺序相反(fills[0] 是最底层)',
+      ),
+    unbind: z
+      .boolean()
+      .optional()
+      .describe('true = 解绑该槽位;默认 false(绑定)'),
+  })
+  .superRefine((v, ctx) => {
+    const allowed: readonly string[] = VARIABLE_SLOTS[v.property];
+    if (!allowed.includes(v.value)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['value'],
+        message: `${v.property} 不接受「${v.value}」,可选:${allowed.join(' / ')}`,
+      });
+    }
+    // 解绑不需要变量(unlinkVariableReferenceInLayer 不收 id):只在绑定方向要求
+    if (v.unbind !== true && v.variableId == null) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['variableId'],
+        message: '绑定时必须给 variableId(解绑才不用给)',
+      });
+    }
+  });
 
 export const mastergoOps: PlatformOp[] = [
   {
@@ -1100,5 +1509,29 @@ export const mastergoOps: PlatformOp[] = [
       'MasterGo 特有:删掉一个变体维度。params: { nodeId(COMPONENT_SET), property(维度名或 id;真机 2026-09-29 验证**按名字生效**) }。写完回读确认维度消失。⚠ 维度被删后,该维度的取值组合从集合里消失,引用这些组合的实例会落到哪个成分由引擎决定 —— 删完用 mg_list_variant_properties 复核,必要时逐个实例 jsd_set_instance_properties 重切',
     inputSchema: deleteVariantPropertySchema,
     run: deleteVariantProperty,
+  },
+  {
+    name: 'mg_list_variables',
+    title: '查看变量集合与变量',
+    description:
+      'MasterGo 特有:列出**变量集合(含模式)**与**变量**(类型 / 所属集合 / 描述 / 各模式的值)。params: { collectionId?, type?, limit? }。**动手前的摸底入口**,也是另两个变量 op 的回读面。与 `jsd_get_page` 的 `assets.variables` 不是两件事:那条是**不分平台的概览**(只有 id + 名称),要值、要模式、要按集合筛就用这条。值按模式索引(键 = modeId,取自变量自身的 `modes`);集合恒全量返回 —— 模式不是可选信息,它是变量值的索引维度。⚠ MG 的 `Collection` 没有 defaultModeId 字段(与 Figma 不同),官方约定「第一个模式」为默认模式',
+    inputSchema: listVariablesSchema,
+    run: listVariablesOp,
+  },
+  {
+    name: 'mg_variables_create',
+    title: '批量建变量',
+    description:
+      'MasterGo 特有:批量建变量(与 Figma 的 `figma_variables_create` 同形,便于两个平台共用一套调用纪律)。params: { collectionName?, variables: [{ name, type, value?, description? }] }。type 取 typings 全表 12 项:单值 BOOLEAN / NUMBER / STRING / COLOR(COLOR 用 {r,g,b,a},**0-1 浮点**),复合样式 PAINT / TEXT / EFFECT / GRID / STROKE_WIDTH / CORNER_RADIUS / PADDING / SPACING(建出来是空样式,value 走部分更新语义)。**同名集合复用、同名同类型变量就地更新值**;失败回滚本次新建的集合(复用既有集合时不删,避免连坐)。写完回读确认每个变量都在 —— 本平台有「回包成功、值没变」的前科(0018)',
+    inputSchema: variablesCreateSchema,
+    run: createVariables,
+  },
+  {
+    name: 'mg_variables_apply',
+    title: '绑定/解绑变量到图层属性',
+    description:
+      'MasterGo 特有:把**已有变量**绑到图层属性,unbind=true 则解绑(解绑**不用**给 variableId)。params: { nodeIds, variableId?, property, value, index?, unbind? }。property 与 value 是一对,取值来自官方文档「属性参数一览」:`baseProperty`(opacity / fillColor / visible)、`strokeProperty`(top / right / bottom / left / all / color)、`radiusProperty`(topLeft / topRight / bottomRight / bottomLeft / all)、`paddingProperty`(top / right / bottom / left / topBottom / leftRight / all)、`dimensionProperty`(width / height / maxWidth / maxHeight / minWidth / minHeight)、`effectProperty`(x / y / blur / spread / color)、`gridProperty`(sectionSize / count / gutterSize / offset / color)、`textProperty`(fontFamily / fontWeight / fontSize / lineHeight / letterSpacing / paragraphSpacing);传错会在入参校验就被点名。数组型属性(fills / effects / grids)**必须**给 index。⚠ MG **没有**「图层属性 ↔ 变量」的反读接口:回读只能拿到该图层用到了哪些集合(getLayerVariableModes),所以绑完要 jsd_export 目视确认渲染真的变了',
+    inputSchema: variablesApplySchema,
+    run: applyVariableReference,
   },
 ];

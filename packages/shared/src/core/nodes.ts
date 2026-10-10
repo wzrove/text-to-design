@@ -6,13 +6,19 @@ import type {
   SerializedNode,
   SerializedNodeType,
 } from '../schemas';
-import { ensurePagesLoaded, resolveNodes } from './access';
+import {
+  canReadDocumentScope,
+  ensurePagesLoaded,
+  resolveNodes,
+} from './access';
+import { listDocumentAssets } from './assets';
 import type {
   ContainerSkeleton,
   DesignHost,
   NodeSkeleton,
   PageSkeleton,
 } from './host';
+import type { RuntimeContext } from './runtime';
 import { serializeNode, trySerialize } from './serialize';
 import { ensureLayoutMode, type LayoutMode } from './utils';
 
@@ -271,23 +277,33 @@ function walkChildren(node: NodeSkeleton): NodeSkeleton[] {
 
 export async function findNodes(
   host: DesignHost,
+  ctx: RuntimeContext,
   params: FindParams,
 ): Promise<FindResult> {
   let nodes: NodeSkeleton[];
   // document 范围是否真的执行了全量加载(0011 批次 5:成本标注的事实来源)
   let pagesLoaded = false;
+  /** scope=document 被退回当前页(本平台读不到非当前页,0039 修订) */
+  let scopedToCurrentPage = false;
 
   if (params.ids != null && params.ids.length > 0) {
     nodes = await resolveNodes(host, params.ids);
   } else {
-    // 范围门控(0011 批次 5):document 范围先全量加载再跨页遍历;
-    // dynamic-page 下不加载就读其他页的 children 会拿到空集。门控与
-    // 幂等都在 ensurePagesLoaded 一处,jsDesign(无 dynamic-page)直接短路。
-    if (params.scope === 'document') {
+    // 0039 修订:跨页读的前提是平台声明了 `documentScopeRead`,判据在**调用前**。
+    // 未声明的平台(即时设计 / MG)在这里退回当前页 —— 不是「不支持这个参数」,
+    // 而是「只搜得到当前页」,由 note 点名;门控(ensurePagesLoaded)也一并跳过:
+    // 即时设计的运行时有 `loadAllPagesAsync` 且永不返回,await 它就是挂死。
+    scopedToCurrentPage =
+      params.scope === 'document' && !canReadDocumentScope(ctx);
+    if (params.scope === 'document' && !scopedToCurrentPage) {
+      // 范围门控(0011 批次 5):document 范围先全量加载再跨页遍历;
+      // dynamic-page 下不加载就读其他页的 children 会拿到空集。
       pagesLoaded = await ensurePagesLoaded(host);
     }
     const pages =
-      params.scope === 'document' ? host.root.children : [host.currentPage];
+      params.scope === 'document' && !scopedToCurrentPage
+        ? host.root.children
+        : [host.currentPage];
     const collect = (page: PageSkeleton): NodeSkeleton[] => {
       try {
         if (params.type != null) {
@@ -322,6 +338,17 @@ export async function findNodes(
     nodes = nodes.filter((n) => n.name.includes(name));
   }
   const scoped = params.scope === 'document' && params.ids == null;
+  const notes: string[] = [];
+  if (scoped && pagesLoaded) {
+    notes.push(
+      '本次为全文档查找:已执行一次全量页加载(dynamic-page 下有一次性成本),再次调用不再重复加载',
+    );
+  }
+  if (scopedToCurrentPage) {
+    notes.push(
+      '本平台读不到非当前页(触碰即挂死),scope=document 已退回当前页:结果只含当前页的内容',
+    );
+  }
   return {
     // 逐节点序列化**必须各带保护**:引擎 getter 会因节点自身状态抛(实测 Figma:
     // 文档里存在「带错误的组件集」时 `get_variantProperties` 抛),一个坏节点会让
@@ -330,11 +357,7 @@ export async function findNodes(
     nodes: nodes.slice(0, 100).map((n) => minimalOrFull(n, params.depth ?? 1)),
     total: nodes.length,
     ...(scoped ? { scope: 'document' as const } : {}),
-    ...(scoped && pagesLoaded
-      ? {
-          note: '本次为全文档查找:已执行一次全量页加载(dynamic-page 下有一次性成本),再次调用不再重复加载',
-        }
-      : {}),
+    ...(notes.length > 0 ? { note: notes.join(';') } : {}),
   };
 }
 
@@ -353,26 +376,28 @@ export async function setSelection(
 }
 
 /**
- * 顶层节点的轻量摘要:只读本函数回传的那几个字段。
+ * 顶层节点的几何摘要:只读本函数回传的那几个字段(0039)。
  *
  * 不能再走 `trySerialize(node, 0)`:depth 只挡子节点递归,`serializeNode` 对**每个**
  * 节点照样读 fills/strokes/effects/layoutGrids/boundVariables/children 等几十处引擎
  * 属性,还会为 z 回查一次父级 children(`childIndexOf` 逐兄弟比 id)。后者在页面顶层
  * 是 O(n²) 次跨边界属性读 —— 实测症状是 `jsd_get_page` 直接顶穿 UI 侧 25s 转发超时
  * (`ok=false error=forward_timeout`),而它自称「轻量摘要」。
- * z 由调用方按下标给出,单节点成本降到「本行字段数」。
+ *
+ * 字段集由 0039 定死:id/name/type/width/height/x/y,共 7 次跨边界读/节点 ——
+ * 与原来的四十几次比降了一个量级,这是顶穿预算的那个量级差。`type` 值这 1 次读
+ * (用户口径要求保留,用来一眼看出顶层是容器还是文本)。
+ * 删掉的两项各有去处:`z`(顶层绘制顺序)在 0039 之后没有消费方(漂移复核只用 id/x/y);
+ * `childCount` 要读 `n.children.length`,是**容器**才有的跨边界读 —— 顶层里混着叶子
+ * 节点,这一读换来的是清单里多数行没有的字段。
  */
-function lightTopLevel(
-  n: NodeSkeleton,
-  z: number,
-): PageStructureResult['nodes'][number] {
+function lightTopLevel(n: NodeSkeleton): PageStructureResult['nodes'][number] {
   const out: PageStructureResult['nodes'][number] = {
     id: n.id,
     name: n.name,
     type: n.type,
     x: 0,
     y: 0,
-    z,
   };
   try {
     out.x = Math.round(n.x) || 0;
@@ -388,48 +413,75 @@ function lightTopLevel(
   } catch {
     // 同上:尺寸读不到就不给
   }
-  try {
-    if ('children' in n) {
-      const c = n.children?.length ?? 0;
-      if (c > 0) out.childCount = c;
-    }
-  } catch {
-    // 同上
-  }
   return out;
 }
 
 /**
- * 页面结构总览:当前页顶层节点的轻量摘要(不回读子节点,见 lightTopLevel)。
+ * 页面结构总览:当前页顶层节点几何 + 设计系统资源清单(见 lightTopLevel / 0039)。
  *
  * 0011 批次 5:读取前显式门控 `loadAllPagesAsync`(幂等,重复调用不重复加载),
  * 附带文档级页面总览(pages)—— dynamic-page 下这是唯一安全的跨页读法;
  * 真正发生了全量加载时在 note 里标注成本,jsDesign 恒无 note(文档常驻)。
+ *
+ * 顺序不是随意的:门控必须在**任何**跨页读之前,资源清单要遍历各页找组件,
+ * 故先取门控返回值(它只用于成本标注),再让资源清单复用同一次已完成的加载。
  */
 export async function getPageStructure(
   host: DesignHost,
+  ctx: RuntimeContext,
 ): Promise<PageStructureResult> {
-  const pagesLoaded = await ensurePagesLoaded(host);
+  const {
+    assets,
+    failedPages,
+    unavailableSurfaces,
+    scopedToCurrentPage,
+    pagesLoaded,
+  } = await listDocumentAssets(host, ctx);
+  // 页列表元数据同样要收口:读不到非当前页的平台,`pages` 也只给当前页 ——
+  // 否则 `get_page` 会在这一段(而不是资源清单)再次挂到转发超时。
+  const pageList = scopedToCurrentPage
+    ? [host.currentPage]
+    : host.root.children;
   const children = host.currentPage.children ?? [];
   const nodes: PageStructureResult['nodes'] = [];
-  // 下标 = 绘制顺序(z):顶层节点没有父级可回查,这里按页面 children 顺序直接给出
-  for (const [z, c] of children.entries()) {
-    nodes.push(lightTopLevel(c, z));
+  for (const c of children) {
+    nodes.push(lightTopLevel(c));
+  }
+  // note 是「本次读取的附加说明」通道:0011 的成本标注与 0039 的枚举降级各自成句
+  const notes: string[] = [];
+  if (pagesLoaded) {
+    notes.push(
+      '本次读取前执行了一次全量页加载(dynamic-page 下有一次性成本),再次调用不再重复加载',
+    );
+  }
+  if (failedPages.length > 0) {
+    notes.push(
+      `资源清单在 ${failedPages.join('、')} 页枚举失败(该页有失效节点,组件/变体集可能不全)`,
+    );
+  }
+  if (unavailableSurfaces.length > 0) {
+    // 0043:空数组有两种成因,必须区分 —— 不然「列不出来」会被当成「文档里没有」
+    notes.push(
+      `assets.${unavailableSurfaces.join(' / assets.')} 恒空:本平台未声明对应能力,这一面清单读不出来(不等于文档里没有)`,
+    );
+  }
+  if (scopedToCurrentPage) {
+    // 0039 修订:即时设计/MG 触碰非当前页会挂到转发超时(实测 25s),跨页一律不做
+    notes.push(
+      '资源清单与 pages 只覆盖当前页:本平台读不到非当前页(触碰即挂死),不等于文档只有一页',
+    );
   }
   return {
     pageName: host.currentPage.name,
     nodes,
     count: nodes.length,
+    assets,
     // 全量加载后各页顶层可安全读取;childCount 用 children.length(轻量,不序列化)
-    pages: host.root.children.map((p) => ({
+    pages: pageList.map((p) => ({
       name: p.name,
       childCount: p.children?.length ?? 0,
     })),
-    ...(pagesLoaded
-      ? {
-          note: '本次读取前执行了一次全量页加载(dynamic-page 下有一次性成本),再次调用不再重复加载',
-        }
-      : {}),
+    ...(notes.length > 0 ? { note: notes.join(';') } : {}),
   };
 }
 

@@ -146,7 +146,7 @@ export function registerComponentTools(
     opTool('set_instance_properties', {
       name: 'jsd_set_instance_properties',
       title: 'setInstanceProperties.title',
-      description: `设置实例的变体/组件属性。属性名与可选值先 jsd_find / jsd_get_selection 读:\`variantProperties\`(本节点当前取值,如 {"状态":"默认"})与 \`variantGroupProperties\`(组件集上各属性的**可选值**,如 {"状态":["默认","禁用"]})。名字必须完全匹配(宿主侧键可能是属性 id 如 Property 1#1:0,传名字即可,adapter/门面会自动归一)。值:变体属性传字符串,布尔属性传布尔,需要显式类型或换绑候选时传 {"type":"INSTANCE_SWAP","value":"1:2"}。**能传哪种值取决于本平台签名**(登记在 dicts/platform-value-domain.ts 的第四类表,由 sync-guarantee 双向断言守):${componentWriteText(null)}`,
+      description: `设置实例的变体/组件属性。属性名与可选值先 jsd_find / jsd_get_selection 读:\`variantProperties\`(本节点当前取值,如 {"状态":"默认"})与 \`variantGroupProperties\`(组件集上各属性的**可选值**,如 {"状态":["默认","禁用"]})。**变体属性传名字即可;组件属性(布尔/文本/换绑)必须传读到的完整键**(含 \`#32:0\` 后缀)—— 组件属性在引擎侧只认完整键,短名会报 \`Could not find a component property with name\`(真机实测,TEXT/BOOLEAN/INSTANCE_SWAP 三类都一样);core 只在基名**唯一**命中时替你补全,有歧义直接报错并列出候选。**写前先读 \`componentPropertyReferences\`**(它标明哪个图层由哪个属性驱动 —— 属性成对存在时只有连着可见层的那一组会改画面,写错那组会「回包成功、画布不动」)。值:变体属性传字符串,布尔属性传布尔,需要显式类型或换绑候选时传 {"type":"INSTANCE_SWAP","value":"1:2"}。**能传哪种值取决于本平台签名**(登记在 dicts/platform-value-domain.ts 的第四类表,由 sync-guarantee 双向断言守):${componentWriteText(null)}`,
       inputSchema: setInstancePropertiesSchema,
       annotations: {
         readOnlyHint: false,

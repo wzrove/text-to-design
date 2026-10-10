@@ -12,12 +12,14 @@ import { mastergoOps } from './ops';
  *   - `componentProperties`:读侧已由门面**投影**成契约形状(实例侧 `componentProperties` /
  *     组件侧 `componentPropertyValues`,见 0017 复核节),写侧刚补上平台 op(0019);
  *     但**真机写入尚未验证通过**,所以继续不 claim —— 等实机确认布尔/文本写得住再 claim;
- *   - `variables`:typings 里有 `mg.variables`,但没有 platformOps 实现,claim 等于空口;
+ *   - `variables`:0040 起写侧有了 `mg_variables_create` / `mg_variables_apply`,故 claim 它
+ *     (claim 的含义是「这个平台有变量能力面」,此前不 claim 正是因为只有 typings 没有接线);
+ *     未接的部分是模式/分组/别名/作用域等旁支,登记在 `platform-knowledge.ts` 的 nativeUnwired;
  * - `inPlaceVariants`:**已真机验证**——`mg.combineAsVariants` 把**原组件本身**移进集合
  *   (合并后集合的 children 就是传入组件的 id,页面无克隆残留),与 Figma 同语义;
  *   故 claim 它,core 的合并首选顺序据此走原位姿势。
  *
- * platformOps:两组,共 11 个 op。
+ * platformOps:三组,共 14 个 op。
  * - **组件属性管理**(0019,5 个):MG 不会把组件的子文本自动暴露成 `TEXT` 属性,
  *   没有这组 op 就永远造不出第一个属性,`jsd_set_instance_properties` 的
  *   布尔/文本/换绑路径等于摆设;
@@ -25,11 +27,20 @@ import { mastergoOps } from './ops';
  *   这是 MG 三平台独有的面 —— 0018 的换绑只能切到**已有**成分,造新值此前只能靠
  *   「改成分名字让引擎归一」这种未声明的副作用;接上这组才算有正路。
  *   两个别名 op(`editVariantPropertiesAlias` / `editVariantPropertyValuesAlias`)
- *   依赖变量面(`mg.variables`),仍未接 —— 属「可以接、等变量决策」。
- *
- * 变量(`mg.variables`)整体仍未接:形状与 Figma 不同、需另开决策。
+ *   依赖变量能力面,本仓仍未接 —— 变量侧只做到「建变量 / 绑图层属性」(0040),
+ *   别名那套(变量引用变量)在 nativeUnwired 里,故这两个 op 继续等;
+ * - **变量**(0040,3 个):查看 / 批量建 / 绑定解绑。与 Figma 的两个变量 op 同形
+ *   (`create` 的参数形状刻意对齐,便于两个平台共用一套调用纪律),差异只在绑定参数
+ *   用的是官方文档的槽位词(`property` + `value`),理由见 ops.ts 头注释。
  */
 export const meta: PlatformMeta = {
-  capabilities: ['styles', 'inPlaceVariants'],
+  // styleEnumeration(0043):**本仓未在 MG 真机上验过这一条**,是按现状声明 ——
+  // MG 此前就是在枚举样式的(`styles` 能力位管的是「能按 id 应用」,不是「能列清单」),
+  // 不声明等于拿一个未验证的怀疑去砍掉 MG 的 `assets.styles` 与 `jsd://styles`。
+  // 声明是「当前认知」,真机一测不对就改这一行;待验项已写进 0043。
+  // documentScopeRead(0039 修订):**不**声明 —— MG 同样没有 `loadAllPagesAsync`,
+  // 且它能否读非当前页**本仓未真机验过**。按保守默认收口为只扫当前页(错过的只是
+  // 「别的页有组件」,代价远小于一次 25s 挂死);验过能跨页就在这里加一位。
+  capabilities: ['styles', 'styleEnumeration', 'variables', 'inPlaceVariants'],
   platformOps: mastergoOps,
 };
