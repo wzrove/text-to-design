@@ -35,7 +35,7 @@ Rules:
 
 - 单点 bug（参数校验、文案点名、normalize 兜底、单文件少量行）→ 直接改，**不开决策记录**。
 - 结构压力（同一问题修完又复发、修法新增分支/抽象、跨 ≥3 文件、落在既有决策的「影响范围」内）
-  → 先走 `.agents/skills/software-design-patterns/` 出结论并落 `docs/design-decisions/NNNN-*.md`，
+  → 先走 `.agents/skills/software-design-patterns/` 出结论并落 `docs/design-decisions/<8位短id>-*.md`，
   再按记录改。
 - **依赖单向**：`software-design-patterns` 是独立可移植的通用技能，不引用本仓任何具体工具
   （判门槛与回填由调用方负责）。

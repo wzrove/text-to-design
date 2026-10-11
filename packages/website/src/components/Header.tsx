@@ -1,20 +1,24 @@
 import { Code, Download, Monitor, Moon, Sun } from 'lucide-solid';
 import { For, Match, Switch } from 'solid-js';
+import { LOCALES, useLocale } from '../i18n/context';
 import { createScrollProgress, createSectionSpy } from '../motion';
-import { createTheme, THEME_LABEL } from '../theme';
+import { createTheme } from '../theme';
 import ContactLinks from './ContactLinks';
 
-const NAV = [
-  { id: 'platforms', label: '平台' },
-  { id: 'install', label: '安装' },
-];
+const NAV = ['platforms', 'install'] as const;
+
+const LOCALE_SHORT: Record<(typeof LOCALES)[number], string> = {
+  'zh-CN': '中',
+  en: 'EN',
+};
 
 export default function Header(props: {
   releasesUrl: string;
   repoUrl: string;
 }) {
+  const { d, f, locale, setLocale } = useLocale();
   const progress = createScrollProgress();
-  const active = createSectionSpy(NAV.map((n) => n.id));
+  const active = createSectionSpy([...NAV]);
   const theme = createTheme();
 
   return (
@@ -39,22 +43,20 @@ export default function Header(props: {
         </a>
 
         <nav
-          aria-label="页面导航"
+          aria-label={d().header.navAria}
           class="ml-auto hidden items-center gap-1 lg:flex"
         >
           <For each={NAV}>
-            {(item) => (
+            {(id) => (
               <a
-                href={`#${item.id}`}
-                aria-current={active() === item.id ? 'true' : undefined}
+                href={`#${id}`}
+                aria-current={active() === id ? 'true' : undefined}
                 class={
                   'rounded-md px-2.5 py-1.5 text-sm transition ' +
-                  (active() === item.id
-                    ? 'text-brand'
-                    : 'text-mute hover:text-txt')
+                  (active() === id ? 'text-brand' : 'text-mute hover:text-txt')
                 }
               >
-                {item.label}
+                {d().header.nav[id]}
               </a>
             )}
           </For>
@@ -63,11 +65,40 @@ export default function Header(props: {
         <div class="ml-auto flex items-center gap-2 lg:ml-1">
           <ContactLinks />
 
+          {/* biome-ignore lint/a11y/useSemanticElements: 语言二选一不是页内 tab */}
+          <div
+            role="group"
+            aria-label={d().header.langAria}
+            class="flex items-center rounded-md border border-line bg-panel p-0.5"
+          >
+            <For each={LOCALES}>
+              {(code) => (
+                <button
+                  type="button"
+                  onClick={() => setLocale(code)}
+                  aria-pressed={locale() === code}
+                  class={
+                    'rounded px-1.5 py-1 font-mono text-[11px] transition ' +
+                    (locale() === code
+                      ? 'bg-brand/15 text-brand'
+                      : 'text-mute hover:text-txt')
+                  }
+                >
+                  {LOCALE_SHORT[code]}
+                </button>
+              )}
+            </For>
+          </div>
+
           <button
             type="button"
             onClick={theme.cycle}
-            title={`主题:${THEME_LABEL[theme.mode()]},点击切换`}
-            aria-label={`切换主题,当前${THEME_LABEL[theme.mode()]}`}
+            title={f(d().header.themeTitle, {
+              mode: d().header.theme[theme.mode()],
+            })}
+            aria-label={f(d().header.themeAria, {
+              mode: d().header.theme[theme.mode()],
+            })}
             class="inline-flex h-8 w-8 items-center justify-center rounded-md border border-line bg-panel text-mute transition hover:border-brand/40 hover:text-txt"
           >
             <Switch>
@@ -90,7 +121,7 @@ export default function Header(props: {
             class="hidden items-center gap-1.5 rounded-md border border-line bg-panel px-3 py-1.5 text-sm text-mute transition hover:text-txt sm:inline-flex"
           >
             <Code size={15} aria-hidden />
-            源码仓库
+            {d().header.repo}
           </a>
           <a
             href={props.releasesUrl}
@@ -99,7 +130,7 @@ export default function Header(props: {
             class="inline-flex items-center gap-1.5 rounded-md bg-brand px-3.5 py-1.5 text-sm font-medium text-ink transition hover:brightness-110"
           >
             <Download size={15} aria-hidden />
-            下载插件
+            {d().header.download}
           </a>
         </div>
       </div>

@@ -12,12 +12,6 @@ const NEXT: Record<ThemeMode, ThemeMode> = {
   dark: 'system',
 };
 
-export const THEME_LABEL: Record<ThemeMode, string> = {
-  system: '跟随系统',
-  light: '亮色',
-  dark: '暗色',
-};
-
 function media() {
   return window.matchMedia(QUERY);
 }

@@ -2,9 +2,11 @@ import { Check } from 'lucide-solid';
 import { createSignal, For, onCleanup, Show } from 'solid-js';
 import { BRAND_PATHS } from '../brand-icons';
 import { CONTACTS, type Contact } from '../content';
+import { useLocale } from '../i18n/context';
 
 /** 渠道图标按钮:有 href 跳转,有 value 复制,复制后短暂显示对勾 */
 export default function ContactLinks(props: { class?: string }) {
+  const { d, f } = useLocale();
   const [copied, setCopied] = createSignal('');
   let timer: ReturnType<typeof setTimeout> | undefined;
 
@@ -26,6 +28,8 @@ export default function ContactLinks(props: { class?: string }) {
 
   onCleanup(() => clearTimeout(timer));
 
+  const label = (contact: Contact) => d().contacts.labels[contact.id];
+
   return (
     <div class={`flex items-center gap-1 ${props.class ?? ''}`}>
       <For each={CONTACTS}>
@@ -35,13 +39,19 @@ export default function ContactLinks(props: { class?: string }) {
             onClick={() => run(contact)}
             title={
               contact.value
-                ? `${contact.label} ${contact.value} · 点击复制`
-                : contact.label
+                ? f(d().contacts.copyTitle, {
+                    label: label(contact),
+                    value: contact.value,
+                  })
+                : label(contact)
             }
             aria-label={
               contact.value
-                ? `${contact.label} ${contact.value},点击复制`
-                : contact.label
+                ? f(d().contacts.copyAria, {
+                    label: label(contact),
+                    value: contact.value,
+                  })
+                : label(contact)
             }
             class="inline-flex h-8 w-8 items-center justify-center rounded-md border border-line bg-panel text-mute transition hover:border-brand/40 hover:text-txt"
           >
@@ -52,7 +62,7 @@ export default function ContactLinks(props: { class?: string }) {
                   when={BRAND_PATHS[contact.id]}
                   fallback={
                     <span class="font-mono text-[10px]">
-                      {contact.label.slice(0, 2)}
+                      {label(contact).slice(0, 2)}
                     </span>
                   }
                 >

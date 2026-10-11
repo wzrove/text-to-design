@@ -16,23 +16,14 @@ import {
   MCP_COMMAND,
   PLATFORMS,
 } from '../content';
+import { useLocale } from '../i18n/context';
 import { onFirstVisible, revealDelay } from '../motion';
 import CopyButton from './CopyButton';
 
-const TITLE_CHARS = [...'发布页'];
-const STEPS = ['提问', '调用工具', '写入画布'];
 /** 一轮演完停在终态的时长,之后自动切下一个任务 */
 const HOLD_MS = 2600;
 
 const CHART_BARS = [32, 58, 41, 77, 64, 90];
-const CHART_LABELS = ['1月', '2月', '3月', '4月', '5月', '6月'];
-const MENU_TITLE_CHARS = [...'山雾咖啡'];
-const MENU_ITEMS = [
-  { name: '美式', price: '¥12' },
-  { name: '拿铁', price: '¥18' },
-  { name: '山雾轻乳', price: '¥22' },
-  { name: '冷萃', price: '¥16' },
-];
 
 type Phase = 'typing' | 'thinking' | 'tool' | 'draw';
 
@@ -216,9 +207,12 @@ function buildDrawTimeline(
 }
 
 export default function Hero(props: { releasesUrl: string; repoUrl: string }) {
+  const { d, f } = useLocale();
   const [typed, setTyped] = createSignal(0);
   const [phase, setPhase] = createSignal<Phase>('typing');
   const [task, setTask] = createSignal<DemoTask>(DEMO_TASKS[0]);
+  const demoText = () => d().hero.demo[task().id];
+  const titleParts = () => d().hero.title.split('{brand}');
   const step = () => STEP_OF[phase()];
   let demo: HTMLDivElement | undefined;
   let canvas: HTMLDivElement | undefined;
@@ -271,7 +265,7 @@ export default function Hero(props: { releasesUrl: string; repoUrl: string }) {
   /** 播一遍就停在终态,不再自动循环;重播/切任务由按钮触发 */
   async function play(id: number) {
     const alive = () => !cancelled && id === runId;
-    const prompt = task().prompt;
+    const prompt = demoText().prompt;
     clearTimeout(rotate);
 
     // 打字不依赖 gsap:分块加载失败也不能把整段演示冻住
@@ -327,7 +321,7 @@ export default function Hero(props: { releasesUrl: string; repoUrl: string }) {
     void ensureTimeline();
 
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      setTyped(task().prompt.length);
+      setTyped(demoText().prompt.length);
       setPhase('draw');
       void ensureTimeline().then(() => tl?.progress(1).pause());
       return;
@@ -360,7 +354,7 @@ export default function Hero(props: { releasesUrl: string; repoUrl: string }) {
             class="mono-label inline-flex items-center gap-2 rounded-full border border-line bg-panel px-3 py-1"
           >
             <Terminal size={13} aria-hidden />
-            MCP · 即时设计 / Figma / MasterGo
+            {d().hero.badge}
           </p>
 
           <h1
@@ -368,9 +362,9 @@ export default function Hero(props: { releasesUrl: string; repoUrl: string }) {
             style={revealDelay(1, 90)}
             class="mt-6 text-4xl font-semibold leading-[1.1] tracking-tight sm:text-5xl"
           >
-            让 AI 在你的
-            <span class="text-brand">设计软件</span>
-            里动手画图
+            {titleParts()[0]}
+            <span class="text-brand">{d().hero.titleBrand}</span>
+            {titleParts()[1]}
           </h1>
 
           <p
@@ -378,9 +372,11 @@ export default function Hero(props: { releasesUrl: string; repoUrl: string }) {
             style={revealDelay(2, 90)}
             class="mt-6 max-w-xl text-[17px] leading-relaxed text-mute"
           >
-            text-to-design 把 opencode、Claude 这类 AI
-            助手接进画布:读取选中内容、按你的描述画新图形、改样式、导出图片。
-            你只管描述,它负责操作。
+            {f(d().hero.lead, {
+              assistants: d().hero.assistants.list.join(
+                d().hero.assistants.sep,
+              ),
+            })}
           </p>
 
           <div
@@ -394,7 +390,7 @@ export default function Hero(props: { releasesUrl: string; repoUrl: string }) {
               target="_blank"
               class="group inline-flex items-center gap-2 rounded-md bg-brand px-5 py-2.5 text-sm font-medium text-ink transition duration-300 hover:-translate-y-0.5 hover:brightness-110"
             >
-              下载插件包
+              {d().hero.ctaDownload}
               <ArrowRight
                 size={16}
                 aria-hidden
@@ -407,7 +403,7 @@ export default function Hero(props: { releasesUrl: string; repoUrl: string }) {
               target="_blank"
               class="inline-flex items-center gap-2 rounded-md border border-line bg-panel px-5 py-2.5 text-sm text-txt transition duration-300 hover:-translate-y-0.5 hover:border-brand/50"
             >
-              安装说明
+              {d().hero.ctaDocs}
             </a>
           </div>
 
@@ -416,7 +412,7 @@ export default function Hero(props: { releasesUrl: string; repoUrl: string }) {
             style={revealDelay(4, 90)}
             class="mt-8 flex flex-wrap items-center gap-x-4 gap-y-2.5"
           >
-            <p class="mono-label">支持</p>
+            <p class="mono-label">{d().hero.support}</p>
             <ul class="flex flex-wrap items-center gap-2">
               <For each={PLATFORMS}>
                 {(platform) => (
@@ -425,10 +421,18 @@ export default function Hero(props: { releasesUrl: string; repoUrl: string }) {
                       aria-hidden
                       class="h-1.5 w-1.5 rounded-full bg-brand"
                     />
-                    <span class="text-txt">{platform.name}</span>
-                    <span class="font-mono text-[10px] text-mute">
-                      {platform.latin}
+                    <span class="text-txt">
+                      {d().platforms.items[platform.id].name}
                     </span>
+                    <Show
+                      when={
+                        platform.latin !== d().platforms.items[platform.id].name
+                      }
+                    >
+                      <span class="font-mono text-[10px] text-mute">
+                        {platform.latin}
+                      </span>
+                    </Show>
                   </li>
                 )}
               </For>
@@ -440,14 +444,14 @@ export default function Hero(props: { releasesUrl: string; repoUrl: string }) {
             style={revealDelay(5, 90)}
             class="mt-10 rounded-lg border border-line bg-panel p-4"
           >
-            <p class="mono-label">后台服务 · 一条命令</p>
+            <p class="mono-label">{d().hero.service}</p>
             <div class="mt-3 flex flex-wrap items-center gap-3">
               <code class="font-mono text-sm break-all text-code">
                 {MCP_COMMAND}
               </code>
               <CopyButton
                 text={MCP_COMMAND}
-                label="复制后台服务命令"
+                label={d().hero.copyService}
                 class="ml-auto"
               />
             </div>
@@ -464,11 +468,11 @@ export default function Hero(props: { releasesUrl: string; repoUrl: string }) {
             <div class="flex flex-wrap items-center gap-x-2 gap-y-2 border-b border-line px-4 py-3">
               <span class="h-2.5 w-2.5 rounded-full bg-coral/70" />
               <span class="h-2.5 w-2.5 rounded-full bg-brand/60" />
-              <span class="mono-label ml-2">AI 会话</span>
+              <span class="mono-label ml-2">{d().hero.session}</span>
               {/** biome-ignore lint/a11y/useSemanticElements: 按钮组无对应语义标签,role=group 已足够 */}
               <div
                 role="group"
-                aria-label="演示任务"
+                aria-label={d().hero.demoGroup}
                 class="ml-auto flex items-center gap-1"
               >
                 <For each={DEMO_TASKS}>
@@ -484,7 +488,7 @@ export default function Hero(props: { releasesUrl: string; repoUrl: string }) {
                           : 'border-line text-mute hover:border-brand/40 hover:text-txt')
                       }
                     >
-                      {t.label}
+                      {d().hero.demo[t.id].label}
                     </button>
                   )}
                 </For>
@@ -494,19 +498,19 @@ export default function Hero(props: { releasesUrl: string; repoUrl: string }) {
                   <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-brand/70" />
                   <span class="relative inline-flex h-1.5 w-1.5 rounded-full bg-brand" />
                 </span>
-                已连接
+                {d().hero.connected}
               </span>
             </div>
 
             <div class="space-y-3 px-4 py-4 text-sm">
               <p class="relative rounded-lg bg-raise px-3 py-2.5 leading-relaxed text-txt">
-                <span class="sr-only">{task().prompt}</span>
+                <span class="sr-only">{demoText().prompt}</span>
                 <span aria-hidden class="invisible">
-                  {task().prompt}
+                  {demoText().prompt}
                 </span>
                 <span aria-hidden class="absolute inset-0 px-3 py-2.5">
                   <span classList={{ 'typing-caret': phase() === 'typing' }}>
-                    {task().prompt.slice(0, typed())}
+                    {demoText().prompt.slice(0, typed())}
                   </span>
                 </span>
               </p>
@@ -521,7 +525,7 @@ export default function Hero(props: { releasesUrl: string; repoUrl: string }) {
                     <>
                       <Check size={13} class="text-brand" aria-hidden />
                       <span classList={{ 'demo-tool': phase() !== 'typing' }}>
-                        {task().toolLine}
+                        {demoText().toolLine}
                       </span>
                     </>
                   }
@@ -538,10 +542,10 @@ export default function Hero(props: { releasesUrl: string; repoUrl: string }) {
 
             <div class="border-t border-line px-4 py-5">
               <div class="flex items-center justify-between gap-3">
-                <p class="mono-label">画布</p>
+                <p class="mono-label">{d().hero.canvas}</p>
                 {/* 流水线进度:先看清走到哪一步,再看产物落进画布 */}
                 <ol class="flex flex-1 items-center gap-1.5 font-mono text-[10px]">
-                  <For each={STEPS}>
+                  <For each={d().hero.steps}>
                     {(label, i) => (
                       <li class="flex flex-1 items-center gap-1.5 last:flex-none">
                         <span
@@ -565,7 +569,7 @@ export default function Hero(props: { releasesUrl: string; repoUrl: string }) {
                         >
                           {label}
                         </span>
-                        <Show when={i() < STEPS.length - 1}>
+                        <Show when={i() < d().hero.steps.length - 1}>
                           <span
                             aria-hidden
                             class="relative h-[3px] flex-1 overflow-hidden rounded-full bg-line"
@@ -600,9 +604,11 @@ export default function Hero(props: { releasesUrl: string; repoUrl: string }) {
                     <div class="relative w-[240px]">
                       <div class="draw-item draw-chart rounded-lg border border-line bg-raise p-3">
                         <p class="flex items-center justify-between">
-                          <span class="mono-label text-[9px]">月度产出</span>
+                          <span class="mono-label text-[9px]">
+                            {d().hero.demo.chart.axisTitle}
+                          </span>
                           <span class="draw-item draw-peak rounded bg-brand/15 px-1.5 font-mono text-[9px] leading-4 text-brand">
-                            峰值 90
+                            {d().hero.demo.chart.peak}
                           </span>
                         </p>
                         <div class="mt-2 flex h-[76px] items-end gap-1.5">
@@ -617,7 +623,7 @@ export default function Hero(props: { releasesUrl: string; repoUrl: string }) {
                         </div>
                         <div class="draw-item draw-axis mt-2 h-px bg-line" />
                         <div class="mt-1 flex justify-between font-mono text-[8px] leading-3 text-mute">
-                          <For each={CHART_LABELS}>
+                          <For each={d().hero.demo.chart.months}>
                             {(m) => (
                               <span class="draw-item draw-tick">{m}</span>
                             )}
@@ -636,14 +642,14 @@ export default function Hero(props: { releasesUrl: string; repoUrl: string }) {
                     <div class="relative w-[240px]">
                       <div class="draw-item draw-menu rounded-lg border border-line bg-raise p-3">
                         <p class="flex text-sm font-medium">
-                          <For each={MENU_TITLE_CHARS}>
+                          <For each={d().hero.demo.menu.titleChars}>
                             {(char) => (
                               <span class="draw-item draw-char">{char}</span>
                             )}
                           </For>
                         </p>
                         <div class="mt-2.5 space-y-2">
-                          <For each={MENU_ITEMS}>
+                          <For each={d().hero.demo.menu.items}>
                             {(item) => (
                               <div class="draw-item draw-row flex items-baseline gap-2 text-[11px]">
                                 <span class="text-txt">{item.name}</span>
@@ -656,7 +662,7 @@ export default function Hero(props: { releasesUrl: string; repoUrl: string }) {
                           </For>
                         </div>
                         <p class="draw-item draw-foot mt-3 flex items-center justify-between font-mono text-[9px] text-mute">
-                          <span>扫码点单</span>
+                          <span>{d().hero.demo.menu.foot}</span>
                           <span class="inline-block h-4 w-4 rounded-sm border border-line" />
                         </p>
                       </div>
@@ -672,7 +678,7 @@ export default function Hero(props: { releasesUrl: string; repoUrl: string }) {
                     <div class="relative w-[240px]">
                       <div class="draw-item draw-frame rounded-lg border border-line bg-raise p-3">
                         <p class="flex text-sm font-medium">
-                          <For each={TITLE_CHARS}>
+                          <For each={d().hero.demo.card.titleChars}>
                             {(char) => (
                               <span class="draw-item draw-char">{char}</span>
                             )}
@@ -685,14 +691,14 @@ export default function Hero(props: { releasesUrl: string; repoUrl: string }) {
                         <div class="mt-3 flex items-center justify-between">
                           <div class="flex gap-1.5">
                             <span class="draw-item draw-tag h-4 rounded border border-line px-1.5 font-mono text-[9px] leading-4 text-mute">
-                              draft
+                              {d().hero.demo.card.tagDraft}
                             </span>
                             <span class="draw-item draw-tag h-4 rounded border border-line px-1.5 font-mono text-[9px] leading-4 text-mute">
-                              v2
+                              {d().hero.demo.card.tagVersion}
                             </span>
                           </div>
                           <span class="draw-item draw-button h-5 rounded bg-brand/85 px-2.5 text-[10px] leading-5 text-ink">
-                            发布
+                            {d().hero.demo.card.button}
                           </span>
                         </div>
                       </div>
@@ -710,16 +716,14 @@ export default function Hero(props: { releasesUrl: string; repoUrl: string }) {
           </div>
 
           <div class="mt-4 flex flex-wrap items-center justify-center gap-x-3 gap-y-2">
-            <p class="font-mono text-xs text-mute">
-              产物由真实工具面驱动 · 面板显示「已连接」即可开工
-            </p>
+            <p class="font-mono text-xs text-mute">{d().hero.footnote}</p>
             <button
               type="button"
               onClick={replay}
               class="inline-flex items-center gap-1.5 rounded-md border border-line bg-panel px-2.5 py-1 font-mono text-xs text-mute transition hover:border-brand/50 hover:text-txt"
             >
               <RotateCw size={13} aria-hidden />
-              重播演示
+              {d().hero.replay}
             </button>
           </div>
         </div>
