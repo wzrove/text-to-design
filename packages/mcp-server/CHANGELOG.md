@@ -1,5 +1,124 @@
 # text-to-design-mcp
 
+## 0.12.0
+
+### Minor Changes
+
+- [#43](https://github.com/wzrove/text-to-design/pull/43) [`151e129`](https://github.com/wzrove/text-to-design/commit/151e129e0dc3926e1e884a796cfe9d0c50db18ec) Thanks [@wzrove](https://github.com/wzrove)! - feat: `jsd_get_page` 收窄为「当前页顶层几何 + 设计系统资源清单」(见 0039)
+  
+  **为什么要动**:`get_page` 自称「轻量摘要」,却按 25s 转发预算顶着读。daemon 日志里同一签名反复出现 —— `r38`(10-08)、`r53`/`r54`(10-09)、`r3`/`r5`(10-10,插件与 daemon 都是当日新产物)全是 `ok=false 耗时=25001xms error=forward_timeout`。同一时段 `ping`/`get_selection`/`find` 都是毫秒级返回,只有它挂死:不是掉线,是这条输出面的成本随页面规模涨、却没有任何边界(字段越多、顶层节点越多,引擎跨边界读越多)。上一次的 `lightTopLevel` 只压了单节点读次数,没解决这个。
+  
+  **输出改成两段**(`nodes` 字段是 `id/名称/类型/宽高/x/y`;`z` 与 `childCount` 在 0039 之后没有消费方):
+  
+  - `nodes` —— 当前页顶层节点的几何,不递归。
+  - `assets` —— 资源清单,四项在**当前产物里恒在**:`summary`(四类计数)、`components`(组件)、`variants`(变体集,**带「维度 → 可选值」**)、`styles`(样式,**全量四类** PAINT/TEXT/EFFECT/GRID,各自带 `type`)、`variables`(变量)。某面在本平台不存在时该项是**空数组**,不报错 —— 三平台能力面不对称是常态,让缺口把整条只读调用打成错误没有收益。`variants[].properties` 在平台读不到该字段时**整个键省略**(不写空对象 —— 空对象会被当成「确实没有维度」)。要看资源细节按 id 走 `jsd_find`。
+  
+  **这张清单的存在理由是「设计前先复用」**:工具描述、`jsd://page` 资源描述、全局 instructions 与 `design-strategy` 配方(新增第 0 条)四处都写死了同一条纪律 —— 设计类任务第一步读它,命中同名/同用途的组件、变体取值、样式、变量**一律复用,禁止新建重复件**,清单里确实没有才允许新建。变体展开维度取值与样式收全量,都是为了不让调用方因为「看不到」而退回新建;四类各自怎么复用(平台入口名不同)由 `platform-facts.ts` 的 `reuseGuideText` 按平台给,配方只做拼接。
+  
+  `assets` 整块在 schema 里声明为**可选**,只为产物错位容错:MCP 与插件各自升级,旧插件发不出这个键,而 `structured()` 对过不了 schema 的结果一律判 `isError` + 空结构 —— 写成必填会让「插件旧了」表现为整条调用失败(同 `fonts` 的 `total/offset/truncated` 为什么可选)。约定:键缺席 = 产物错位;键在但数组空 = 本平台没这个面。反方向(旧 MCP + 新插件)天然安全,本批只删字段。
+  
+  **枚举失败不连坐**:引擎的 `findAll*` 会因文档里**任何一个坏节点**整页抛(实测 Figma:残留一个出错的组件集 → 整页一个节点都查不到)。所以枚举按**页** try/catch:失败页跳过、页名写进 `note` 点名(该页清单可能不全),不让一个坏节点把 `get_page` 又打成错误。`note` 因此由「单一的成本标注」扩成「本次读取的附加说明」通道 —— 全量加载成本与枚举降级各占一句。
+  
+  **资源清单不新造读路径**:组件与变体集走契约里已有的 `findAllWithCriteria`(引擎原生过滤,一次调用遍历全文档,不是逐节点跨边界读);颜色样式复用 `core.listStyles`;变量走**新增的可选契约成员** `getLocalVariablesAsync`,形制照抄 `getLocalPaintStylesAsync`(契约可选 + 平台缺口/投影登记 + Access 层 `typeof` 探测回退)。两侧各一个投影点:Figma 是 `figma.variables.getLocalVariablesAsync`(同步入口在 dynamic-page 下必抛,故只接异步那条);MasterGo 是命名空间下的 `mg.variables.getVariables()`(契约名字在顶层,故在 `code/mastergo/host.ts` 投影)。**即时设计 typings 全文无 variable 声明,结构上接不了** —— 它的资源清单里变量恒为空数组,不是「还没接」。三条平台缺口/投影登记都在 `sync-guarantee.ts` 里配了成对的编译期断言(登记的必须真不在 typings 里;投影项的来源必须真在子命名空间上)。
+  
+  `dicts/platform-knowledge.ts`(0032 的变量/组件/变体三域事实表)同步更新 MG 那一格:`variables.read` 从 `null` 改成 `mg.variables.getVariables()`、`readShape: 'array'`,并给 `DomainFact.read` 补一句「也可以是本仓已接的枚举 API」。**MG 的变量能力位 claim 仍关着**、写入口仍不接(建集合/建变量/绑值)——claim 的含义是「这个平台有变量能力面」,会连「能改变量」的预期一起放出去;0033 那两个别名 op 也仍在等写侧。变量面文案(`variableFaceText`)据此把「本仓没接」改成「只接了只读枚举,写入口一个都没接」。
+  
+  **不动的东西**:`jsd_get_page` 的工具名与 `nodes[].id/x/y` 保持原样 —— 结构变更复核(`drift-watch`)的「当前页顶层」那一层靠它配对节点,改名/删字段会静默打断复核(`drift-hook.test.ts` 已守)。`pages`(各页名与顶层节点数)与 `note`(全量加载成本)保留:两者是页级元数据,成本与节点数无关。
+  
+  真机待验(需 `pnpm build` + 重载插件):① `jsd_get_page` 耗时回到毫秒级、不再出现 `forward_timeout`;② 即时设计上 `assets` 取到组件/变体集/颜色样式,变量为空数组(该平台无变量面);③ Figma 与 MasterGo 上变量清单非空。
+
+### Patch Changes
+
+- [#43](https://github.com/wzrove/text-to-design/pull/43) [`151e129`](https://github.com/wzrove/text-to-design/commit/151e129e0dc3926e1e884a796cfe9d0c50db18ec) Thanks [@wzrove](https://github.com/wzrove)! - fix: 组件属性两处静默缺口 —— 写侧键归一回 core，读侧暴露图层引用（见 0041）
+  
+  两处都在「组件属性」这条读写链上，由用 Figma 真机搭一个通讯录页（复用「会话行」组件铺 3 行联系人）的同一批操作暴露。
+  
+  **① 写侧：键形态从没归属，文档却承诺已归一。**
+  
+  `jsd_set_instance_properties` 把键原样透传给引擎，中间零归一。而引擎对**组件属性**（BOOLEAN / TEXT / INSTANCE_SWAP）只认带 `#` 后缀的完整键 —— 真机四连测，短名一律 `in setProperties: Could not find a component property with name: '标题'`（TEXT / BOOLEAN / INSTANCE_SWAP 三类都一样）。免后缀只对**变体属性**成立，那是另一张表。
+  
+  三处文档（输入 schema 的 describe、`component-property` 配方 §4、工具描述）长期写着「门面会自动归一，传名字即可」，实现里只有 MasterGo 门面做了，且那里自承只兜得住 BOOLEAN/TEXT。现在在 `core/component.ts` 补齐三个平台，四条纪律：精确命中保留 → 基名**唯一**命中补成完整键 → 命中 0 个原样透传（变体属性不在 `componentProperties` 里、MG 的实例属性表实测常为空，按「查不到就拒」会把这两类合法调用一起打死）→ 命中 ≥2 个报错并列出候选。
+  
+  歧义在**任何一次写入之前**报出来（先把每个实例要写的键算完再统一下笔），不留下半批覆盖。三处文档同步改成「变体属性传名字，组件属性传完整键，core 只在基名唯一时补全」。
+  
+  **② 读侧：看不见「哪个属性驱动哪个图层」，于是同一件事能做错而不自知。**
+  
+  `会话行` 的 12 个属性成对存在（`摘要`/`摘要2`、`显示铃铛`/`显示铃铛2`…），只有一组连着可见图层。改错那组时 `componentProperties` **全部回读为新值**、回包 `ok=true`，画布上摘要/时间/铃铛纹丝不动 —— 纯静默失效，且没有任何信号提示哪一组是活的。
+  
+  引擎有一手事实（Figma `plugin-api.d.ts:6545`、MG `dist/index.d.ts:2406` 的 `componentPropertyReferences`），仓库此前只用在写侧绑定，没进读路径。现在加进序列化：`NodeSkeleton` 与线格式各加一个**可选**字段（无引用或平台不支持时整个键缺席，「键在 = 至少有一条引用」可直接依赖），槽位键**归一到一套词汇** `visible` / `characters` / `mainComponent` —— MG 原生的显隐槽叫 `isVisible`，原样透传等于把 0025 刚决定藏起来的两套词汇重新暴露到读路径。`jsd_find` 读组件子层即可看到 `R_摘要 → { characters: "摘要2#32:7" }`，据此一次选对属性。
+  
+  jsDesign 的 `plugin-api.d.ts` 全文零命中该声明（属**接不了**，与「未接」不是一回事），已登记进 `jsdesign/sync-guarantee.ts` 的缺席清单，由编译期断言守。
+  
+  **顺带修掉一个会喂错模型的坑**：`component-property` 配方 §6「复核」只教了「回读 `componentProperties` 比对」，而这恰好是上面那个静默失效骗得过的判据。现在补一条：回读通过 ≠ 画面变了，写完要 **jsd_find 深度读节点的实际内容 / 可见性**复核，选键阶段先读 `componentPropertyReferences`。
+  
+  新增 9 例单测（`component-property-keys.test.ts`）：精确键不改写 / 基名唯一命中补全 / 多头命中报错列候选 / 未知键透传 / 混合三类键 / 布尔值形态不变、读路径槽位归一 / 无引用时键缺席 / 回包能过线格式校验。
+  
+  真机待验（Figma）：① 用短名 `头像` 调 `jsd_set_instance_properties` 应命中 `头像[#32](https://github.com/wzrove/text-to-design/issues/32):6`；② `jsd_find` 读「会话行」组件子层应能看到 `componentPropertyReferences`；③ MasterGo 侧同一字段应输出 `visible`（不是 `isVisible`）。
+
+- [#43](https://github.com/wzrove/text-to-design/pull/43) [`151e129`](https://github.com/wzrove/text-to-design/commit/151e129e0dc3926e1e884a796cfe9d0c50db18ec) Thanks [@wzrove](https://github.com/wzrove)! - feat(mg): MasterGo 变量读写接入 platformOps(见 0040)
+  
+  此前 MG 的变量面是半截的:0039 只接了只读枚举(`jsd_get_page` 的 `assets.variables` 能列出变量),但没有任何写入口 —— 而变量的价值全在「建出来、绑到图层、画布跟着变」。现在补齐三个 op,走既有的 `jsd_platform_op` 通道(不新增工具,目录体积不受影响):
+  
+  - `mg_list_variables` —— 摸底 / 回读:集合(含模式)+ 变量(类型 / 所属集合 / 描述 / 各模式的值)。
+  - `mg_variables_create` —— 批量建变量。**参数形状刻意对齐 Figma 的 `figma_variables_create`**,两个平台共用一套调用纪律;同名集合复用、同名同类型变量就地更新值,失败回滚**本次新建**的集合(复用既有集合时不删,避免连坐删掉用户变量)。初值:单值类型直接给(BOOLEAN/NUMBER/STRING/COLOR,COLOR 用 `{r,g,b,a}` 0-1 浮点),复合样式类型走部分更新语义。
+  - `mg_variables_apply` —— 绑定 / 解绑变量到图层属性(`unbind: true` 解绑)。
+  
+  **槽位取值以官方文档为唯一依据**:`mg.variables` 这片 API 在 typings 里只有签名、没有一个字的说明,`setVariableReferenceInLayer({strokeProperty: 'all'})` 这类槽位的取值全是裸 `string` —— 照类型猜会写出不存在的槽位而静默不生效。故按官方文档的「属性参数一览」逐值落表(`baseProperty` / `strokeProperty` / `radiusProperty` / `paddingProperty` / `dimensionProperty` / `effectProperty` / `gridProperty` / `textProperty`),并在入参校验就点名(传错立刻报可选项清单,不落到引擎)。文档与 typings 的两处不一致已就地注明:文档的变量类型表少一个 `SPACING`、`setVariableValue` 的 `modeId` 文档可选而 typings 必填(本仓按 typings 走,并加了双向同宽断言)。
+  
+  **回读纪律**:`create` 回读变量是否都在(缺一个就抛 —— 本平台有「回包成功、值没变」的前科);`apply` 回读 `getLayerVariableModes`,拿不到变量所属集合时在结果里点名 `unverified` + `warning`。⚠ MG **没有**「图层属性 ↔ 变量」的反读接口,所以绑数组属性(fills / effects / grids)必须自己给 `index`,视觉结论要 `jsd_export` 目视 —— 这条写进了 op 描述与配方。
+  
+  **顺带修掉一个会喂错模型的坑**:`variable-binding` 配方的「批量绑定」那段此前硬写着 Figma 的字段词汇(`nodeIds` + `boundProperty` + `variableId`)。MG 一旦有了写入口,按「有写入口」拼接的同一段文案就会落到 MG 调用方身上 —— 参数名全错且不报错,只会静默绑不上。现在把三段平台句子挪进 `platform-facts.ts`(平台差异只落声明表与投影点),配方只做拼接;`variableFaceText` 的装配期那半句也改成按表逐平台派生(原来硬写 Figma 的读路径)。
+  
+  `platform-knowledge.ts` 的 MG `variables` 随之更新:`write` = 两个新 op,`nativeUnwired` 缩到旁支(模式管理 / 分组管理 / 变量引用变量 / 作用域与代码语法 / 复合变量补子项 / 一步建绑);`meta.ts` 声明 `variables` 能力位(此前不 claim 正是因为只有 typings 没有接线);MG 的 `platformOps` 11 → 14。
+  
+  真机待验(MasterGo 客户端):① 建四种单值变量并回读值;② 建复合样式变量;③ `strokeProperty:'all'` 等槽位各绑一次确认画布真的变;④ `unbind` 能解开;⑤ 传错槽位时错误里出现可选项清单。
+
+- [#43](https://github.com/wzrove/text-to-design/pull/43) [`151e129`](https://github.com/wzrove/text-to-design/commit/151e129e0dc3926e1e884a796cfe9d0c50db18ec) Thanks [@wzrove](https://github.com/wzrove)! - fix: 跨页读按平台声明收口 —— 读不到非当前页的平台只扫当前页（0039 修订，两轮真机实测）
+  
+  即时设计真机跑了两轮（每轮都 `pnpm build` + 重载插件）：
+  
+  | 请求 | 第一轮（0043 后） | 第二轮（按符号收口） | 第三轮（按能力声明收口） |
+  |---|---|---|---|
+  | `jsd_ping` | 5ms | 22ms | 16ms |
+  | `jsd://styles` | **11ms**（原 25008ms 超时） | — | **8ms** |
+  | `jsd_find` 当前页 | 44ms | 44ms | — |
+  | `jsd_find scope=document` | 25425ms / 25466ms `forward_timeout` | 25008ms `forward_timeout` | **25ms**，带「已退回当前页」note |
+  | `jsd_get_page` | 25634ms `forward_timeout` | 25016ms `forward_timeout` | **42ms** `ok=true` |
+  
+  第三轮 `get_page` 的真实回包：当前页 14 个顶层 FRAME（id/名称/类型/宽高/x/y）+ `assets` 四键（本平台样式/变量读不出，恒空）+ `pages` 一条 + 两句 `note` 点名成因。
+  
+  样式那一半已经修好（0043：`jsd://styles` 11ms 返空带 `note`），但 `get_page` 仍然挂 —— **卡点是跨页读**：当前页 find 只要 44ms，跨页必挂 25s。0039 那句「jsDesign 无 dynamic-page、文档常驻，直接遍历即可」不成立。
+  
+  **第一版判据（有没有 `loadAllPagesAsync`）被真机推翻**：按符号收口后 `find scope=document` 照样 25008ms 超时。原因和 0042 的样式 getter 是**同一个坑** —— jsDesign 的 host 是 `Object.create(native)`，typings 里没有的符号运行时照样透出来，于是 `loadAllPagesAsync` **存在且永不返回**。
+  
+  **最终判据**：新增能力位 `documentScopeRead`（形制同 0043，只收平台声明）。未声明 ⇒
+  
+  - `get_page` 的资源清单与 `pages` 元数据**只覆盖当前页**；
+  - `jsd_find scope=document` **退回当前页**；
+  - **连 `ensurePagesLoaded` 都跳过**（它 await 的正是那个永不返回的调用）；
+  - 以上都在 `note` 里点名（「不等于文档只有一页」）。
+  
+  判据放在**调用前**，不是 try/catch —— 同步调用不可中断，失败根本走不到 catch。Figma 声明（真有 dynamic-page 且会返回）；即时设计 / MasterGo 不声明（MG 未真机验，按保守默认收口，验过能跨页再放开这一位）。
+  
+  新增 4 例单测（`document-scope.test.ts`），断言的是**遍历了哪些页**而不是返回值；假宿主刻意把 `loadAllPagesAsync` 做成「符号在」（真机上它永不返回），用例验的是闸门而不是挂死。
+
+- [#43](https://github.com/wzrove/text-to-design/pull/43) [`151e129`](https://github.com/wzrove/text-to-design/commit/151e129e0dc3926e1e884a796cfe9d0c50db18ec) Thanks [@wzrove](https://github.com/wzrove)! - fix: 样式枚举拆出独立能力位，`get_page` 与 `jsd://styles` 按平台声明返空（见 0043）
+  
+  0042 把样式枚举拆成了四次独立调用，但没解决根因：core 判断「能不能问样式」靠 `typeof host.getLocalPaintStyles === 'function'`，而即时设计**四个 getter 全都在** —— 只是引擎侧永不返回。存在性探测答的是「有没有这个东西」，而这里的问题是「问了没回音」，判据类型不对。
+  
+  **本批把判据换成平台声明**：新增能力位 `styleEnumeration`（「能不能列出有哪些样式」），与既有的 `styles`（「能不能**按 id 应用**样式」）分开 —— 合成一位正是这次事故的机制：即时设计 claim 了 `styles` 且它真的能按 id 应用，于是「能列清单」被隐含出来，`get_page` 因此全废（25s `forward_timeout`）。
+  
+  - **未声明 ⇒ 恒空，且一个 getter 都不调。** 闸在 `core/access.ts`（两个消费方共用：`list_styles` ← `jsd://styles`，`listDocumentAssets` ← `get_page`）。断言的是**调用记录** —— 只看返回值会放过「取回来再丢掉」，而那照样冻死线程。
+  - **变量面同规则**（用既有的 `variables` 位）：资源清单四个面此前是「两个靠声明、两个靠探测」，同一份清单两套判据，正是漏判的土壤。
+  - **能力表未注入时 fail-open**（退回 `typeof` 探测，沿 0002 与写路径同口径）。
+  - **空数组必须点名成因**（0007）：`jsd://styles` 回包加 `note`，`get_page` 的 `note` 多第三种来源 —— 「清单读不出来」不能被读成「文档里没有样式」。
+  
+  平台声明：Figma / MasterGo 声明 `styleEnumeration`，即时设计只声明 `styles`。MasterGo 这一条**未真机验过**，是按现状声明（此前 MG 就是在枚举样式的，不为未验证的怀疑砍掉它的清单）—— 真机一测不对，改 `meta.ts` 那一行即可，机制不动。
+  
+  **顺带清掉 0042 的探针**：`list_styles` 的 `kinds` 入参与单类资源 `jsd://styles/{kind}` 一并删除。它的存在前提是「还要靠分开问来定位哪一类坏」，而现在不该问的平台在能力闸处一个 getter 都不会调 —— 「按类少问」不再承载判断，长期养一个入口没有收益；真要取证，临时放开声明即可。四类仍保留为**四次独立调用**（任一类失败不连坐，这条独立成立），`STYLE_KINDS` 也留着 —— `styles[].type` 的取值域还需要它一处。
+  
+  真机待验：① 即时设计上 `get_page` 与 `jsd://styles` 回到毫秒级且 `note` 点名；② MasterGo 上 `jsd://styles` 仍列得出样式。
+
 ## 0.11.0
 
 ### Minor Changes
