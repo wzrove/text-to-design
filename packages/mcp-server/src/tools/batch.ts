@@ -15,7 +15,13 @@ import {
 } from '../core/registry';
 import type { McpI18n } from '../i18n';
 
-/** 按点分路径(含 a[0].b 下标段)从步骤结果根对象取值;任一段不可达视为失败 */
+/**
+ * 按点分路径(含 a[0].b 下标段)从步骤结果根对象取值;任一段不可达视为失败。
+ *
+ * created/updated 是数组还是单对象随工具而异,写占位符时最容易猜反。两种形状
+ * 各只有一种无歧义读法时互认:单元素数组按对象取字段(`created.id`≈`created[0].id`)、
+ * 单对象取下标 0(`created[0]`≈`created`)。多元素数组不认(歧义),照旧报错。
+ */
 function getPath(
   root: unknown,
   path: string,
@@ -25,13 +31,18 @@ function getPath(
     const m = /^([\w$\u4e00-\u9fff-]*)((?:\[\d+\])*)$/.exec(part.trim());
     if (m == null) return { ok: false };
     if (m[1] !== '') {
+      if (Array.isArray(cur) && cur.length === 1) cur = cur[0];
       if (cur == null || typeof cur !== 'object') return { ok: false };
       cur = (cur as Record<string, unknown>)[m[1]];
     }
     if (m[2] !== '') {
       for (const idx of m[2].matchAll(/\[(\d+)\]/g)) {
-        if (!Array.isArray(cur)) return { ok: false };
-        cur = cur[Number(idx[1])];
+        const i = Number(idx[1]);
+        if (!Array.isArray(cur)) {
+          if (i === 0 && cur != null && typeof cur === 'object') continue;
+          return { ok: false };
+        }
+        cur = cur[i];
       }
     }
   }

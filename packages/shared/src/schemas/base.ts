@@ -34,39 +34,40 @@ export interface RGB {
 /** 客户端可传的颜色:0-1 通道对象或 hex 字符串(#RGB/#RGBA/#RRGGBB/#RRGGBBAA) */
 export type RGBInput = RGB | string;
 
+// 通道上限 255:0-1 原样透传,>1 由 core/normalize.ts 整组 /255,与运行时容错保持一致
 const colorChannels = z
   .object({
     r: z
       .number()
       .min(0)
-      .max(1, '颜色通道最大 1(0-255 的色值请先除以 255 归一化)')
+      .max(255, '颜色通道最大 255')
       .describe('schema.base.r'),
     g: z
       .number()
       .min(0)
-      .max(1, '颜色通道最大 1(0-255 的色值请先除以 255 归一化)')
+      .max(255, '颜色通道最大 255')
       .describe('schema.base.g'),
     b: z
       .number()
       .min(0)
-      .max(1, '颜色通道最大 1(0-255 的色值请先除以 255 归一化)')
+      .max(255, '颜色通道最大 255')
       .describe('schema.base.b'),
     a: z
       .number()
       .min(0)
-      .max(1, 'alpha 通道最大 1(0-255 请先归一化)')
+      .max(255, 'alpha 通道最大 255')
       .optional()
       .describe('schema.base.a'),
   })
   .strict();
 
-// 颜色 = 通道对象(0-1)或 hex 字符串。只做校验不做 transform:hex→通道的
-// 归一化在 core/normalize.ts 引擎赋值前统一完成(schema 带 transform 时
+// 颜色 = 通道对象(0-1,或 0-255 由归一化处理)或 hex 字符串。只做校验不做 transform:
+// hex→通道的归一化在 core/normalize.ts 引擎赋值前统一完成(schema 带 transform 时
 // z.toJSONSchema 直接抛 "Transforms cannot be represented in JSON Schema")。
 // 不用 union:union 失败时 zod 只报笼统的 "Invalid input",这里手动分发校验,
-// 对象输入透出通道级精确报错(如 0-255 归一化提示),字符串输入给出 hex 格式提示。
+// 对象输入透出通道级精确报错,字符串输入给出 hex 格式提示。
 const COLOR_TYPE_HINT =
-  '颜色需为 {r,g,b[,a]} 对象(通道 0-1,0-255 色值请先除以 255)或 hex 字符串(#RGB/#RGBA/#RRGGBB/#RRGGBBAA,如 "#ff0000")';
+  '颜色需为 {r,g,b[,a]} 对象(通道 0-1;任一路 >1 视为 0-255,自动整组 /255)或 hex 字符串(#RGB/#RGBA/#RRGGBB/#RRGGBBAA,如 "#ff0000")';
 
 // 单段 as:入参类型是客户端形态 RGBInput,输出类型是归一化后的通道对象
 // (core/normalize.ts 产出),两侧语义各自成立
@@ -93,11 +94,11 @@ const colorSchema = z.unknown().superRefine((v, ctx) => {
 }) as z.ZodType<RGB, RGBInput>;
 
 export const rgbSchema = colorSchema.describe(
-  '颜色:{r,g,b} 对象(通道 0-1)或 hex 字符串,如 "#ff0000"(带透明度可用 8 位 hex,其 alpha 会转为 paint 级 opacity)',
+  '颜色:{r,g,b} 对象(通道 0-1,>1 视为 0-255 自动归一化)或 hex 字符串,如 "#ff0000"(带透明度可用 8 位 hex,其 alpha 会转为 paint 级 opacity)',
 );
 
 export const rgbaSchema = colorSchema.describe(
-  'RGBA 颜色:{r,g,b,a} 对象(通道 0-1,a 缺省按 1)或 hex 字符串,如 "#ff0000"、"#ff000080"',
+  'RGBA 颜色:{r,g,b,a} 对象(通道 0-1,>1 视为 0-255 自动归一化;a 缺省按 1)或 hex 字符串,如 "#ff0000"、"#ff000080"',
 );
 export type RGBA = RGB;
 

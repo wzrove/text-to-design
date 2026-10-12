@@ -33,6 +33,23 @@ const GATED_SPEC_KEYS = Object.keys(CAPABILITY_OF_GATED_PROP).filter(
  */
 const SIZE_TOLERANCE = 0.5;
 
+/**
+ * 创建前预检整棵子树:失败必须发生在任何节点落地之前,否则抛错会留下建了一半的孤儿层
+ * (实测 icon 子节点报错后,父 FRAME 已 appendChild 到画布上)。
+ */
+export function assertSpecSupported(spec: ExecuteOp): void {
+  const iconField = (spec as unknown as Record<string, unknown>).icon;
+  if (iconField != null) {
+    // children 走 catchall 放行,未知键会被静默忽略并建出空矢量(实测 100×100 空 VECTOR)
+    throw new Error(
+      `子节点不支持 icon 字段(收到 ${JSON.stringify(iconField)}):图标请用 jsd_create_icon 单独创建,再用 jsd_manage_nodes(op=reparent, 传 parentId)移入父容器`,
+    );
+  }
+  for (const child of spec.children ?? []) {
+    assertSpecSupported(child);
+  }
+}
+
 async function buildNode(
   host: DesignHost,
   ctx: RuntimeContext,

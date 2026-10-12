@@ -8,7 +8,7 @@ import {
   propAppliesTo,
 } from '../dicts/prop-applicability';
 import type { ExecuteOp, SerializedNode } from '../schemas';
-import buildNode from './buildNode';
+import buildNode, { assertSpecSupported } from './buildNode';
 import type { DesignHost, NodeSkeleton } from './host';
 import {
   type CreateNotes,
@@ -193,8 +193,16 @@ export async function executeOps(
   const created: NodeSkeleton[] = [];
   // 写后回收袋(0007):门控字段 + 回读不一致 + writer 自述告警,一次调用共用一份
   const notes = emptyNotes();
+  // 出错回滚按「页面顶层新增了什么」清扫,而不是只删 created 里的:抛在 buildNode 半途时
+  // 那个节点还没进 created(实测 icon 子节点报错后留下建了一半的空父层)
+  const pageTopBefore = new Set(
+    ((page as { children?: readonly NodeSkeleton[] }).children ?? []).map(
+      (c) => c.id,
+    ),
+  );
   try {
     for (const spec of specs) {
+      assertSpecSupported(spec);
       const node = await buildNode(host, ctx, spec, page, notes);
       if (mode === 'center') {
         const center = host.viewport.center;
@@ -209,9 +217,14 @@ export async function executeOps(
       created.push(node);
     }
   } catch (e) {
-    for (const node of created) {
+    // 先取静态快照再删:children 是活数组,边删边迭代会跳过元素
+    const topNow = [
+      ...((page as { children?: readonly NodeSkeleton[] }).children ?? []),
+    ];
+    for (const n of topNow) {
+      if (pageTopBefore.has(n.id)) continue;
       try {
-        node.remove();
+        n.remove();
       } catch {}
     }
     throw e;

@@ -26,7 +26,11 @@ interface NormalizedColor {
   a?: number;
 }
 
-/** 颜色通道归一化:hex 字符串与 0-255 → 0-1(任一路 >1 视为 0-255 输入,整组 /255);0-1 原样保留 */
+/**
+ * 颜色通道归一化:hex 字符串与 0-255 → 0-1。
+ * rgb 与 a 各自判量纲(任一路 >1 视为该组 0-255 输入,整组 /255),
+ * 否则混合写法 {r:0.2,g:0.4,b:0.6,a:180} 会把本已 0-1 的 rgb 也除掉。
+ */
 function normalizeColor(raw: unknown, path: string): NormalizedColor {
   if (typeof raw === 'string') {
     const hex = parseHexColor(raw);
@@ -45,12 +49,12 @@ function normalizeColor(raw: unknown, path: string): NormalizedColor {
   let g = normChannel(o.g, path, 'g');
   let b = normChannel(o.b, path, 'b');
   let a = o.a != null ? normChannel(o.a, path, 'a') : undefined;
-  if (r > 1 || g > 1 || b > 1 || (a != null && a > 1)) {
+  if (r > 1 || g > 1 || b > 1) {
     r /= 255;
     g /= 255;
     b /= 255;
-    if (a != null) a /= 255;
   }
+  if (a != null && a > 1) a /= 255;
   return { r, g, b, a };
 }
 

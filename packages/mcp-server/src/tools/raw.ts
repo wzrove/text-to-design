@@ -1,6 +1,6 @@
-import { readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import type { McpServer } from '@modelcontextprotocol/server';
 import {
   exportResultSchema,
@@ -81,6 +81,7 @@ export function registerRawTools(
           size: bytes.byteLength,
         };
         if (savePath) {
+          mkdirSync(dirname(savePath), { recursive: true });
           writeFileSync(savePath, bytes);
           out.path = savePath;
         }

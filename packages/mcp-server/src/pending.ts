@@ -105,6 +105,7 @@ export class PendingManager {
           signal,
           listener: () => {
             if (this.pending.delete(id)) {
+              clearTimeout(entry.timer);
               this.detachAbort(entry);
               log(`请求取消: ${id} ${method} 耗时=${Date.now() - startedAt}ms`);
               reject(new BridgeError('cancelled', `请求已取消: ${method}`));
@@ -166,7 +167,7 @@ export class PendingManager {
     }
     const pending = this.pending.get(msg.id);
     if (!pending) {
-      warn(`未匹配响应: id=${msg.id}(可能已超时或来源不明)`);
+      warn(`未匹配响应: id=${msg.id}(客户端已取消回收,或来源不明)`);
       return;
     }
     if (msg.hasBinary && (msg.binaryCount ?? 1) > 0) {
