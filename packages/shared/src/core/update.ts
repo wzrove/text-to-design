@@ -21,7 +21,7 @@ import {
 } from './props/risk';
 import { runWriters } from './props/run';
 import { emptyOutcome, type WriteOutcome } from './props/types';
-import { UPDATE_WRITERS } from './props/writers';
+import { layoutDriftNotices, UPDATE_WRITERS } from './props/writers';
 import type { RuntimeContext } from './runtime';
 import { serializeNode } from './serialize';
 import { collectTargets, fontNotResolved } from './utils';
@@ -247,6 +247,10 @@ export async function updateSelection(
   // 序列化提前到告警组装之前:字体判定要用**序列化后**的 fontName(引擎已落库的形态),
   // 写入时刻读到的还是原样回显,判不出「组合有没有被解析」(见 utils.fontNotResolved)。
   const updated = targets.map((n) => serializeNode(n));
+  // 开布局的副作用(子节点重排 / 容器被 hug)在 settle 之后才可见 → 用序列化值对账
+  for (let i = 0; i < targets.length; i += 1) {
+    warnings.push(...layoutDriftNotices(targets[i], updated[i]));
+  }
   const wantFont = (props as { fontName?: unknown }).fontName as
     | { family?: unknown; style?: unknown }
     | undefined;

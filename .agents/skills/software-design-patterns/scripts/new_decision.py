@@ -10,8 +10,8 @@ Usage:
 
 Only stdlib (Python 3.8+).
 
-标识分两套并存（用户 2026-10-11 定案，见决策记录 a1b2c3d4）：
-- 旧记录：0001–0039 的 4 位数字，文件名与引用一律不动；
+标识分两套并存（用户 2026-10-11 定案，见决策记录 de446d4e）：
+- 旧记录：4 位数字号，文件名与引用一律不动；
 - 新记录：`uuid4` 前 8 位十六进制。多人各自从同一基线开分支时，
   `max+1` 必然撞号，而 id 由随机数决定，跨分支不共享计数器所以不会撞。
 占号用 `O_CREAT|O_EXCL`：同一分钟内两人各跑一次也只有一个赢家。
@@ -155,15 +155,17 @@ def set_index_status(directory: Path, ident: str, status: str) -> bool:
     return False
 
 
-def update_index(directory: Path, ident: str, title: str) -> None:
+def update_index(directory: Path, ident: str, title: str, filename: str) -> None:
     """Insert the row inside the table body — never after later sections.
 
     数字行按号插到该在的位置；短 id 行没有可比顺序，一律追加到表尾。
+    行首写成 `[标识](文件名)`：INDEX 的编号列一直是可达链接，裸标识会让该行
+    在表里看起来像没登记（手工补的旧行全是链接形态）。
     """
     index = directory / "INDEX.md"
     if not index.exists():
         index.write_text(INDEX_HEADER, encoding="utf-8")
-    row = f"| {ident} | {title} | 提议 | 待补充 | {today()} |\n"
+    row = f"| [{ident}]({filename}) | {title} | 提议 | 待补充 | {today()} |\n"
     lines = index.read_text(encoding="utf-8").splitlines(keepends=True)
 
     insert_at = None
@@ -242,7 +244,7 @@ def main() -> int:
     ident = ident_of(path.name)
     path.write_text(render(TEMPLATE.read_text(encoding="utf-8"), ident, args.title, supersedes),
                     encoding="utf-8")
-    update_index(directory, ident, args.title)
+    update_index(directory, ident, args.title, path.name)
 
     if supersedes is not None:
         replaced = set_record_status(directory, supersedes, "已被取代")

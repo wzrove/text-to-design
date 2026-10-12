@@ -1,9 +1,11 @@
 import {
   DOMAIN_CAPABILITY,
   type KnowledgeDomain,
+  LAYOUT_GRID_UNVERIFIABLE_PLATFORMS,
   PLATFORM_LABEL,
   PLATFORMS,
   type PlatformKey,
+  PROP_APPLICABILITY,
   platformDomainFact,
   platformMethodParamAcceptedKinds,
 } from 'text-to-design-shared';
@@ -299,4 +301,30 @@ export function componentFaceText(platform: PlatformKey | null): string {
   return fact?.read == null
     ? `${label(platform)}读不到 componentProperties(能力位未声明),只能读 variantProperties。`
     : `${label(platform)}读得到 componentProperties 与 variantProperties(组件属性传带 \`#\` 后缀的完整键,变体属性传名字)。`;
+}
+
+/**
+ * 「容器怎么排布」—— 自动布局与栅格参考线两条路都在,免得调用方只知道手摆 x/y。
+ *
+ * 数据取自两张既有声明表,本文件不另立事实:
+ * - 宿主类型:`PROP_APPLICABILITY.layoutGrids`(与 core 写路径同一份,见 0022);
+ * - 逐平台可落性:`LAYOUT_GRID_UNVERIFIABLE_PLATFORMS`(MG 复验记录,见 0022 的第四类登记)。
+ * 「互斥」那句在 `shared/core/props/writers.ts` 的网格 warnings 里还有一份运行期措辞
+ * (那条带各平台证据,摘不掉);本条是**事前**提示,两处判据同源。
+ */
+export function layoutHintText(platform: PlatformKey | null): string {
+  const hosts = PROP_APPLICABILITY.layoutGrids.join(' / ');
+  const gridStatus = (p: PlatformKey): string =>
+    LAYOUT_GRID_UNVERIFIABLE_PLATFORMS.includes(p)
+      ? `${label(p)}:\`layoutGrids\` 实测不收(节点级网格不落盘)—— 别重试,要栅格请在设计器里手动加`
+      : `${label(p)}:\`layoutGrids\` 可写,写后走双读回读校验,没生效会在结果 warnings 里点名`;
+  return [
+    '排布有两条路,都可用:① **自动布局** —— `layoutMode=HORIZONTAL|VERTICAL` 配 ',
+    '`itemSpacing/padding*/primary|counterAxisSizingMode|primary|counterAxisAlignItems`',
+    '(节奏按上一条:归组摆好后用 jsd_set_layout);② **栅格参考线** —— `layoutGrids`(仅 ' +
+      hosts +
+      ')。',
+    '两者互斥:引擎只在**非自动布局**的容器上收网格。',
+    targets(platform).map(gridStatus).join(';'),
+  ].join('');
 }

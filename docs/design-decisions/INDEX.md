@@ -3,134 +3,82 @@
 历史只增不改。结论变了就新建记录并取代旧编号，旧记录保留原文。
 
 读法：每条决策**先读本索引**定位受影响的既有记录（含下面的依赖关系），再打开单条。
-下表只列**最近 10 条**；更早的 0001–0024 见 [`INDEX-2026.md`](INDEX-2026.md)。
+下表留**现行有效 + 最近 10 条**；更早的 0001–0024 见 [`INDEX-2026.md`](INDEX-2026.md)。
 
-维护阈值：本表 ≤ 15 KB 或 ≤ 40 条，超限**按年拆档**（全量行移入 `INDEX-<年>.md`，本表只留现行有效 + 最近 10 条）；
-单条记录的「变更历史」> 10 行时压成一行摘要 + 指向被取代的记录。完整机制见
-`.agents/skills/software-design-patterns/references/decision-log.md`。
+索引行**只存定位信息**：状态列是封闭词表值（最多跟一个短标注），影响范围列是层/包粒度，
+依赖关系只写关系。真机数据、文件清单、论证摘要都在**单条记录**里 —— 别往索引抄（口径见
+`.agents/skills/software-design-patterns/references/decision-log.md`，行宽与体积由
+`tests/skill-doc-budget.test.ts` 守）。维护阈值：本表 ≤ 15 KB 或 ≤ 40 条，超限**按年拆档**
+（全量行移入 `INDEX-<年>.md`）；单条记录的「变更历史」> 10 行时压成一行摘要 + 指向被取代的记录。
 
 | 编号 | 标题 | 状态 | 影响范围 | 最后更新 |
 |---|---|---|---|---|
-| [0025](0025-Figma补上组件属性的定义入口：一个op承担定义即绑定，不照搬MG的四段式.md) | Figma 补上组件属性**定义**入口：一个 op 承担「定义 + 绑定」，不照搬 MG 四段式 | 已采纳（**Figma 真机复验通过**：2026-09-25 验 INSTANCE_SWAP / TEXT 两槽，2026-09-29 补测 BOOLEAN 槽(可见性)，属性确实驱动图层） | `ui/code/figma/{ops,sync-guarantee}.ts`、`mcp-server/tools/nodes.ts`、`mcp-server/README.md` | 2026-09-25 |
-| [0029](0029-能力字典改规格表：kind-判别加-labelKey-收口，删死代码与重复事实.md) | 能力字典改规格表：kind 判别 + labelKey 收口 | 已采纳（类型检查 + 不变式测试通过） | `shared/`（`dicts/capability.ts`、`core/{capabilities,buildNode}.ts`、i18n 少一键）、`ui/`（删 `i18n/capabilityKeys.ts`、`CapabilityCard`、`figma/meta.ts` 少一位） | 2026-09-29 |
-| [0030](0030-MCP-服务实例一次装配、跨请求复用（目录不再按请求重建）.md) | MCP 服务实例一次装配、跨请求复用（目录不再按请求重建） | 已采纳（类型检查 + 本包 24 例不变式测试通过；真机复验待插件重载） | `mcp-server/`（`daemon/run.ts` 装配改一次、`server.ts` 删 `liveSessions`/`syncToolAvailability` + 加 `cacheHints`、`index.ts` 连接变化回调）、`daemon/proxy.ts` 注释 | 2026-09-29 |
-| [0031](0031-MCP-声明面照-2026-07-28-补齐：目录缓存提示-+-工具注解四-hint-必填.md) | MCP 声明面照 2026-07-28 补齐：目录缓存提示 + 工具注解四 hint 必填 | 已采纳（类型检查 + 本包 24 例不变式测试通过；真机复验待插件重载） | `mcp-server/`（`config.ts`、`server.ts`、`daemon/proxy.ts`、`core/registry.ts`、`tools/*.ts` 全 53 个工具的注解） | 2026-09-29 |
-| [0032](0032-平台事实三域收敛为声明表：prompts-与工具描述共用单一投影点.md) | 平台事实三域收敛为声明表：prompts 与工具描述共用单一投影点 | 已采纳（类型检查 + 12 例不变式 + i18n/目录体积回归通过；2026-10-08 真机：jsDesign 侧 boolean 一项**不可隔离**（无属性可设）、MG/Figma 侧配方分流通过） | `shared/`（新增 `dicts/platform-knowledge.ts`、`platform-value-domain.ts` 第四类登记、`core/host.ts`、i18n 三键）、`ui/`（三侧 `sync-guarantee.ts`）、`mcp-server/`（新增 `tools/platform-facts.ts`、`tools/{prompts,components,platform}.ts`、`README.md`）、`tests/platform-knowledge.test.ts` | 2026-10-08 |
-| [0033](0033-MG-集合级变体管理接入-platformOps：原生建维改值替代改名副作用.md) | MG 集合级变体管理接入 platformOps：原生建维改值替代改名副作用 | 已采纳（类型检查 + 18 例新单测 + 40 例既有 MG 单测 + 事实表/i18n/目录体积回归 + 三平台构建通过；**真机复验通过**——MG 客户端 7 项全通，`platformOps` 5→11、画布已清干净） | `ui/src/code/mastergo/`（`ops.ts` 6 个 op、新增 `variant-set.ts` 与其单测、`meta.ts`、`sync-guarantee.ts`）、`shared/dicts/platform-knowledge.ts`、`mcp-server/`（`tools/{platform-facts,prompts}.ts`、`README.md`）、`tests/platform-knowledge.test.ts` | 2026-09-29 |
-| [0034](0034-单类型-create-工具容忍并校验-type：三处口径统一加越界字段点名.md) | 单类型 create 工具容忍并校验 `type`：三处口径统一 + 越界字段点名 | 已采纳（类型检查 + 8 例新单测 + 266 例回归 + 三平台构建通过；**Figma 真机三条路径复验通过** 2026-10-08，jsDesign / MasterGo 待补） | `mcp-server/`（`tools/create.ts`、`core/registry.ts`）、`shared/src/schemas/batch.ts` | 2026-10-08 |
-| [0035](0035-图表支持：服务端单向编译加复用-SVG-导入通道，骨架原生绘图区-SVG，不引入模式.md) | 图表支持：服务端单向编译 + 复用 SVG 导入通道（骨架原生 / 绘图区 SVG）；另开配方 prompt + `jsd_create_svg` 文件来源覆盖任意种类 | 已被取代（被 [0036](0036-删掉内置图表编译器：图表一律走代码生成-SVG-再导入配方.md) 取代：主路径「内置编译器优先」被删，只留配方那条路；`jsd_create_svg` 的 `svgPath` 来源按原文保留） | `shared/`（新增 `dicts/chart.ts`、`schemas/chart.ts`、`schemas/execute.ts` 新增 `createSvgInputSchema`、i18n 三键）、`mcp-server/`（新增 `src/charts.ts`、`tools/chart.ts`、`prompts.ts` 的 `chart-by-code`、`tools/create.ts` 的 `svgPath`、`config.ts` 体积护栏、`tools/index.ts`、2 个测试文件、`smoke-chart.ts`） | 2026-10-09 |
-| [0036](0036-删掉内置图表编译器：图表一律走代码生成-SVG-再导入配方.md) | 删掉内置图表编译器：图表一律走代码生成 SVG 再导入配方 | 已采纳（类型检查 + 全量 vitest + 三平台构建通过；配方不点名图形库、配色指向画布既有变量；真机待验项沿 0035：SVG 的 `path`/`C`/`circle` 保真、`<text>` 字体回落） | `shared/`（删 `schemas/chart.ts`、删 `dicts/chart.ts`、出口各摘一条、i18n 少一键）、`mcp-server/`（删 `src/charts.ts`、`tools/chart.ts`、`smoke-chart.ts`、`__tests__/chart.test.ts`、`tools/index.ts` 注册、`tools/prompts.ts` 配方重写、`tools/create.ts` 描述）、两个 `README.md` | 2026-10-09 |
-| [0037](0037-提示反馈收口：页头改用-daisyUI-tooltip，操作结果统一走-toast-出口.md) | 提示反馈收口：页头改用 daisyUI tooltip，操作结果统一走 toast 出口 | 已采纳（类型检查通过；真机待验：气泡宽度/贴边、toast 层级与连点去重） | `ui/`（新增 `components/{Tooltip,Toast}.tsx`、`utils/toast.ts`，`index.css` 加一条气泡宽度规则；页头四组件 + `App.tsx`；`SelectionCard` / `ConnectionHint` / `LogDrawer` 的复制反馈）、`shared/`（i18n 增 2 键、删 2 键） | 2026-10-10 |
-| [0038](0038-版本升级提示：daemon代查npm-latest，页头条件挂载升级入口，Modal给分步清单与复制给LLM.md) | 版本升级提示：daemon 代查 npm latest，页头条件挂载升级入口，Modal 给分步清单与复制给 LLM | 已采纳（类型检查 + 守卫/比较单测 + i18n 门禁通过；真机待验：按钮出现时机、Modal 与焦点归还、registry 不可达时不提示） | `shared/`（新增 `version-channel.ts`、i18n 增键）、`mcp-server/`（新增 `version-check.ts`，`bridge.ts` 加推送、`daemon/run.ts` 起周期）、`ui/`（`vite.config.ts` 注入 `__APP_VERSION__`、新增 `utils/version.ts` 与 `components/{UpgradeButton,UpgradeModal}.tsx`、bridge 四处、`App.tsx`） | 2026-10-10 |
-| [0039](0039-get_page-收窄为顶层几何加资源清单：复用既有契约成员，变量走可选入口.md) | `get_page` 收窄为「顶层几何 + 资源清单」：复用既有契约成员，变量走可选入口 | 已采纳（**2026-10-10 即时设计真机三轮已验并据此修订**：跨页读必挂 25s ⇒ 按能力位 `documentScopeRead` 收口为只扫当前页（符号判据那版被真机推翻：该符号运行时存在且永不返回）；样式那半归 0043。**复验通过**：`get_page` 42ms、`find scope=document` 25ms、`list_styles` 8ms。Figma / MG 变量清单与 MG 能否读非当前页待验） | `shared/`（`schemas/results.ts` 出参改形状、`schemas/derived.ts` 加 `AssetRef`、`core/{host,access,nodes}.ts`、新增 `core/assets.ts`、`core/index.ts` 出口、`dicts/platform-knowledge.ts` 的 MG 变量读路径、i18n `getPage.description` 两语言）、`ui/`（`code/figma/host.ts` 与 `code/mastergo/{host,meta}` 加变量投影、三侧 `sync-guarantee.ts` 缺口/投影登记）、`mcp-server/`（`tools/{resources,platform-facts}.ts`、`README.md` 两行） | 2026-10-10 |
-| [0039](0039-website-多语言沿用-0016-口径：locale-由-Solid-context-显式提供，不引库也不做-en-预渲染.md) | website 多语言沿用 0016 口径：locale 由 Solid context 显式提供，不引库也不做 /en/ 预渲染 | 已采纳 | `website/`（新增 `src/i18n/`、`content.ts` 只留语言无关事实、`components/*` 走 `useLocale()`、`Header` 语言切换、`main.tsx` 挂 Provider） | 2026-10-11 |
-| de446d4e | 决策记录改用 8 位短 id 取号，旧数字号只读保留 | 已采纳（scratch 目录跑通：新建取短 id 落表内、`--status 0007` 与 `--supersedes 0007` 仍认旧数字号） | `software-design-patterns/`（`scripts/new_decision.py` 取号与寻址、`SKILL.md`、`references/decision-log.md`）、`AGENTS.md` 落盘路径写法、`INDEX.md` 行格式 | 2026-10-11 |
-
-| [0040](0040-MG-变量读写接入-platformOps：op-形制对齐-Figma，槽位取值以官方文档为据.md) | MG 变量读写接入 platformOps：op 形制对齐 Figma，槽位取值以官方文档为据 | 已采纳（三包类型检查通过，含两组新增编译期断言；真机待验：建值/绑槽位/解绑/错槽位点名，见记录「验证」节） | `ui/`（`code/mastergo/{ops,meta,sync-guarantee}.ts`）、`shared/`（`dicts/{platform-knowledge,capability}.ts`）、`mcp-server/`（`tools/{platform-facts,prompts}.ts`、`README.md`） | 2026-10-10 |
-| [0041](0041-组件属性两处静默缺口：写侧键归一回-core，读侧暴露图层引用.md) | 组件属性两处静默缺口：写侧键归一回 core，读侧暴露图层引用 | 已采纳（三包类型检查通过 + 新增 9 例单测通过；真机待验：短名能命中完整键、`jsd_find` 能读到 `componentPropertyReferences`、MG 侧输出 `visible` 而非 `isVisible`） | `shared/`（`core/{component,serialize,host}.ts`、`schemas/{platform,serialized-node,split-ops}.ts`、新增 `__tests__/component-property-keys.test.ts`）、`ui/`（`code/jsdesign/sync-guarantee.ts` 缺口登记）、`mcp-server/`（`tools/{prompts,components}.ts`）、`.changeset/component-property-gaps.md` | 2026-10-10 |
-| [0042](0042-本地样式枚举按类拆分：同步-getter-不可中断，单类入口兼作定位探针.md) | 本地样式枚举按类拆分：同步 getter 不可中断，单类入口兼作定位探针 | 已采纳（**「四类 = 四次独立调用」保留**；探针那一半 —— `kinds` 筛选与 `jsd://styles/{kind}` —— 已随 0043 同批摘掉） | `shared/`（新增 `dicts/style-kind.ts`、`schemas/{inputs,results}.ts`、`core/{access,export}.ts`、`dicts/index.ts`、新增 `__tests__/list-styles.test.ts`）、`ui/`（`code/plugin.ts`）、`mcp-server/`（`tools/resources.ts` 新增 `jsd://styles/{kind}`） | 2026-10-10 |
-| [0043](0043-样式枚举拆出独立能力位：get_page-与-jsd-styles-按平台声明返空.md) | 样式枚举拆出独立能力位：`get_page` 与 `jsd://styles` 按平台声明返空 | 已采纳（三包类型检查通过 + 8 例单测通过；**即时设计真机已验**：`jsd://styles` 11ms / 8ms 返空带 `note`（原 25s 超时）；`get_page` 剩的跨页那一半已由 0039 修订接走并复验通过（42ms）。MG 侧声明待验） | `shared/`（`dicts/capability.ts` 新增 `styleEnumeration`、i18n 两键、`schemas/results.ts` 加两处 `note`、`core/{access,export,assets,nodes}.ts` 的 ctx 透传与闸、新增 `__tests__/assets-capability.test.ts`、`list-styles.test.ts` 补 3 例）、`ui/`（三侧 `meta.ts`、`code/plugin.ts`）、`mcp-server/`（`tools/resources.ts` 描述 + 摘掉 `jsd://styles/{kind}`） | 2026-10-10 |
+| [0025](0025-Figma补上组件属性的定义入口：一个op承担定义即绑定，不照搬MG的四段式.md) | Figma 补上组件属性**定义**入口：一个 op 承担「定义 + 绑定」 | 已采纳（真机复验通过） | `ui/code/figma`、`mcp-server/tools` | 2026-09-25 |
+| [0029](0029-能力字典改规格表：kind-判别加-labelKey-收口，删死代码与重复事实.md) | 能力字典改规格表：kind 判别 + labelKey 收口 | 已采纳 | `shared/dicts`、`shared/core`、`ui/components` | 2026-09-29 |
+| [0030](0030-MCP-服务实例一次装配、跨请求复用（目录不再按请求重建）.md) | MCP 服务实例一次装配、跨请求复用（目录不再按请求重建） | 已采纳（真机待插件重载） | `mcp-server`、`daemon` | 2026-09-29 |
+| [0031](0031-MCP-声明面照-2026-07-28-补齐：目录缓存提示-+-工具注解四-hint-必填.md) | MCP 声明面照 2026-07-28 补齐：目录缓存提示 + 工具注解四 hint 必填 | 已采纳（真机待插件重载） | `mcp-server`（全工具注解） | 2026-09-29 |
+| [0032](0032-平台事实三域收敛为声明表：prompts-与工具描述共用单一投影点.md) | 平台事实三域收敛为声明表：prompts 与工具描述共用单一投影点 | 已采纳（jsDesign 一项待验） | `shared/dicts`、`shared/core`、`mcp-server/tools`、`ui/code` | 2026-10-08 |
+| [0033](0033-MG-集合级变体管理接入-platformOps：原生建维改值替代改名副作用.md) | MG 集合级变体管理接入 platformOps：原生建维改值替代改名副作用 | 已采纳（真机复验通过） | `ui/code/mastergo`、`shared/dicts`、`mcp-server/tools` | 2026-09-29 |
+| [0034](0034-单类型-create-工具容忍并校验-type：三处口径统一加越界字段点名.md) | 单类型 create 工具容忍并校验 `type`：三处口径统一 + 越界字段点名 | 已采纳（MG / jsDesign 待验） | `mcp-server/tools`、`shared/schemas` | 2026-10-08 |
+| [0035](0035-图表支持：服务端单向编译加复用-SVG-导入通道，骨架原生绘图区-SVG，不引入模式.md) | 图表支持：服务端单向编译 + 复用 SVG 导入通道；另开配方 prompt | 已被取代 | `shared/schemas`、`mcp-server`（已回退） | 2026-10-09 |
+| [0036](0036-删掉内置图表编译器：图表一律走代码生成-SVG-再导入配方.md) | 删掉内置图表编译器：图表一律走代码生成 SVG 再导入配方 | 已采纳（真机待验） | `shared/schemas`、`shared/dicts`、`mcp-server/tools`、两个 `README.md` | 2026-10-09 |
+| [0037](0037-提示反馈收口：页头改用-daisyUI-tooltip，操作结果统一走-toast-出口.md) | 提示反馈收口：页头改用 daisyUI tooltip，操作结果统一走 toast 出口 | 已采纳（真机待验） | `ui/components`、`ui/utils`、`shared/i18n` | 2026-10-10 |
+| [0038](0038-版本升级提示：daemon代查npm-latest，页头条件挂载升级入口，Modal给分步清单与复制给LLM.md) | 版本升级提示：daemon 代查 npm latest，页头条件挂载升级入口 | 已采纳（真机待验） | `shared`、`mcp-server`、`ui/components` | 2026-10-10 |
+| [0039](0039-get_page-收窄为顶层几何加资源清单：复用既有契约成员，变量走可选入口.md) | `get_page` 收窄为「顶层几何 + 资源清单」：复用既有契约成员，变量走可选入口 | 已采纳（真机已修订） | `shared/schemas`、`shared/core`、`shared/dicts`、`ui/code`、`mcp-server/tools` | 2026-10-10 |
+| [0040](0040-MG-变量读写接入-platformOps：op-形制对齐-Figma，槽位取值以官方文档为据.md) | MG 变量读写接入 platformOps：op 形制对齐 Figma，槽位取值以官方文档为据 | 已采纳（真机待验） | `ui/code/mastergo`、`shared/dicts`、`mcp-server/tools` | 2026-10-10 |
+| [0041](0041-组件属性两处静默缺口：写侧键归一回-core，读侧暴露图层引用.md) | 组件属性两处静默缺口：写侧键归一回 core，读侧暴露图层引用 | 已采纳（真机待验） | `shared/core`、`shared/schemas`、`ui/code/jsdesign`、`mcp-server/tools` | 2026-10-10 |
+| [0042](0042-本地样式枚举按类拆分：同步-getter-不可中断，单类入口兼作定位探针.md) | 本地样式枚举按类拆分：同步 getter 不可中断，单类入口兼作定位探针 | 已采纳 | `shared/dicts`、`shared/schemas`、`shared/core`、`ui`、`mcp-server/tools` | 2026-10-10 |
+| [0043](0043-样式枚举拆出独立能力位：get_page-与-jsd-styles-按平台声明返空.md) | 样式枚举拆出独立能力位：`get_page` 与 `jsd://styles` 按平台声明返空 | 已采纳（MG 声明待验） | `shared/dicts`、`shared/core`、`ui/code`、`mcp-server/tools` | 2026-10-10 |
+| [942910d2](942910d2-website-多语言沿用-0016-口径：locale-由-Solid-context-显式提供，不引库也不做-en-预渲染.md) | website 多语言沿用 0016 口径：locale 由 Solid context 显式提供 | 已采纳 | `website/i18n`、`website/components` | 2026-10-12 |
+| [de446d4e](de446d4e-决策记录改用-8-位短-id-取号，旧数字号只读保留.md) | 决策记录改用 8 位短 id 取号，旧数字号只读保留 | 已采纳（scratch 已验） | `.agents/skills/software-design-patterns`、`AGENTS.md`、`INDEX.md` | 2026-10-12 |
+| [89d02d1b](89d02d1b-决策索引只存定位信息：状态列收词表值、影响范围降粒度、体积门禁复活.md) | 决策索引只存定位信息：状态列收词表值、影响范围降粒度、体积门禁复活 | 已采纳 | `INDEX.md`、`tests/skill-doc-budget.test.ts`、`.agents/skills/software-design-patterns/` | 2026-10-12 |
 
 ## 依赖关系
 
-只画**现行有效**的记录（已取代 / 已废弃的不进图）。图覆盖全部现行有效记录，故图里可能出现不在上表的编号
-（那几条已归档进 [`INDEX-2026.md`](INDEX-2026.md)）。
+只画**现行有效**的记录（已取代 / 已废弃的不单列，但可作为被引用项出现）。
+箭头读法：`── 依赖 / 沿 / 取代 / 修订`，理由在单条记录的「相关记录」行与「候选与排除」表里。
 
 ```text
-0005 (Vitest + CI)  ── 全部前置：没有它，其余结论无法验收
-0002 (RuntimeContext) ── 0001 的可测性地基
-0003 (tags + after)  ── 独立，可与任意批次并行
-0006 (目录投影)      ── 独立；原则取自 0003（不手抄清单）
-0001 (PropWriter)    ── 依赖 0002
-0004 (Pipeline)      ── 与 0001 同批；纠正早前评审的「责任链」说法
-0007 (回读回收)      ── 把 0004 的回收面补到创建路径；覆盖面口径取自 0003
-0008 (归档阶段)      ── 独立于代码层；「能被机器守的约束不靠文档纪律」取自 0005
-0009 (依赖单向)      ── 独立于代码层；「同一事实不手写多份」与 0008 同源，都取自 0005
-0010 (异步优先)      ── 契约纪律，不改管线；「能被机器守的不靠文档纪律」取自 0005，可移植边界取自 0009
-0011 (Access 层)     ── 0010 在 dynamic-page 下的落地；解析/加载收口，0001/0004 管线保持同步
-0012 (zod 沙箱化)    ── 独立；外部依赖与 0009 同源（不污染上游库）
-0013 (错误链路)      ── 与 0007 同源（不允许静默失效）；「能被机器守的约束」取自 0005；不改 0001/0004 写入管线
-0014 (面板高度)      ── 独立；「同一事实不手写多份」取自 0008/0009；「不为一处需求引依赖」取自 0012；不改 0001/0004 写入管线
-0015 (日志高度下限)  ── 修订 0014 的「抽屉不参与高度」那一条；「不为一处需求引依赖」取自 0012
-0016 (i18n 键化)    ── 载体取自 0013、唯一真源取自 0007、locale 显式注入沿 0002、体积受 0006 约束；
-                        `ui_env` 加字段沿 0014；不改 0001/0004 写入管线
-0017 (MasterGo 门面投影) ── 契约两处异步化沿 0010（它第一次反向改**既有**成员）；Access 层回退沿 0011；
-                        平台可移植边界沿 0009（平台专属约定不进通用技能）；沙箱存疑点引自 0012；
-                        不改 0001/0004 写入管线
-0018 (MG 变体写入换绑) ── 落在 0017 的平台上；沿 0007「不允许静默失效」立修法（匹配不到必报错、换绑后回读校验）；
-                        调用面不变（仍是 set_instance_properties 语义），故不改 core/线格式
-0019 (MG 组件属性 op)  ── 补 0017 的平台能力缺口（读得到、建不出）；与 figma 的 platformOps 同档；
-                        回读校验沿 0007「不允许静默失效」；被 0018 的组件属性分流依赖
-0020 (不按平台重定义工具) ── 立「差异三档机制（属性门控 / 工具 platforms 名单 / platformOps 通道）」的边界，
-                        明确按平台出工具族属过度设计（撞 0006 目录体积门禁、成本转嫁调用方）；
-                        本次建组件带子节点修在 core 通用管线而非 MG 专属分支，避免制造新的平台分叉；
-                        依赖 0017 的 adapter 分层，沿用 0004/0007 的回读回收，不动 0001/0004 写入管线
-0021 (布局放开到组件/组件集) ── 取代 0020 末尾「加 variantSetLayout 能力位」那条建议：逐平台核对 typings 后
-                        门控恒真 → 不引能力位（静默失效由 0007 回读兜住）；依赖 0017 的 adapter 分层
-0022 (平台类型事实声明表) ── 判定归属层从平台门面移进 core 写路径（只有 core 手上有 ctx/outcome），出口沿 0007；
-                        平台维度沿 0002、载体沿 0001/0021，不引入新模式；依赖 0017
-0023 (组件属性读写形态) ── 一份形态知识只写一处（沿 0022），四个出口共用；「默认不换变体」是 0007 的具体化；
-                        MG 的键归一仍留在门面（0017/0019）
-0024 (boundVariables 读路径) ── 补读出口，动机沿 0007（写后要能回读）；按 0021/0022「逐平台核对后走既有机制」
-                        （超集可选字段 + 编译期断言），不新增词汇（与 0023 同源）；值成员故 0010 不适用
-0025 (Figma 组件属性定义) ── 沿用 0020 的 platformOps 通道加 op（不新造工具族）；合并「定义+绑定」是消 0007 禁的中间态，
-                        槽位由类型推导与 0023「一份形态知识只写一处」同源；形制参照 0019 的 MG 四段式但按平台能力裁剪
-0029 (能力规格表) ── 把「一个事实一份」推到能力面：kind 替掉空数组的三种含义；取向同 0021/0022，不引入模式
-0030 (一次装配、跨请求复用) ── 独立于写入管线；「不引模式、由调用方持有装配结果」沿 0002（不设模块级可变
-                        单例）、目录体积口径沿 0006；删 list_changed 广播与 0016 的装配期投影同源（目录恒定）
-0031 (声明面补齐) ── 与 0030 同批：0030 定的「目录静态」是 0031 给 daemon 侧 CATALOG_TTL_MS 的前提，
-                        两侧取值相反（shim 镜像目录恒 0）也因此；工具注解必填沿 0003「不手抄清单」的取向
-0032 (平台事实三域) ── 把 0022/0029「一个事实一份」推到变量/组件/变体三域：载体沿 0029 的规格表取向、
-                        判定归属沿 0022（数据表 + 编译期断言，不引模式）；prompts 按平台分流沿 0002
-                        （平台状态显式注入，不用模块级单例）；过时注释的复发由 0005 的不变式测试守；
-                        新增第四类登记（契约方法参数取值域）补 0022 三张表装不下的形态
-0033 (MG 集合级变体管理) ── 补 0018 的「未决」项（它把增维/改值留成「需要时另开决策」）：走 0020 的第二档
-                        （platformOps 通道），形制沿 0019 的组件属性 op 组、出口纪律沿 0007（本平台有「回包成功、
-                        值没变」的前科，故每个 op 写完回读）；拒绝「按平台出新工具族」沿 0020、拒绝「扩
-                        combine_as_variants 入参」同因；登记进 0032 的三域事实表，提示词据此分流
-0034 (单类型 create 容忍 type) ── 口径统一沿 0022/0032「一个事实一份」；报错出口沿 0013（出口改写不外扩）；
-                        排除「10 条描述各写一句」是撞 0006 的体积口径；工具面不动沿 0020；
-                        ② 与 daemon/friendly-schema 同为出口改写但输入源不同（zod shape vs 线格式 JSON Schema），
-                        两层不互相引用，故不构成第二份事实
-0036 (删内置图表编译器) ── 取代 0035 的主路径：只留配方 prompt + `jsd_create_svg` 的 `svgPath`（这一条按 0035 原文保留）。
-                        不新增执行面 ⇒ 0020 的三档机制一档都不用；工具数 −1，目录体积取向沿 0006；失败出口沿 0007
-                        「不允许静默失效」（`svgPath` 的读失败/为空/超限仍是人话报错）；字典收窄沿 0029/0032
-                        「一个事实一份」；排除 daemon 内 vm 沙箱的结论直接继承 0035，未重开
-0037 (提示反馈收口) ── 不引模式，只做两处收口（Tooltip 组件 / toast 出口）；浮层不进流沿 0014/0015，
-                        文案键化沿 0016，模块级状态的口径取自 0002 与 `theme.ts` 的既有取舍；
-                        「同一交互只留一个实现」的取向与 0026 同源（该编号是空号，仅代码引用）
-0038 (版本升级提示) ── 不引模式（Strategy/Retry/Observer 均排除）；daemon 代查是宿主网络白名单下的唯一可行路径，
-                        面板直连在 Figma 必被挡；「一个事实一份」沿 0008/0009/0032，推送帧形状照 0033 的旁路消息；
-                        浮层不进流沿 0014，文案键化沿 0016，复制反馈沿 0037 的 `copyWithToast`；
-                        查询失败「不提示」而非报错，是 0007「不允许静默失效」的另一半：留痕但不给错的结论
-0039 (get_page 收窄) ── 不引模式（Strategy/Factory 撞 0009/0032「一个事实一份」、拆工具撞 0020/0006）；
-                        跨页读门控沿 0011（`ensurePagesLoaded` 幂等）、新契约成员的可选+缺口登记形制沿 0010/0017/0028；
-                        资源枚举复用契约既有成员（`findAllWithCriteria`）与 `core.listStyles`，不造第三条通路；
-                        MG 变量的「命名空间投影」照 0017 的门面投影取向（符号在 `mg.variables` 下）；
-                        「工具名与 nodes[].id/x/y 不许动」沿 0003（drift-watch 靠它配对，改名即静默失效）
-0040 (MG 变量读写) ── 走 0020 的第二档（platformOps 通道，不新造工具族，且平台 op 不进工具目录 ⇒ 不撞 0006）；
-                        op 形制沿 0019/0033，写完回读沿 0018/0007（本平台有「回包成功、值没变」前科）；
-                        槽位取值 typings 无据，以官方文档为唯一依据并落表 + 入参点名（0034 的越界字段点名）；
-                        平台句子从配方挪进「投影点」沿 0022/0032（原配方硬写 Figma 词汇，会让 MG 调用方拿到错参数名）；
-                        与 0039 是同一件事的两半：它接只读枚举，这里接写侧
-0041 (组件属性两处缺口) ── 不引模式：写侧键归一是「一份形态知识只写一处」缺掉的下半格（0023 收了**值**形态，
-                        键形态从没归属；三处文档却已承诺归一）；
-                        读侧槽位归一到一套词汇沿 0025（原样透传会把刚藏起来的 Figma `visible` / MG `isVisible` 重新暴露）；
-                        两条都落在 0007 上：歧义点名不猜、回读要读**可见层**而不是 `componentProperties` 的回显；
-                        「通道不新造」沿 0040 —— 写归一进 core 的既有入口，读引用走既有序列化字段
-0042 (样式枚举按类拆分) ── 不引模式：把「四类」还原成**四次独立调用**（此前被当成一次批量查询，而同步
-                        getter 不可中断 ⇒ 任一个不返回就拖死全部）；
-                        返空不作为默认，沿 0007 —— 与变量面「平台没有该 API」必须区分：前者不需要问就知道是空，
-                        后者是问了没回音，静默空等于假结论；
-                        「单类出口兼作探针」是为 0039 的回归（`get_page` 把样式枚举带进了默认路径）找证据，
-                        证据没到之前不改 `get_page` 的默认路径
-0043 (样式枚举能力位) ── 不引模式：`typeof` 存在性探测答不了「问了没回音」（即时设计四个 getter 全在、
-                        永不返回），判据只能是**平台声明** ⇒ 拆 `styleEnumeration` 与「按 id 应用样式」的
-                        `styles` 分开（合成一位正是 0039 那次事故的机制）；
-                        声明与机制分开沿 0029/0032（能力位本身是既有机制，摘一行即可改，不必动判据），
-                        ctx 注入沿 0002（读路径首次用它，注入点仍是插件那一个）；
-                        「空数组必须点名成因」沿 0007 —— 与 0042 的「返空即撒谎」是同一条的两种兑现：
-                        0042 拒绝在证据前返空，0043 拿到判据后返空但带 `note`
+0005 (Vitest + CI)      ── 前置：其余记录的验收都靠它
+0001 (PropWriter)       ── 依赖 0002；与 0004 同批
+0002 (RuntimeContext)   ── 被 0001/0016/0017/0022/0030/0032/0037/0043 取口径
+0003 (tags + after)     ── 独立；「不手抄清单」被 0006/0007/0031/0039 引用
+0004 (Pipeline)         ── 与 0001 同批；被 0007/0020 引用
+0006 (目录投影)         ── 独立；体积口径被 0020/0030/0034/0036/0039/0040 引用
+0007 (回读回收)         ── 被 0013/0018/0019/0022/0024/0025/0033/0036/0038/0039/0040/0041/0042/0043 引用
+0008 (归档阶段)         ── 独立于代码层；同源 0009；被 0032/0038/89d02d1b 引用
+0009 (依赖单向)         ── 独立于代码层；同源 0008；被 0010/0012/0017/0032/0039/0043 引用
+0010 (异步优先)         ── 沿 0005/0009；被 0011/0017/0024/0039 引用
+0011 (Access 层)        ── 依赖 0010；被 0017/0039/0042 引用
+0012 (zod 沙箱化)       ── 独立；同源 0009；被 0014/0015/0017 引用
+0013 (错误链路)         ── 同源 0007/0005；被 0016/0034 引用
+0014 (面板高度)         ── 独立；被 0015/0016/0037/0038 引用
+0015 (日志高度下限)     ── 修订 0014
+0016 (i18n 键化)        ── 沿 0013/0007/0002/0006/0014；被 0030/0037/0038/942910d2 引用
+0017 (MG 门面投影)      ── 沿 0010/0011/0012/0009；被 0018/0019/0021/0022/0023/0039/0040 引用
+0018 (MG 变体写入换绑)  ── 依赖 0017；沿 0007；被 0019/0033/0040 引用
+0019 (MG 组件属性 op)   ── 依赖 0017；沿 0007；被 0023/0025/0033/0040 引用
+0020 (不按平台重定义工具) ── 依赖 0017；沿 0004/0007/0006；被 0025/0033/0034/0036/0039/0040 引用
+0021 (布局放开到组件集) ── 取代 0020 末尾的 `variantSetLayout` 建议；依赖 0017/0007
+0022 (平台类型事实表)   ── 依赖 0017；沿 0007/0002/0001/0021；被 0023/0029/0032/0034/0040 引用
+0023 (组件属性读写形态) ── 沿 0022/0007/0017/0019；被 0025/0041 引用
+0024 (boundVariables)   ── 沿 0007/0021/0022/0023/0010
+0025 (Figma 组件属性定义) ── 沿 0020/0019/0023/0007；被 0041 引用
+0029 (能力规格表)       ── 沿 0021/0022；被 0032/0036/0043 引用
+0030 (一次装配复用)     ── 沿 0002/0006/0016；是 0031 的前提
+0031 (声明面补齐)       ── 依赖 0030；沿 0003
+0032 (平台事实三域)     ── 沿 0022/0029/0002/0005；被 0033/0034/0036/0039/0040/0042/0043/0038/0008 引用
+0033 (MG 集合级变体)    ── 补 0018 的未决项；沿 0020/0019/0007/0032；被 0040 引用
+0034 (create 容忍 type) ── 沿 0022/0032/0013/0006/0020；被 0040 引用
+0036 (删内置图表编译器) ── 取代 0035；沿 0020/0006/0007/0029/0032/0035
+0037 (提示反馈收口)     ── 沿 0014/0015/0016/0002；被 0038 引用
+0038 (版本升级提示)     ── 沿 0008/0009/0032/0033/0014/0016/0037/0007
+0039 (get_page 收窄)    ── 沿 0009/0032/0020/0006/0011/0010/0017/0003/0007/0028；被 0040/0042/0043 引用
+0040 (MG 变量读写)      ── 与 0039 是同一件事两半；沿 0020/0019/0033/0018/0007/0034/0022/0032
+0041 (组件属性两处缺口) ── 沿 0023/0025/0007/0040
+0042 (样式枚举按类拆分) ── 沿 0007/0011/0032/0039；被 0043 引用
+0043 (样式枚举能力位)   ── 依赖 0042；沿 0039/0029/0032/0002/0007
+89d02d1b (索引只存定位) ── 沿 0008/0005/0009；不取代任何记录
 ```
 
 更早的记录（0001–0024）见 [`INDEX-2026.md`](INDEX-2026.md)。

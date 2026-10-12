@@ -12,6 +12,7 @@ import type { McpI18n } from '../i18n';
 import { getPlatformState } from '../platform-state';
 import {
   componentWriteText,
+  layoutHintText,
   reuseGuideText,
   variableBindBulkText,
   variableBindShapeText,
@@ -406,6 +407,8 @@ export function designStrategyRecipe(
   );
   // 复用入口按平台给(句子在 platform-facts,配方只拼接)
   const reuseGuide = reuseGuideText(platform);
+  // 排布的两条路(自动布局 / 栅格参考线)与逐平台可落性,同样只拼接不另写事实
+  const layoutHint = layoutHintText(platform);
   return `# 画布创作纪律
 
 0) **先查可复用件,再动手**(设计类任务的第一步,别跳):\`jsd_get_page\`(等价资源 \`jsd://page\`)给的是**设计系统资源清单** —— 看 \`assets.summary\` 一眼判断这文档有没有现成的件,再按类取 id 复用。**命中就复用,禁止新建重复件**:同名/同用途的组件、同状态的变体取值、已有的颜色/文字/效果样式、已有的变量,**一律先用现成的**;清单里确实没有,才允许新建(新建出来的件请按「组件族/状态」命名,方便下一次被复用)。
@@ -416,6 +419,8 @@ ${reuseGuide}
 3) 命名语义化:用「登录页 / Logo 容器 / 邮箱输入 / 主按钮」这类说明用途的名字,不用「矩形 1」「Frame 2」;同一批元素命名风格保持一致。
 3.5) 抽组件:**先回第 0 条的清单**——已有同族组件就直接 jsd_create_instance 铺开,别新建重复组件;要切状态先看 \`assets.variants[].properties\` 里有没有现成取值。清单里确实没有、且同类单元 ≥2 个且结构一致(按钮 / 输入框 / 列表项 / 图标底)时,才提 COMPONENT、再用 INSTANCE 铺开,别逐个复制;命名走「组件族/状态」。
 4) 归组后再布局:**元素不许直挂屏根** —— 屏内每个语义分区(侧栏 / 顶栏 / 筛选条 / KPI 行 / 每张卡片)各自是一个容器,卡片内部的图元再按语义编组(GROUP:坐标轴 / 网格 / 数据系列 / 图例各一组)。一层不套、几十个元素平铺是后续最难改的形态,别走这个极端。做法:先建容器与元素,再用 jsd_reparent_nodes 逐层归入(**parentId 显式传目标容器 id**,别依赖「当前选中第一个」的缺省值;跨父级移动会保持节点绝对位置,不用手动摆回 x/y,移入 auto-layout 容器时位置交给布局);auto-layout(layoutMode/itemSpacing/padding*/primaryAxisAlignItems 等)最后用 jsd_set_layout 单独设,别在建节点时混着传。
+4.5) ${layoutHint}
+4.6) **绘图区用 SVG 还是原生图元,按「之后要改的是哪一类」分**(做法见 \`jsd://recipes/chart-by-code\`):**数值级**(换数据 / 改某根柱的高度 / 挪一个点)→ SVG,回源重算重导比在画布上挪一串节点便宜;\`vectorPaths.data\` **不回读**,画布上读不到也改不了坐标。**样式级**(改色 / 线宽 / 隐藏某个系列)→ 两边都行:SVG 按语义 \`<g id>\` 切层后在画布上就能点名改(实测 jsDesign 会落成同名子分组,渐变与 dash 保留;换平台先回读确认)。**结构级**(要排进 auto-layout 行列 / 要绑变量或样式 / 要做成组件复用 / 表格单元格 / 卡片骨架)→ 必须原生节点,**SVG 不吃布局**。**文案一律原生**(SVG 里的 \`<text>\` 字体字重由引擎解析,不保证)。三者常共存,一张卡的标准形态:卡片 FRAME + 标题/图例/数值/表格用原生节点,中间绘图区塞一个 SVG 子节点。
 5) 间距与字号阶梯:主标题 > 正文标签 > 按钮文本 > 辅助说明;同级元素间距一致,用 itemSpacing 统一控制,不靠手调坐标凑。**长段落要换行**:TEXT 缺省按内容撑开(textAutoResize 缺省 WIDTH_AND_HEIGHT),只给 width 会被引擎改成 NONE 且高度不随内容重算 —— 要固定宽+自动换行传 width + textAutoResize:"HEIGHT",要固定框尺寸传 "NONE"。**字体取 jsd_list_fonts 的 fonts[] 成对值**:family 用 fonts[].family 原样(如 SourceHanSansCN_family),style 用同一项的全名(如 SourceHanSansCN-Bold,不是简称 "Bold")—— 写错会被静默忽略、退回默认字面,结果 warnings 会点名。
 6) 视觉顺序:自上而下按阅读顺序排布,主操作按钮放在输入项之后,次要链接(忘记密码/注册)放最后。
 7) 层序与遮挡:序列化里每个节点都带 \`z\`(= 父级 children 下标 = 绘制顺序,0 = 最底层,越大越靠上),判断谁压谁直接读 z。要调层序用 jsd_reparent_nodes + index(= 目标 z);auto-layout 容器同样支持,若引擎没落位会明确报错,那就改 itemSpacing / 对齐。别靠「新建一个节点压上去」改遮挡。
@@ -688,8 +693,8 @@ const CHART_CODE_EXAMPLE = [
  * 刻意**不点名库**:指名就把模型绑到某一个包上,而能跑出字符串的写法有无穷多种。
  * 配色与字号**取自画布上已有的样式/变量**(读 \`jsd://styles\` 与 \`boundVariables\`),
  * 本仓不再维护一套自己的图表色板 —— 图的皮要跟文档走,不是跟本仓走。
- * 产出侧要求**按语义层切 \`<g id>\`**(第 5 节):导入只有一个节点,层级能否保住由引擎
- * 决定(未验),故配方把「导入后回读判明」写进步骤与复核清单,而不是断言一定分好组。
+ * 产出侧要求**按语义层切 \`<g id>\`**(第 5 节):jsDesign 实测(2026-10-12)\`<g id>\` 会落成
+ * 同名子分组(GROUP),但**换平台不保证** —— 故配方仍把「导入后回读判明」写进步骤与复核清单。
  */
 export function chartByCodeRecipe(
   chart: string,
@@ -699,6 +704,7 @@ export function chartByCodeRecipe(
   return `# 用代码画图表 / 数据可视化:算出 SVG → 落盘 → 导入画布
 
 ## 0. 前提:没有内置图表工具,这条路就是主路径
+- **先判该不该用 SVG**:本配方适合「几何由数据算出来」的图(折线 / 面积 / 圆环 / 弧 / 热力条 / 带刻度坐标轴)—— 用矩形手拼这些要多几十倍节点还拼不准,换数据时回源重导也比在画布上挪一串节点便宜。**不适合**的三类:要排进 auto-layout 行列的、要绑变量/样式或要做成组件复用的、表格单元格与卡片骨架这类结构件 —— 这些必须原生节点(SVG **不吃布局**,\`vectorPaths.data\` 也不回读)。完整判据见 \`jsd://recipes/design-strategy\` 第 4.6 条。
 - 图表一律这样画:**你自己写代码算几何、自己拼 SVG 字符串、落盘,再用 \`jsd_create_svg\` 导入**。本仓没有内置图表工具(别去找、也别试着调)。
 - 前提是**你能执行本地命令**。做不到就改用原生图元(FRAME / RECTANGLE / TEXT / POLYGON)摆一张近似图,或换一个有 shell 的宿主。
 - **不指定库**:用你最顺手的写法 —— 原生 \`Math\` 与数组方法手算坐标就够(见第 7 节的零依赖示例,它同时演示了第 5 节的分层);要用第三方包也行,唯一的判断标准是**它能不能在没有浏览器的环境里跑出字符串**。
@@ -742,11 +748,13 @@ export function chartByCodeRecipe(
 - **每个语义层一个 \`<g>\`,各带一个 ASCII 语义 \`id\`**:\`title\` / \`plot\` / \`grid\` / \`axis-x\` / \`axis-y\` / \`series-<名>\` / \`axis-labels\` / \`legend\`。id 是你在源码里定位那一层的把手,用英文别用中文。
 - **同一系列的点/线/柱放同一层,不同系列各一层** —— 「把某条折线加粗」「把网格线调淡」就都变成一层的事。切到「一层 = 之后会单独改的一个语义单位」为止:整张图套一个 \`<g>\` 是切少了,一层不套是切没了。
 - **平移/缩放只写最外层那一个 \`transform\`**:绘图区统一 \`<g transform="translate(px,py)">\`,内部坐标一律从 0 起。手动挪图、改内边距只动这一个数,不用在满文件里找散落的坐标。
-- **导入后读一次,判明层级有没有保住**:\`jsd_create_svg\` 回的是**一个**节点(工具面只声明这一个),里面的 \`<g>\` 是否落成子分组由引擎决定,**本仓未验**。故导入后立刻 \`jsd_find({ ids: [created.id], depth: 2 })\` 看一眼 —— 按 id 读子树要用 \`jsd_find\`(\`jsd_get_selection\` 只读当前选中、且只收 depth):
+- **导入后读一次,判明层级有没有保住**:\`jsd_create_svg\` 回的是**一个**根节点,里面的 \`<g>\` 会不会落成子分组由引擎决定 —— **jsDesign 实测(2026-10-12)会**:每个 \`<g id>\` 变成同名 GROUP(如 \`grid\` / \`target\` / \`series-done\`),\`linearGradient\` 与 \`stroke-dasharray\` 也照常保留(圆环用 \`<circle>\` + dasharray 即可,不必碰 A 指令)。但**别把这条当跨平台事实**:换平台仍按下面回读判明。导入后立刻 \`jsd_find({ ids: [created.id], depth: 2 })\` 看一眼 —— 按 id 读子树要用 \`jsd_find\`(\`jsd_get_selection\` 只读当前选中、且只收 depth):
   - 有子层 → 直接用,顺手 \`jsd_rename_node\` 起成上面那套语义名;
   - 只有一层(整图一个矢量节点)→ 要么接受它,要么按第 6 节把「一定会改」的文字/色块另建原生节点。
+- **回读读不到路径数据**:\`vectorPaths.data\` 在序列化里是空串(实测 jsDesign),所以「看一眼线画得对不对」只能靠 \`jsd_export\` 导图,别指望从回显里读坐标;要改几何就回源 SVG 重算重导,别在画布上徒手挪矢量。
+- **\`jsd_create_svg\` 单独一批**:它比其它步骤慢得多,和 create/reparent/move 混在同一 \`jsd_batch\` 里实测会**整次调用超时**(且超时那批什么都没落)—— 导入这一步自己一批,拿到 \`created.id\` 再排装配批。
 - **别用引用式复用**:\`<use>\` / \`<symbol>\` 的引用解析**未验**,别为省几行去用;\`<defs>\` 里放渐变照常(\`jsd_create_svg\` 的工具面声明保留渐变)。
-- 分层不亏:引擎保留就白得一套层级;不保留,SVG 本身也还是一份能读能改的源码,不妨碍后面的手工编辑。
+- 分层不亏:实测 jsDesign 会**白得一套语义子分组** —— 「把异常那条系列调淡 / 隐藏网格层」这类样式级改动就能直接在画布上做,不用回源;分组没保住的平台上,SVG 源码本身也还是一份能读能改的文件,不亏。
 
 ## 6. 要能单独改的文字,导入后另建原生节点
 - 整张图按**一个** SVG 节点导入(里面的 \`<g>\` 能不能保住成子层,见第 5 节的回读判据):里面的 \`<text>\` **不能保证**单独选中改文案,字体也由引擎解析器决定。

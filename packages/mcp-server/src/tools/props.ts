@@ -157,7 +157,7 @@ export function registerPropTools(
       name: 'jsd_set_layout',
       title: 'setLayout.title',
       description:
-        '设置容器的 auto-layout:layoutMode 与 itemSpacing/padding*/主轴交叉轴尺寸和对齐/约束/伸缩可在同一次调用里一起传(引擎先应用 layoutMode 再应用间距)。适用 FRAME / COMPONENT / COMPONENT_SET —— 变体集内变体重叠时用它排布(三平台节点均继承 frame 的自动布局能力)。建议建节点时不要混着传,归组并摆好后再单独设',
+        '设置容器的 auto-layout:layoutMode 与 itemSpacing/padding*/主轴交叉轴尺寸和对齐/约束/伸缩可在同一次调用里一起传(引擎先应用 layoutMode 再应用间距)。适用 FRAME / COMPONENT / COMPONENT_SET —— 变体集内变体重叠时用它排布(三平台节点均继承 frame 的自动布局能力)。建议建节点时不要混着传,归组并摆好后再单独设。只管布局语义:改节点宽高用 jsd_resize_node,本工具不接受 width/height',
       method: 'set_layout',
       inputSchema: setLayoutSchema,
       annotations: {
