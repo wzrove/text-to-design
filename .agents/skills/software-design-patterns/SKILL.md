@@ -76,7 +76,7 @@ allowed-tools: Bash, Read, Grep, Glob, Write, Edit
 
 本技能只负责「**已经确认的结构压力 → 决策**」这一段，**不假设项目用哪套缺陷跟踪**。什么算结构压力、什么时候该走这一步，由**调用方**说了算。不同项目用的是报错台账、回归用例、事故复盘还是评审意见，本技能不关心，也不引用任何具体工具。
 
-产出固定这几样：结论、候选与排除、实施方案（目标形状 + 本次不做）、成本与退出条件，外加一个编号 `NNNN`。
+产出固定这几样：结论、候选与排除、实施方案（目标形状 + 本次不做）、成本与退出条件，外加一个 8 位短 id。
 
 **别给琐碎改动开决策记录。** 日志一旦被小条目灌满，工作流第 1 步「先查日志」就成了噪音源，整条链路跟着失效。
 
@@ -126,7 +126,7 @@ allowed-tools: Bash, Read, Grep, Glob, Write, Edit
 | 落记录、需求变更时追加/取代/废弃、索引体积治理 | `references/decision-log.md` |
 | 推荐 ≥2 个模式，要确认职责不重叠 | `references/pattern-combinations.md` |
 | 路由未命中、跨多层级、要评分或迁移顺序 | `references/decision-guide.md` |
-| 新建决策记录骨架（自动编号 + 更新索引），或改既有记录状态 | `scripts/new_decision.py "标题"` / `--status <编号> 已采纳`（骨架来自 `assets/decision-record-template.md`） |
+| 新建决策记录骨架（自动取 8 位短 id + 更新索引），或改既有记录状态 | `scripts/new_decision.py "标题"` / `--status <标识> 已采纳`（`<标识>` 认短 id，也认 0001–0039 的旧数字号；骨架来自 `assets/decision-record-template.md`） |
 
 > 52 个模式文件加起来远超一次对话的预算：**只打开候选那 1–3 个**。
 > 模式文件里没有 `Timeout` 这一条。超时预算是 `distributed/retry.md` 里的约束，不要去找 `timeout.md`。
