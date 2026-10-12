@@ -37,21 +37,9 @@ export type RGBInput = RGB | string;
 // 通道上限 255:0-1 原样透传,>1 由 core/normalize.ts 整组 /255,与运行时容错保持一致
 const colorChannels = z
   .object({
-    r: z
-      .number()
-      .min(0)
-      .max(255, '颜色通道最大 255')
-      .describe('schema.base.r'),
-    g: z
-      .number()
-      .min(0)
-      .max(255, '颜色通道最大 255')
-      .describe('schema.base.g'),
-    b: z
-      .number()
-      .min(0)
-      .max(255, '颜色通道最大 255')
-      .describe('schema.base.b'),
+    r: z.number().min(0).max(255, '颜色通道最大 255').describe('schema.base.r'),
+    g: z.number().min(0).max(255, '颜色通道最大 255').describe('schema.base.g'),
+    b: z.number().min(0).max(255, '颜色通道最大 255').describe('schema.base.b'),
     a: z
       .number()
       .min(0)

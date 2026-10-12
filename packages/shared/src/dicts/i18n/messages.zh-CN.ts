@@ -188,10 +188,12 @@ export const MESSAGES_ZH_CN = {
   'bridge.log.pingFailed': 'ping 插件失败: {message}',
   'bridge.error.useBridge': 'useBridge 必须在 <BridgeProvider> 内使用',
   // ── zod .describe 字段说明(见 0016:schema 存键,边界投影成文案) ──
-  'schema.base.r': '红色通道,范围 0-1(0=无,1=满),如纯红为 1;>1 视为 0-255,自动整组归一化',
+  'schema.base.r':
+    '红色通道,范围 0-1(0=无,1=满),如纯红为 1;>1 视为 0-255,自动整组归一化',
   'schema.base.g': '绿色通道,范围 0-1(或 0-255 自动归一化)',
   'schema.base.b': '蓝色通道,范围 0-1(或 0-255 自动归一化)',
-  'schema.base.a': '不透明度,范围 0-1(0=全透明,1=不透明),缺省按 1 处理;>1 视为 0-255 自动归一化',
+  'schema.base.a':
+    '不透明度,范围 0-1(0=全透明,1=不透明),缺省按 1 处理;>1 视为 0-255 自动归一化',
   'schema.base.color': '该停止点的颜色(带 alpha)',
   'schema.base.position': '停止点位置,范围 0-1(0=起点,1=终点)',
   'schema.base.transformSchema':
