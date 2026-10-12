@@ -16,4 +16,5 @@ export * from './platform-knowledge';
 export * from './platform-value-domain';
 export * from './prop-applicability';
 export * from './search-scope';
+export * from './style-kind';
 export * from './unapplied-prop';

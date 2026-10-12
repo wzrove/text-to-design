@@ -1,11 +1,13 @@
 export {
   ensurePagesLoaded,
   listStylesAsync,
+  listVariablesAsync,
   resolveMainComponent,
   resolveNodes,
   resolveNodesMap,
   resolveOne,
 } from './access';
+export { listDocumentAssets } from './assets';
 export { default as buildNode } from './buildNode';
 export { hostCapabilityState } from './capabilities';
 export {

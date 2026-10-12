@@ -64,7 +64,7 @@ export function registerResources(
     {
       title: 'resources.title3',
       description:
-        '当前文档可复用的本地样式(PAINT/TEXT/EFFECT/GRID),含 id/name/type;按名应用样式前先读这里拿准确样式名',
+        '当前文档可复用的本地样式(PAINT/TEXT/EFFECT/GRID),含 id/name/type;按名应用样式前先读这里拿准确样式名。⚠ 空清单不等于没有样式:本平台未声明样式枚举能力时恒空,回包会带 note 说明',
       mimeType: 'application/json',
     },
     async () => {
@@ -79,7 +79,7 @@ export function registerResources(
     {
       title: 'resources.title4',
       description:
-        '当前页顶层节点的轻量摘要(名称/类型/位置/尺寸/子节点数),不递归;另附文档级页面总览(pages:各页名与顶层节点数,动态页文档首次读取会全量加载并在 note 点名成本)。从头设计整页前先读这里看页面已有内容;等价于 jsd_get_page',
+        '**当前页**概览:①第一层节点的几何(id/名称/类型/宽高/x/y,不递归);②可复用资源清单(assets.summary 给四类计数;组件、变体集(带维度→可选值)、样式(PAINT/TEXT/EFFECT/GRID)、变量,每项含 id+名称)。范围:样式与变量是文档级;组件与变体在只读得到当前页的平台(即时设计/MasterGo)**只覆盖当前页**,note 会点名。**设计前先读这里:命中的一律复用,禁止新建重复件**。等价于 jsd_get_page',
       mimeType: 'application/json',
     },
     async () => {

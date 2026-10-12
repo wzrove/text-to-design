@@ -20,6 +20,10 @@ import { figmaOps } from './ops';
 export const meta: PlatformMeta = {
   capabilities: [
     'styles',
+    'styleEnumeration',
+    // 文档范围读(0039 修订):Figma 有 dynamic-page 与 `loadAllPagesAsync` 且真的会
+    // 返回 ⇒ 跨页遍历、资源清单与 pages 元数据都覆盖全文档。另两平台不声明。
+    'documentScopeRead',
     'textTruncation',
     'componentProperties',
     'variables',

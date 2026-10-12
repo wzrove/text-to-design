@@ -69,7 +69,7 @@ export const RECIPES: RecipeEntry[] = [
     uri: 'jsd://recipes/design-strategy',
     titleKey: 'prompt.designStrategy.title',
     whenToUse:
-      '画布创作的通用纪律。**从零设计整页 / 界面之前先读这一条**:先摸底、结构分层(成品该多深就多深,调用才分批)、语义化命名、抽组件、归组后再布局、间距与字号阶梯、层序与遮挡、出错回滚,附示例结构树',
+      '画布创作的通用纪律。**从零设计整页 / 界面之前先读这一条**:先摸底、结构分层(成品该多深就多深,调用才分批)、语义化命名、抽组件、归组后再布局、图形区走 SVG 还是原生图元的分流、间距与字号阶梯、层序与遮挡、出错回滚,附示例结构树',
     render: () => designStrategyRecipe(undefined, currentPlatform()),
   },
   {
@@ -77,7 +77,7 @@ export const RECIPES: RecipeEntry[] = [
     uri: 'jsd://recipes/chart-by-code',
     titleKey: 'prompt.chartByCode.title',
     whenToUse:
-      '画图表 / 数据可视化(折线、柱状、饼图 / 环形、散点、雷达、面积、桑基、仪表盘、看板……)。自己写脚本算几何、落盘 SVG,再经 jsd_create_svg 的 svgPath 导入;含零依赖示例与引擎侧硬约束',
+      '画图表 / 数据可视化(折线、柱状、饼图 / 环形、散点、雷达、面积、桑基、仪表盘、看板……)。自己写脚本算几何、落盘 SVG,再经 jsd_create_svg 的 svgPath 导入;含零依赖示例与引擎侧硬约束。不适合三类:要吃 auto-layout、要绑变量/样式、要复用成组件 —— 那些用原生节点',
     argsHint:
       '参数 chart(要画什么图:种类 + 数据 + 口径)、svgPath(落盘路径,缺省 /tmp/chart.svg)',
     render: () =>

@@ -2,6 +2,8 @@ import type { z } from 'zod';
 import type { findSchema } from './inputs';
 import type { observedNodeTypeSchema } from './node-type';
 import type {
+  assetRefSchema,
+  assetsSchema,
   findResultSchema,
   listFontsResultSchema,
   listStylesResultSchema,
@@ -42,6 +44,10 @@ export type UpdateNodeProps = Partial<SetFillProps> &
 export type ListFontsResult = z.infer<typeof listFontsResultSchema>;
 export type ListStylesResult = z.infer<typeof listStylesResultSchema>;
 export type PageStructureResult = z.infer<typeof pageStructureResultSchema>;
+/** 可复用资源的最小引用(id + 名称);契约层 `getLocalVariablesAsync` 也回这个形状 */
+export type AssetRef = z.infer<typeof assetRefSchema>;
+/** 设计系统资源清单(0039);`PageStructureResult['assets']` 因版本错位容错而是可选的 */
+export type Assets = z.infer<typeof assetsSchema>;
 
 /** 插件 exportNodes 原始返回(keyed by id,含二进制字节) */
 export interface RawExportFile {

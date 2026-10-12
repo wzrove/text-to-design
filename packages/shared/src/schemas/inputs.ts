@@ -20,7 +20,7 @@ export const findSchema = z.object({
     .enum(SEARCH_SCOPES)
     .optional()
     .describe(
-      "查找范围:'page'=当前页(缺省)|'document'=跨页全文档(触发全量加载,大文档有一次性成本,结果 note 点名)",
+      "查找范围:'page'=当前页(缺省)|'document'=跨页全文档(触发全量加载,大文档有一次性成本,结果 note 点名)。⚠ 读不到非当前页的平台(即时设计/MasterGo)会自动退回当前页并在 note 点名 —— 结果只含当前页,不是全文档",
     ),
   recursive: z.boolean().optional().describe('schema.inputs.recursive'),
   depth: z.number().optional().describe('schema.inputs.depth'),
@@ -322,6 +322,11 @@ export const listFontsSchema = z.object({
     .optional()
     .describe('schema.inputs.limit'),
 });
+/**
+ * 空对象而非删掉方法:`list_styles` 的形状要留给未来加参数的位置,而**筛选参数不再有**
+ * —— 0042 的单类入口与 `kinds` 是为「哪一类挂死」取证用的探针,0043 把判据换成平台
+ * 能力声明后,未声明的平台一次 getter 都不调,「按类少问」不再承载任何判断。
+ */
 export const listStylesSchema = z.object({});
 export const getPageStructureSchema = z.object({});
 

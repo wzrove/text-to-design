@@ -195,7 +195,7 @@ export const setInstancePropertiesSchema = z
     properties: z
       .record(z.string(), componentPropertyInputSchema)
       .describe(
-        '属性名→值:变体属性传字符串(如 {"状态":"禁用"}),布尔属性传布尔(如 {"显示图标":false}),需要显式类型或换绑候选时传 {"type":"INSTANCE_SWAP","value":"1:2"}。属性名从 jsd_find / jsd_get_selection 返回的 variantProperties(变体)与 componentProperties(布尔/文本/换绑)里取,必须完全匹配;宿主侧键可能是属性 id(如 Property 1#1:0),名字也能用 —— 门面会自动归一',
+        '属性名→值:变体属性传字符串(如 {"状态":"禁用"}),布尔属性传布尔(如 {"显示图标":false}),需要显式类型或换绑候选时传 {"type":"INSTANCE_SWAP","value":"1:2"}。属性名取 jsd_find / jsd_get_selection 的 variantProperties(变体)与 componentProperties(布尔/文本/换绑):**变体属性传名字即可;组件属性传带 `#` 后缀的完整键**(如 `标题#32:0`)—— 组件属性在引擎侧只认完整键,短名会报 `Could not find a component property with name`(真机实测,三种类型都如此)。传短名时 core 只在基名**唯一**命中时替你补全,有歧义直接报错并列出候选,不做猜测。**选哪个键之前先读 componentPropertyReferences**:它标明「哪个图层由哪个属性驱动」,属性成对存在时只有连着可见层的那一组会改画面',
       ),
   })
   .strict();

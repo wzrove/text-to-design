@@ -57,6 +57,7 @@ import type {
   TEXT_RANGE_SETTERS,
   VALUE_TO_MG,
 } from './node-facade';
+import type { MG_VARIABLE_TYPES } from './ops';
 
 /** 联合类型全部成员的键并集 */
 type KeysOf<T> = T extends unknown ? keyof T : never;
@@ -141,7 +142,11 @@ export const _mixedSymbolCheck: symbol extends PluginAPI['mixed']
 /**
  * **投影项**:MG 有等价能力,但名字/形态不同,由 host.ts 换算(不是「没有」)。
  * - `currentPage` / `root` → `mg` 顶层没有,挂在 `mg.document` 下;
- * - `createVector` → MG 只有 `createPen`(节点类型也叫 `PEN`,由门面翻回 `VECTOR`)。
+ * - `createVector` → MG 只有 `createPen`(节点类型也叫 `PEN`,由门面翻回 `VECTOR`);
+ * - `getLocalVariablesAsync`(0039)→ 变量挂在 `mg.variables` 命名空间下
+ *   (`mg.variables.getVariables()`),适配器投影到契约的顶层名字(只取 id/name)。
+ *   与上面三条同属「位置不同」,故**不是**缺席项:下面成对的两条断言(顶层不许有 +
+ *   来源必须真在 `PluginAPI['variables']` 上)合起来才证明这一点。
  *
  * 装饰高(0028)的 `chromeHeight` 也在这里:本平台是**三平台里唯一有真源的**
  * (`ui.viewport.headerHeight`),适配器实现了它 —— 但符号不在 `ui` 这一层
@@ -151,7 +156,8 @@ type HostProjectionGap =
   | 'currentPage'
   | 'root'
   | 'createVector'
-  | 'chromeHeight';
+  | 'chromeHeight'
+  | 'getLocalVariablesAsync';
 
 /**
  * **缺席项**:MG 两级 API 都没有,契约里声明为可选,core 按运行时探测回退或用明确
@@ -185,6 +191,10 @@ export type HostGapHonestyCheck = ExpectNever<
 /** 反向:登记为投影的东西也不该在 mg 顶层(在顶层就说明不用投影,该删登记) */
 export type HostProjectionHonestyCheck = ExpectNever<
   Declared<HostProjectionGap, PluginAPI>
+>;
+/** 投影项的来源必须真的在 `PluginAPI['variables']` 上(证明「不是没有,是位置不同」) */
+export type VariablesProjectionSourceCheck = ExpectNever<
+  Missing<'getVariables', PluginAPI['variables']>
 >;
 
 export type PageContractCheck = ExpectNever<
@@ -498,9 +508,9 @@ export type MgSetPropsAllowPresentCheck = ExpectNever<
 /**
  * 依据:`@mastergo/plugin-typings@2.19.2` `dist/index.d.ts:3072-3085` 的 `ComponentSetNode`。
  *
- * 为什么两个「未接」的别名入口也断言:它们不是遗忘,而是**等变量面**(绑的是变量别名,
- * 而 `mg.variables` 本仓未接)—— 登记成断言,官方哪天删/改名时不会静默变成幻影符号;
- * 变量面接上时,这里就是「可以接的清单」。
+ * 为什么两个「未接」的别名入口也断言:它们不是遗忘,而是**等变量面的写侧**(绑的是变量
+ * 别名,而 `mg.variables` 本仓只接了只读枚举,写入/绑定仍未接 —— 见 0039)—— 登记成断言,
+ * 官方哪天删/改名时不会静默变成幻影符号;变量写侧接上时,这里就是「可以接的清单」。
  *
  * 断言失败会打出具体键名(`Type '"xxx"' does not satisfy the constraint 'never'`),
  * 对应 0033 的退出条件:宿主改了入口名 → 先红在类型层,不靠人记。
@@ -534,4 +544,52 @@ export type MastergoVariantSetMethodsCheck =
  */
 export type MgHasNoVariantGroupPropertiesCheck = ExpectNever<
   Declared<'variantGroupProperties', RuntimeComponentSetNode>
+>;
+
+// ---- 8) 变量入口(0040):op 里调的每个方法必须真在 `mg.variables` 上 ----
+
+/**
+ * 依据:`@mastergo/plugin-typings@2.19.2` `dist/index.d.ts:1098-1310` 的 `VariableAPI`,
+ * 槽位语义取自官方文档 https://developers.mastergo.com/apis/variables。
+ *
+ * 为什么非断言不可:这组 op 活在「字符串方法名 + 裸 string 槽位」的世界里 —— 方法名写错
+ * 编译期一点信号都没有,而运行期它只会炸在插件沙箱里(与 0033 的变体 op 同因)。
+ * 槽位**取值**在 typings 里没有对应类型可断言(全是 `string`),那份表的唯一依据是官方文档,
+ * 已在 `ops.ts` 注明出处 —— 类型系统守不到的部分,靠证据链守。
+ */
+type MgVariableMethod =
+  | 'getCollections'
+  | 'createCollection'
+  | 'deleteCollection'
+  | 'getVariables'
+  | 'getVariableById'
+  | 'createVariable'
+  | 'setVariableValue'
+  | 'setVariableReferenceInLayer'
+  | 'unlinkVariableReferenceInLayer'
+  | 'getLayerVariableModes';
+
+type MissingVariableMethods = {
+  [K in MgVariableMethod]: Missing<K, PluginAPI['variables']>;
+}[MgVariableMethod];
+
+export type MastergoVariableMethodsCheck = ExpectNever<MissingVariableMethods>;
+
+/**
+ * 变量类型:op 的 zod enum 与 typings 的 `VariableType` 必须**同宽**(双向断言)。
+ *
+ * 两个方向各挡一种漂移:单向只挡「我们写了 typings 没有的类型」,漏掉「typings 新增了
+ * 类型而我们没跟上」—— 后者才是真正会静默少一个选项的那种。故这里从 `ops.ts` 的清单
+ * 派生(不手抄第二份),两侧一起受守。
+ *
+ * ⚠ 官方文档的 `PluginVariableType` 表只列 11 项(**没有 `SPACING`**),与 typings 不同宽。
+ * 本仓按 typings 走(引擎签名以 typings 为准);哪天文档补上或 typings 删掉,这条会红。
+ */
+type MgVariableType = (typeof MG_VARIABLE_TYPES)[number];
+
+export type MgVariableTypeInTypingsCheck = ExpectNever<
+  Exclude<MgVariableType, VariableType>
+>;
+export type MgVariableTypeCompletenessCheck = ExpectNever<
+  Exclude<VariableType, MgVariableType>
 >;

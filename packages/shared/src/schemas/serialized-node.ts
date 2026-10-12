@@ -27,8 +27,16 @@ import {
 } from './base';
 import type { ObservedNodeType } from './node-type';
 import { observedNodeTypeSchema } from './node-type';
-import type { BoundVariableAliases, ComponentPropertyValue } from './platform';
-import { boundVariablesSchema, componentPropertyValueSchema } from './platform';
+import type {
+  BoundVariableAliases,
+  ComponentPropertyReferences,
+  ComponentPropertyValue,
+} from './platform';
+import {
+  boundVariablesSchema,
+  componentPropertyReferencesSchema,
+  componentPropertyValueSchema,
+} from './platform';
 
 export interface SerializedNode {
   id: string;
@@ -113,6 +121,15 @@ export interface SerializedNode {
   textStyleId?: string;
   effectStyleId?: string;
   componentProperties?: Record<string, ComponentPropertyValue>;
+  /**
+   * 组件属性**引用**(0041):本图层由哪个组件属性驱动,槽位 → 属性键
+   * (如 `{ characters: "摘要2#32:7" }` = 这层的文本随「摘要2」变)。
+   *
+   * 与 `componentProperties` 成对读:那条说值,这条说**谁会被它改**。真机踩过:
+   * 属性成对存在时只有连着可见层的那一组会改画面,写错那组「回包成功、画布不动」。
+   * 仅组件/实例内部的图层有值;无引用或平台不支持(jsDesign)时整个键缺席。
+   */
+  componentPropertyReferences?: ComponentPropertyReferences;
   /** 变量绑定(仅 Figma;无绑定或不支持该字段的平台恒缺省 —— 键在即至少有一条绑定) */
   boundVariables?: BoundVariableAliases;
 }
@@ -224,6 +241,7 @@ export const serializedNodeSchema: z.ZodType<SerializedNode> = z.lazy(() =>
     componentProperties: z
       .record(z.string(), componentPropertyValueSchema)
       .optional(),
+    componentPropertyReferences: componentPropertyReferencesSchema.optional(),
     boundVariables: boundVariablesSchema.optional(),
   }),
 );

@@ -129,11 +129,34 @@ type HostAsyncNameGap = 'createNodeFromSvgAsync' | 'createImageFromBytesAsync';
  */
 type UiDerivedGap = 'chromeHeight';
 
+/**
+ * 命名空间**投影**缺口(0039):符号存在,只是挂在子命名空间下而不是 `PluginAPI` 顶层。
+ * - `getLocalVariablesAsync`:Figma 是 `figma.variables.getLocalVariablesAsync`
+ *   (`plugin-api.d.ts:2149`),本仓 adapter 把它投影到契约的顶层名字上(见 figma/host.ts)。
+ *
+ * 与 `HostAsyncNameGap` 分开登记,因为两者缺席理由相反:那一类是**本仓包出来的名字**
+ * (typings 里查不到属预期),这一类是**原型上就有、只是位置不同**(有真源,故下面
+ * 多一条 `VariablesProjectionCheck` 断言来源存在)。官方哪天把变量入口搬到顶层,
+ * 反向断言会失败,提醒收编。
+ */
+type HostNamespaceProjectionGap = 'getLocalVariablesAsync';
+
 export type HostContractCheck = ExpectNever<
-  Missing<Exclude<keyof DesignHost, HostAsyncNameGap>, PluginAPI>
+  Missing<
+    Exclude<keyof DesignHost, HostAsyncNameGap | HostNamespaceProjectionGap>,
+    PluginAPI
+  >
 >;
 export type HostAsyncNameGapCheck = ExpectNever<
   Declared<HostAsyncNameGap, PluginAPI>
+>;
+/** 反向:登记为投影的顶层名字必须真不在 PluginAPI 上 */
+export type HostProjectionGapHonestyCheck = ExpectNever<
+  Declared<HostNamespaceProjectionGap, PluginAPI>
+>;
+/** 投影项的来源必须真的在 `PluginAPI['variables']` 上(证明「不是没有,是位置不同」) */
+export type VariablesProjectionCheck = ExpectNever<
+  Missing<'getLocalVariablesAsync', PluginAPI['variables']>
 >;
 export type PageContractCheck = ExpectNever<
   Missing<keyof PageSkeleton, PluginAPI['currentPage']>

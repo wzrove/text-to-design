@@ -1,4 +1,4 @@
-import type { DesignHost, NodeSkeleton } from 'text-to-design-shared';
+import type { AssetRef, DesignHost, NodeSkeleton } from 'text-to-design-shared';
 
 /**
  * Figma 原生**同步**建图方法:契约自 0017 起改叫 `*Async`(MasterGo 侧只有
@@ -34,6 +34,23 @@ export const host: DesignHost = Object.create(native, {
   createImageFromBytesAsync: {
     value: async (bytes: Uint8Array): Promise<{ hash: string }> =>
       native.createImage(bytes),
+    enumerable: true,
+  },
+  /**
+   * 本地变量枚举(0039):Figma 是三平台里唯一有变量读面的。
+   *
+   * 必须走 `variables.getLocalVariablesAsync()` —— 老入口
+   * `variables.getLocalVariables()` 已废弃,且 manifest 声明 dynamic-page 时**必抛**。
+   * 投影成 `AssetRef`(只留 id/name):`Variable` 的其余字段是平台形态,
+   * 资源清单不需要,也不该顺带把它们带进线格式(0024 对 boundVariables 是另一种取舍:
+   * 那里透传的是引擎词汇,因为它是**写入依据**)。
+   */
+  getLocalVariablesAsync: {
+    value: async (): Promise<readonly AssetRef[]> =>
+      (await figma.variables.getLocalVariablesAsync()).map((v) => ({
+        id: v.id,
+        name: v.name,
+      })),
     enumerable: true,
   },
 });

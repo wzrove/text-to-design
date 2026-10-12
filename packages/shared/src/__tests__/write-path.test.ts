@@ -1208,6 +1208,254 @@ describe('布局 spacing/padding 的写后校验(0021 遗留补齐)', () => {
 });
 
 /**
+ * 布局轴尺寸模式(sizingMode)与开启布局时的次序漂移(2026-10-12 真机实测补)。
+ *
+ * 现场:在 jsDesign 上搭 auto-layout 原型时,声明 `width:150` 的筛选 chip 回读 106、
+ * 声明 `height:104` 的 KPI 卡回读 80(引擎把该轴翻成 AUTO 按内容 hug),回包零告警;
+ * 另一次「先 reparent 摆好 index、再给父容器开布局」后 index 被布局重算改掉,同样零告警。
+ * 两者都属于 0007 要根除的「回显成功实则没生效」。
+ */
+describe('布局 sizingMode 回读 + 开启布局的次序漂移', () => {
+  /** 复刻「引擎静默忽略这个字段」:set 不生效,get 恒为原值 */
+  function frozen<T extends NodeSkeleton, K extends keyof T>(
+    node: T,
+    key: K,
+    value: T[K],
+  ): void {
+    Object.defineProperty(node, key, {
+      get: () => value,
+      set: () => {},
+      configurable: true,
+    });
+  }
+
+  it('sizingMode 被引擎翻成 AUTO → 点名(声明的固定轴尺寸被 hug 吃掉)', async () => {
+    const frame = makeFrame();
+    frozen(frame, 'counterAxisSizingMode', 'AUTO');
+    host = makeHost([frame]);
+    const r = await updateSelection(
+      host,
+      ctx,
+      {
+        ids: [frame.id],
+        props: { layoutMode: 'HORIZONTAL', counterAxisSizingMode: 'FIXED' },
+      },
+      'set_layout',
+    );
+    const warn = r.warnings?.join('') ?? '';
+    expect(warn, 'sizingMode 此前不在回读集合里,hug 掉尺寸无人知晓').toContain(
+      'counterAxisSizingMode',
+    );
+    expect(warn).toMatch(/AUTO/);
+  });
+
+  it('sizingMode 真落库 → 不产生告警', async () => {
+    const frame = makeFrame();
+    host = makeHost([frame]);
+    const r = await updateSelection(
+      host,
+      ctx,
+      {
+        ids: [frame.id],
+        props: { layoutMode: 'VERTICAL', primaryAxisSizingMode: 'AUTO' },
+      },
+      'set_layout',
+    );
+    expect(frame.primaryAxisSizingMode).toBe('AUTO');
+    expect(r.warnings).toBeUndefined();
+  });
+
+  it('创建路径没开布局 → sizingMode 不对账(字段本就不参与排布,不许自造不一致)', async () => {
+    host = makeHost();
+    const r = await executeOps(
+      host,
+      ctx,
+      {
+        type: 'FRAME',
+        name: 'plain',
+        width: 300,
+        height: 80,
+        primaryAxisSizingMode: 'AUTO',
+      },
+      { mode: 'absolute', x: 0, y: 0 },
+    );
+    expect(r.warnings).toBeUndefined();
+  });
+
+  it('开启 auto-layout 把 children 重排了 → 点名(次序即绘制/布局顺序)', async () => {
+    const frame = makeFrame('2:1', '容器');
+    const kids = [
+      makeRect('1:1', 'a'),
+      makeRect('1:2', 'b'),
+      makeRect('1:3', 'c'),
+    ];
+    frame.children = kids;
+    let mode: string = 'NONE';
+    // 复刻引擎行为:开布局那一刻按几何重排子节点
+    Object.defineProperty(frame, 'layoutMode', {
+      get: () => mode,
+      set: (v: string) => {
+        mode = v;
+        if (v !== 'NONE') kids.reverse();
+      },
+      configurable: true,
+    });
+    host = makeHost([frame]);
+    const r = await updateSelection(
+      host,
+      ctx,
+      { ids: [frame.id], props: { layoutMode: 'VERTICAL' } },
+      'set_layout',
+    );
+    expect(r.warnings?.join('')).toContain('重排了 容器(2:1) 的子节点次序');
+  });
+
+  it('修改路径:开布局把容器 hug 小了 → 点名尺寸漂移(字段落库不等于尺寸保住)', async () => {
+    const frame = makeFrame('2:1', '容器');
+    frame.width = 120;
+    frame.height = 260;
+    frame.children = [makeRect('1:1', 'a'), makeRect('1:2', 'b')];
+    let mode: string = 'NONE';
+    // 复刻引擎行为:sizingMode 字段照落,容器尺寸按内容重算
+    Object.defineProperty(frame, 'layoutMode', {
+      get: () => mode,
+      set: (v: string) => {
+        mode = v;
+        if (v !== 'NONE') {
+          frame.width = 100;
+          frame.height = 80;
+        }
+      },
+      configurable: true,
+    });
+    host = makeHost([frame]);
+    const r = await updateSelection(
+      host,
+      ctx,
+      {
+        ids: [frame.id],
+        props: {
+          layoutMode: 'VERTICAL',
+          primaryAxisSizingMode: 'FIXED',
+          counterAxisSizingMode: 'FIXED',
+        },
+      },
+      'set_layout',
+    );
+    const warn = r.warnings?.join('') ?? '';
+    expect(
+      warn,
+      '120×260 被 hug 成 100×80 而回包零告警,就是现场踩到的那条',
+    ).toContain('被 auto-layout 改成');
+    expect(warn).toContain('jsd_resize_node');
+  });
+
+  it('创建路径:子树布局字段没落地也要点名(子树此前不进回收袋)', async () => {
+    host = makeHost();
+    const realCreateFrame = host.createFrame;
+    host.createFrame = () => {
+      const n = realCreateFrame();
+      // 复刻引擎行为:写入时看着像成功,序列化读数时方向已被回写成 VERTICAL、
+      // 交叉轴被翻成 AUTO
+      frozen(n, 'layoutMode', 'VERTICAL');
+      frozen(n, 'counterAxisSizingMode', 'AUTO');
+      return n;
+    };
+    const r = await executeOps(
+      host,
+      ctx,
+      {
+        type: 'FRAME',
+        name: '行-KPI',
+        width: 1208,
+        height: 96,
+        layoutMode: 'HORIZONTAL',
+        children: [
+          {
+            type: 'FRAME',
+            name: '卡-KPI-1',
+            width: 232,
+            height: 96,
+            layoutMode: 'VERTICAL',
+            counterAxisSizingMode: 'FIXED',
+          },
+        ],
+      },
+      { mode: 'absolute', x: 0, y: 0 },
+    );
+    const warn = r.warnings?.join('') ?? '';
+    // 根节点:方向被回写(buildNode 的 settle 也能抓到)
+    expect(warn).toContain('layoutMode');
+    // 子节点:buildNode 递归时不传 notes,只有序列化对账抓得到
+    expect(warn, '子树的布局漂移此前整条丢失').toContain('卡-KPI-1');
+    expect(warn).toContain('counterAxisSizingMode');
+  });
+
+  it('创建路径:sizingMode 落库了但尺寸仍被 hug 吃掉 → 单独点名尺寸', async () => {
+    // 实测(2026-10-12 jsDesign):传 120×260 开 VERTICAL 布局,两个 sizingMode 都
+    // 回读成 FIXED,容器却是 100×80 —— 字段对账全过,尺寸没人管
+    host = makeHost();
+    const realCreateFrame = host.createFrame;
+    host.createFrame = () => {
+      const n = realCreateFrame();
+      frozen(n, 'height', 80);
+      return n;
+    };
+    const r = await executeOps(
+      host,
+      ctx,
+      {
+        type: 'FRAME',
+        name: '行-容器',
+        width: 120,
+        height: 260,
+        layoutMode: 'VERTICAL',
+        primaryAxisSizingMode: 'FIXED',
+        counterAxisSizingMode: 'FIXED',
+      },
+      { mode: 'absolute', x: 0, y: 0 },
+    );
+    const warn = r.warnings?.join('') ?? '';
+    expect(warn).toContain('height 未落地');
+    expect(warn).toContain('jsd_resize_node');
+  });
+
+  it('创建路径:开布局把子节点次序重排了 → 点名(基线 = spec 数组序)', async () => {
+    host = makeHost();
+    const realCreateFrame = host.createFrame;
+    host.createFrame = () => {
+      const n = realCreateFrame();
+      // 复刻引擎行为:开布局后按几何位置重排,后插的反而在数组前面
+      const prepend = (child: NodeSkeleton) => {
+        const self = n as unknown as { children: NodeSkeleton[] };
+        self.children = [child, ...(self.children ?? [])];
+        child.parent = n;
+      };
+      n.appendChild = prepend;
+      n.insertChild = (_i: number, child: NodeSkeleton) => prepend(child);
+      return n;
+    };
+    const r = await executeOps(
+      host,
+      ctx,
+      {
+        type: 'FRAME',
+        name: '行-次序',
+        width: 120,
+        height: 60,
+        layoutMode: 'VERTICAL',
+        children: [
+          { type: 'RECTANGLE', name: '底', width: 40, height: 10 },
+          { type: 'RECTANGLE', name: '顶', width: 40, height: 10 },
+        ],
+      },
+      { mode: 'absolute', x: 0, y: 0 },
+    );
+    expect(r.warnings?.join('')).toContain('子节点次序被 auto-layout 重排');
+  });
+});
+
+/**
  * 「属性 × 节点类型」不匹配必须在**写入前**拦下(2026-09-24 MG 真机踩到)。
  *
  * `layoutGrids` / `clipsContent` 只存在于三平台的 frame 族 mixin 上,矩形没有该字段;
@@ -1590,7 +1838,7 @@ describe('Figma 运行时收窄与节点序列化容错', () => {
     const good = makeRect('F:good', '好节点');
     host = makeHost([broken, good]);
 
-    const r = await findNodes(host, {});
+    const r = await findNodes(host, ctx, {});
 
     expect(r.total).toBe(2);
     const [bad, ok] = r.nodes;

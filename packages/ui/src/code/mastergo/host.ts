@@ -23,7 +23,9 @@ import { summarizeStyle, unwrapNode, wrapNode } from './node-facade';
  *    结果落在指定父级,故这里统一算出结果后自己 `appendChild`(否则新节点留页面根,
  *    层级与坐标都错);
  * 3. `createImage` 返回 `Image{href}`(不是 Figma 的 `{hash}`),按契约注释把 href
- *    当宿主本地图片引用交出,由门面把 paint 的 `imageHash` 翻回 `imageRef`。
+ *    当宿主本地图片引用交出,由门面把 paint 的 `imageHash` 翻回 `imageRef`;
+ * 4. 变量不在 `mg` 顶层,在命名空间下(`mg.variables.getVariables()`)—— 契约的名字是
+ *    顶层的 `getLocalVariablesAsync`,故只在**这里**投影一次(`getLocalVariablesAsync`)。
  *
  * 未实现(契约里为可选,core 按运行时探测回退或用明确报错兜住):
  * `ungroup`(MG 两级 API 都没有)、`getNodeByIdAsync` / `loadAllPagesAsync` /
@@ -142,6 +144,21 @@ export const host: DesignHost = {
   getLocalTextStyles: () => mg.getLocalTextStyles().map(summarizeStyle),
   getLocalEffectStyles: () => mg.getLocalEffectStyles().map(summarizeStyle),
   getLocalGridStyles: () => mg.getLocalGridStyles().map(summarizeStyle),
+  /**
+   * 本地变量枚举(0039):MG 是**命名空间投影**而不是同名符号 —— 真源在
+   * `mg.variables.getVariables()`(`@mastergo/plugin-typings@2.19.2 dist/index.d.ts:1176`,
+   * `Variable{id,name,…}:1874`),契约名字在顶层,故在这里投影成 `AssetRef`(只留 id/name)。
+   *
+   * 契约是 `Async`,MG 原生是同步 —— 差异收在本文件(同 0017 对
+   * `createNodeFromSvg` / `createImage` 的处理),不让它渗进 core。
+   * 只读枚举:MG 的写入口(Collection / Mode / 建变量)本仓仍未接,故 meta 里不 claim
+   * 变量能力位(见 meta.ts)。
+   *
+   * ⚠ `getVariables()` 没有 `includeExternal` 参数(与 `getCollections` 不同),故这里
+   * 不做过滤 —— 真机上若发现混进外部库变量,按 `collectionId` 过滤即可,判据留在这里。
+   */
+  getLocalVariablesAsync: async () =>
+    mg.variables.getVariables().map((v) => ({ id: v.id, name: v.name })),
 
   on: (event: string, handler: (...args: unknown[]) => void) => {
     // 宿主的事件名是联合类型、回调参数按事件各异(selectionchange 给的是 id 数组),

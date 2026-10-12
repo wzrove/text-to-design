@@ -10,7 +10,12 @@ import {
 import type { ExecuteOp, SerializedNode } from '../schemas';
 import buildNode from './buildNode';
 import type { DesignHost, NodeSkeleton } from './host';
-import { emptyNotes, nodeLabel, unappliedWarning } from './props/outcome';
+import {
+  type CreateNotes,
+  emptyNotes,
+  nodeLabel,
+  unappliedWarning,
+} from './props/outcome';
 import type { RuntimeContext } from './runtime';
 import { serializeNode } from './serialize';
 import { fontNotResolved } from './utils';
@@ -39,6 +44,137 @@ function coerceSpecs(ops: unknown): ExecuteOp[] {
     return ops.map(coerceSpec);
   }
   return [coerceSpec(ops)];
+}
+
+/**
+ * 创建路径的**布局对账**:拿序列化后的值比请求值。
+ *
+ * 为什么不能只在 writer 的 settle 里判(那里已经判过一次):写入瞬间的回读是
+ * **同 tick 原样回显**,引擎要到之后才把方向回写成另一头、把 FIXED 轴翻成 AUTO
+ * —— 与 `fontName` 同一类坑(见 `core/utils.ts` 的 `fontNotResolved` 与
+ * `props/writers.ts` 的对应注释)。序列化是这次执行里能拿到的最早可信读数。
+ *
+ * 实测(2026-10-12,jsDesign):建 auto-layout 行容器传 `layoutMode:"HORIZONTAL"`
+ * + 两轴 FIXED + 1616×200,回包一切正常,**下一次调用 jsd_find 读回来是
+ * VERTICAL + AUTO**,子卡被拉成整宽 —— 零告警。
+ */
+function reconcileCreatedLayout(
+  spec: Readonly<Record<string, unknown>>,
+  node: SerializedNode,
+  notes: CreateNotes,
+): void {
+  const label = nodeLabel(node);
+  const wantMode = spec.layoutMode;
+  const modeLanded = wantMode != null && wantMode === node.layoutMode;
+  if (wantMode != null && !modeLanded) {
+    notes.unapplied.push({
+      key: 'layoutMode',
+      label,
+      detail: `请求 ${String(wantMode)},回读 ${node.layoutMode ?? 'NONE'}`,
+    });
+  }
+  // 没开布局的容器上这些字段本就不参与排布(与 writers 的 create 分支同口径):
+  // 拿请求值对账只会自造「没生效」
+  const layoutOn = wantMode != null || node.layoutMode != null;
+  if (layoutOn) {
+    for (const key of [
+      'primaryAxisSizingMode',
+      'counterAxisSizingMode',
+    ] as const) {
+      const want = spec[key];
+      if (want == null) continue;
+      const got = node[key];
+      if (got === want) continue;
+      notes.unapplied.push({
+        key,
+        label,
+        detail: `请求 ${String(want)},回读 ${got ?? '读不到'}`,
+      });
+    }
+  }
+  // 布局没落地时不比 spacing/padding:没进布局的容器这些值本就不参与排布
+  if (modeLanded) {
+    for (const key of [
+      'itemSpacing',
+      'paddingTop',
+      'paddingRight',
+      'paddingBottom',
+      'paddingLeft',
+    ] as const) {
+      const want = spec[key];
+      if (typeof want !== 'number' || node[key] === want) continue;
+      notes.unapplied.push({
+        key,
+        label,
+        detail: `请求 ${want},回读 ${node[key] ?? '读不到'}`,
+      });
+    }
+  }
+  // 声明了尺寸、该轴回读也写着 FIXED,引擎却仍按内容 hug 改了尺寸 ——
+  // 实测(2026-10-12 jsDesign)传 120×260 开 VERTICAL 布局后回读 100×80,
+  // 而 primaryAxisSizingMode/counterAxisSizingMode 两个字段本身是落库的,
+  // 所以 sizingMode 的对账抓不到它:尺寸要单独比。
+  if (node.layoutMode != null) {
+    const primaryIsWidth = node.layoutMode === 'HORIZONTAL';
+    for (const dim of ['width', 'height'] as const) {
+      const want = spec[dim];
+      if (typeof want !== 'number') continue;
+      const got = node[dim];
+      if (typeof got !== 'number' || Math.abs(got - want) <= 0.5) continue;
+      const axisMode = primaryIsWidth
+        ? dim === 'width'
+          ? node.primaryAxisSizingMode
+          : node.counterAxisSizingMode
+        : dim === 'height'
+          ? node.primaryAxisSizingMode
+          : node.counterAxisSizingMode;
+      // AUTO 轴按内容撑开属预期,不是没生效
+      if (axisMode === 'AUTO') continue;
+      notes.messages.push(
+        [
+          `${label} 的 ${dim} 未落地:请求 ${want},回读 ${got}(该轴 sizingMode 回读为 ${axisMode ?? '读不到'})。`,
+          'auto-layout 容器即使 sizingMode 写着 FIXED,引擎仍可能在开启布局/插入子节点时按内容重算尺寸。',
+          '处理:布局与子节点都就位后,用 jsd_resize_node 传 width/height 钉回尺寸(重发 set_layout 会再被吃掉一次);',
+          '要按内容撑开就别传该维尺寸,直接声明该轴 sizingMode 为 AUTO,免得对账口径互相打架。',
+        ].join(''),
+      );
+    }
+  }
+  const kids = node.children;
+  const specKids = spec.children;
+  if (kids == null || !Array.isArray(specKids) || specKids.length === 0) return;
+  // 次序基线 = spec 数组序(创建时按它逐个 append);引擎开布局会按几何重排
+  const wantOrder = (specKids as readonly Record<string, unknown>[]).map((s) =>
+    typeof s?.name === 'string' ? s.name : '',
+  );
+  const gotOrder = kids.map((k) => k.name);
+  if (
+    wantOrder.length === gotOrder.length &&
+    wantOrder.some((n, i) => n !== gotOrder[i])
+  ) {
+    notes.messages.push(
+      [
+        `${label} 的子节点次序被 auto-layout 重排:${wantOrder.join('→')} 变成 ${gotOrder.join('→')}(次序即绘制顺序,也是布局排布顺序)。`,
+        '表现:期望的层叠/排列关系变了,遮挡可能反过来。',
+        '处理:用 jsd_reparent_nodes(传 parentId + index)按目标次序归位;引擎按几何位置排布,',
+        '想让顺序稳定就先把手动排好的 x/y 摆成期望次序,再开布局。',
+      ].join(''),
+    );
+  }
+  // 引擎可能已按几何重排 children,位置对不上 —— 按 name 配对(创建工具强制语义名)
+  const pending = new Map<string, Record<string, unknown>[]>();
+  for (const s of specKids as readonly Record<string, unknown>[]) {
+    const key = typeof s?.name === 'string' ? s.name : '';
+    const queue = pending.get(key);
+    if (queue) queue.push(s);
+    else pending.set(key, [s]);
+  }
+  for (const kid of kids) {
+    const queue = pending.get(kid.name);
+    const specKid = queue?.shift();
+    if (specKid == null) continue;
+    reconcileCreatedLayout(specKid, kid, notes);
+  }
 }
 
 export async function executeOps(
@@ -100,6 +236,14 @@ export async function executeOps(
     }
   }
   const warnings: string[] = [];
+  // 布局字段对账(创建路径 settle 的回读是同 tick 回显,判不出引擎事后回写)
+  for (let i = 0; i < specs.length; i += 1) {
+    reconcileCreatedLayout(
+      specs[i] as unknown as Readonly<Record<string, unknown>>,
+      serialized[i],
+      notes,
+    );
+  }
   if (notes.skipped.size > 0) {
     warnings.push(
       `以下字段由平台能力门控,当前平台运行时不具备,创建时已忽略:${[

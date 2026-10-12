@@ -1,6 +1,6 @@
 import { LAYOUT_GRID_UNVERIFIABLE_PLATFORMS } from '../../dicts/platform-value-domain';
 import { propAppliesTo } from '../../dicts/prop-applicability';
-import type { LayoutGrid } from '../../schemas';
+import type { LayoutGrid, SerializedNode } from '../../schemas';
 import type { FontName } from '../../schemas/base';
 import { MIXED, type NodeSkeleton } from '../host';
 import {
@@ -9,6 +9,7 @@ import {
   normalizePaints,
 } from '../normalize';
 import { loadFont, MIN_RESIZE_SIZE } from '../utils';
+import { nodeLabel } from './outcome';
 import { platformRejectsProp } from './platform-gate';
 import {
   field,
@@ -495,6 +496,7 @@ export const layoutWriter: PropWriter = {
   write(ctx) {
     const { node, src, create } = ctx;
     const mode = src.layoutMode as 'HORIZONTAL' | 'VERTICAL' | undefined;
+    if (mode != null) rememberLayoutOrder(node);
     if (create) {
       // 创建路径:只有显式给了 layoutMode 才开启布局并配齐默认值
       if (mode == null) return;
@@ -586,6 +588,29 @@ export const layoutWriter: PropWriter = {
         ok: !(key in node) || field(node, key) === expected,
       });
     }
+    // sizingMode 回读(2026-10-12 补,与 spacing/padding 同一族缺口):引擎开启
+    // auto-layout、或布局重算时,会把调用方显式声明的 FIXED 翻成 AUTO(容器按内容
+    // hug)—— 实测 jsDesign:chip 声明 width 150 回读 106、KPI 卡声明 height 104
+    // 回读 80,而回包零告警。声明过就必须对账,压不住由 0007 的出口点名。
+    for (const key of [
+      'primaryAxisSizingMode',
+      'counterAxisSizingMode',
+    ] as const) {
+      const expected = src[key];
+      if (expected == null) continue;
+      // 创建路径没开布局时 write() 一个布局字段都没写(见上面 create 分支的提前
+      // 返回),此时拿请求值对账只会自造「没生效」—— 与 spacing/padding 同口径
+      if (ctx.create && src.layoutMode == null) continue;
+      if (!propAppliesTo(key, node.type)) continue;
+      if (platformRejectsProp(ctx, key, expected) != null) continue;
+      if (key in node && field(node, key) !== expected) {
+        setField(node, key, expected);
+      }
+      ctx.outcome.readback.push({
+        key,
+        ok: !(key in node) || field(node, key) === expected,
+      });
+    }
     if (src.layoutMode == null) return;
     if (!propAppliesTo('layoutMode', node.type)) return;
     const expected = src.layoutMode as 'NONE' | 'HORIZONTAL' | 'VERTICAL';
@@ -598,6 +623,89 @@ export const layoutWriter: PropWriter = {
     ctx.outcome.readback.push({ key: 'layoutMode', ok });
   },
 };
+
+/** 容器当前 children 的 id 次序;非容器 / 读取抛异常时返回空数组(不参与对账) */
+function childIds(node: NodeSkeleton): string[] {
+  try {
+    const kids = (node as { children?: readonly { id: string }[] }).children;
+    return Array.isArray(kids) ? kids.map((c) => c.id) : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * 开布局前的快照(次序 + 尺寸)。
+ *
+ * 为什么要留到**序列化之后**再比(而不是在 settle 里当场比):引擎的那次重排与
+ * hug 都发生在 settle 之后 —— 实测(2026-10-12 jsDesign)`jsd_set_layout{layoutMode:
+ * "VERTICAL"}` 当场回读次序仍是数组序、尺寸仍是请求值,下一次 `jsd_find` 读回来
+ * 次序已变成几何序、120×260 已缩成 100×80。settle 里比对等于永远比不出东西。
+ * 与 `fontName` 同一族:**写入时刻的读数不可信**,判据要用序列化值。
+ */
+interface LayoutSnapshot {
+  order: string[];
+  width?: number;
+  height?: number;
+}
+
+const layoutBefore = new WeakMap<NodeSkeleton, LayoutSnapshot>();
+
+export function rememberLayoutOrder(node: NodeSkeleton): void {
+  const size = node as unknown as { width?: unknown; height?: unknown };
+  layoutBefore.set(node, {
+    order: childIds(node),
+    width: typeof size.width === 'number' ? size.width : undefined,
+    height: typeof size.height === 'number' ? size.height : undefined,
+  });
+}
+
+/**
+ * 序列化后比对:开启 auto-layout 到底把什么改掉了(次序 / 尺寸)。
+ * 读取深度不够(children 没序列化出来)时那一项**不比** —— 拿不准就别报。
+ */
+export function layoutDriftNotices(
+  node: NodeSkeleton,
+  serialized: SerializedNode,
+): string[] {
+  const before = layoutBefore.get(node);
+  layoutBefore.delete(node);
+  if (before == null) return [];
+  const out: string[] = [];
+  const after = serialized.children?.map((c) => c.id);
+  if (before.order.length > 1 && after?.length === before.order.length) {
+    const moved = after.filter((id, i) => id !== before.order[i]).length;
+    if (moved > 0) {
+      out.push(
+        [
+          `开启 auto-layout 重排了 ${nodeLabel(node)} 的子节点次序:${moved}/${before.order.length} 个换了位置(次序即绘制顺序,也是布局排布顺序)。`,
+          '表现:先前 jsd_reparent_nodes 摆好的 index 会被这次重算改掉,遮挡关系与排布都可能变。',
+          '处理:布局开好之后再调一次 jsd_reparent_nodes(传 parentId + index)按目标次序归位;',
+          '引擎按几何位置排布 —— 想让顺序稳定,先把子节点 x/y 排成期望次序再开布局。',
+        ].join(''),
+      );
+    }
+  }
+  // 尺寸:引擎开布局时按内容 hug 掉容器尺寸,而**两个 sizingMode 字段本身落库成
+  // FIXED**(实测 2026-10-12 jsDesign:120×260 → 100×80)—— 字段对账抓不到,
+  // 只能拿开布局前后的实测尺寸比。
+  const label = nodeLabel(node);
+  for (const dim of ['width', 'height'] as const) {
+    const was = before[dim];
+    const now = serialized[dim];
+    if (typeof was !== 'number' || typeof now !== 'number') continue;
+    if (Math.abs(now - was) <= 0.5) continue;
+    out.push(
+      [
+        `${label} 的 ${dim} 被 auto-layout 改成 ${now}(开布局前 ${was})。`,
+        '引擎在开启布局时按内容重算容器尺寸,而该轴的 sizingMode 回读仍是 FIXED —— 字段落了库,尺寸没保住。',
+        '处理:布局与子节点都就位后,用 jsd_resize_node 传 width/height 钉回尺寸;',
+        '重发 set_layout 会再吃掉一次。要的就是按内容撑开,则显式把该轴 sizingMode 传 AUTO,让意图与结果一致。',
+      ].join(''),
+    );
+  }
+  return out;
+}
 
 /**
  * 显式给了尺寸、却没声明该轴的 sizingMode → 该轴钉成 FIXED。

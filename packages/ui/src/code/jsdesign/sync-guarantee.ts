@@ -101,6 +101,9 @@ type JsDesignAbsent =
   | 'textTruncation'
   | 'maxLines'
   | 'componentProperties'
+  // 组件属性引用(0041):`plugin-api.d.ts` 全文零命中 —— 属**接不了**,
+  // 与「本仓未接」不是一回事(该版本连 `componentProperties` 都没有)。
+  | 'componentPropertyReferences'
   | 'boundVariables'
   | 'getMainComponentAsync'
   | 'resetOverrides'
@@ -143,6 +146,18 @@ type JsDesignAsyncGap =
   | 'getLocalGridStylesAsync';
 
 /**
+ * 平台**能力面**缺口(0039):契约里声明为可选,但缺席理由既不是「名字不同」也不是
+ * dynamic-page,而是这个平台**结构上就没有这个面**。
+ * - `getLocalVariablesAsync`:jsDesign typings 全文没有任何 variable 声明
+ *   (实测 `grep -in variable` 零命中)⇒ 接不了。完整事实在三域表
+ *   `dicts/platform-knowledge.ts`(0032)。
+ *
+ * 与上面 `JsDesignAsyncGap` 分开登记,是因为两类缺口的**退出条件不同**:
+ * 那一类等官方补 dynamic-page 符号,这一类只能等平台长出变量面。
+ */
+type JsDesignCapacityGap = 'getLocalVariablesAsync';
+
+/**
  * 契约异步化后的**名字**缺口(0017):jsDesign 原生只有同步 `createNodeFromSvg` /
  * `createImage`,`*Async` 两个名字是本仓 adapter 包出来的(见 jsdesign/host.ts),
  * typings 里查不到属预期。官方将来收录同名异步符号时反向断言会失败,提醒收编。
@@ -158,7 +173,10 @@ export type HostContractCheck = ExpectNever<
   Missing<
     Exclude<
       keyof DesignHost,
-      JsDesignHostTypingsGap | JsDesignAsyncGap | JsDesignAsyncNameGap
+      | JsDesignHostTypingsGap
+      | JsDesignAsyncGap
+      | JsDesignAsyncNameGap
+      | JsDesignCapacityGap
     >,
     PluginAPI
   >
@@ -166,7 +184,10 @@ export type HostContractCheck = ExpectNever<
 /** 反向:登记为缺口的东西必须真的不在 typings 里(登记不诚实也会报错) */
 export type HostGapCheck = ExpectNever<
   Declared<
-    JsDesignHostTypingsGap | JsDesignAsyncGap | JsDesignAsyncNameGap,
+    | JsDesignHostTypingsGap
+    | JsDesignAsyncGap
+    | JsDesignAsyncNameGap
+    | JsDesignCapacityGap,
     PluginAPI
   >
 >;

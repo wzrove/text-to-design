@@ -26,10 +26,48 @@ const variablesCreateSchema = z.object({
     .min(1),
 });
 
-const variablesApplySchema = z.object({
-  nodeIds: z.array(z.string()).min(1),
-  boundProperty: z.string().describe('如 fills/strokes/effects/backgrounds'),
-  variableId: z.string(),
+const variablesApplySchema = z
+  .object({
+    nodeIds: z.array(z.string()).min(1),
+    boundProperty: z.string().describe('如 fills/strokes/effects/backgrounds'),
+    variableId: z
+      .string()
+      .optional()
+      .describe('要绑的变量 id;`unbind: true` 时不用给'),
+    unbind: z
+      .boolean()
+      .optional()
+      .describe('true = 解绑该字段上的变量绑定;默认 false(绑定)'),
+  })
+  .superRefine((v, ctx) => {
+    if (v.unbind === true || v.variableId != null) return;
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['variableId'],
+      message: '绑定时必须给 variableId(解绑才不用给)',
+    });
+  });
+
+/**
+ * 变量清单(与 MG 的 `mg_list_variables` **同形**,两边共用一套调用纪律)。
+ *
+ * 为什么需要它:Figma 的变量读路径此前只有节点上的 `boundVariables` —— 读到的是**绑定**,
+ * 不是**库存**;「有哪些变量、值是多少、有哪些模式」在画布上没有出口,选变量绑定前只能靠猜 id。
+ * 与 `jsd_get_page` 的 `assets.variables` 不是两件事:那条是不分平台的概览(只有 id + 名称)。
+ */
+const variablesListSchema = z.object({
+  collectionId: z.string().optional().describe('只列该集合下的变量'),
+  type: z
+    .enum(['BOOLEAN', 'COLOR', 'FLOAT', 'STRING'])
+    .optional()
+    .describe('只列该类型的变量'),
+  limit: z
+    .number()
+    .int()
+    .min(1)
+    .max(500)
+    .optional()
+    .describe('最多返回几个变量(默认 200);集合那一段恒全量返回'),
 });
 
 /**
@@ -146,10 +184,17 @@ async function applyVariables(
   const p = params as {
     nodeIds: string[];
     boundProperty: string;
-    variableId: string;
+    variableId?: string;
+    unbind?: boolean;
   };
-  const variable = await figma.variables.getVariableByIdAsync(p.variableId);
-  if (variable == null) throw new Error(`没有找到变量: ${p.variableId}`);
+  const unbind = p.unbind === true;
+  // 解绑不需要变量:两个入口都收 null,语义是「把该字段上绑着的东西摘掉」
+  const variable = unbind
+    ? null
+    : await figma.variables.getVariableByIdAsync(p.variableId ?? '');
+  if (!unbind && variable == null) {
+    throw new Error(`没有找到变量: ${p.variableId ?? '(未给 variableId)'}`);
+  }
   const nodes = await resolveNodes(host, p.nodeIds);
   if (nodes.length === 0) throw new Error('没有找到要绑定变量的节点');
   const isPaintField = PAINT_BOUND_FIELDS.has(p.boundProperty);
@@ -164,7 +209,8 @@ async function applyVariables(
         failed.push(n.id);
         continue;
       }
-      // 只对 SOLID 端绑 color(SOLID 的可绑字段就叫 color);渐变等其余 paint 原样保留
+      // 只对 SOLID 端绑 color(SOLID 的可绑字段就叫 color);渐变等其余 paint 原样保留。
+      // variable 传 null 即为**解绑**(typings:setBoundVariableForPaint 的第三参收 null)
       target[paintField] = (paints as Paint[]).map((paint) =>
         paint.type === 'SOLID'
           ? figma.variables.setBoundVariableForPaint(paint, 'color', variable)
@@ -185,6 +231,62 @@ async function applyVariables(
     }
   }
   return { applied, failed };
+}
+
+async function listVariables(
+  _host: DesignHost,
+  params: unknown,
+): Promise<{
+  collections: Array<{
+    id: string;
+    name: string;
+    defaultModeId: string;
+    modes: Array<{ id: string; name: string }>;
+  }>;
+  variables: Array<{
+    id: string;
+    name: string;
+    type: string;
+    collectionId: string;
+    description?: string;
+    /** 各模式下的值(键 = modeId),原样透传不归一 */
+    values: Record<string, unknown>;
+  }>;
+  count: number;
+  truncated?: boolean;
+}> {
+  const p = params as {
+    collectionId?: string;
+    type?: 'BOOLEAN' | 'COLOR' | 'FLOAT' | 'STRING';
+    limit?: number;
+  };
+  const limit = p.limit ?? 200;
+  // dynamic-page 下 variables 的同步 getter 全部抛异常,一律走 *Async(0011)
+  const collections = await figma.variables.getLocalVariableCollectionsAsync();
+  const all = await figma.variables.getLocalVariablesAsync(p.type);
+  const filtered =
+    p.collectionId == null
+      ? all
+      : all.filter((v) => v.variableCollectionId === p.collectionId);
+  const slice = filtered.slice(0, limit);
+  return {
+    collections: collections.map((c) => ({
+      id: c.id,
+      name: c.name,
+      defaultModeId: c.defaultModeId,
+      modes: c.modes.map((m) => ({ id: m.modeId, name: m.name })),
+    })),
+    variables: slice.map((v) => ({
+      id: v.id,
+      name: v.name,
+      type: v.resolvedType,
+      collectionId: v.variableCollectionId,
+      ...(v.description ? { description: v.description } : {}),
+      values: v.valuesByMode as unknown as Record<string, unknown>,
+    })),
+    count: filtered.length,
+    ...(filtered.length > slice.length ? { truncated: true } : {}),
+  };
 }
 
 /** 本地样式查找:精确名优先,退化到 trim + 忽略大小写 */
@@ -395,10 +497,18 @@ export const figmaOps: PlatformOp[] = [
     run: createVariables,
   },
   {
-    name: 'figma_variables_apply',
-    title: '绑定变量',
+    name: 'figma_variables_list',
+    title: '查看变量集合与变量',
     description:
-      'Figma 特有:给节点绑定变量。params: { nodeIds, boundProperty(如 fills/strokes/effects/backgrounds), variableId }',
+      'Figma 特有:列出**变量集合(含模式)**与**变量**(类型 / 所属集合 / 描述 / 各模式的值)。params: { collectionId?, type?: BOOLEAN|COLOR|FLOAT|STRING, limit? }。**动手前的摸底入口**,也是另两个变量 op 的回读面;与 MG 的 `mg_list_variables` 同形。绑定前先在这里拿 `variableId`(与 `jsd_get_page` 的 `assets.variables` 不是两件事:那条是不分平台的概览,只有 id + 名称)',
+    inputSchema: variablesListSchema,
+    run: listVariables,
+  },
+  {
+    name: 'figma_variables_apply',
+    title: '绑定/解绑变量',
+    description:
+      'Figma 特有:给节点绑定变量,`unbind: true` 则解绑(解绑**不用**给 variableId)。params: { nodeIds, boundProperty(如 fills/strokes/effects/backgrounds), variableId?, unbind? }。⚠ paint 类字段(fills/strokes/backgrounds)的变量必须绑在 paint 自身(节点级 setBoundVariable 会抛),只对 SOLID 端绑 color,渐变等其余 paint 原样保留;单节点内的渐变端点无法这样绑',
     inputSchema: variablesApplySchema,
     run: applyVariables,
   },

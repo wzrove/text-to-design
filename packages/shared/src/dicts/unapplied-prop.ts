@@ -14,6 +14,13 @@
 const PADDING_HINT =
   '容器没有生效的 auto-layout 时(layoutMode 为 NONE)padding 不参与布局,引擎可能根本不落值。处理:先 jsd_find 回读该容器的 layoutMode,把 layoutMode 与四边 padding **放在同一次 jsd_set_layout 里**重传;已是布局容器则以 jsd_find 回读到的值为准(它才是渲染用的真源)';
 
+/**
+ * sizingMode 的根因只有一句:引擎在开布局/算布局时把轴翻成 AUTO(按内容 hug),
+ * 于是调用方给的固定宽高被吃掉。两条路径同一份文案。
+ */
+const SIZING_MODE_HINT =
+  '引擎把该轴翻成了 AUTO(按内容撑开),显式给的对应边尺寸被吃掉 —— 主轴/交叉轴落在哪条边由 layoutMode 决定(HORIZONTAL:主轴=宽、交叉轴=高;VERTICAL 相反)。处理:用 jsd_resize_node 传 width/height 把尺寸钉回去(此时别再重发 set_layout,否则又被翻回),或接受 hug 并把该轴的 sizingMode 显式写成 AUTO 让意图与结果一致';
+
 export const UNAPPLIED_PROP_HINT: Readonly<Record<string, string>> = {
   layoutMode:
     '引擎在布局重算后会回写容器方向(已重试写入一次仍不一致):子节点会按**回读到的**方向排布,方向错了会全叠在同一点(渲染上只看得见一个)。处理:用 jsd_find 复核该容器的 layoutMode,再单独调一次 jsd_set_layout(只传 layoutMode)重设',
@@ -23,6 +30,8 @@ export const UNAPPLIED_PROP_HINT: Readonly<Record<string, string>> = {
   paddingRight: PADDING_HINT,
   paddingBottom: PADDING_HINT,
   paddingLeft: PADDING_HINT,
+  primaryAxisSizingMode: SIZING_MODE_HINT,
+  counterAxisSizingMode: SIZING_MODE_HINT,
   fontName:
     '引擎没解析这个 family/style(渲染退回默认字面,而回显看起来是成功的)。**写法约定(实测 2026-09-19)**:`family` 取 `jsd_list_fonts` 的 `fonts[].family`(形如 `SourceHanSansCN_family`),`style` 取同一项 `styles` 里的**全名**(形如 `SourceHanSansCN-Bold`)—— 解析成功引擎会规范化成短名(回读 `{family:"SourceHanSansCN", style:"Bold"}` 属正常,不报警);把 `style` 写成简称 `"Bold"` 或写一个不存在的族时,引擎**原样保留请求值**且渲染用默认字面。处理:照 `fonts[]` 原样取 family + style 重写一次,关键文字另配一次 jsd_export 目检(字重/字面的差异只在小图上看得出)',
   width:

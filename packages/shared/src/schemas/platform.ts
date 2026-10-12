@@ -68,6 +68,32 @@ export type ComponentPropertyValue = z.infer<
 >;
 
 /**
+ * 组件属性**引用**(0041):某图层的哪个槽位由哪个组件属性驱动。值是属性的
+ * **完整键**(如 `摘要2#32:7`),可**直接回喂** `jsd_set_instance_properties`。
+ *
+ * 与 {@link componentPropertyValueSchema} 成对:那条说「实例上这个属性等于什么」,
+ * 本条说「哪个图层会被它改」。真机踩过:属性成对存在(`摘要`/`摘要2`)时只有连着
+ * 可见层的那一组会改画面,写错那组会「回包成功、画布不动」—— 读路径里没有这层关系
+ * 就只能靠试。
+ *
+ * 槽位键**归一到一套词汇**(`visible` / `characters` / `mainComponent`):Figma 原生
+ * 就叫这三个,而 MG 原生的显隐槽叫 `isVisible` —— 原样透传等于把 0025 刚决定藏起来的
+ * 两套词汇重新暴露到读路径。jsDesign 的 typings 全文无该声明,字段恒缺席(登记在
+ * `ui/src/code/jsdesign/sync-guarantee.ts`)。
+ */
+export const componentPropertyReferencesSchema = z.object({
+  /** 显隐由哪个属性驱动 */
+  visible: z.string().optional(),
+  /** 文本内容由哪个属性驱动 */
+  characters: z.string().optional(),
+  /** 主组件(换绑)由哪个属性驱动 */
+  mainComponent: z.string().optional(),
+});
+export type ComponentPropertyReferences = z.infer<
+  typeof componentPropertyReferencesSchema
+>;
+
+/**
  * 组件/变体属性的**入参**值:变体属性传字符串(`{"状态":"禁用"}`),布尔属性传布尔,
  * 需要显式声明类型(或换绑属性要带 `preferredValues`)时传 `{type, value}` 对象。
  *

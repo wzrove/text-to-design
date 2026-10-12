@@ -74,7 +74,7 @@
 ## 常见问题
 
 - **AI 说连不上插件**:看即时设计里的插件面板是不是「已连接」,没有就重新运行插件,再重启 AI 会话
-- **AI 说某工具/某字段「平台不支持」**:当前插件平台没有这项能力。面板可折叠的「能力」区块、`jsd_ping` 回包、`jsd://platform/state` 三处看到的是同一份能力表(即时设计侧只有本地样式;变量 / 组件属性 / 文本截断是 Figma 侧才有的差异能力)
+- **AI 说某工具/某字段「平台不支持」**:当前插件平台没有这项能力。面板可折叠的「能力」区块、`jsd_ping` 回包、`jsd://platform/state` 三处看到的是同一份能力表(即时设计侧只有本地样式;变量 / 组件属性 / 文本截断是 Figma 侧先有、MasterGo 侧陆续补上的差异能力)
 - **改了配置没反应**:重启 AI 工具会话
 - **想深入排查**:看文末「给开发者看」的日志部分
 - **旧版升级见下方「升级」**
@@ -105,7 +105,7 @@ pkill -f text-to-design-mcp
 | --- | --- |
 | `jsd_ping` | 检查插件是否在线,返回三张能力表(核心能力 / 平台差异能力 / 平台特有 op 名单);回包被 daemon 缓存,后续可读 `jsd://platform/state` |
 | `jsd_get_selection` | 读取画布当前选中的节点 |
-| `jsd_get_page` | 读取当前页结构(顶层节点轻量摘要 + 文档级页面总览;等价 `jsd://page` 资源) |
+| `jsd_get_page` | 读取当前页结构(顶层节点几何 + **设计系统资源清单**:组件/变体集(带维度取值)/样式(四类全量)/变量,含 summary 计数;等价 `jsd://page` 资源)。**设计类任务第一步读它,命中即复用** |
 | `jsd_find` | 按名称/类型/id 查找节点 |
 | `jsd_create_nodes` | 按描述创建节点(frame/rect/text 等,支持阴影/描边/渐变/文本样式) |
 | `jsd_create_svg` | 直接导入 SVG(保留 path/矢量数据,不经降级)。来源二选一:`svg` 内联字符串,或 `svgPath` 本地文件路径(**图表一律走这条**:脚本按 `chart-by-code` 配方算好、落盘,再传路径) |
@@ -147,7 +147,7 @@ pkill -f text-to-design-mcp
 | `jsd_export` | 导出节点为 PNG/JPG/SVG/PDF(导出失败的 id 在文本里点名) |
 | `jsd_list_fonts` | 列出可用字体:families 与各族的可用字型 `fonts:[{family,styles}]`(写 fontName 前照这份取组合,family+style 需精确匹配,猜错会静默退回默认字重) |
 | `jsd_fill_image` | 用本地图片填充节点 |
-| `jsd_platform_op` | 平台特有能力的通用通道(Figma 变量/本地样式/组件属性**定义与设值**;MasterGo 组件属性管理与**集合级变体管理**——建维度/加成分/改取值/删维度)。先读 `jsd_ping` 的 `platformOps` 名单再传 op 名;插件平台不适用(如即时设计)时由 daemon 直接拦截并给出替代路径,不发插件往返 |
+| `jsd_platform_op` | 平台特有能力的通用通道(Figma **变量读写**/本地样式/组件属性**定义与设值**;MasterGo **变量读写(查看 / 批量建 / 绑定解绑)**、组件属性管理与**集合级变体管理**——建维度/加成分/改取值/删维度)。先读 `jsd_ping` 的 `platformOps` 名单再传 op 名;插件平台不适用(如即时设计)时由 daemon 直接拦截并给出替代路径,不发插件往返 |
 
 ### 配方 prompt(`prompts/list`)
 
@@ -183,7 +183,7 @@ Figma 用户不会再读到 jsDesign 的兜底细节;平台未探测时给「先
 | `jsd://canvas/selection` | 当前选中的序列化树(等价 jsd_get_selection depth=2) |
 | `jsd://fonts` | 当前环境可用字体:families 与各族的可用字型 `fonts:[{family,styles}]` |
 | `jsd://styles` | 当前文档可复用本地样式(PAINT/TEXT/EFFECT/GRID,按名应用样式前先读这里) |
-| `jsd://page` | 当前页顶层节点轻量摘要(名称/类型/位置/尺寸/子节点数,从头设计整页前先读) |
+| `jsd://page` | 当前页顶层节点几何(id/名称/类型/宽高/x/y)+ 设计系统资源清单(组件/变体集(维度→取值)/样式(PAINT/TEXT/EFFECT/GRID)/变量,含四类计数)。**设计前先读这里,命中的一律复用,别造重复件** |
 | `jsd://node/{id}` | 按 id 读节点序列化结构 |
 | `jsd://platform/state` | 插件平台状态与能力表(platform / capabilities / coreCapabilities / platformOps)。读 daemon 本地缓存,**不发插件请求**;插件上线时 daemon 自动探测一次,断开即清空,未探测时为空 |
 
