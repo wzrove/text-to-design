@@ -172,7 +172,9 @@ type HostAbsentGap =
   | 'getLocalPaintStylesAsync'
   | 'getLocalTextStylesAsync'
   | 'getLocalEffectStylesAsync'
-  | 'getLocalGridStylesAsync';
+  | 'getLocalGridStylesAsync'
+  /** MG 没有「一条 API 删样式」的入口:原生是 `getStyleById(id)`(:1436)+ `BaseStyle.remove()`(:1994)两步,契约的 `removeStyle` 是本仓包的聚合动作 */
+  | 'removeStyle';
 
 export type HostContractCheck = ExpectNever<
   Missing<
@@ -220,7 +222,13 @@ type NodeAbsentGap =
   | 'removeOverrides'
   | 'ungroup'
   | 'textTruncation'
-  | 'maxLines';
+  | 'maxLines'
+  /** MG 的样式绑定只有同步赋值入口(typings 全文无 `set*StyleIdAsync`);`paragraphIndent` 同理:MGG 的 TextNode 有 `paragraphSpacing` 但**没有** `paragraphIndent` —— 对本平台无影响,建样式由引擎从图层整体抄,core 不逐字段灌(见 host.ts 的 createStyle) */
+  | 'paragraphIndent'
+  | 'setFillStyleIdAsync'
+  | 'setStrokeStyleIdAsync'
+  | 'setTextStyleIdAsync'
+  | 'setEffectStyleIdAsync';
 
 /**
  * 「存在但形状不同」的两项:

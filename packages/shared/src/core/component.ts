@@ -1,8 +1,12 @@
+import { PLATFORM_LABEL } from '../dicts/platform';
+import { platformMethodParamAllowed } from '../dicts/platform-value-domain';
 import type {
+  ComponentPropertyAliasValue,
   ComponentPropertyValue,
   ExecuteOp,
   SerializedNode,
   UpdateNodeProps,
+  VariableAliasRef,
 } from '../schemas';
 import { resolveMainComponent, resolveNodes, resolveNodesMap } from './access';
 import buildNode from './buildNode';
@@ -112,20 +116,24 @@ export async function swapComponents(
 /**
  * 组件属性的**读形态 → 写形态**映射(0023)。
  *
- * 读回来的 `componentProperties` 每项是 `{type, value}`,而引擎写侧只收标量:
+ * 读回来的 `componentProperties` 每项是 `{type, value}`,而引擎写侧收什么由各自签名定:
  * Figma `setProperties(properties: {[name]: string|boolean|VariableAlias})`
- * (`@figma/plugin-typings` 1.137.0 `plugin-api.d.ts:11115`)。把读形态原样回喂会被
+ * (`@figma/plugin-typings` 1.139.0 `plugin-api.d.ts:11123`)。把读形态原样回喂会被
  * 整条拒绝(`Unrecognized key(s) in object: 'value'`),且 `SLOT` 引擎明确不收
  * (`cannotSetSlotProperty`)—— 被跳过的键名进 `skipped`,由调用方点名,不静默丢。
+ *
+ * `value` 是变量别名(`{type:'VARIABLE_ALIAS', id}`)时**原样带上**而不是摊平成 id 字符串:
+ * 摊平等于把「跟随变量」写成「值等于那串 id 文本」,是静默改语义。平台收不收别名由调用方
+ * 按 `dicts/platform-value-domain.ts` 判(见 {@link setInstanceProperties} 的门)。
  *
  * 三种入参形态都收(裸字符串 / 裸布尔 / `{type,value}`),因为工具入参与覆盖快照
  * 两个来源本来就不同形。MG 门面另有一层**键归一**(名字→propertyId),与本函数不重叠。
  */
 export function toComponentPropertyWrites(props: Record<string, unknown>): {
-  writes: Record<string, string | boolean>;
+  writes: Record<string, string | boolean | VariableAliasRef>;
   skipped: string[];
 } {
-  const writes: Record<string, string | boolean> = {};
+  const writes: Record<string, string | boolean | VariableAliasRef> = {};
   const skipped: string[] = [];
   for (const [name, raw] of Object.entries(props)) {
     if (typeof raw === 'string' || typeof raw === 'boolean') {
@@ -141,22 +149,59 @@ export function toComponentPropertyWrites(props: Record<string, unknown>): {
       skipped.push(name);
       continue;
     }
-    if (
-      typeof entry.value === 'string' ||
-      typeof entry.value === 'boolean' ||
-      // 变量绑定:写侧要的就是 alias 对象里的值(string id)
-      (entry.value != null && typeof entry.value === 'object')
-    ) {
-      const value = entry.value as { id?: string } | string | boolean;
-      writes[name] =
-        typeof value === 'object' && value.id != null
-          ? value.id
-          : (value as string | boolean);
+    if (isVariableAliasRef(entry.value)) {
+      writes[name] = entry.value;
+      continue;
+    }
+    if (typeof entry.value === 'string' || typeof entry.value === 'boolean') {
+      writes[name] = entry.value;
       continue;
     }
     skipped.push(name);
   }
   return { writes, skipped };
+}
+
+/** 变量别名形态的判定(线格式见 `schemas/platform.ts` 的 variableAliasRefSchema) */
+function isVariableAliasRef(value: unknown): value is VariableAliasRef {
+  const v = value as { type?: unknown; id?: unknown } | null;
+  return (
+    v != null &&
+    typeof v === 'object' &&
+    v.type === 'VARIABLE_ALIAS' &&
+    typeof v.id === 'string'
+  );
+}
+
+/**
+ * 要绑变量的属性落到不收变量别名的平台时,当场点名中止(不写半批)。
+ * 判据来自 `dicts/platform-value-domain.ts` 的第四类表,与 `core/props/platform-gate.ts`
+ * 同源(0022);错误文案自带替代路径(0007)。
+ */
+function rejectUnsupportedAlias(
+  ctx: RuntimeContext,
+  aliasKeys: readonly string[],
+): void {
+  if (aliasKeys.length === 0) return;
+  if (
+    platformMethodParamAllowed(ctx.platform, 'setProperties', 'variableAlias')
+  )
+    return;
+  // i18n-exempt: 随结果上行给模型,不走面板文案
+  throw new Error(
+    `属性 ${aliasKeys.join('、')} 要绑变量,但 ${
+      ctx.platform == null ? '当前平台' : PLATFORM_LABEL[ctx.platform]
+    } 的 setProperties 签名不收变量别名(只有 Figma 收,见 plugin-api.d.ts:11123)。请改传标量值,或把这条留给 Figma 侧执行。`,
+  );
+}
+
+/** 写形态里哪些键的值是变量别名(即「这个属性要跟随变量」) */
+function aliasKeysOf(
+  writes: Record<string, string | boolean | VariableAliasRef>,
+): string[] {
+  return Object.keys(writes).filter(
+    (k) => (writes[k] as VariableAliasRef)?.type === 'VARIABLE_ALIAS',
+  );
 }
 
 /** `标题#32:0` → `标题`;没有 `#` 的键原样返回(基名即自身) */
@@ -248,16 +293,23 @@ function knownPropertyKeys(
  *
  * `properties` 是**宽类型**(字符串 | 布尔 | `ComponentPropertyValue`),与契约
  * `DesignHost.setProperties` 的签名一致:变体属性是字符串,布尔/文本/换绑属性是标量,
- * 需要显式类型或换绑候选时才传对象。宿主底层只收标量,故这里统一走
- * {@link toComponentPropertyWrites} 整形(0023);键再走
- * {@link normalizeComponentPropertyKeys} 补成完整键(0041);MG 还要把名字键归一到
- * propertyId,那一层在门面里(见 0017)。
+ * 需要显式类型或换绑候选时才传对象,值要跟随变量时 `value` 传 `VariableAliasRef`。
+ * 收下来的形态再走 {@link toComponentPropertyWrites} 整成写形态(0023);键走
+ * {@link normalizeComponentPropertyKeys} 补成完整键(0041);MG 的名字→propertyId 归一在门面里(见 0017)。
+ *
+ * 「本平台收不收这种值形态」不在这里手写:查 `dicts/platform-value-domain.ts`
+ * 的第四类表(`PLATFORM_METHOD_PARAM_DOMAIN`),与 `core/props/platform-gate.ts`
+ * 的属性写路径同一张表、同一个判据(0022:判定要有归属,门面里 console.warn 不算)。
  */
 export async function setInstanceProperties(
   host: DesignHost,
+  ctx: RuntimeContext,
   params: {
     ids: string[];
-    properties: Record<string, string | boolean | ComponentPropertyValue>;
+    properties: Record<
+      string,
+      string | boolean | ComponentPropertyValue | ComponentPropertyAliasValue
+    >;
   },
 ): Promise<{ updated: SerializedNode[] }> {
   const instances = (await resolveNodes(host, params.ids)).filter(
@@ -273,12 +325,13 @@ export async function setInstanceProperties(
       `属性 ${skipped.join('、')} 的值形态无法写成标量(SLOT 属性引擎不收,或值缺少 value)。请用 jsd_find 回读该实例的 componentProperties 取合法项后重试。`,
     );
   }
+  rejectUnsupportedAlias(ctx, aliasKeysOf(writes));
   // 运行时校验 + 键归一:**两遍**走,先把每个实例要写的键算完,再统一下笔。
   // 为什么分两遍:归一的歧义必须**在任何一次写入之前**报出来 —— 否则第一个实例
   // 已经写完、第二个实例才抛,等于留了半批覆盖(0041「不确定就点名,绝不猜」)。
   const planned: Array<{
     inst: NodeSkeleton;
-    props: Record<string, string | boolean>;
+    props: Record<string, string | boolean | VariableAliasRef>;
   }> = [];
   for (const inst of instances) {
     // dynamic-page 下 inst.mainComponent 直接抛,必须走异步入口(0011)
@@ -739,15 +792,18 @@ async function applyOverrideSnapshot(
           wanted[k] = v;
         }
         const { writes } = toComponentPropertyWrites(wanted);
+        rejectUnsupportedAlias(ctx, aliasKeysOf(writes));
         if (Object.keys(writes).length > 0) target.setProperties(writes);
       } else if (
         snapshot.variantProperties != null &&
         Object.keys(snapshot.variantProperties).length > 0
       ) {
         if (swapToSource) {
-          target.setProperties(
-            toComponentPropertyWrites(snapshot.variantProperties).writes,
-          );
+          const variantWrites = toComponentPropertyWrites(
+            snapshot.variantProperties,
+          ).writes;
+          rejectUnsupportedAlias(ctx, aliasKeysOf(variantWrites));
+          target.setProperties(variantWrites);
         } else {
           for (const k of Object.keys(snapshot.variantProperties))
             if (!skippedIdentity.includes(k)) skippedIdentity.push(k);

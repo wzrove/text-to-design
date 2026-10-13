@@ -105,7 +105,7 @@ export const RECIPES: RecipeEntry[] = [
     uri: 'jsd://recipes/script-ops',
     titleKey: 'prompt.scriptOps.title',
     whenToUse:
-      '把多步画布操作合并成一次 jsd_batch 编排或一段宿主脚本。步骤多、往返多、上下文吃紧时读它(含占位符纪律与收敛复核)',
+      '把多步画布操作合并成一次 jsd_batch 编排或一段宿主脚本;步骤多、往返多、上下文吃紧时读它。也覆盖**整页/整档批量改造**(先摸底、确认现状形态、id 的三种来源、按块切批、清单装不下时用 callsFile 或 CLI exec、回读复核与点名类错误不重试)',
     argsHint: '参数 task(要完成的任务,留空只返回脚本化调用纪律)',
     render: () => scriptRecipe(undefined),
   },

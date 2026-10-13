@@ -10,7 +10,7 @@ SKILL.md 只留「结论必须落日志」这条纪律和当前位置，完整�
 先沿用项目已有的约定，按这个顺序找：`docs/design-decisions/`、`docs/adr/`、
 `docs/decisions/`、`ADR/`，或者项目里已有的设计日志。都没有，才新建
 `docs/design-decisions/`，索引叫 `INDEX.md`。
-这个顺序和 `scripts/new_decision.py` 里的 `CANDIDATE_DIRS` 一致，改一处记得同步另一处。
+这个顺序和 `scripts/new_decision.mjs` 里的 `CANDIDATE_DIRS` 一致，改一处记得同步另一处。
 
 位置定下来之后**不要中途搬家**。标识会被外部引用（其他文档、变更记录、项目的缺陷台账都算），
 路径一变引用就断。本技能只保证**记录格式和标识稳定**，至于谁按什么方式回填，
@@ -19,17 +19,17 @@ SKILL.md 只留「结论必须落日志」这条纪律和当前位置，完整�
 ## 创建记录
 
 ```bash
-python3 scripts/new_decision.py "支付渠道分支改用 Strategy"          # 自动取短 id + 更新索引
-python3 scripts/new_decision.py "订单状态机改用 State" --supersedes 0001
-python3 scripts/new_decision.py "..." --dir docs/adr                # 目录与项目既有约定不同时
-python3 scripts/new_decision.py --status 0001 已采纳                # 只改状态，不新建记录
+node scripts/new_decision.mjs "支付渠道分支改用 Strategy"          # 自动取短 id + 更新索引
+node scripts/new_decision.mjs "订单状态机改用 State" --supersedes 0001
+node scripts/new_decision.mjs "..." --dir docs/adr                # 目录与项目既有约定不同时
+node scripts/new_decision.mjs --status 0001 已采纳                # 只改状态，不新建记录
 ```
 
-标识两套并存：**新记录**用 `uuid4` 前 8 位十六进制（`a1b2c3d4-标题.md`），
+标识两套并存：**新记录**用 `randomUUID` 前 8 位十六进制（`a1b2c3d4-标题.md`），
 **旧记录**保留原 4 位数字号，文件名与既有引用一律不改。取号不读目录里的最大值——
 多人各自开分支时 `max+1` 必然撞号，而短 id 不共享计数器；脚本再用
-`O_CREAT|O_EXCL` 独占占位，同机同一秒各跑一次也只有一个赢家。
-`--status` / `--supersedes` 两种形态都认。
+`O_CREAT|O_EXCL`（Node 的 `fs` flag `wx`）独占占位，同机同一秒各跑一次也只有一个赢家。
+`--status` / `--supersedes` 两种形态都认。脚本零依赖，只用 Node 内置模块。
 
 脚本从 [../assets/decision-record-template.md](../assets/decision-record-template.md) 生成骨架
 （压力 / 候选与排除 / 结论 / 实施方案 / 成本与退出条件 / 验证 / 变更历史），填内容即可。

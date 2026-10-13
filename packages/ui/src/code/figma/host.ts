@@ -1,4 +1,12 @@
-import type { AssetRef, DesignHost, NodeSkeleton } from 'text-to-design-shared';
+import {
+  type AssetRef,
+  type DesignHost,
+  fillStyleFromNode,
+  type NodeSkeleton,
+  type StyleCreateInit,
+  type StyleDraft,
+  type StyleSummary,
+} from 'text-to-design-shared';
 
 /**
  * Figma 原生**同步**建图方法:契约自 0017 起改叫 `*Async`(MasterGo 侧只有
@@ -51,6 +59,40 @@ export const host: DesignHost = Object.create(native, {
         id: v.id,
         name: v.name,
       })),
+    enumerable: true,
+  },
+  /**
+   * 建本地样式:引擎是「无参建空样式 + 灌值」,灌值那份逻辑与 jsDesign 共用
+   * `core/styles.ts` 的 `fillStyleFromNode`(两家样式对象字段一致)。
+   *
+   * TEXT 类要先 `loadFontAsync` 再写排版字段,故整条走异步(契约 0010)。
+   */
+  createStyle: {
+    value: async (init: StyleCreateInit): Promise<StyleSummary> => {
+      const style =
+        init.kind === 'PAINT'
+          ? figma.createPaintStyle()
+          : init.kind === 'TEXT'
+            ? figma.createTextStyle()
+            : init.kind === 'EFFECT'
+              ? figma.createEffectStyle()
+              : figma.createGridStyle();
+      const draft = style as unknown as StyleDraft;
+      await fillStyleFromNode(draft, init, (f) => figma.loadFontAsync(f));
+      return { id: style.id, name: style.name, type: style.type };
+    },
+    enumerable: true,
+  },
+  /**
+   * 删本地样式:取样式对象只能走 `getStyleByIdAsync` —— 同步的 `getStyleById` 在
+   * dynamic-page 下必抛(0011);`Style.remove()` 本体是同步的(typings :12418)。
+   */
+  removeStyle: {
+    value: async (id: string): Promise<void> => {
+      const style = await figma.getStyleByIdAsync(id);
+      if (style == null) throw new Error(`没有找到样式: ${id}`);
+      style.remove();
+    },
     enumerable: true,
   },
 });

@@ -73,11 +73,19 @@ text-to-design 能让 AI 助手(比如 opencode、Claude)直接在你的设计�
 
 - **AI 说连不上插件**:先看即时设计里的插件面板是否显示「已连接」,没有就重新运行插件,然后重启 AI 会话。
 - **改完配置不生效**:重启 AI 工具会话。
+- **升级后工具签名没变 / 新参数被拒**(报「缺少必填属性」或「多出未知属性」,而提示里显示的 schema 明明是新版的):
+  AI 工具在**启动时**缓存工具描述,重连连接器不会刷新它 —— 重启 AI 工具即可。这一条在「版本号没变、
+  只换了构建」时最容易撞上(例如本地改完 `pnpm build` 直接指过去),所以改完服务端请连带重启工具。
 - **AI 会话没开,插件面板一直「等待服务」**:后台服务默认由 AI 会话拉起。想让它随时在线,二选一:
   - 手动常驻:`npx -y text-to-design-mcp@latest daemon`(命令幂等,重复执行安全;常驻到下次重启)
   - 开机自启:`npx -y text-to-design-mcp@latest install-service`(用户级 launchd / systemd --user / 计划任务;
     注销用 `uninstall-service`;想先看计划加 `--dry-run`)。开发态(tsx 跑 TS 源码)或 npx 缓存路径会被拒绝注册,
     需先全局安装;`--force` 可跳过该检查。
+- **想用脚本批量改画布**(一次要改的节点上千、参数体写不进对话):把步骤清单写成 JSON,用
+  `npx -y text-to-design-mcp@latest exec calls.json` 直接跑。文件形状与 `jsd_batch` 的 `calls` 一致 ——
+  `{"calls":[…]}`(可带 `stopOnError` / `checkDrift`)或直接一个数组;加 `--dry-run` 只校验清单,
+  加 `--json` 把结果打成 JSON 供管道消费。任一步失败退出码为 1。AI 侧也可以直接调 `jsd_batch`
+  的 `callsFile` 传同一个文件路径(id 不必进上下文)。
 - **想深入排查**:看文末「给开发者看」的调试部分。
 
 ---

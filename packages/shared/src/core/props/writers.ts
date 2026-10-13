@@ -17,6 +17,7 @@ import {
   setField,
   type WriteCtx,
   writeProp,
+  writeStyleRefProp,
 } from './types';
 
 /**
@@ -750,18 +751,22 @@ export const supersetWriter: PropWriter = {
   ],
   write(ctx) {
     const { node, src } = ctx;
-    for (const key of [
-      'fillStyleId',
-      'strokeStyleId',
-      'textStyleId',
-      'effectStyleId',
-    ] as const) {
-      writeProp(ctx, node, key, src[key]);
-    }
-    if (node.type !== 'TEXT') return;
-    for (const key of ['textTruncation', 'maxLines'] as const) {
-      writeProp(ctx, node, key, src[key]);
-    }
+    // 样式绑定一律走 writeStyleRefProp:dynamic-page 平台同步赋值会当场抛(0011)
+    return Promise.all(
+      (
+        [
+          'fillStyleId',
+          'strokeStyleId',
+          'textStyleId',
+          'effectStyleId',
+        ] as const
+      ).map((key) => writeStyleRefProp(ctx, node, key, src[key])),
+    ).then(() => {
+      if (node.type !== 'TEXT') return;
+      for (const key of ['textTruncation', 'maxLines'] as const) {
+        writeProp(ctx, node, key, src[key]);
+      }
+    });
   },
 };
 

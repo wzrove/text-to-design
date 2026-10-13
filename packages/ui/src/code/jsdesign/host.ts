@@ -1,4 +1,11 @@
-import type { DesignHost, NodeSkeleton } from 'text-to-design-shared';
+import {
+  type DesignHost,
+  fillStyleFromNode,
+  type NodeSkeleton,
+  type StyleCreateInit,
+  type StyleDraft,
+  type StyleSummary,
+} from 'text-to-design-shared';
 
 /**
  * jsDesign 原生**同步**建图方法:契约自 0017 起改叫 `*Async`(MasterGo 侧只有
@@ -32,6 +39,39 @@ export const host: DesignHost = Object.create(native, {
   createImageFromBytesAsync: {
     value: async (bytes: Uint8Array): Promise<{ hash: string }> =>
       native.createImage(bytes),
+    enumerable: true,
+  },
+  /**
+   * 建本地样式:与 figma/host.ts 同形(引擎的样式对象字段一致),灌值同样复用
+   * `core/styles.ts` 的 `fillStyleFromNode`,不在此重写第二份。
+   */
+  createStyle: {
+    value: async (init: StyleCreateInit): Promise<StyleSummary> => {
+      const style =
+        init.kind === 'PAINT'
+          ? jsDesign.createPaintStyle()
+          : init.kind === 'TEXT'
+            ? jsDesign.createTextStyle()
+            : init.kind === 'EFFECT'
+              ? jsDesign.createEffectStyle()
+              : jsDesign.createGridStyle();
+      await fillStyleFromNode(style as unknown as StyleDraft, init, (f) =>
+        jsDesign.loadFontAsync(f),
+      );
+      return { id: style.id, name: style.name, type: style.type };
+    },
+    enumerable: true,
+  },
+  /**
+   * 删本地样式:本平台没有 dynamic-page,同步 `getStyleById` 就是官方入口
+   * (`plugin-api.d.ts:50`),`Style.remove()` 同步(`:1143`)。
+   */
+  removeStyle: {
+    value: async (id: string): Promise<void> => {
+      const style = jsDesign.getStyleById(id);
+      if (style == null) throw new Error(`没有找到样式: ${id}`);
+      style.remove();
+    },
     enumerable: true,
   },
 });

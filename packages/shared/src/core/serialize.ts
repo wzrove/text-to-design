@@ -81,6 +81,38 @@ function childIndexOf(node: NodeSkeleton): number | undefined {
 }
 
 /**
+ * `letterSpacing` 的形状收窄:运行时偶尔给出**双层**包装 ——
+ * `{ unit:'PIXELS', value:{ value:0, unit:'PIXELS' } }`,而线格式要的是
+ * `{ value:number, unit }`。真机 2026-10-14 在即时设计上复现:组件内的文本节点
+ * (`jsd_create_component` 的 children 建出来的那一层)读回来就是双层,同一客户端
+ * 用 `jsd_create_text` 直接建的文本节点是平的 —— 所以是宿主运行时的形状差,不是本仓写进去的。
+ *
+ * 为什么在这里收窄而不留给 `as unknown as`:那样整条结果会撞 `outputSchema`,
+ * 于是 `structured()` 把**读到的数据本身**当错误正文回给调用方(见 response.ts),
+ * 一个只读查询就因为一个可归一的形状被判失败。双层里内层才是引擎认可的取值,取内层。
+ */
+function unwrapLetterSpacing(raw: unknown): WireLetterSpacing | undefined {
+  if (raw == null || typeof raw !== 'object') return undefined;
+  const outer = raw as { unit?: unknown; value?: unknown };
+  const inner =
+    outer.value != null && typeof outer.value === 'object'
+      ? (outer.value as { unit?: unknown; value?: unknown })
+      : undefined;
+  if (inner != null) {
+    return {
+      value: typeof inner.value === 'number' ? inner.value : 0,
+      unit: (typeof inner.unit === 'string' ? inner.unit : outer.unit) as
+        | 'PIXELS'
+        | 'PERCENT',
+    };
+  }
+  return {
+    value: typeof outer.value === 'number' ? outer.value : 0,
+    unit: (outer.unit ?? 'PIXELS') as 'PIXELS' | 'PERCENT',
+  };
+}
+
+/**
  * @param zIndex 已知的父级下标(递归 children 时直接传入,省掉一次父级扫描);
  *   顶层调用留空则按父级 children 现算。
  */
@@ -469,7 +501,7 @@ export function serializeNode(
     if (!isMixed(node.lineHeight))
       base.lineHeight = node.lineHeight as SerializedNode['lineHeight'];
     if (!isMixed(node.letterSpacing)) {
-      base.letterSpacing = node.letterSpacing as unknown as WireLetterSpacing;
+      base.letterSpacing = unwrapLetterSpacing(node.letterSpacing);
     }
   }
   if ('layoutMode' in node && node.layoutMode !== 'NONE') {

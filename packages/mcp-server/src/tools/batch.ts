@@ -7,6 +7,7 @@ import {
 } from 'text-to-design-shared';
 import type { Bridge } from '../bridge';
 import { BATCH_TIMEOUT_MS } from '../config';
+import { loadBatchCallsFile } from '../core/calls-file';
 import {
   bridgeTool,
   executorNames,
@@ -49,8 +50,8 @@ function getPath(
   return { ok: true, value: cur };
 }
 
-/** 解析单个引用表达式 'stepId.a.b[0]';步骤不存在/路径不可达时抛错(附可用步骤) */
-function resolveRef(expr: string, steps: Map<string, unknown>): unknown {
+/** 解析单个引用表达式;步骤不存在/路径不可达时抛错(附可用步骤) */
+function resolveStepRef(expr: string, steps: Map<string, unknown>): unknown {
   const dot = expr.indexOf('.');
   const id = dot === -1 ? expr : expr.slice(0, dot);
   const path = dot === -1 ? '' : expr.slice(dot + 1);
@@ -69,6 +70,72 @@ function resolveRef(expr: string, steps: Map<string, unknown>): unknown {
     );
   }
   return r.value;
+}
+
+/**
+ * 资源寻址占位符:`{{@comp:按钮}}` / `{{@var:accent/blue}}` → 资源 id。
+ *
+ * 为什么需要:此前占位符只认**本批步骤的结果**(步骤表随调用结束销毁),于是
+ * 「用哪个组件建实例」「把这个填充绑到哪个变量」都得先在批次外查一次 id 再硬写进
+ * args —— 名字是本仓最稳的资源标识,而 id 每次都要重新摸。
+ * 与 `@` 前缀不撞车:步骤 id 用 `.` 分段,不允许出现 `@` 开头。
+ */
+const ASSET_RE = /^@(comp|var):([\s\S]+)$/;
+
+/** `jsd_get_page` 回包里资源清单的部分形状 */
+interface PageAssets {
+  components?: { id: string; name: string }[];
+  variants?: { id: string; name: string }[];
+  variables?: { id: string; name: string }[];
+}
+
+/** 一次取名只读一遍文档:同批多个 `@` 引用共用同一份 assets */
+type AssetLoader = () => Promise<PageAssets>;
+
+/** 同类资源里按名字找 id:精确名 → trim + 忽略大小写;零命中/多命中都点名,不猜 */
+function pickAssetId(
+  kind: 'comp' | 'var',
+  name: string,
+  pool: { id: string; name: string }[],
+): string {
+  const want = name.trim();
+  const label = kind === 'comp' ? '组件/变体集' : '变量';
+  const exact = pool.filter((a) => a.name === want);
+  const hits =
+    exact.length > 0
+      ? exact
+      : pool.filter((a) => a.name.trim().toLowerCase() === want.toLowerCase());
+  if (hits.length === 1) return hits[0].id;
+  if (hits.length > 1) {
+    throw new Error(
+      `按名字取${label}「${name}」撞上 ${hits.length} 个同名资源:${hits
+        .map((h) => `${h.name}(${h.id})`)
+        .join(
+          '、',
+        )}。名字不唯一时改用 id 直接写,或先重命名(0041:不确定就点名,绝不猜)。`,
+    );
+  }
+  const known = pool.slice(0, 30).map((a) => a.name);
+  throw new Error(
+    `按名字取${label}「${name}」没命中。${
+      known.length === 0
+        ? `这一面当前读不到任何${label}(两种原因都可能:本平台未声明该能力面,或本平台读不到非当前页 —— 到底哪种见 jsd_get_page 回包的 note)`
+        : `现有${label}:${known.join('、')}${pool.length > known.length ? ' …' : ''}`
+    };也可以直接写 id。`,
+  );
+}
+
+async function resolveAssetRef(
+  kind: 'comp' | 'var',
+  name: string,
+  load: AssetLoader,
+): Promise<string> {
+  const assets = await load();
+  const pool =
+    kind === 'comp'
+      ? [...(assets.components ?? []), ...(assets.variants ?? [])]
+      : (assets.variables ?? []);
+  return pickAssetId(kind, name, pool);
 }
 
 const REF_RE = /\{\{\s*([^{}]+?)\s*\}\}/g;
@@ -178,19 +245,40 @@ function echoStep(structured: unknown): { data: unknown; trimmed: boolean } {
 }
 
 /** 深度遍历入参:引用占位符独占整值时保留原类型;内嵌于长字符串时以 JSON 文本展开 */
-function resolveRefs(value: unknown, steps: Map<string, unknown>): unknown {
+async function resolveRefs(
+  value: unknown,
+  steps: Map<string, unknown>,
+  loadAssets: AssetLoader,
+): Promise<unknown> {
+  const one = async (expr: string): Promise<unknown> => {
+    const asset = ASSET_RE.exec(expr.trim());
+    return asset != null
+      ? resolveAssetRef(asset[1] as 'comp' | 'var', asset[2], loadAssets)
+      : resolveStepRef(expr, steps);
+  };
   if (typeof value === 'string') {
     const whole = WHOLE_REF_RE.exec(value.trim());
-    if (whole != null) return resolveRef(whole[1], steps);
-    return value.replace(REF_RE, (_, expr: string) => {
-      const v = resolveRef(expr, steps);
-      return typeof v === 'string' ? v : JSON.stringify(v);
-    });
+    if (whole != null) return one(whole[1]);
+    // 字符串里的多个引用要按出现顺序逐个替换
+    let out = '';
+    let last = 0;
+    for (const m of value.matchAll(REF_RE)) {
+      out += value.slice(last, m.index);
+      const v = await one(m[1]);
+      out += typeof v === 'string' ? v : JSON.stringify(v);
+      last = (m.index ?? 0) + m[0].length;
+    }
+    return last === 0 ? value : out + value.slice(last);
   }
-  if (Array.isArray(value)) return value.map((v) => resolveRefs(v, steps));
+  if (Array.isArray(value)) {
+    const out: unknown[] = [];
+    for (const v of value) out.push(await resolveRefs(v, steps, loadAssets));
+    return out;
+  }
   if (value != null && typeof value === 'object') {
     const out: Record<string, unknown> = {};
-    for (const [k, v] of Object.entries(value)) out[k] = resolveRefs(v, steps);
+    for (const [k, v] of Object.entries(value))
+      out[k] = await resolveRefs(v, steps, loadAssets);
     return out;
   }
   return value;
@@ -221,8 +309,30 @@ export function registerBatchTools(
       description: 'batch.followUp',
     },
     timeout: BATCH_TIMEOUT_MS,
-    run: async (args, _bridge, signal) => {
-      const { calls, stopOnError, checkDrift } = args as BatchParams;
+    run: async (args, bridge, signal) => {
+      const {
+        calls: inlineCalls,
+        callsFile,
+        stopOnError: inlineStopOnError,
+        checkDrift: inlineCheckDrift,
+      } = args as BatchParams;
+      // 清单来源二选一:内联 calls,或一个 JSON 文件的绝对路径(id 不进上下文)。
+      // 两个都给会让「哪份生效」变成猜测,所以点名拒绝而不是挑一个用。
+      const fromFile =
+        callsFile == null || callsFile.trim() === ''
+          ? null
+          : await loadBatchCallsFile(callsFile);
+      if (fromFile != null && inlineCalls != null)
+        throw new Error(
+          'calls 与 callsFile 只能给一个:calls 在本批内直接执行,callsFile 从文件读同一份清单。两个都给会让「哪份生效」变成猜。',
+        );
+      if (fromFile == null && inlineCalls == null)
+        throw new Error(
+          '需要 calls 或 callsFile 其中一个(都缺省时没有步骤可执行)。参数体大到写不进上下文时,把清单写进 JSON 文件、这里只传它的绝对路径。',
+        );
+      const calls = fromFile?.calls ?? inlineCalls ?? [];
+      const stopOnError = fromFile?.stopOnError ?? inlineStopOnError;
+      const checkDrift = fromFile?.checkDrift ?? inlineCheckDrift;
       const steps = new Map<string, unknown>();
       const results: BatchResult['results'] = [];
       let echoTrimmed = false;
@@ -232,6 +342,23 @@ export function registerBatchTools(
       // 不是全局开关,也不是把钩子从 def 上摘掉。
       const skipHooks = checkDrift === false;
       const stepWarnings: string[] = [];
+      // 资源清单按需读一次:占位符里的 `{{@comp:…}}` / `{{@var:…}}` 共用同一份快照,
+      // 批次内不做二次读(名字寻址不该比硬编码 id 更贵)。批后新建的资源不在快照里,
+      // 那是刻意的:同批刚建就按名字取,等于赌引擎已刷新。
+      let assetsPromise: Promise<PageAssets> | undefined;
+      const loadAssets: AssetLoader = () => {
+        assetsPromise ??= (async () => {
+          const assets = await bridge.request(
+            'get_page',
+            {},
+            {
+              ...(signal != null ? { signal } : {}),
+            },
+          );
+          return (assets as { assets?: PageAssets })?.assets ?? {};
+        })();
+        return assetsPromise;
+      };
       for (let i = 0; i < calls.length; i++) {
         const call = calls[i];
         const id =
@@ -253,10 +380,11 @@ export function registerBatchTools(
         }
         let resolvedArgs: Record<string, unknown>;
         try {
-          resolvedArgs = resolveRefs(call.args ?? {}, steps) as Record<
-            string,
-            unknown
-          >;
+          resolvedArgs = (await resolveRefs(
+            call.args ?? {},
+            steps,
+            loadAssets,
+          )) as Record<string, unknown>;
         } catch (e) {
           fail(e instanceof Error ? e.message : String(e));
           break;

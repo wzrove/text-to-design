@@ -2039,7 +2039,7 @@ describe('组件属性写形态与覆盖套用(0023)', () => {
       seen.push(p);
     };
     host = makeHost([inst]);
-    await setInstanceProperties(host, {
+    await setInstanceProperties(host, ctx, {
       ids: ['5:9'],
       properties: { 'Property 1': { type: 'VARIANT', value: 'B' } },
     });

@@ -50,6 +50,8 @@ export type FillImageParams = {
 };
 export type ListFontsParams = z.infer<typeof s.listFontsSchema>;
 export type ListStylesParams = z.infer<typeof s.listStylesSchema>;
+export type CreateStyleParams = z.infer<typeof s.createStyleSchema>;
+export type DeleteStyleParams = z.infer<typeof s.deleteStyleSchema>;
 export type GetPageStructureParams = z.infer<typeof s.getPageStructureSchema>;
 
 export type PingResult = z.infer<typeof s.pingResultSchema>;
@@ -76,6 +78,8 @@ export type PluginMethod =
   | 'export'
   | 'list_fonts'
   | 'list_styles'
+  | 'create_style'
+  | 'delete_style'
   | 'fill_image'
   | 'node_op'
   | 'component_op'
@@ -121,9 +125,13 @@ export type RequestParams<M extends PluginMethod> = M extends 'ping'
                       ? s.PlatformOpParams
                       : M extends 'list_styles'
                         ? ListStylesParams
-                        : M extends 'get_page'
-                          ? GetPageStructureParams
-                          : ListFontsParams;
+                        : M extends 'create_style'
+                          ? CreateStyleParams
+                          : M extends 'delete_style'
+                            ? DeleteStyleParams
+                            : M extends 'get_page'
+                              ? GetPageStructureParams
+                              : ListFontsParams;
 
 export type PluginRequest =
   | { type: 'request'; id: string; method: 'ping'; params: PingParams }
@@ -203,6 +211,18 @@ export type PluginRequest =
       id: string;
       method: 'list_styles';
       params: ListStylesParams;
+    }
+  | {
+      type: 'request';
+      id: string;
+      method: 'create_style';
+      params: CreateStyleParams;
+    }
+  | {
+      type: 'request';
+      id: string;
+      method: 'delete_style';
+      params: DeleteStyleParams;
     }
   | {
       type: 'request';

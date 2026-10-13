@@ -157,9 +157,9 @@ export function variableFaceText(platform: PlatformKey | null): string {
         fact.read == null
           ? ''
           : `本仓只接了**只读枚举**(读路径 \`${fact.read}\`,进 jsd_get_page 的资源清单),`;
-      return `${label(platform)}的 typings 里有变量 API(${fact.nativeUnwired.length} 类入口),${readPart}**写入口一个都没接** —— 属「可以接、只是还没接」,不是平台没有。`;
+      return `${label(platform)}的 typings 里有变量 API(${fact.nativeUnwired.length} 类入口),${readPart}**写入口一个都没接** —— 属「可以接、只是还没接」,不是平台没有。替代路径:${fallbackOf(platform, 'variables')}`;
     }
-    return `${label(platform)}**没有变量能力面**(typings 里没有任何变量声明),别去找变量 op。`;
+    return `${label(platform)}**没有变量能力面**(typings 里没有任何变量声明),别去找变量 op。替代路径:${fallbackOf(platform, 'variables')}`;
   }
   const withWrite = PLATFORMS.filter(
     (p) => (platformDomainFact(p, 'variables')?.write.length ?? 0) > 0,
@@ -198,10 +198,10 @@ export function variableFaceText(platform: PlatformKey | null): string {
  */
 export function variableBindBulkText(platform: PlatformKey | null): string {
   if (platform === 'mastergo') {
-    return '- 绑定一次传 `nodeIds` 多个节点 + `property` + `value` + `variableId`(数组型属性另给 `index`),槽位取值见 `mg_variables_apply` 的描述,传错会在入参校验就点名;';
+    return '- 一次调用带多组:`bindings: [{ nodeIds, property, value, variableId?, index?, unbind? }]`,一组 = 一个变量 × 一个槽位 × 一批节点;槽位取值见 `mg_variables_apply` 的描述,传错会在入参校验就点名,数组型属性另给 `index`,不要一个节点一次调用;';
   }
   if (platform === 'figma') {
-    return '- 绑定一次传 `nodeIds` 多个节点 + `boundProperty` + `variableId`,不要一个节点一次调用;';
+    return '- 一次调用带多组:`bindings: [{ nodeIds, boundProperty, variableId?, subField?, index?, unbind? }]`,一组 = 一个变量 × 一个字段 × 一批节点,不要一个节点一次调用;节点级字段直接写字段名,fills / strokes 绑在 paint 上,index 省略即该数组全部 SOLID 项,effects / layoutGrids 另给 `subField` + `index`;';
   }
   return '- 绑定一次传多个 `nodeIds`,参数词汇以本平台变量面给的为准,不要一个节点一次调用;';
 }
@@ -256,7 +256,7 @@ export function reuseGuideText(platform: PlatformKey | null): string {
     return [
       '- 组件:`jsd_create_instance` 用 `componentId` 铺实例;同类单元 ≥2 个时**先查清单**,别新建重复组件。',
       '- 变体集:切到**已有**取值用 `jsd_set_instance_properties`(取值清单看 `assets.variants[].properties`;MG 原生读不到该字段时用 `mg_list_variant_properties` 看)。要造新值用集合级 op,不要靠改主件名字。',
-      '- 样式:节点字段 `fillStyleId` / `strokeStyleId` / `textStyleId` / `effectStyleId` 直接引用样式 id(清单见 `assets.styles` 或 `jsd://styles`)。',
+      '- 样式:节点字段 `fillStyleId` / `strokeStyleId` / `textStyleId` / `effectStyleId` 直接引用样式 id(清单见 `assets.styles` 或 `jsd://styles`);**清单里没有就建一条** —— `jsd_create_style` 从指定节点抄(MG 原生就是「从这个图层取」)。',
       '- 变量:`mg_variables_apply` 绑到图层属性,变量 id 从 `mg_list_variables` 或 `assets.variables` 取。',
     ].join('\n');
   }
@@ -264,22 +264,22 @@ export function reuseGuideText(platform: PlatformKey | null): string {
     return [
       '- 组件:`jsd_create_instance` 用 `componentId` 铺实例;同类单元 ≥2 个时**先查清单**,别新建重复组件。',
       '- 变体集:切到**已有**取值用 `jsd_set_instance_properties`(取值清单看 `assets.variants[].properties`)。',
-      '- 样式:平台 op `figma_style_apply_by_name` 按名应用,或直接写节点字段 `fillStyleId` / `strokeStyleId` / `textStyleId` / `effectStyleId`。',
+      '- 样式:平台 op `figma_style_apply_by_name` 按名应用,或直接写节点字段 `fillStyleId` / `strokeStyleId` / `textStyleId` / `effectStyleId`;**清单里没有就建一条** —— `jsd_create_style` 从指定节点抄。',
       '- 变量:平台 op `figma_variables_apply` 绑到节点(变量 id 先 `figma_variables_list` 或从 `assets.variables` 取)。',
     ].join('\n');
   }
   if (platform === 'jsdesign') {
     return [
-      '- 组件:`jsd_create_instance` 用 `componentId` 铺实例;同类单元 ≥2 个时**先查清单**,别新建重复组件。',
+      '- 组件:`jsd_create_instance` 用 `componentId` 铺实例;同类单元 ≥2 个时**先查清单**,别新建重复组件。⚠ 本平台把带 `/` 的组件名拆成「集合 / 成分」—— `assets.components[].name` 是**叶子名**(建 `组/主件` 后清单里叫 `主件`,集合名在 `assets.variants` 上),按名字取组件(`{{@comp:…}}`)时一律照清单里的原样写。',
       '- 变体集:切到**已有**取值用 `jsd_set_instance_properties`(取值清单看 `assets.variants[].properties`)。',
-      '- 样式:节点字段 `fillStyleId` / `strokeStyleId` / `textStyleId` / `effectStyleId` 直接引用样式 id(清单见 `assets.styles` 或 `jsd://styles`)。',
-      '- 变量:本平台没有变量面(`assets.variables` 恒空),别去找变量入口。',
+      '- 样式:节点字段 `fillStyleId` / `strokeStyleId` / `textStyleId` / `effectStyleId` 直接引用样式 id(清单见 `assets.styles` 或 `jsd://styles`);**清单里没有就建一条** —— `jsd_create_style` 从指定节点抄。',
+      '- 变量:本平台没有变量面(`assets.variables` 恒空),别去找变量入口;统一色板走上一条的样式路。',
     ].join('\n');
   }
   return [
     '- 组件:`jsd_create_instance` 用 `componentId` 铺实例;同类单元 ≥2 个时**先查清单**,别新建重复组件。',
     '- 变体集:切到**已有**取值用 `jsd_set_instance_properties`(取值清单看 `assets.variants[].properties`)。',
-    '- 样式:节点上的 `*StyleId` 字段引用样式 id,或本平台提供的按名应用入口(清单见 `jsd://platform/state` 的 platformOps)。',
+    '- 样式:节点上的 `*StyleId` 字段引用样式 id(`jsd_create_style` 能从既有节点建出一条),或本平台提供的按名应用入口(清单见 `jsd://platform/state` 的 platformOps)。',
     '- 变量:本平台的变量入口见 `jsd://platform/state` 的 platformOps(`assets.variables` 恒空即本平台没有变量面)。',
   ].join('\n');
 }

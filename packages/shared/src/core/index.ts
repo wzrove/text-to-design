@@ -65,6 +65,12 @@ export {
   runtimeContext,
 } from './runtime';
 export { MAX_SERIALIZE_DEPTH, serializeNode, trySerialize } from './serialize';
+export {
+  createStyle,
+  deleteStyles,
+  fillStyleFromNode,
+  type StyleDraft,
+} from './styles';
 export { updateSelection } from './update';
 export {
   type CollectTargetsOptions,

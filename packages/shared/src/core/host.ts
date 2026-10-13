@@ -1,6 +1,7 @@
 import type { z } from 'zod';
 import type { BooleanOperation } from '../dicts/boolean-operation';
 import type { HostCapabilityKey } from '../dicts/capability';
+import type { StyleKind } from '../dicts/style-kind';
 import type * as shared from '../schemas';
 
 /**
@@ -86,6 +87,8 @@ export interface NodeSkeleton extends ContainerSkeleton {
   textDecoration?: 'NONE' | 'UNDERLINE' | 'STRIKETHROUGH';
   lineHeight?: shared.LineHeight | typeof MIXED;
   letterSpacing?: shared.LetterSpacing | typeof MIXED;
+  paragraphIndent?: number;
+  paragraphSpacing?: number;
 
   layoutMode?: 'NONE' | 'HORIZONTAL' | 'VERTICAL';
   itemSpacing?: number | typeof MIXED;
@@ -131,14 +134,15 @@ export interface NodeSkeleton extends ContainerSkeleton {
    * **之前**的说法,之后没回填,于是「jsDesign 只收字符串」这条差异长期没有归属。
    * 别再在这里手写平台差异:写进上面那张表,让类型检查守(0032)。
    *
-   * 对象形态只有 Figma 收(MG 会把 boolean 之外的形态拒掉),故由 adapter/门面负责整形。
+   * 对象形态(`ComponentPropertyValue` / `VariableAliasRef`)只有 Figma 收(MG 会把
+   * boolean 之外的形态拒掉),故由 adapter/门面负责整形;写路径按上面那张表点名拒绝。
    * jsDesign 收到布尔值究竟静默忽略还是报错,2026-09-29 未做真机验证 —— 故只声明
    * 「签名只收字符串」这个类型事实,不写「引擎不收」。
    */
   setProperties(
     properties: Record<
       string,
-      string | boolean | shared.ComponentPropertyValue
+      string | boolean | shared.ComponentPropertyValue | shared.VariableAliasRef
     >,
   ): void;
   outlineStroke(): NodeSkeleton | null;
@@ -156,6 +160,16 @@ export interface NodeSkeleton extends ContainerSkeleton {
   strokeStyleId?: string;
   textStyleId?: string;
   effectStyleId?: string;
+  /**
+   * 样式绑定的**异步入口**(0011):Figma manifest 已声明 dynamic-page,直接赋值
+   * `fillStyleId` 等会抛 `Cannot call with documentAccess: dynamic-page. Use
+   * node.setFillStyleIdAsync instead.`(真机 2026-10-13 复现)。写路径优先走这里,
+   * 平台没有 Async 变体时(jsDesign / MG)才退回上面的同步赋值。
+   */
+  setFillStyleIdAsync?(id: string): Promise<void>;
+  setStrokeStyleIdAsync?(id: string): Promise<void>;
+  setTextStyleIdAsync?(id: string): Promise<void>;
+  setEffectStyleIdAsync?(id: string): Promise<void>;
   componentProperties?: Record<string, shared.ComponentPropertyValue>;
   /**
    * 组件属性**引用**(0041):本图层由哪个组件属性驱动。与上面那条成对 —— 那条说
@@ -187,6 +201,22 @@ export interface StyleSummary {
   id: string;
   name: string;
   type: string;
+}
+
+/**
+ * 建本地样式的入参(契约形态)。
+ *
+ * 一律**从某个既有节点取值**,不给内联的 fills/effects 数组:MG 的原生入口就是
+ * `createFillStyle({ name, id: layerId })`(引擎从该图层抄样式),而 Figma / jsDesign
+ * 的工厂是无参建空样式再灌值 —— 「从节点抄」是三家唯一都成立的那条路。内联值等于在
+ * 本仓再造一套 `jsd_set_fill_color` 的入参形状,两份事实(0032)。
+ */
+export interface StyleCreateInit {
+  kind: StyleKind;
+  name: string;
+  description?: string;
+  /** 取值来源节点(已由调用方解析,含 fills / effects / layoutGrids / 文本排版字段) */
+  node: NodeSkeleton;
 }
 
 /** 可容纳子节点的对象:页面 + 容器型节点共享 */
@@ -336,6 +366,26 @@ export interface DesignHost {
   getLocalTextStylesAsync?(): Promise<readonly StyleSummary[]>;
   getLocalEffectStylesAsync?(): Promise<readonly StyleSummary[]>;
   getLocalGridStylesAsync?(): Promise<readonly StyleSummary[]>;
+  /**
+   * 建一条本地样式(取值来自 {@link StyleCreateInit.node} 那个节点),回它的摘要。
+   *
+   * 三平台都有原生入口(Figma / jsDesign `createPaintStyle()` 等无参工厂、
+   * MG `createFillStyle({name, id})` 由引擎从图层抄),故**不是可选**:但 core 一律按
+   * `typeof` 探测后再调 —— 缺席时报「本平台没有建样式的入口」,不静默回空。
+   * 名字带 `Async`(0010):Figma 侧灌 TEXT 样式要先 `loadFontAsync`。
+   */
+  createStyle(init: StyleCreateInit): Promise<StyleSummary>;
+  /**
+   * 删一条本地样式。三平台原生都有 `Style.remove()`(Figma `plugin-api.d.ts:12418`、
+   * MG `dist/index.d.ts:1994`、jsDesign `plugin-api.d.ts:1143`),但**取样式对象的入口不同**:
+   * Figma 在 dynamic-page 下只能 `getStyleByIdAsync`,另两家只有同步 `getStyleById`
+   * —— 差异收在各自 adapter,契约只给 id。
+   *
+   * 为什么要接:不接的话 `jsd_create_style` 是「建了撤不回」的单向门,任何失败路径
+   * (含 2026-10-13 实测到的「取值检查跑在工厂之后」那版泄漏)都会在文档里攒垃圾。
+   * 样式不存在时**抛错**,由调用方归进 failed 点名,不静默跳过。
+   */
+  removeStyle(id: string): Promise<void>;
   /**
    * 本地变量枚举(0039,仅 Figma 运行时存在)。**可选**:没有这个面的平台不实现即可,
    * Access 层按 `typeof` 探测,取不到返回空数组(不报错)。

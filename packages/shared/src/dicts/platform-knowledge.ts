@@ -130,8 +130,16 @@ export const PLATFORM_KNOWLEDGE: Readonly<
       readShape: null,
       write: [],
       nativeUnwired: [],
-      fallback: null,
-      evidence: [`${JSD}(全文无 variable 声明:grep -in variable 零命中)`],
+      // 缺席也得给出口:`variable-binding` 配方第 3 节在无写入口时直接引这条,
+      // 留 null 就等于对着调用方说「跳过」而不给做法(0007)。
+      fallback:
+        '两条路,都不是变量那种玩法:① **本地样式** —— `jsd_create_style` 从一个既有节点抄出样式(四类:PAINT / TEXT / EFFECT / GRID),回 id;绑上去用 jsd_set_fill_color 的 fillStyleId / jsd_set_text 的 textStyleId / jsd_set_effects 的 effectStyleId / jsd_set_stroke 的 strokeStyleId,清单读 jsd://styles(只读资源)。一条样式改一次,全档跟随。② **结构继承** —— 抽成 COMPONENT 后改主件,实例自动继承(批量套覆盖走 variant-sync 配方)。',
+      evidence: [
+        `${JSD}(全文无 variable 声明:grep -in variable 零命中)`,
+        'packages/ui/src/code/jsdesign/meta.ts capabilities=[styles](样式面是有的)',
+        'packages/ui/src/code/jsdesign/host.ts:48(createStyle 已接:`jsd_create_style` 走 jsDesign.createPaintStyle 等四工厂;四类样式的共同契约在 packages/shared/src/core/styles.ts)',
+        `${JSD}:88-91(createPaintStyle / createTextStyle / createEffectStyle / createGridStyle)`,
+      ],
     },
     // 组件:`componentProperties` 读侧不存在(已在 sync-guarantee 里反向断言),
     // 写侧走原生 `setProperties`,但签名只收字符串 ⇒ 布尔/文本/换绑属性写不了。
@@ -180,18 +188,20 @@ export const PLATFORM_KNOWLEDGE: Readonly<
       readShape: 'map',
       write: ['figma_variables_create', 'figma_variables_apply'],
       nativeUnwired: [
-        'Variable.setValueForMode / rename / remove(改变量值与生命周期,本仓未接)',
+        'Variable.setValueForMode / rename(改变量值与生命周期里的改名,本仓未接;删除已接成 figma_variables_remove)',
         'VariableCollection 的模式增删改名(addMode / renameMode / removeMode)',
       ],
       fallback: null,
       evidence: [
-        'packages/ui/src/code/figma/ops.ts figma_variables_create / figma_variables_apply(0040 起带 unbind)/ figma_variables_list',
+        'packages/ui/src/code/figma/ops.ts figma_variables_create / figma_variables_apply(0040 起带 unbind;此后一次吃 bindings[] 多组)/ figma_variables_list',
         'packages/shared/src/schemas/platform.ts:90-118 boundVariables 线格式',
         `${FIG}:2149 getLocalVariablesAsync / :2160 getLocalVariableCollectionsAsync`,
+        `${FIG}:6817-6852 VariableBindableNodeField / TextField(paint 与 effect / grid 项是另外三个入口,故 boundProperty 分三档)`,
         'docs/design-decisions/0024-变量绑定进入读路径：boundVariables-按引擎词汇原样透传，不引入归一化层.md',
       ],
     },
-    // 组件:读侧 componentProperties、定义侧 addComponentProperty、设值 setProperties 三种值形态全收。
+    // 组件:读侧 componentProperties、定义侧 addComponentProperty、设值 setProperties 三种值形态全收
+    // (标量 / {type,value} / 值跟随变量的 VARIABLE_ALIAS —— 最后那种只此一家)。
     components: {
       read: 'componentProperties',
       readShape: 'map',
@@ -201,6 +211,8 @@ export const PLATFORM_KNOWLEDGE: Readonly<
       evidence: [
         `${FIG}:11127 readonly componentProperties`,
         `${FIG}:11123 setProperties(string | boolean | VariableAlias)`,
+        `${FIG}:2214 createVariableAliasByIdAsync(官方给的「属性值绑变量」构造入口)`,
+        `${FIG}:11571 VariableResolvedDataType 无 VARIANT —— 变体属性值绑不了变量`,
         `${FIG}:9577 componentPropertyDefinitions / :9581 addComponentProperty`,
         'packages/shared/src/core/component.ts:124-160 读形态 → 写形态单点映射(0023)',
       ],
@@ -252,7 +264,8 @@ export const PLATFORM_KNOWLEDGE: Readonly<
         `${MG}:1522 readonly variables: VariableAPI`,
         `${MG}:1098-1108 VariableAPI(Collection / Mode)`,
         `${MG}:1176 getVariables() / :1874 Variable{id,name,…}`,
-        'packages/ui/src/code/mastergo/ops.ts 三个变量 op 与槽位表(官方文档 URL 见该文件头注释)',
+        'packages/ui/src/code/mastergo/ops.ts 三个变量 op 与槽位表(官方文档 URL 见该文件头注释;mg_variables_apply 与 Figma 同形,一次吃 bindings[] 多组)',
+        `${MG}:1832 VariableType 十二项里没有 VARIANT —— 变体属性无从绑变量`,
         'packages/ui/src/code/mastergo/meta.ts capabilities 声明 variables(0040 起)',
       ],
     },
@@ -267,7 +280,7 @@ export const PLATFORM_KNOWLEDGE: Readonly<
       fallback: null,
       evidence: [
         `${MG}:3096 readonly componentProperties: Array<ComponentProperties>`,
-        `${MG}:3097 setProperties({ [propertyId: string]: string | boolean })`,
+        `${MG}:3097 setProperties({ [propertyId: string]: string | boolean })——**不收变量别名**,值绑变量只此 Figma 一家(dicts/platform-value-domain.ts 的第四类表按平台 deny)`,
         `${MG}:2965-2980 ComponentPropertiesMixin(add / edit / delete)`,
         'packages/ui/src/code/mastergo/meta.ts:12-14 写侧真机未验,故不 claim',
       ],

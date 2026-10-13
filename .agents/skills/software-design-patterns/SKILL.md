@@ -96,7 +96,7 @@ allowed-tools: Bash, Read, Grep, Glob, Write, Edit
 | 落记录、需求变更时追加/取代/废弃、索引体积治理 | `references/decision-log.md` |
 | 推荐 ≥2 个模式，要确认职责不重叠 | `references/pattern-combinations.md` |
 | 路由未命中、跨多层级、要评分或迁移顺序 | `references/decision-guide.md` |
-| 新建决策记录骨架（自动取 8 位短 id + 更新索引），或改既有记录状态 | `scripts/new_decision.py "标题"` / `--status <标识> 已采纳`（`<标识>` 认短 id，也认旧数字号；骨架来自 `assets/decision-record-template.md`） |
+| 新建决策记录骨架（自动取 8 位短 id + 更新索引），或改既有记录状态 | `node scripts/new_decision.mjs "标题"` / `--status <标识> 已采纳`（`<标识>` 认短 id，也认旧数字号；骨架来自 `assets/decision-record-template.md`） |
 
 > 52 个模式文件加起来远超一次对话的预算：**只打开候选那 1–3 个**。
 > 模式文件里没有 `Timeout` 这一条。超时预算是 `distributed/retry.md` 里的约束，不要去找 `timeout.md`。

@@ -19,7 +19,9 @@ import {
   copyInstanceOverrides,
   createComponentNodes,
   createInstances,
+  createStyle,
   createSvgNode,
+  deleteStyles,
   detachInstanceNodes,
   executeOps,
   exportNodes,
@@ -445,7 +447,7 @@ export function registerPlugin(
               send(
                 id,
                 true,
-                await setInstanceProperties(host, {
+                await setInstanceProperties(host, ctx, {
                   ids: p.ids ?? [],
                   properties: p.properties ?? {},
                 }),
@@ -523,6 +525,22 @@ export function registerPlugin(
           // 平台能力声明后已摘掉 —— 不该问的平台一个 getter 都不会调(同步 getter
           // 不可中断,问了不回答就是冻死整条调用)。
           const r = await listStyles(host, ctx);
+          send(id, true, r);
+          break;
+        }
+        case 'create_style': {
+          const p = msg.params;
+          const r = await createStyle(host, ctx, {
+            kind: p.kind,
+            name: p.name,
+            ...(p.description == null ? {} : { description: p.description }),
+            fromNodeId: p.fromNodeId,
+          });
+          send(id, true, r);
+          break;
+        }
+        case 'delete_style': {
+          const r = await deleteStyles(host, ctx, msg.params.ids);
           send(id, true, r);
           break;
         }

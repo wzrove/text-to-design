@@ -154,9 +154,20 @@ export function structured(
         ...(followUp !== undefined ? { followUp } : {}),
       };
     }
-    // 插件返回异常数据(过不了 schema)时仍兜底返回合法空结构
+    // 插件返回的数据过不了 schema:把**哪一项不合形状**说在前面,再附原始正文。
+    // 此前只回原始 JSON 并标 isError —— 调用方(和 jsd_batch 的失败文案)看到的
+    // 「错误」就是一段正常数据,真实原因(校验失败)反而没有任何出口。
+    const detail = parsed.error.issues
+      .map((i) => `${i.path.join('.') || '(root)'}: ${i.message}`)
+      .slice(0, 8)
+      .join('; ');
     return {
-      content: text(data).content,
+      content: [
+        {
+          type: 'text',
+          text: `错误: 结果未通过本工具的输出校验 —— ${detail}\n原始返回:\n${JSON.stringify(data, null, 2)}`,
+        },
+      ],
       structuredContent: emptyFor(schema),
       isError: true,
       ...(followUp !== undefined ? { followUp } : {}),

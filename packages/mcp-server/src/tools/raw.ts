@@ -3,6 +3,10 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import type { McpServer } from '@modelcontextprotocol/server';
 import {
+  createStyleResultSchema,
+  createStyleSchema,
+  deleteStyleResultSchema,
+  deleteStyleSchema,
   exportResultSchema,
   exportSchema,
   fillImageSchema,
@@ -199,9 +203,51 @@ export function registerRawTools(
     },
   });
 
+  const createStyle = bridgeTool({
+    name: 'jsd_create_style',
+    title: 'createStyle.title',
+    description: 'createStyle.description',
+    method: 'create_style',
+    inputSchema: createStyleSchema,
+    outputSchema: createStyleResultSchema,
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+    followUp: {
+      type: 'tool',
+      tool: 'jsd_set_fill_color',
+      description: 'createStyle.followUp',
+    },
+  });
+
+  const deleteStyle = bridgeTool({
+    name: 'jsd_delete_style',
+    title: 'deleteStyle.title',
+    description: 'deleteStyle.description',
+    method: 'delete_style',
+    inputSchema: deleteStyleSchema,
+    outputSchema: deleteStyleResultSchema,
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+    followUp: {
+      type: 'tool',
+      tool: 'jsd_get_page',
+      description: 'deleteStyle.followUp',
+    },
+  });
+
   return [
     exportTool(server, bridge, i18n),
     fillImage(server, bridge, i18n),
     listFonts(server, bridge, i18n),
+    createStyle(server, bridge, i18n),
+    deleteStyle(server, bridge, i18n),
   ];
 }

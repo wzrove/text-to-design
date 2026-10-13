@@ -114,8 +114,17 @@ type JsDesignAbsent =
  * 官方 typings 收录后本断言失败 —— 提醒删白名单、改回真实类型。
  * - absolutePosition:节点级,两平台 typings 均未声明;
  * - ungroup:节点级,jsDesign typings 连 PluginAPI 层都没有(见下方 HostGapCheck)。
+ * - `set*StyleIdAsync` 四个:只有 **Figma** 有(`plugin-api.d.ts:7505 / 8573 / 8665`,
+ *   配合 dynamic-page 把 `fillStyleId` 之类标成只读),jsDesign 全文无 `StyleIdAsync`
+ *   (实测 grep 零命中)⇒ 本平台走同步赋值那条退路,故契约里声明为可选。
  */
-type NodeTypingsGap = 'absolutePosition' | 'ungroup';
+type NodeTypingsGap =
+  | 'absolutePosition'
+  | 'ungroup'
+  | 'setFillStyleIdAsync'
+  | 'setStrokeStyleIdAsync'
+  | 'setTextStyleIdAsync'
+  | 'setEffectStyleIdAsync';
 
 /**
  * jsDesign typings 的**宿主层**缺口:`ungroup` 在 Figma 是 `PluginAPI.ungroup(node)`,
@@ -167,7 +176,11 @@ type JsDesignCapacityGap = 'getLocalVariablesAsync';
  */
 type JsDesignAsyncNameGap =
   | 'createNodeFromSvgAsync'
-  | 'createImageFromBytesAsync';
+  | 'createImageFromBytesAsync'
+  /** 原生是四个分开的工厂(createPaintStyle / Text / Effect / Grid),契约这条 `createStyle` 是本仓按 kind 分发的**聚合名** */
+  | 'createStyle'
+  /** 原生是 `getStyleById(id)` + `Style.remove()` 两步(`plugin-api.d.ts:50 / :1143`),契约这条 `removeStyle` 是本仓包的聚合动作 */
+  | 'removeStyle';
 
 export type HostContractCheck = ExpectNever<
   Missing<

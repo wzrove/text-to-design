@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { STYLE_KINDS } from '../dicts/style-kind';
 import { childNodeSchema } from './execute-schemas';
 import { componentPropertyInputSchema } from './platform';
 import {
@@ -206,6 +207,40 @@ export const combineAsVariantsSchema = z
       '要合并为变体集(分量)的组件(COMPONENT)节点 id 列表;实例不能直接合成,须先 jsd_detach_instance 或重建为组件',
     ),
     name: z.string().optional().describe('schema.splitOps.name4'),
+  })
+  .strict();
+
+export const createStyleSchema = z
+  .object({
+    kind: z
+      .enum(STYLE_KINDS)
+      .describe(
+        '样式类别(四类各对应引擎自己的工厂;MG 另有 cornerRadius/padding/spacing 等专属入口,本工具不提供)',
+      ),
+    name: z
+      .string()
+      .min(1)
+      .describe('样式名,建议用「分组/名称」两层(如 `色板/主色`)'),
+    description: z
+      .string()
+      .optional()
+      .describe('样式说明,建后可在 jsd://styles 里回读'),
+    fromNodeId: z
+      .string()
+      .describe(
+        '**取值来源节点**(必填):三平台唯一都成立的形状 —— MG 的原生入口就是「从这个图层抄」,Figma / jsDesign 由本仓把该节点的 fills / effects / layoutGrids / 文本排版字段灌进新样式。PAINT 类 fills 优先,节点只有描边时退到 strokes',
+      ),
+  })
+  .strict();
+
+export const deleteStyleSchema = z
+  .object({
+    ids: z
+      .array(z.string().min(1))
+      .min(1)
+      .describe(
+        '要删的本地样式 id 列表(取自 jsd://styles 或 jsd_get_page 的 assets.styles);按 id 不按名 —— 同名样式可以并存,按名删等于猜',
+      ),
   })
   .strict();
 

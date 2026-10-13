@@ -391,7 +391,25 @@ export function scriptRecipe(task?: string): string {
   return `${head}
 1) 多步流程一次成型:优先 jsd_batch 编排(create→reparent→update、find→批量修改、图标×N 等);宿主有代码执行工具时也可写一段脚本连续 await 多个 tools.jsd_*。
 2) 中间值只在管道内流动:上游结果用双花括号占位符(步骤id.字段路径)注入下游参数(脚本内用变量传递);每步只提取后续需要的字段,不回传完整序列化结果。**占位符只在同一次调用的本批次内有效** —— 跨批次引用会报「占位符引用的步骤不存在或未成功」并中止整批,跨批次请硬编码上一步回显里的真实 id。
-3) 收敛:最后只做一次 jsd_get_selection(depth=1) 总复核,不要每步都复核。`;
+3) 收敛:最后只做一次 jsd_get_selection(depth=1) 总复核,不要每步都复核。
+
+## 整页/整档批量改造(同一套纪律的更重场合)
+
+适用:一次要改的节点上百、参数体自己都写不下(整页铺 token、整档换样式、批量套组件)。只改几个节点时直接单工具调用更省。
+
+4) **先摸底,再动手**。jsd_get_page 读 assets(组件/变体/样式/变量)与顶层节点;再**按「块」**(每屏 / 每板)分别 jsd_find(depth 2~3)把要改的树读回来。整档一次读完会超回包上限、结果落盘 —— 落盘后用脚本做结构化分析(分组、去重、统计形态),不要把整棵树塞进上下文。
+
+5) **定策略前先确认「现状形态」**。例:批量绑色前先确认目标节点是不是「单个 SOLID 填充」——有渐变或多色的节点,一次绑整组会把该节点上别的 paint 一起改掉。这一步跳过,失败会以「回显成功但渲染变了」的形式出现(见结果 warnings 一节)。
+
+6) **id 的三种来源,优先级从高到低**:本批步骤结果 {{步骤id.字段路径}};文档已有资源 {{@comp:名称}} / {{@var:名称}}(读一次 jsd_get_page 的资源清单,同批共用);兜底才硬编码上一批回显里的真实 id。名字零命中/多命中一律点名中止 —— 那是设计,不是可以「取最近的一个」的警告。
+
+7) **按块切批**,不要一次排到 50 步上限:每屏一段既换来回显清晰,也换到失败隔离(某屏失败不连坐其余)。
+
+8) **回读复核要单独调一次 jsd_find**。batch 回显会把节点裁到 id/name/type/几何,在批内看回显复核会被裁剪骗到;要确认 boundVariables 或 *StyleId 是否真落上,只能单独读一次。
+
+9) **清单装不下就走文件,别把 id 搬进上下文**。jsd_batch 支持 callsFile(一个 JSON 文件的绝对路径,内容 {"calls":[…]} 或直接一个数组,可带 stopOnError / checkDrift);同一个文件也能用 CLI 直接跑 —— \`text-to-design-mcp exec <calls.json> [--json] [--dry-run]\`(dry-run 只校验清单;--json 把结果打成 JSON 供管道消费;任一步失败退出码为 1)。**不要**改去连 daemon 的本地端口或 import 本仓内部模块 —— 那是内部传输契约,不是给调用方用的接口。
+
+10) **点名类错误不要重试**:字段不可绑 / 名字不唯一 / 平台签名不收 / 引用的步骤不存在,都是策略问题,重试只会同样失败。只有连接类抖动才值得重试。`;
 }
 
 /** 设计策略总纲:把 server.ts 里 INSTRUCTIONS 的三条纪律展开成可照着走的完整流程 */
@@ -516,14 +534,16 @@ export function variableBindingRecipe(
     ? `## 3. 批量绑定别逐个往返
 - 建变量时**一次传完**变量列表(失败整体回滚),拿到 collectionId 与 variables[].id;
 ${variableBindBulkText(platform)}
-- 整条链(建变量 → 绑定 → 回读复核)合并进 jsd_batch,中间 id 用 {{步骤id.字段路径}} 占位符,不回传模型。
+- 整条链(建变量 → 绑定 → 回读复核)合并进 jsd_batch:本批新建的中间 id 用 {{步骤id.字段路径}} 占位符(不回传模型),**已存在的组件 / 变量按名字取**用 {{@comp:名称}} / {{@var:名称}} —— 它读一次 jsd_get_page 的资源清单,省掉「先查 id 再拼批」那一趟往返;名字不唯一或没命中都会点名中止。
+- ⚠ 名字一律按 assets 里**原样**写,不要照搬创建时用的路径:即时设计会把带斜杠的组件名拆成「集合 / 成分」,assets.components[].name 存的是叶子名(真机 2026-10-14:建「探针/组件」之后清单里叫「组件」,而「探针」落在 assets.variants 的集合名上)—— 按创建时那个路径写会不命中,没命中时错误里会给出现有名字。
+- ⚠ 可建 / 可绑的变量类型:Figma 是 VariableResolvedDataType 六种(BOOLEAN / COLOR / EASING / FLOAT / STRING / TIMING),MG 是那 12 项(单值 STRING / BOOLEAN / COLOR / NUMBER + 复合样式 PAINT / TEXT / EFFECT / GRID / STROKE_WIDTH / CORNER_RADIUS / PADDING / SPACING)—— **两家都没有 VARIANT 类型** —— 「把变体属性绑到变量」在这两个平台上都不存在,别去试;切变体取值走 jsd_set_instance_properties。另两条容易混成一件事的:Figma 能把**组件属性值**(BOOLEAN / TEXT / INSTANCE_SWAP)绑变量,properties 的值传 {type, value:{type:'VARIABLE_ALIAS', id}};而「一个变量的值引用另一个变量」是**值形态**(把 {type:'VARIABLE_ALIAS', id} 作为 value 传给 figma_variables_create),不是第五种可建类型 —— EXPRESSION 与 VARIABLE_ALIAS 只出现在原型交互的 VariableData 表里,createVariable 的第三参收不了它们。
 
 ## 4. 复核(写后必须回读)
 ${variableBindVerifyText(platform)}
 - 结果的 warnings 一律读:绑定类字段被忽略时会在这里点名。`
     : `## 3. 本平台没有可用的变量入口,本节跳过
 - 别去试变量 op(daemon 会拦成 platform_unsupported,白跑一趟往返)。
-- 统一色板 / 间距按第 2 节的替代路径做;要批量复用样式走 variant-sync 配方(COMPONENT + jsd_sync_overrides)。
+- 统一色板 / 间距照第 1 节末尾的替代路径做(那半句就是从事实表 \`variables.fallback\` 投影出来的,不在这里重写);要批量复用样式走 variant-sync 配方(COMPONENT + jsd_sync_overrides)。
 
 ## 4. 复核
 - 若文档里本来就有绑定(别的平台建的),回读时按字段名比对;本平台读不到绑定字段时,结果里不会出现该键,别把「没有该键」当成「绑定丢了」。`;
@@ -593,7 +613,7 @@ export function componentPropertyRecipe(
       ? '- 布尔属性传布尔(如 {"显示图标":false});文本属性传字符串。'
       : '- **布尔 / 文本这类非字符串值不在本平台签名里**(见上一节)⇒ 没有签名支撑,传过去不算数。要这类效果就换设计:jsd_detach_instance 后直接改子节点,或改主组件让所有实例继承。',
     allowsAlias
-      ? '- 需要显式类型或换绑候选时传 {"type":"INSTANCE_SWAP","value":"1:2"}。'
+      ? '- 需要显式类型或换绑候选时传 {"type":"INSTANCE_SWAP","value":"1:2"};\n- 要让**组件属性的值跟随变量**(BOOLEAN / TEXT / INSTANCE_SWAP 三类)时,value 传 {"type":"VARIABLE_ALIAS","id":"VariableID:23:114"} —— 这是 Figma `setProperties` 签名里的一档(plugin-api.d.ts:11123),id 取自 figma_variables_list 或 {{@var:名称}}。⚠ **变体属性(VARIANT)不能这样绑**:变量类型表里没有 VARIANT,变体取值只能给字符串。'
       : '- 换绑属性(INSTANCE_SWAP):本平台签名收**字符串**,所以直接传组件 id/键就行;**对象形态**({"type":"INSTANCE_SWAP",...})只有能收变量别名的签名才认(见上一节)。要整组件换绑用 jsd_swap_component。',
     '- 值形态以本平台 `setProperties` 签名为准(见上一节),不在签名里的形态不是「会被忽略」而是「本就没这个入口」。',
   ].join('\n');

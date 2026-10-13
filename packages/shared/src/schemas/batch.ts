@@ -18,7 +18,7 @@ export const batchCallSchema = z.object({
     .record(z.string(), z.unknown())
     .optional()
     .describe(
-      '该工具的完整入参;任意位置的字符串值里可放双花括号占位符(步骤id.字段路径)引用先前步骤结果。注意:jsd_create_* 是单类型工具,节点类型已固化在工具名里(jsd_create_frame=FRAME),args 不必再传 type',
+      '该工具的完整入参;任意位置的字符串值里可放双花括号占位符。两种来源:引用先前步骤结果(步骤id.字段路径),或按名字取文档里已有的资源 —— {{@comp:名称}} 给组件/变体集 id、{{@var:名称}} 给变量 id(读一次 jsd_get_page 的资源清单,同名多命中或零命中会点名中止整批)。注意:jsd_create_* 是单类型工具,节点类型已固化在工具名里(jsd_create_frame=FRAME),args 不必再传 type',
     ),
   continueOnError: z
     .boolean()
@@ -31,7 +31,12 @@ export type BatchCall = z.infer<typeof batchCallSchema>;
 
 /** 与 manageComponentsSchema 同思路:扁平结构,schema 保持简单,语义约束由运行时给出 */
 export const batchSchema = z.object({
-  calls: z.array(batchCallSchema).min(1).max(50).describe('schema.batch.calls'),
+  calls: z
+    .array(batchCallSchema)
+    .max(50)
+    .optional()
+    .describe('schema.batch.calls'),
+  callsFile: z.string().optional().describe('schema.batch.callsFile'),
   stopOnError: z
     .boolean()
     .optional()

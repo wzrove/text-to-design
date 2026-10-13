@@ -2,6 +2,7 @@
 import { Bridge } from './bridge';
 import type { ServiceOptions } from './daemon';
 import { installService, runDaemon, runShim, uninstallService } from './daemon';
+import { runExecCli } from './daemon/exec';
 import { error, log, setLogSink } from './logger';
 import { clearPlatformState, refreshPlatformState } from './platform-state';
 
@@ -32,6 +33,7 @@ const IS_DAEMON =
  *
  * - 无参数     → shim(MCP 宿主按 stdio 拉起,转发给 daemon,必要时 spawn)
  * - `daemon`   → 常驻 daemon(幂等:已有实例则直接退出)
+ * - `exec <calls.json>` → 从文件跑一次 jsd_batch(参数体太大时不必把它搬进上下文)
  * - `install-service` / `uninstall-service` → 用户级自启注册,让 daemon 与
  *   MCP 会话解耦(面板不必等 AI 会话起来才能连上)
  */
@@ -39,6 +41,8 @@ const ARGV = process.argv.slice(2);
 const SERVICE_CMD = ARGV.find(
   (a) => a === 'install-service' || a === 'uninstall-service',
 );
+/** `exec` 只在「以 CLI 身份被调用」时成立:被 spawn 出来的 daemon 也带着同一个 argv */
+const EXEC_CMD = ARGV[0] === 'exec' && !IS_DAEMON;
 
 if (SERVICE_CMD) {
   // CLI 子命令的前台可见性:默认日志只落盘,终端用户会看见「什么都没发生」。
@@ -54,6 +58,13 @@ if (SERVICE_CMD) {
   };
   if (SERVICE_CMD === 'install-service') installService(opts);
   else uninstallService(opts);
+} else if (EXEC_CMD) {
+  // exec 的 stdout 是**数据通道**(--json 时给管道消费),所以日志一律走 stderr ——
+  // 否则一行 log 就把 JSON 流弄脏了
+  setLogSink((_level, line) => {
+    process.stderr.write(`[text-to-design-mcp] ${line}\n`);
+  });
+  void runExecCli(ARGV.slice(1));
 } else if (IS_DAEMON) {
   runDaemon(bridge).catch((e) => {
     bridge.stop();

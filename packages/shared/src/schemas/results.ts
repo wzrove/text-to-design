@@ -273,3 +273,23 @@ export const listStylesResultSchema = z.object({
    */
   note: z.string().optional(),
 });
+
+/** 建样式的结果:回新建那条的摘要(与 listStyles 同构,调用方拿 id 直接回喂 set_* 的 styleId 字段) */
+export const createStyleResultSchema = z.object({
+  created: z.object({
+    id: z.string(),
+    name: z.string(),
+    type: z.enum(STYLE_KINDS),
+  }),
+});
+
+/** 删样式的结果:逐条给成败,单条失败(样式不存在)不连坐其余 */
+export const deleteStyleResultSchema = z.object({
+  removed: z.array(z.string()),
+  failed: z.array(
+    z.object({
+      id: z.string(),
+      reason: z.string().describe('这一条没删掉的原因(通常是样式 id 不存在)'),
+    }),
+  ),
+});

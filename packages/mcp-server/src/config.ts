@@ -47,6 +47,18 @@ export const MAX_INLINE_DATA_URL_BYTES = Number(
 /** jsd_batch 整批上限:每步仍受自身 timeout 约束,此处只封顶整次编排 */
 export const BATCH_TIMEOUT_MS = 120_000;
 
+/**
+ * jsd_batch 的步骤清单文件上限(字节)。
+ *
+ * 为什么要有这条:清单里装的是 nodeIds 之类的 id 数组,整页铺 token 时一份清单
+ * 上千个 id、几十 KB 是正常的;但坏掉的生成脚本会输出指数级膨胀的清单,一次读进
+ * 内存再解析会把 daemon 拖住。超限不截断、不猜,直接点名文件路径与两个体积。
+ * 可用环境变量 TEXT_TO_DESIGN_MCP_MAX_CALLS_FILE_BYTES 覆盖。
+ */
+export const MAX_CALLS_FILE_BYTES = Number(
+  process.env.TEXT_TO_DESIGN_MCP_MAX_CALLS_FILE_BYTES ?? 8 * 1024 * 1024,
+);
+
 /** jsd_create_svg 的 SVG 源码体积上限(字节)。
  *  代码生成的图表常见几十 KB(正常),但坏掉的脚本会输出指数级膨胀的节点串,
  *  整份经文本帧下发会一路吃掉宿主内存。超限时不静默截断,直接报错并给抽稀建议。

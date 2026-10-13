@@ -145,6 +145,67 @@ export const host: DesignHost = {
   getLocalEffectStyles: () => mg.getLocalEffectStyles().map(summarizeStyle),
   getLocalGridStyles: () => mg.getLocalGridStyles().map(summarizeStyle),
   /**
+   * 建本地样式:MG 的原生入口**自带取值** —— `createFillStyle({ name, id })` 的 `id`
+   * 是图层 id,引擎从那个图层抄样式(`dist/index.d.ts:1455` + `CreateStyleConfig:3186`),
+   * 所以这里不需要像 Figma / jsDesign 那样逐字段灌值,`fillStyleFromNode` 在本平台无调用方。
+   *
+   * 只接四类(与契约的 `StyleKind` 同宽):MG 另有 cornerRadius / padding / spacing /
+   * strokeWidth 等专属工厂,不在本仓样式面里(契约未声明这些类别,接了就是第二套词汇)。
+   */
+  createStyle: async ({ kind, name, description, node }) => {
+    const config = {
+      name,
+      id: node.id,
+      ...(description == null ? {} : { description }),
+    };
+    const style =
+      kind === 'PAINT'
+        ? mg.createFillStyle(config)
+        : kind === 'TEXT'
+          ? mg.createTextStyle(config)
+          : kind === 'EFFECT'
+            ? mg.createEffectStyle(config)
+            : mg.createGridStyle(config);
+    return { id: style.id, name: style.name, type: kind };
+  },
+  /**
+   * 删本地样式:`mg.getStyleById(id)`(typings :1436)+ `BaseStyle.remove()`(:1994)。
+   * MG 的 `getStyleById` 只有同步变体,契约侧仍包成 Promise(0017 的名字纪律)。
+   *
+   * ⚠ **必须按「是不是样式」判,不能只判有没有 `remove`**。MG 的 `Style` 联合类型
+   * (`:2079`)里混进了 `Variable`,而运行时变量对象**也有 `remove()`** ——
+   * 真机 2026-10-14:拿变量 id `3:7` 调 `jsd_delete_style`,回包 `removed`,那个变量
+   * 真的没了(存在性守卫挡不住)。也不能按 `type` 判:`VariableType`(:1832)与
+   * `StyleType`(:1810)在 PAINT / TEXT / EFFECT / GRID / STROKE_WIDTH / CORNER_RADIUS /
+   * PADDING / SPACING 上**大面积重名**。能分开的只有 `collectionName` —— 样式有
+   * (`BaseStyle:1990`)、变量没有(`Variable:1874`)。
+   */
+  removeStyle: async (id: string) => {
+    const found = mg.getStyleById(id) as {
+      collectionName?: unknown;
+      remove?: () => void;
+    } | null;
+    if (found == null) {
+      // i18n-exempt: 随结果上行给模型,不走面板文案
+      throw new Error(`没有找到样式: ${id}`);
+    }
+    if (
+      typeof found.collectionName !== 'string' ||
+      found.collectionName === ''
+    ) {
+      // i18n-exempt: 同上
+      throw new Error(
+        `${id} 不是本地样式(有 ` +
+          `remove() 不等于是样式:MG 的 getStyleById 连变量都解析得出来)。删变量请走 mg_variables_remove`,
+      );
+    }
+    if (typeof found.remove !== 'function') {
+      // i18n-exempt: 同上
+      throw new Error(`${id} 这条样式对象没有 remove() 入口,删不了`);
+    }
+    found.remove();
+  },
+  /**
    * 本地变量枚举(0039):MG 是**命名空间投影**而不是同名符号 —— 真源在
    * `mg.variables.getVariables()`(`@mastergo/plugin-typings@2.19.2 dist/index.d.ts:1176`,
    * `Variable{id,name,…}:1874`),契约名字在顶层,故在这里投影成 `AssetRef`(只留 id/name)。

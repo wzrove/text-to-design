@@ -70,12 +70,28 @@ function claimedCapabilities(platform: PlatformKey): string[] {
 /**
  * 证据串里抽出仓内路径:取第一个空白分隔的词,再去掉尾部的 `:行号`。
  * 以 `@` 开头的是 typings 事实(指向 node_modules 里的第三方包),不做文件校验。
+ *
+ * ⚠ 抽出来的东西必须**像仓内路径**(见 `looksLikeRepoPath`):这条约定是「证据以路径
+ * 开头」,但任何非空开头都会被抽出来当路径 —— 于是 `建样式已接:…` 这种以句子开头的
+ * 证据会以「指向不存在的文件 → 建样式已接」的形式报错,把人往错的排查方向带
+ * (2026-10-14 实测)。所以先判形状,再判存在性。
  */
 function repoPathOf(evidence: string): string | null {
   if (evidence.startsWith('@')) return null;
   const firstToken = evidence.split(/\s+/)[0] ?? '';
   const end = firstToken.indexOf(':');
   return end === -1 ? firstToken : firstToken.slice(0, end);
+}
+
+/**
+ * 像仓内路径:带 `/`,且**第一个 `/` 之前**不含中日韩文字。
+ * 只判前缀段是刻意的 —— 决策文档的文件名本身就带中文
+ * (`docs/design-decisions/0018-实例变体写入：MG上改为…md`),按「整串不含中文」判会误伤;
+ * 而句子开头的证据(`建样式已接:…`)在第一个 `/` 之前就已经是中文,能准确抓住。
+ */
+function looksLikeRepoPath(token: string): boolean {
+  const slash = token.indexOf('/');
+  return slash > 0 && !/[\u4e00-\u9fff]/.test(token.slice(0, slash));
 }
 
 /** typings 证据必须能追溯:带 `@x.y.z` 版本,且带行号或明说是「零命中」 */
@@ -155,6 +171,27 @@ describe('平台事实表:结构完整', () => {
     expect(misused).toEqual([]);
   });
 
+  it('证据开头的形状判定:句子开头 / URI 都要被抓住,决策文档的中文文件名不算违规', () => {
+    // 路径形状:前缀段不带中文即可 —— 决策文档的文件名本身是中文
+    expect(looksLikeRepoPath('packages/ui/src/code/jsdesign/host.ts')).toBe(
+      true,
+    );
+    expect(
+      looksLikeRepoPath(
+        'docs/design-decisions/0018-实例变体写入：MG上改为集合内换绑加回读校验.md',
+      ),
+    ).toBe(true);
+    // 句子开头:没有 `/` → 不是路径(实测 2026-10-14 这条被当成路径去 fs 校验,
+    // 报成「指向不存在的文件」,把排查带偏)
+    expect(looksLikeRepoPath('建样式已接')).toBe(false);
+    expect(looksLikeRepoPath('EVIDENCE')).toBe(false);
+    // URI 也算不出来:repoPathOf 会在第一个 `:` 处截断,留下 `jsd` —— 同样被形状判定拦下
+    expect(repoPathOf('jsd://recipes/script-ops')).toBe('jsd');
+    expect(
+      looksLikeRepoPath(repoPathOf('jsd://recipes/script-ops') ?? ''),
+    ).toBe(false);
+  });
+
   it('每条证据都能追溯:仓内文件真实存在,或写清 typings 包名与行号', () => {
     const problems: string[] = [];
     for (const platform of PLATFORMS) {
@@ -167,6 +204,12 @@ describe('平台事实表:结构完整', () => {
                 `${platform}.${domain}:typings 证据要带版本与行号(或明说零命中)→ ${evidence}`,
               );
             }
+            continue;
+          }
+          if (!looksLikeRepoPath(path)) {
+            problems.push(
+              `${platform}.${domain}:证据要以「仓内路径:行」或「@包名@版本 文件:行」开头,现在开头是「${path}」→ ${evidence}`,
+            );
             continue;
           }
           if (!existsSync(`${ROOT}${path}`)) {

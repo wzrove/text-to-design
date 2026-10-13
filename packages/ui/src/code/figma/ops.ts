@@ -18,18 +18,100 @@ const variablesCreateSchema = z.object({
     .array(
       z.object({
         name: z.string(),
-        type: z.enum(['BOOLEAN', 'COLOR', 'FLOAT', 'STRING']),
-        /** COLOR 用 {r,g,b}/{r,g,b,a}(0-1 浮点);FLOAT 用 number */
+        /** 建变量的入口只有 `VariableResolvedDataType` 这 6 种(`plugin-api.d.ts:11571` + `createVariable` 重载 :2176/:2188);`EXPRESSION` / `VARIABLE_ALIAS` 是**值形态**,不是可建类型 */
+        type: z.enum([
+          'BOOLEAN',
+          'COLOR',
+          'EASING',
+          'FLOAT',
+          'STRING',
+          'TIMING',
+        ]),
+        /**
+         * 按 `VariableValue`(:11588)的形状给:BOOLEAN 布尔 / STRING 字符串 /
+         * FLOAT·TIMING 数字 / COLOR 用 `{r,g,b}` 或 `{r,g,b,a}`(**0-1 浮点,不是 hex**)/
+         * EASING 走 MotionEasing / 引用别的变量用 `{type:'VARIABLE_ALIAS', id}`。
+         */
         value: z.unknown().optional(),
       }),
     )
     .min(1),
 });
 
-const variablesApplySchema = z
+/**
+ * 节点级可绑字段(`setBoundVariable` 的 `field`),逐值抄自
+ * `@figma/plugin-typings` `plugin-api.d.ts:6817-6852` 的
+ * `VariableBindableNodeField` + `VariableBindableTextField`。
+ * 表外一律点名拒,不丢给引擎抛一句没有上下文的错。
+ */
+const NODE_BOUND_FIELDS = [
+  'width',
+  'height',
+  'characters',
+  'itemSpacing',
+  'paddingLeft',
+  'paddingRight',
+  'paddingTop',
+  'paddingBottom',
+  'visible',
+  'cornerRadius',
+  'topLeftRadius',
+  'topRightRadius',
+  'bottomLeftRadius',
+  'bottomRightRadius',
+  'minWidth',
+  'maxWidth',
+  'minHeight',
+  'maxHeight',
+  'counterAxisSpacing',
+  'strokeWeight',
+  'strokeTopWeight',
+  'strokeRightWeight',
+  'strokeBottomWeight',
+  'strokeLeftWeight',
+  'opacity',
+  'gridRowGap',
+  'gridColumnGap',
+  'fontFamily',
+  'fontSize',
+  'fontStyle',
+  'fontWeight',
+  'letterSpacing',
+  'lineHeight',
+  'paragraphSpacing',
+  'paragraphIndent',
+] as const;
+
+/** 数组型字段:绑到数组**某一项的子字段**,与节点级字段是两套入口 */
+const ITEM_BOUND_FIELDS = {
+  effects: ['color', 'radius', 'spread', 'offsetX', 'offsetY'],
+  layoutGrids: ['sectionSize', 'count', 'offset', 'gutterSize'],
+} as const;
+
+/** 填充/描边:变量必须绑在 paint 自身,节点级 setBoundVariable 会抛
+ * 「fills and strokes variable bindings must be set on paints directly」;子字段固定 `color` */
+const PAINT_BOUND_FIELDS = ['fills', 'strokes'] as const;
+
+const bindingSchema = z
   .object({
     nodeIds: z.array(z.string()).min(1),
-    boundProperty: z.string().describe('如 fills/strokes/effects/backgrounds'),
+    boundProperty: z
+      .string()
+      .describe(
+        '引擎字段名:节点级(见工具描述的名单)/ fills / strokes / effects / layoutGrids',
+      ),
+    subField: z
+      .string()
+      .optional()
+      .describe('effects / layoutGrids 必填(color / radius / …)'),
+    index: z
+      .number()
+      .int()
+      .min(0)
+      .optional()
+      .describe(
+        '数组项下标;effects / layoutGrids 必填,fills / strokes 可省略(= 全部 SOLID 项)',
+      ),
     variableId: z
       .string()
       .optional()
@@ -39,14 +121,76 @@ const variablesApplySchema = z
       .optional()
       .describe('true = 解绑该字段上的变量绑定;默认 false(绑定)'),
   })
+  // 逐组也 strict:整份参数里拼错的键必须当场被点名,不能被静默丢掉后
+  // 让人以为「绑过了」(真机 2026-10-14 就在 MG 侧误塞过 `boundProperty:""`)
+  .strict()
   .superRefine((v, ctx) => {
-    if (v.unbind === true || v.variableId != null) return;
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ['variableId'],
-      message: '绑定时必须给 variableId(解绑才不用给)',
-    });
+    if (v.unbind !== true && v.variableId == null) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['variableId'],
+        message: '绑定时必须给 variableId(解绑才不用给)',
+      });
+    }
+    if (v.boundProperty in ITEM_BOUND_FIELDS) {
+      const allowed: readonly string[] =
+        ITEM_BOUND_FIELDS[v.boundProperty as keyof typeof ITEM_BOUND_FIELDS];
+      if (v.index == null) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['index'],
+          message: `${v.boundProperty} 是数组项,必须给 index`,
+        });
+      }
+      if (v.subField == null || !allowed.includes(v.subField)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['subField'],
+          message: `${v.boundProperty} 的可绑子字段是:${allowed.join(' / ')}`,
+        });
+      }
+    }
   });
+
+const variablesApplySchema = z.object({
+  bindings: z
+    .array(bindingSchema)
+    .min(1)
+    .describe('一组 = 一个变量 × 一个字段 × 一批节点;一次调用可带多组'),
+});
+
+const variablesRemoveSchema = z.object({
+  variableIds: z
+    .array(z.string().min(1))
+    .min(1)
+    .describe(
+      '要删的变量 id 列表(取自 figma_variables_list 或 assets.variables)',
+    ),
+});
+
+/**
+ * 删变量:引擎的 `Variable.remove()` 是同步的(typings :11774)。
+ * 逐条删,单条找不到不连坐其余 —— 回包点名。
+ */
+async function removeVariables(
+  _host: DesignHost,
+  params: unknown,
+): Promise<{ removed: string[]; failed: { id: string; reason: string }[] }> {
+  const { variableIds } = params as { variableIds: string[] };
+  const removed: string[] = [];
+  const failed: { id: string; reason: string }[] = [];
+  for (const id of variableIds) {
+    try {
+      const variable = await figma.variables.getVariableByIdAsync(id);
+      if (variable == null) throw new Error(`没有找到变量: ${id}`);
+      variable.remove();
+      removed.push(id);
+    } catch (e) {
+      failed.push({ id, reason: e instanceof Error ? e.message : String(e) });
+    }
+  }
+  return { removed, failed };
+}
 
 /**
  * 变量清单(与 MG 的 `mg_list_variables` **同形**,两边共用一套调用纪律)。
@@ -58,9 +202,9 @@ const variablesApplySchema = z
 const variablesListSchema = z.object({
   collectionId: z.string().optional().describe('只列该集合下的变量'),
   type: z
-    .enum(['BOOLEAN', 'COLOR', 'FLOAT', 'STRING'])
+    .enum(['BOOLEAN', 'COLOR', 'EASING', 'FLOAT', 'STRING', 'TIMING'])
     .optional()
-    .describe('只列该类型的变量'),
+    .describe('只列该类型的变量(全表 6 种,与 figma_variables_create 同宽)'),
   limit: z
     .number()
     .int()
@@ -105,17 +249,42 @@ const componentPropertiesSetSchema = z.object({
     z.string(),
     z.object({
       type: z.enum(['BOOLEAN', 'TEXT', 'VARIANT', 'INSTANCE_SWAP']),
-      value: z.union([z.boolean(), z.string()]),
+      /**
+       * 标量 = 写死值;`{type:'VARIABLE_ALIAS', id}` = 让该属性跟随变量
+       * (引擎写侧签名收 VariableAlias,`plugin-api.d.ts:11123`;
+       * 别名由 `figma_variables_list` / `jsd_get_page` 的 assets.variables 拿 id)
+       */
+      value: z.union([
+        z.boolean(),
+        z.string(),
+        z.object({ type: z.literal('VARIABLE_ALIAS'), id: z.string() }),
+      ]),
     }),
   ),
 });
 
 type StyleableNode = {
+  id: string;
   fillStyleId?: string;
   strokeStyleId?: string;
   textStyleId?: string;
   effectStyleId?: string;
+  setFillStyleIdAsync?(id: string): Promise<void>;
+  setStrokeStyleIdAsync?(id: string): Promise<void>;
+  setTextStyleIdAsync?(id: string): Promise<void>;
+  setEffectStyleIdAsync?(id: string): Promise<void>;
 };
+
+/** op 的 `kind` → 该绑到节点的哪个字段与哪个异步入口(两类入口成对登记,不靠拼字符串) */
+const STYLE_BIND_TARGET = {
+  fill: { field: 'fillStyleId', setter: 'setFillStyleIdAsync' },
+  stroke: { field: 'strokeStyleId', setter: 'setStrokeStyleIdAsync' },
+  text: { field: 'textStyleId', setter: 'setTextStyleIdAsync' },
+  effect: { field: 'effectStyleId', setter: 'setEffectStyleIdAsync' },
+} as const satisfies Record<
+  'fill' | 'stroke' | 'text' | 'effect',
+  { field: keyof StyleableNode; setter: keyof StyleableNode }
+>;
 
 async function createVariables(
   _host: DesignHost,
@@ -128,8 +297,8 @@ async function createVariables(
     collectionName?: string;
     variables: {
       name: string;
-      type: 'BOOLEAN' | 'COLOR' | 'FLOAT' | 'STRING';
-      /** COLOR 用 {r,g,b} 或 {r,g,b,a}(0-1 浮点,非 hex 字符串);FLOAT 用 number */
+      type: 'BOOLEAN' | 'COLOR' | 'EASING' | 'FLOAT' | 'STRING' | 'TIMING';
+      /** COLOR 用 {r,g,b} 或 {r,g,b,a}(0-1 浮点,非 hex 字符串);FLOAT/TIMING 用 number;引用别的变量用 {type:'VARIABLE_ALIAS', id} */
       value?: unknown;
     }[];
   };
@@ -173,64 +342,155 @@ async function createVariables(
   }
 }
 
-/** paints 类字段:引擎要求变量绑在 paint 自身,节点级 setBoundVariable 会抛
- * 「fills and strokes variable bindings must be set on paints directly」 */
-const PAINT_BOUND_FIELDS = new Set(['fills', 'strokes', 'backgrounds']);
+/** 表外字段的点名原因:常见误写不是「拼错」,是拿别的平台的词汇或别的路径来绑 */
+function rejectionReason(field: string): string | null {
+  if (NODE_BOUND_FIELDS.includes(field as (typeof NODE_BOUND_FIELDS)[number]))
+    return null;
+  if ((PAINT_BOUND_FIELDS as readonly string[]).includes(field)) return null;
+  if (field in ITEM_BOUND_FIELDS) return null;
+  if (field === 'backgrounds')
+    return 'Figma 节点没有 backgrounds 字段(frame 的填充就叫 fills);backgrounds 是即时设计的词汇';
+  if (field === 'variantProperties')
+    return '变体属性不在 setBoundVariable 的可绑字段里(VariableBindableNodeField,plugin-api.d.ts:6817-6844),变量类型表里也没有 VARIANT(同文件 :11571);切变体取值用 jsd_set_instance_properties';
+  if (field === 'componentProperties')
+    return '组件属性值绑变量走 figma_component_properties_set:properties 的值传 {type, value:{type:"VARIABLE_ALIAS", id}}';
+  return `不是引擎可绑字段。节点级可绑:${NODE_BOUND_FIELDS.join(' / ')};数组型:fills / strokes(子字段固定 color)、effects / layoutGrids(要给 subField + index)`;
+}
 
-async function applyVariables(
+interface FigmaBinding {
+  nodeIds: string[];
+  boundProperty: string;
+  subField?: string;
+  index?: number;
+  variableId?: string;
+  unbind?: boolean;
+}
+
+interface BindGroupResult {
+  boundProperty: string;
+  variableId?: string;
+  applied: string[];
+  failed: string[];
+}
+
+/** 把一组 binding 落到一批节点上;返回逐节点成败(id 清单),不静默跳过 */
+async function runBinding(
   host: DesignHost,
-  params: unknown,
-): Promise<{ applied: string[]; failed: string[] }> {
-  const p = params as {
-    nodeIds: string[];
-    boundProperty: string;
-    variableId?: string;
-    unbind?: boolean;
-  };
-  const unbind = p.unbind === true;
+  b: FigmaBinding,
+  label: string,
+): Promise<BindGroupResult> {
+  const reject = rejectionReason(b.boundProperty);
+  if (reject != null) {
+    throw new Error(`${label} boundProperty=${b.boundProperty}:${reject}`);
+  }
+  const unbind = b.unbind === true;
   // 解绑不需要变量:两个入口都收 null,语义是「把该字段上绑着的东西摘掉」
   const variable = unbind
     ? null
-    : await figma.variables.getVariableByIdAsync(p.variableId ?? '');
+    : await figma.variables.getVariableByIdAsync(b.variableId ?? '');
   if (!unbind && variable == null) {
-    throw new Error(`没有找到变量: ${p.variableId ?? '(未给 variableId)'}`);
+    throw new Error(
+      `${label} 没有找到变量: ${b.variableId ?? '(未给 variableId)'}`,
+    );
   }
-  const nodes = await resolveNodes(host, p.nodeIds);
-  if (nodes.length === 0) throw new Error('没有找到要绑定变量的节点');
-  const isPaintField = PAINT_BOUND_FIELDS.has(p.boundProperty);
-  const paintField = p.boundProperty as 'fills' | 'strokes' | 'backgrounds';
+  const nodes = await resolveNodes(host, b.nodeIds);
+  if (nodes.length === 0) throw new Error(`${label} 没有找到节点`);
   const applied: string[] = [];
   const failed: string[] = [];
+  const isPaint = (PAINT_BOUND_FIELDS as readonly string[]).includes(
+    b.boundProperty,
+  );
+  const isItem = b.boundProperty in ITEM_BOUND_FIELDS;
   for (const n of nodes) {
     const target = n as unknown as Record<string, unknown>;
-    if (isPaintField) {
-      const paints = target[paintField];
-      if (!Array.isArray(paints) || paints.length === 0) {
-        failed.push(n.id);
+    try {
+      if (isPaint || isItem) {
+        const items = target[b.boundProperty];
+        if (!Array.isArray(items) || items.length === 0) {
+          failed.push(n.id);
+          continue;
+        }
+        const indices =
+          b.index == null
+            ? items.map((_, i) => i)
+            : b.index < items.length
+              ? [b.index]
+              : null;
+        if (indices == null) {
+          failed.push(n.id);
+          continue;
+        }
+        // 数组项的可绑字段随项类型而定:填/描边只有 SOLID 端能绑 color,
+        // effects / layoutGrids 按调用方给的 subField 绑那一项(引擎返回副本,须整体写回)
+        const next = [...items] as unknown[];
+        let touched = 0;
+        for (const i of indices) {
+          const item = items[i] as { type?: string };
+          if (isPaint && item?.type !== 'SOLID') continue;
+          next[i] = isPaint
+            ? figma.variables.setBoundVariableForPaint(
+                items[i] as SolidPaint,
+                'color',
+                variable,
+              )
+            : b.boundProperty === 'effects'
+              ? figma.variables.setBoundVariableForEffect(
+                  items[i] as Effect,
+                  b.subField as VariableBindableEffectField,
+                  variable,
+                )
+              : figma.variables.setBoundVariableForLayoutGrid(
+                  items[i] as LayoutGrid,
+                  b.subField as VariableBindableLayoutGridField,
+                  variable,
+                );
+          touched++;
+        }
+        if (touched === 0) {
+          failed.push(n.id);
+          continue;
+        }
+        target[b.boundProperty] = next;
+        applied.push(n.id);
         continue;
       }
-      // 只对 SOLID 端绑 color(SOLID 的可绑字段就叫 color);渐变等其余 paint 原样保留。
-      // variable 传 null 即为**解绑**(typings:setBoundVariableForPaint 的第三参收 null)
-      target[paintField] = (paints as Paint[]).map((paint) =>
-        paint.type === 'SOLID'
-          ? figma.variables.setBoundVariableForPaint(paint, 'color', variable)
-          : paint,
-      );
-      applied.push(n.id);
-      continue;
-    }
-    try {
       (
         n as unknown as {
           setBoundVariable(property: string, variable: Variable | null): void;
         }
-      ).setBoundVariable(p.boundProperty, variable);
+      ).setBoundVariable(b.boundProperty, variable);
       applied.push(n.id);
     } catch {
       failed.push(n.id);
     }
   }
-  return { applied, failed };
+  return {
+    boundProperty: b.boundProperty,
+    ...(b.variableId != null ? { variableId: b.variableId } : {}),
+    applied,
+    failed,
+  };
+}
+
+async function applyVariables(
+  host: DesignHost,
+  params: unknown,
+): Promise<{
+  groups: BindGroupResult[];
+  applied: string[];
+  failed: string[];
+}> {
+  const { bindings } = params as { bindings: FigmaBinding[] };
+  const groups: BindGroupResult[] = [];
+  for (const [i, b] of bindings.entries()) {
+    groups.push(await runBinding(host, b, `bindings[${i}]`));
+  }
+  // 汇总面:同一个节点可能在多组里,先去重再报总数
+  const applied = [...new Set(groups.flatMap((g) => g.applied))];
+  const failed = [...new Set(groups.flatMap((g) => g.failed))].filter(
+    (id) => !applied.includes(id),
+  );
+  return { groups, applied, failed };
 }
 
 async function listVariables(
@@ -257,7 +517,7 @@ async function listVariables(
 }> {
   const p = params as {
     collectionId?: string;
-    type?: 'BOOLEAN' | 'COLOR' | 'FLOAT' | 'STRING';
+    type?: 'BOOLEAN' | 'COLOR' | 'EASING' | 'FLOAT' | 'STRING' | 'TIMING';
     limit?: number;
   };
   const limit = p.limit ?? 200;
@@ -309,7 +569,7 @@ function findLocalStyleId(
 async function applyStyleByName(
   host: DesignHost,
   params: unknown,
-): Promise<{ applied: string[] }> {
+): Promise<{ applied: string[]; failed?: string[] }> {
   const p = params as {
     nodeIds: string[];
     kind: 'fill' | 'stroke' | 'text' | 'effect';
@@ -342,13 +602,23 @@ async function applyStyleByName(
   const nodes = await resolveNodes(host, p.nodeIds);
   if (nodes.length === 0) throw new Error('没有找到要应用样式的节点');
   const styleable = nodes as unknown as StyleableNode[];
+  const { field, setter } = STYLE_BIND_TARGET[p.kind];
+  const applied: string[] = [];
+  const failed: string[] = [];
   for (const n of styleable) {
-    if (p.kind === 'fill') n.fillStyleId = styleId;
-    else if (p.kind === 'stroke') n.strokeStyleId = styleId;
-    else if (p.kind === 'text') n.textStyleId = styleId;
-    else n.effectStyleId = styleId;
+    try {
+      // dynamic-page 下同步赋值 `fillStyleId` 会抛(与 core/props/types.ts 的
+      // writeStyleRefProp 同一个理由):有异步入口就用它,没有才退到赋值
+      const fn = n[setter];
+      if (typeof fn === 'function') await fn.call(n, styleId);
+      else (n as unknown as Record<string, unknown>)[field] = styleId;
+      applied.push(n.id);
+    } catch {
+      // 该节点类型没有这个样式面(frame 上没有 textStyleId):点名而非静默跳过
+      failed.push(n.id);
+    }
   }
-  return { applied: nodes.map((n) => n.id) };
+  return { applied, ...(failed.length > 0 ? { failed } : {}) };
 }
 
 async function setComponentProperties(
@@ -357,7 +627,13 @@ async function setComponentProperties(
 ): Promise<{ updated: string[] }> {
   const p = params as {
     nodeIds: string[];
-    properties: Record<string, { type: string; value: boolean | string }>;
+    properties: Record<
+      string,
+      {
+        type: string;
+        value: boolean | string | { type: 'VARIABLE_ALIAS'; id: string };
+      }
+    >;
   };
   if (!p.properties || Object.keys(p.properties).length === 0)
     throw new Error('属性列表为空');
@@ -492,7 +768,7 @@ export const figmaOps: PlatformOp[] = [
     name: 'figma_variables_create',
     title: '创建变量',
     description:
-      'Figma 特有:批量创建变量(失败整体回滚)。params: { collectionName?, variables: [{name, type: BOOLEAN|COLOR|FLOAT|STRING, value?}] }。value: COLOR 用 {r,g,b} 或 {r,g,b,a}(0-1 浮点,非 hex);FLOAT 用 number;BOOLEAN 用 boolean;STRING 用 string',
+      "Figma 特有:批量创建变量(失败整体回滚)。params: { collectionName?, variables: [{name, type: BOOLEAN|COLOR|EASING|FLOAT|STRING|TIMING, value?}] } —— type 就是 `VariableResolvedDataType` 全表(:11571),`createVariable` 只收这六种。value 按 `VariableValue`(:11588)的形状:COLOR 用 {r,g,b} 或 {r,g,b,a}(0-1 浮点,非 hex);FLOAT / TIMING 用 number;BOOLEAN 用 boolean;STRING 用 string;EASING 走 MotionEasing;要**引用另一个变量**(那是值形态 `VARIABLE_ALIAS`,不是可建类型)传 {type:'VARIABLE_ALIAS', id}",
     inputSchema: variablesCreateSchema,
     run: createVariables,
   },
@@ -500,17 +776,25 @@ export const figmaOps: PlatformOp[] = [
     name: 'figma_variables_list',
     title: '查看变量集合与变量',
     description:
-      'Figma 特有:列出**变量集合(含模式)**与**变量**(类型 / 所属集合 / 描述 / 各模式的值)。params: { collectionId?, type?: BOOLEAN|COLOR|FLOAT|STRING, limit? }。**动手前的摸底入口**,也是另两个变量 op 的回读面;与 MG 的 `mg_list_variables` 同形。绑定前先在这里拿 `variableId`(与 `jsd_get_page` 的 `assets.variables` 不是两件事:那条是不分平台的概览,只有 id + 名称)',
+      'Figma 特有:列出**变量集合(含模式)**与**变量**(类型 / 所属集合 / 描述 / 各模式的值)。params: { collectionId?, type?: BOOLEAN|COLOR|EASING|FLOAT|STRING|TIMING, limit? }。**动手前的摸底入口**,也是另两个变量 op 的回读面;与 MG 的 `mg_list_variables` 同形。绑定前先在这里拿 `variableId`(与 `jsd_get_page` 的 `assets.variables` 不是两件事:那条是不分平台的概览,只有 id + 名称)',
     inputSchema: variablesListSchema,
     run: listVariables,
   },
   {
     name: 'figma_variables_apply',
-    title: '绑定/解绑变量',
+    title: '批量绑定/解绑变量',
     description:
-      'Figma 特有:给节点绑定变量,`unbind: true` 则解绑(解绑**不用**给 variableId)。params: { nodeIds, boundProperty(如 fills/strokes/effects/backgrounds), variableId?, unbind? }。⚠ paint 类字段(fills/strokes/backgrounds)的变量必须绑在 paint 自身(节点级 setBoundVariable 会抛),只对 SOLID 端绑 color,渐变等其余 paint 原样保留;单节点内的渐变端点无法这样绑',
+      'Figma 特有:一次调用绑**多组**变量,`unbind: true` 则解绑(解绑**不用**给 variableId)。params: { bindings: [{ nodeIds, boundProperty, variableId?, subField?, index?, unbind? }] } —— 一组 = 一个变量 × 一个字段 × 一批节点。boundProperty 用引擎词汇,三档入口不同:① 节点级(width/height/characters/itemSpacing/padding*/corner*/四角 radius/minmax*/stroke*Weight/opacity/gridRowGap/gridColumnGap/visible/fontFamily/fontSize/fontStyle/fontWeight/letterSpacing/lineHeight/paragraphSpacing/paragraphIndent)走 setBoundVariable;② fills / strokes 绑在 paint 自身(节点级会抛),子字段固定 color,index 省略 = 该数组**全部 SOLID 项**,渐变等其余 paint 原样保留;③ effects / layoutGrids 绑数组项,**必须**给 index + subField(effects:color/radius/spread/offsetX/offsetY;layoutGrids:sectionSize/count/offset/gutterSize)。表外字段当场点名拒:backgrounds 是即时设计词汇、variantProperties 不可绑(切变体用 jsd_set_instance_properties)、componentProperties 改走 figma_component_properties_set 的别名值。回包 groups 逐组给 applied/failed,failed = 该节点上这个字段不存在 / 非 SOLID / 引擎拒。⚠ 可绑的变量类型 = `VariableResolvedDataType` 六种(BOOLEAN / COLOR / EASING / FLOAT / STRING / TIMING,typings :11571),**没有 VARIANT 类型变量** —— 变体属性也不在可绑字段表里(:6817-6844)',
     inputSchema: variablesApplySchema,
     run: applyVariables,
+  },
+  {
+    name: 'figma_variables_remove',
+    title: '删除变量',
+    description:
+      'Figma 特有:删本地变量(逐个删,单条 id 不存在只进 failed、不连坐其余)。params: { variableIds: [id…] }。与 `jsd_delete_style` 成对:接上删除之后,`figma_variables_create` / `jsd_create_style` 才不是「建了撤不回」的单向门。⚠ 集合本身(`VariableCollection`)与模式增删改名(`addMode` / `renameMode` / `removeMode`)仍未接,删光变量后空集合会留着',
+    inputSchema: variablesRemoveSchema,
+    run: removeVariables,
   },
   {
     name: 'figma_style_apply_by_name',
@@ -524,7 +808,7 @@ export const figmaOps: PlatformOp[] = [
     name: 'figma_component_properties_set',
     title: '设置实例组件属性',
     description:
-      'Figma 特有:设置实例的组件属性值。params: { nodeIds, properties: {名: {type, value}} }',
+      'Figma 特有:设置实例的组件属性值。params: { nodeIds, properties: {名: {type, value}} }。value 两种:标量(写死值)或 `{type:"VARIABLE_ALIAS", id}`(让该属性跟随变量,引擎签名收别名,typings :11123;id 取自 figma_variables_list)。键必须是回读到的**完整键**(带 `#序号` 后缀,见 jsd_find 的 componentProperties)。⚠ 变体属性(VARIANT)的值**不能**绑变量:变量类型表里没有 VARIANT,变体取值切换只能给字符串',
     inputSchema: componentPropertiesSetSchema,
     run: setComponentProperties,
   },

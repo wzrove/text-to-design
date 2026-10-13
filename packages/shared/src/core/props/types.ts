@@ -103,8 +103,53 @@ export function writeProp(
   key: string,
   value: unknown,
 ): boolean {
+  if (!propWritable(w, node, key, value)) return false;
+  return putIfPresent(node, key, value);
+}
+
+/** 写前判定(存在性 + 领域适用性 + 平台收窄);同步与异步两个入口共用,别在外面再判一遍 */
+function propWritable(
+  w: WriteCtx,
+  node: NodeSkeleton,
+  key: string,
+  value: unknown,
+): boolean {
   if (value == null) return false;
   if (!propAppliesTo(key, node.type)) return false;
   if (!gatePropWrite(w, key, value)) return false;
+  return true;
+}
+
+/** 样式引用字段的异步入口名:与值成员一一对应,不在调用处拼字符串(拼错不会编译失败) */
+const ASYNC_STYLE_SETTER = {
+  fillStyleId: 'setFillStyleIdAsync',
+  strokeStyleId: 'setStrokeStyleIdAsync',
+  textStyleId: 'setTextStyleIdAsync',
+  effectStyleId: 'setEffectStyleIdAsync',
+} as const;
+
+/**
+ * 样式绑定(`*StyleId`)的唯一入口。
+ *
+ * 为什么不直接用 {@link writeProp}:Figma manifest 声明 dynamic-page 后,给
+ * `fillStyleId` 赋值当场抛 `Cannot call with documentAccess: dynamic-page.
+ * Use node.setFillStyleIdAsync instead.`(真机 2026-10-13)—— 那是**入口形态**问题,
+ * 不是平台取值域问题,所以按 0011「新增成员一律异步」的口径优先走异步 setter,
+ * 引擎没有异步变体时(jsDesign / MG)才退回同步赋值。
+ */
+export async function writeStyleRefProp(
+  w: WriteCtx,
+  node: NodeSkeleton,
+  key: keyof typeof ASYNC_STYLE_SETTER,
+  value: unknown,
+): Promise<boolean> {
+  if (!propWritable(w, node, key, value)) return false;
+  const setter = (node as unknown as Record<string, unknown>)[
+    ASYNC_STYLE_SETTER[key]
+  ];
+  if (typeof setter === 'function') {
+    await (setter as (id: string) => Promise<void>).call(node, String(value));
+    return true;
+  }
   return putIfPresent(node, key, value);
 }

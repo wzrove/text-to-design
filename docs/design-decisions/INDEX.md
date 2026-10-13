@@ -32,6 +32,7 @@
 | [942910d2](942910d2-website-多语言沿用-0016-口径：locale-由-Solid-context-显式提供，不引库也不做-en-预渲染.md) | website 多语言沿用 0016 口径：locale 由 Solid context 显式提供 | 已采纳 | `website/i18n`、`website/components` | 2026-10-12 |
 | [de446d4e](de446d4e-决策记录改用-8-位短-id-取号，旧数字号只读保留.md) | 决策记录改用 8 位短 id 取号，旧数字号只读保留 | 已采纳（scratch 已验） | `.agents/skills/software-design-patterns`、`AGENTS.md`、`INDEX.md` | 2026-10-12 |
 | [89d02d1b](89d02d1b-决策索引只存定位信息：状态列收词表值、影响范围降粒度、体积门禁复活.md) | 决策索引只存定位信息：状态列收词表值、影响范围降粒度、体积门禁复活 | 已采纳 | `INDEX.md`、`tests/skill-doc-budget.test.ts`、`.agents/skills/software-design-patterns/` | 2026-10-12 |
+| [7165f370](7165f370-批量编排补上资源名字寻址与变量聚合绑定：一次调用绑多组，VARIANT-只能点名拒绝.md) | 批量编排补上资源名字寻址与变量聚合绑定：一次调用绑多组，VARIANT 只能点名拒绝 | 已采纳 | `mcp-server/tools`、`shared/{schemas,core,dicts}`、`ui/code/{figma,mastergo}` | 2026-10-13 |
 
 ## 依赖关系
 

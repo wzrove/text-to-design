@@ -1202,41 +1202,49 @@ async function createVariables(
   };
 }
 
-async function applyVariableReference(
-  host: DesignHost,
-  params: unknown,
-): Promise<{
+interface MGBinding {
+  nodeIds: string[];
+  variableId?: string;
+  property: SlotKind;
+  value: string;
+  index?: number;
+  unbind?: boolean;
+}
+
+interface MGBindGroup {
+  property: SlotKind;
+  value: string;
+  variableId?: string;
+  collectionId?: string;
   applied: string[];
   failed: string[];
-  collectionId?: string;
   linkedCollections: Array<{ layerId: string; collectionIds: string[] }>;
   unverified?: string[];
-  warning?: string;
-}> {
-  const p = params as {
-    nodeIds: string[];
-    variableId?: string;
-    property: SlotKind;
-    value: string;
-    index?: number;
-    unbind?: boolean;
-  };
-  const nodes = await resolveNodes(host, p.nodeIds);
-  if (nodes.length === 0) throw new Error('没有找到要绑变量的节点');
-  const unbind = p.unbind === true;
-  // 解绑不需要变量:unlinkVariableReferenceInLayer 不收 id,语义是「把这个槽位上的绑定摘掉」
+}
+
+/** 一组绑定落到一批图层;MG 无「属性 ↔ 变量」反读接口,回读只能证到集合层 */
+async function runMGBinding(
+  host: DesignHost,
+  b: MGBinding,
+  label: string,
+): Promise<MGBindGroup> {
+  const nodes = await resolveNodes(host, b.nodeIds);
+  if (nodes.length === 0) throw new Error(`${label} 没有找到要绑变量的节点`);
+  const unbind = b.unbind === true;
+  // 解绑不需要变量:unlinkVariableReferenceInLayer 不收 id
   const variable = unbind
     ? null
-    : mg.variables.getVariableById(p.variableId ?? '');
-  if (!unbind && (variable == null || p.variableId == null)) {
-    throw new Error(`没有找到变量:${p.variableId ?? '(未给 variableId)'}`);
+    : mg.variables.getVariableById(b.variableId ?? '');
+  if (!unbind && (variable == null || b.variableId == null)) {
+    throw new Error(
+      `${label} 没有找到变量:${b.variableId ?? '(未给 variableId)'}`,
+    );
   }
-  // 绑定时 id 必给(schema 已守),这里收窄一次供下面用
-  const variableId = p.variableId ?? '';
+  const variableId = b.variableId ?? '';
   // 槽位按宿主键名原样展开(文档的表就是宿主键名),不在这里改写成别的词汇
   const slot: Record<string, unknown> = {
-    [p.property]: p.value,
-    ...(p.index != null ? { index: p.index } : {}),
+    [b.property]: b.value,
+    ...(b.index != null ? { index: b.index } : {}),
   };
   const applied: string[] = [];
   const failed: string[] = [];
@@ -1277,10 +1285,41 @@ async function applyVariableReference(
           .filter((l) => !l.collectionIds.includes(collectionId))
           .map((l) => l.layerId);
   return {
+    property: b.property,
+    value: b.value,
+    ...(b.variableId != null ? { variableId: b.variableId } : {}),
+    ...(collectionId != null ? { collectionId } : {}),
     applied,
     failed,
-    ...(collectionId != null ? { collectionId } : {}),
     linkedCollections,
+    ...(unverified.length > 0 ? { unverified } : {}),
+  };
+}
+
+async function applyVariableReference(
+  host: DesignHost,
+  params: unknown,
+): Promise<{
+  groups: MGBindGroup[];
+  applied: string[];
+  failed: string[];
+  unverified?: string[];
+  warning?: string;
+}> {
+  const { bindings } = params as { bindings: MGBinding[] };
+  const groups: MGBindGroup[] = [];
+  for (const [i, b] of bindings.entries()) {
+    groups.push(await runMGBinding(host, b, `bindings[${i}]`));
+  }
+  const applied = [...new Set(groups.flatMap((g) => g.applied))];
+  const failed = [...new Set(groups.flatMap((g) => g.failed))].filter(
+    (id) => !applied.includes(id),
+  );
+  const unverified = [...new Set(groups.flatMap((g) => g.unverified ?? []))];
+  return {
+    groups,
+    applied,
+    failed,
     ...(unverified.length > 0
       ? {
           unverified,
@@ -1377,7 +1416,7 @@ const variablesCreateSchema = z.object({
     .describe('要建的变量;同名同类型已存在时就地更新它的值'),
 });
 
-const variablesApplySchema = z
+const mgBindingSchema = z
   .object({
     nodeIds: z.array(z.string().min(1)).min(1),
     variableId: z
@@ -1402,6 +1441,8 @@ const variablesApplySchema = z
       .optional()
       .describe('true = 解绑该槽位;默认 false(绑定)'),
   })
+  // 逐组 strict:拼错的键必须当场点名(真机 2026-10-14 误塞 `boundProperty:""` 被静默吞掉)
+  .strict()
   .superRefine((v, ctx) => {
     const allowed: readonly string[] = VARIABLE_SLOTS[v.property];
     if (!allowed.includes(v.value)) {
@@ -1420,6 +1461,45 @@ const variablesApplySchema = z
       });
     }
   });
+
+/** 与 Figma 的 `figma_variables_apply` **同形**:都是一次吃一组 bindings */
+const variablesApplySchema = z.object({
+  bindings: z
+    .array(mgBindingSchema)
+    .min(1)
+    .describe('一组 = 一个变量 × 一个槽位 × 一批节点;一次调用可带多组'),
+});
+
+const variablesRemoveSchema = z.object({
+  variableIds: z
+    .array(z.string().min(1))
+    .min(1)
+    .describe('要删的变量 id 列表(取自 mg_list_variables 或 assets.variables)'),
+});
+
+/**
+ * 删变量:`mg.variables.deleteVariable(id)` 是同步 void(typings :1218),引擎不在返回值
+ * 里报告成败,所以「存不存在」只能先查一次 `getVariableById` —— 查不到就进 failed 点名。
+ */
+async function removeVariables(
+  _host: DesignHost,
+  params: unknown,
+): Promise<{ removed: string[]; failed: { id: string; reason: string }[] }> {
+  const { variableIds } = params as { variableIds: string[] };
+  const removed: string[] = [];
+  const failed: { id: string; reason: string }[] = [];
+  for (const id of variableIds) {
+    try {
+      if (mg.variables.getVariableById(id) == null)
+        throw new Error(`没有找到变量: ${id}`);
+      mg.variables.deleteVariable(id);
+      removed.push(id);
+    } catch (e) {
+      failed.push({ id, reason: e instanceof Error ? e.message : String(e) });
+    }
+  }
+  return { removed, failed };
+}
 
 export const mastergoOps: PlatformOp[] = [
   {
@@ -1528,10 +1608,18 @@ export const mastergoOps: PlatformOp[] = [
   },
   {
     name: 'mg_variables_apply',
-    title: '绑定/解绑变量到图层属性',
+    title: '批量绑定/解绑变量到图层属性',
     description:
-      'MasterGo 特有:把**已有变量**绑到图层属性,unbind=true 则解绑(解绑**不用**给 variableId)。params: { nodeIds, variableId?, property, value, index?, unbind? }。property 与 value 是一对,取值来自官方文档「属性参数一览」:`baseProperty`(opacity / fillColor / visible)、`strokeProperty`(top / right / bottom / left / all / color)、`radiusProperty`(topLeft / topRight / bottomRight / bottomLeft / all)、`paddingProperty`(top / right / bottom / left / topBottom / leftRight / all)、`dimensionProperty`(width / height / maxWidth / maxHeight / minWidth / minHeight)、`effectProperty`(x / y / blur / spread / color)、`gridProperty`(sectionSize / count / gutterSize / offset / color)、`textProperty`(fontFamily / fontWeight / fontSize / lineHeight / letterSpacing / paragraphSpacing);传错会在入参校验就被点名。数组型属性(fills / effects / grids)**必须**给 index。⚠ MG **没有**「图层属性 ↔ 变量」的反读接口:回读只能拿到该图层用到了哪些集合(getLayerVariableModes),所以绑完要 jsd_export 目视确认渲染真的变了',
+      'MasterGo 特有:一次调用绑**多组**变量(与 Figma 的 `figma_variables_apply` 同形),unbind=true 则解绑(解绑**不用**给 variableId)。params: { bindings: [{ nodeIds, variableId?, property, value, index?, unbind? }] } —— 一组 = 一个变量 × 一个槽位 × 一批节点。property 与 value 是一对,取值来自官方文档「属性参数一览」:`baseProperty`(opacity / fillColor / visible)、`strokeProperty`(top / right / bottom / left / all / color)、`radiusProperty`(topLeft / topRight / bottomRight / bottomLeft / all)、`paddingProperty`(top / right / bottom / left / topBottom / leftRight / all)、`dimensionProperty`(width / height / maxWidth / maxHeight / minWidth / minHeight)、`effectProperty`(x / y / blur / spread / color)、`gridProperty`(sectionSize / count / gutterSize / offset / color)、`textProperty`(fontFamily / fontWeight / fontSize / lineHeight / letterSpacing / paragraphSpacing);传错会在入参校验就被点名。数组型属性(fills / effects / grids)**必须**给 index。⚠ 本平台的组件/变体属性**绑不了变量**:`setProperties` 签名只收 string|boolean(dist/index.d.ts:3097),变量类型表里也没有 VARIANT(:1832)—— 要切变体取值走 jsd_set_instance_properties 或集合级 op。⚠ MG **没有**「图层属性 ↔ 变量」的反读接口:回读只能拿到该图层用到了哪些集合(getLayerVariableModes),所以绑完要 jsd_export 目视确认渲染真的变了',
     inputSchema: variablesApplySchema,
     run: applyVariableReference,
+  },
+  {
+    name: 'mg_variables_remove',
+    title: '删除变量',
+    description:
+      'MasterGo 特有:删本地变量(逐个删,单条 id 不存在只进 failed、不连坐其余)。params: { variableIds: [id…] }。`deleteVariable` 是同步且不回报告(`dist/index.d.ts:1218`),所以本 op 先查一次存在性再删 —— 「静默没删」比报错更难查。与 `jsd_delete_style` 成对:接上删除之后,`mg_variables_create` / `jsd_create_style` 才不是「建了撤不回」的单向门。⚠ 分组管理(`addVariablesToGroup` / `disbandGroup` 等)与模式切换仍未接',
+    inputSchema: variablesRemoveSchema,
+    run: removeVariables,
   },
 ];

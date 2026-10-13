@@ -50,6 +50,22 @@ export const platformOpInfoSchema = z.object({
 });
 export type PlatformOpInfo = z.infer<typeof platformOpInfoSchema>;
 
+/**
+ * 变量别名引用(Figma `VariableAlias` 的线格式)。两种用途同一形状:
+ * - 读路径:出现在 {@link boundVariablesSchema} 的三态里;其 `id` 可**直接回喂**
+ *   `figma_variables_apply` 的 `variableId`;
+ * - 写路径:组件属性的值形态之一(Figma `setProperties` 收 `VariableAlias`,
+ *   `plugin-api.d.ts:11123`;MG / jsDesign 的签名不收,收窄登记在
+ *   `dicts/platform-value-domain.ts` 的第四类表)。
+ *
+ * 不改名、不解析、不补名称 —— 读写字形一致,写后回读就是同一个 id 的比对(决策 0024)。
+ */
+export const variableAliasRefSchema = z.object({
+  type: z.literal('VARIABLE_ALIAS'),
+  id: z.string(),
+});
+export type VariableAliasRef = z.infer<typeof variableAliasRefSchema>;
+
 /** 实例组件属性值(Figma ComponentPropertyValue 的线格式,preferredValues 对齐 InstanceSwapPreferredValue) */
 export const componentPropertyValueSchema = z.object({
   type: z.enum(['BOOLEAN', 'VARIANT', 'TEXT', 'INSTANCE_SWAP']),
@@ -62,9 +78,41 @@ export const componentPropertyValueSchema = z.object({
       }),
     )
     .optional(),
+  /**
+   * 该属性的**哪个字段绑了变量**(Figma `ComponentProperties[].boundVariables`,
+   * typings :11083-11091:`{ value?: VariableAlias }`,`value` 是可绑字段名
+   * 即 `VariableBindableComponentPropertyField`)。
+   *
+   * 为什么必须有这条:把属性值绑成变量之后,引擎在**这里**给证据 —— 节点级的
+   * `boundVariables` 不含组件属性。缺了它,写别名就只剩「值变了」这一条间接证据,
+   * 分不清「绑上了」还是「把变量的当时值写死了」(真机 2026-10-13 复现:改那个
+   * STRING 变量的值,实例文本跟着变 —— 说明引擎记的是绑定,而读包里没有这个键)。
+   * `value` 序列化时原样浅拷贝带出,这里声明它才不会在 zod 出口被 strip。
+   */
+  boundVariables: z
+    .object({ value: variableAliasRefSchema.optional() })
+    .optional(),
 });
 export type ComponentPropertyValue = z.infer<
   typeof componentPropertyValueSchema
+>;
+
+/**
+ * 组件属性值的**写形态之一**:值跟随变量。
+ *
+ * ⚠ 只存在于写路径,不在读形态 {@link componentPropertyValueSchema} 里:引擎读回来的
+ * `componentProperties` 值仍是标量,绑定另有出口(`boundVariables.componentProperties`,
+ * 见决策 0024),`ui/src/code/figma/sync-guarantee.ts:229` 就在守这条读写分界。
+ * 写侧收它是因为 Figma `setProperties` 的签名含 `VariableAlias`
+ * (`plugin-api.d.ts:11123`);MG / jsDesign 的签名不收,收窄登记在
+ * `dicts/platform-value-domain.ts` 第四类表,写路径按表点名拒绝。
+ */
+export const componentPropertyAliasValueSchema = z.object({
+  type: z.enum(['BOOLEAN', 'TEXT', 'INSTANCE_SWAP']),
+  value: variableAliasRefSchema,
+});
+export type ComponentPropertyAliasValue = z.infer<
+  typeof componentPropertyAliasValueSchema
 >;
 
 /**
@@ -95,29 +143,22 @@ export type ComponentPropertyReferences = z.infer<
 
 /**
  * 组件/变体属性的**入参**值:变体属性传字符串(`{"状态":"禁用"}`),布尔属性传布尔,
- * 需要显式声明类型(或换绑属性要带 `preferredValues`)时传 `{type, value}` 对象。
+ * 需要显式声明类型(或换绑属性要带 `preferredValues`)时传 `{type, value}` 对象,
+ * 值要跟随变量时传 `{type, value:{type:'VARIABLE_ALIAS', id}}`(仅 Figma,见
+ * {@link componentPropertyAliasValueSchema})。
  *
- * 为什么三种都收:契约 `DesignHost.setProperties` 的签名就是
- * `Record<string, string | ComponentPropertyValue>`,而各宿主底层只收标量
- * (Figma `setProperties({[名]: string|boolean})`、MG `setProperties({[propertyId]: string|boolean})`)
- * —— 收窄到字符串会让布尔/换绑属性在**两个平台都设不了**,与契约不符。
+ * 为什么这些形态都收:契约 `DesignHost.setProperties` 收标量与对象两种形态,
+ * 而各宿主底层收什么由各自签名决定(Figma `string|boolean|VariableAlias`、
+ * MG `string|boolean`、jsDesign 只有 `string`)—— 收窄到字符串会让布尔/换绑属性在
+ * **两个平台都设不了**;平台收不了的形态在写路径按
+ * `dicts/platform-value-domain.ts` 点名拒绝。
  */
 export const componentPropertyInputSchema = z.union([
   z.string(),
   z.boolean(),
   componentPropertyValueSchema,
+  componentPropertyAliasValueSchema,
 ]);
-
-/**
- * 变量别名引用(Figma `VariableAlias` 的线格式)。`id` 可**直接回喂**
- * `figma_variables_apply.variableId`,故不改名、不解析、不补名称 —— 读写字形一致,
- * 写后回读就是同一个 id 的比对(决策 0024)。
- */
-export const variableAliasRefSchema = z.object({
-  type: z.literal('VARIABLE_ALIAS'),
-  id: z.string(),
-});
-export type VariableAliasRef = z.infer<typeof variableAliasRefSchema>;
 
 /**
  * 节点上的变量绑定。键 = 引擎的可绑定字段名(与 `figma_variables_apply` 的

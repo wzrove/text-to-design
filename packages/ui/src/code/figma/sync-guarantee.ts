@@ -119,7 +119,13 @@ type NodeTypingsGap = 'absolutePosition' | 'ungroup';
  * 注意 Figma 已有的 `createImageAsync(src: string)` 是**另一个语义**(收来源字符串),
  * 与契约的 `createImageFromBytesAsync`(收字节)不是一回事,故不在本缺口名单里。
  */
-type HostAsyncNameGap = 'createNodeFromSvgAsync' | 'createImageFromBytesAsync';
+type HostAsyncNameGap =
+  | 'createNodeFromSvgAsync'
+  | 'createImageFromBytesAsync'
+  /** 原生是四个分开的工厂(createPaintStyle / Text / Effect / Grid),契约这条 `createStyle` 是本仓按 kind 分发的**聚合名** */
+  | 'createStyle'
+  /** 原生是 `getStyleByIdAsync(id)`(`plugin-api.d.ts:431`)+ `Style.remove()`(`:12418`)两步,契约这条 `removeStyle` 是本仓包的聚合动作 */
+  | 'removeStyle';
 
 /**
  * `ui` 契约层里的缺口(0028):`chromeHeight` 在本平台**没有真源** ——
