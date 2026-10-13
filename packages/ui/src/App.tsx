@@ -137,12 +137,16 @@ function Shell() {
       **根元素是滚动容器**(`overflow-y-auto`):窗口高度有硬边界,内容超过它时
       得有人接管 —— 而 `html, body` 的 `overflow: hidden` 是为断宽度重排回环用的,
       不能撤。少了这一条,超限内容会既没滚动条也够不着,直接消失(0014 修订)。
+
+      `overflow-x-hidden` 是配套的:CSS 里一条轴是 auto,另一条的 visible 也会被算成
+      auto,于是任何绝对定位的后代(如 Tooltip 静止态的气泡,实测探出右缘 25px)都会
+      撑出一条横向滚动条。横向本来就没有要滚的东西 —— 面板宽度由宿主定。
     */
     <div
       ref={(el) => {
         rootEl = el;
       }}
-      class={`flex flex-col gap-3 overflow-y-auto bg-base-200 p-4 ${
+      class={`flex flex-col gap-3 overflow-x-hidden overflow-y-auto bg-base-200 p-4 ${
         canResize() ? '' : 'h-screen'
       }`}
     >
@@ -162,13 +166,11 @@ function Shell() {
           连上后整颗隐藏而非置灰 —— 常态面板里一颗永远不可用的按钮只是噪声;
           隐藏也不会挤动右侧工具簇(它左侧是 ml-auto 的弹性留白)。
 
-          提示气泡贴左缘(align=start):这颗按钮在面板左侧,居中放会有一段
-          伸到面板外被裁掉(见 Tooltip)。
+          提示气泡的对齐由 Tooltip 量边界决定(见 Tooltip)。
         */}
         <Show when={status() !== 'connected'}>
           <Tooltip
             class="shrink-0"
-            align="start"
             tip={
               status() === 'superseded'
                 ? t('header.reclaim.title')

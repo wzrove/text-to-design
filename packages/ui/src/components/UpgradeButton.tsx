@@ -19,7 +19,7 @@ export default function UpgradeButton(props: {
   ref?: (el: HTMLButtonElement) => void;
 }) {
   return (
-    <Tooltip tip={t('upgrade.title')} align="end">
+    <Tooltip tip={t('upgrade.title')}>
       <button
         ref={(el) => props.ref?.(el)}
         type="button"

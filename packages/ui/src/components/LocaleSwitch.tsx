@@ -73,7 +73,7 @@ export default function LocaleSwitch() {
     // biome-ignore lint/a11y/noStaticElementInteractions: 纯转发 Escape,真正的交互元素都在内部
     <div class="relative shrink-0" onKeyDown={onKeyDown}>
       {/* 提示只包触发器:包住整块的话,在展开的下拉上悬停也会冒气泡 */}
-      <Tooltip tip={tip()} align="end">
+      <Tooltip tip={tip()}>
         <button
           ref={(el) => {
             triggerEl = el;

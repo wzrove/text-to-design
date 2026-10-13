@@ -17,7 +17,6 @@ export default function ThemeToggle() {
           ? t('header.theme.toLight')
           : t('header.theme.toDark')
       }
-      align="end"
     >
       <button
         type="button"

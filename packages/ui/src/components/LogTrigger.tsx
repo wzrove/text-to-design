@@ -40,7 +40,7 @@ export default function LogTrigger(props: {
 
   return (
     <>
-      <Tooltip tip={t('log.trigger.title')} align="end" class="shrink-0">
+      <Tooltip tip={t('log.trigger.title')} class="shrink-0">
         <button
           type="button"
           ref={props.ref}

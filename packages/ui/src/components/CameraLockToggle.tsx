@@ -67,7 +67,6 @@ export default function CameraLockToggle() {
           ? t('header.cameraLock.title.locked')
           : t('header.cameraLock.title.unlocked')
       }
-      align="end"
     >
       <button
         type="button"
