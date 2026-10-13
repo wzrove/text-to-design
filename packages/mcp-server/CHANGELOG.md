@@ -1,5 +1,11 @@
 # text-to-design-mcp
 
+## 0.12.1
+
+### Patch Changes
+
+- [`f911e51`](https://github.com/wzrove/text-to-design/commit/f911e5132f49e02ecbdcac0f9db0047b4850a1a8) - fix(ui): 悬浮提示气泡对齐改为量边界自动选,消除面板横向滚动条
+
 ## 0.12.0
 
 ### Minor Changes
