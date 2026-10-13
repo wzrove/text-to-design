@@ -10,7 +10,7 @@ import type { NodeSkeleton } from '../core/host';
 import { findNodes } from '../core/nodes';
 import { normalizeLayoutGrids } from '../core/normalize';
 import { type RuntimeContext, runtimeContext } from '../core/runtime';
-import { trySerialize } from '../core/serialize';
+import { serializeNode, trySerialize } from '../core/serialize';
 import { updateSelection } from '../core/update';
 import { LAYOUT_GRID_UNVERIFIABLE_PLATFORMS } from '../dicts/platform-value-domain';
 import { serializedNodeSchema } from '../schemas/serialized-node';
@@ -1802,6 +1802,56 @@ describe('Figma 运行时收窄与节点序列化容错', () => {
       'set_layout',
     );
     expect(r.warnings).toBeUndefined();
+  });
+
+  it('契约外的 paint blendMode 不进线格式(即时设计对 style-bound paint 回 NOTTHROUGH)', () => {
+    // 真机(2026-10-14,jsDesign):任何**绑了 fill style 的 paint**回读
+    // blendMode 都是 "NOTTHROUGH" —— 一个连它自己 typings 里都没有的字面
+    // (BlendMode 只 16 值,见 @jsdesigndeveloper/plugin-typings:546)。
+    // 透传的后果不只是多个怪字段:serialized-node 的枚举校验不过 ⇒ 工具结果被判
+    // isError、structuredContent 被清空 ⇒ jsd_batch 认为该步未成功 ⇒ 下游占位符
+    // 报「步骤不存在或未成功」并中止整批。于是「绑个样式」能把后续所有步骤一起带走,
+    // 而画布上其实已经改好了(见 docs/design-decisions/0044)。
+    const bound = makeRect('S:1', '绑了样式的矩形');
+    bound.fills = [
+      {
+        type: 'SOLID',
+        color: { r: 0.23, g: 0.42, b: 1 },
+        visible: true,
+        blendMode: 'NOTTHROUGH',
+      } as unknown as NonNullable<typeof bound.fills>[number],
+    ];
+    const out = serializeNode(bound);
+    const boundFill = out.fills?.[0] as unknown as
+      | Record<string, unknown>
+      | undefined;
+    expect(boundFill).toMatchObject({ type: 'SOLID' });
+    expect(boundFill?.blendMode).toBeUndefined();
+  });
+
+  it('契约内的 paint blendMode 照常保留(白名单不是一刀切)', () => {
+    const multiplied = makeRect('S:2', '正片叠底矩形');
+    multiplied.fills = [
+      {
+        type: 'SOLID',
+        color: { r: 1, g: 0, b: 0 },
+        blendMode: 'MULTIPLY',
+      },
+    ];
+    const out = serializeNode(multiplied);
+    const multipliedFill = out.fills?.[0] as unknown as
+      | Record<string, unknown>
+      | undefined;
+    expect(multipliedFill?.blendMode).toBe('MULTIPLY');
+  });
+
+  it('节点级 blendMode 同样只放行契约取值', () => {
+    const node = makeRect('S:3', '节点级');
+    (node as unknown as Record<string, unknown>).blendMode = 'NOTTHROUGH';
+    const out = serializeNode(node);
+    expect(
+      (out as unknown as Record<string, unknown>).blendMode,
+    ).toBeUndefined();
   });
 
   it('节点读到 variantProperties 抛错时,序列化不崩、只省略该字段', () => {

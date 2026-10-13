@@ -20,6 +20,7 @@ import {
 import type { RuntimeContext } from './runtime';
 import { serializeNode } from './serialize';
 import { updateSelection } from './update';
+import { resizeContainer } from './utils';
 
 export async function createComponentNodes(
   host: DesignHost,
@@ -48,9 +49,14 @@ export async function createComponentNodes(
   for (const child of params.children ?? []) {
     await buildNode(host, ctx, child, parent);
   }
-  // 尺寸最后压:插子节点时引擎会按内容重算容器尺寸,写在前面会被吃掉
+  // 尺寸最后压:插子节点时引擎会按内容重算容器尺寸,写在前面会被吃掉。
+  // ⚠ 必须用 `resizeContainer`(不施加约束的重载):组件壳在所有平台都是 100×100 起,
+  // jsDesign 组件的子节点默认约束是 `SCALE`,直接 `resize()` 会把子节点按
+  // (w/100, h/100) 各轴独立缩放 —— 375×44 的子节点于是被乘 (3.75, 0.44),
+  // x≥287 的飞出边界被裁掉(真机实测,见 docs/design-decisions/0044)。
   if (params.width != null || params.height != null) {
-    component.resize(
+    resizeContainer(
+      component,
       params.width ?? component.width,
       params.height ?? component.height,
     );

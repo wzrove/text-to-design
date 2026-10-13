@@ -77,4 +77,5 @@ export {
   collectTargets,
   loadFont,
   MIN_RESIZE_SIZE,
+  resizeContainer,
 } from './utils';

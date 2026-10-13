@@ -44,6 +44,21 @@ export interface NodeSkeleton extends ContainerSkeleton {
   remove(): void;
   clone(): NodeSkeleton;
   resize(width: number, height: number): void;
+  /**
+   * 改尺寸**但不施加约束**:子节点不会被按 (w/oldW, h/oldH) 缩放。
+   *
+   * 为什么必须有这一条:创建路径的收尾动作是「子节点插完再压尺寸」(`core/component.ts`
+   * 的 createComponentNodes、`core/buildNode.ts` 的 settleWriters),而 `resize()` 在
+   * **Figma / jsDesign 上都会递归施加 constraints**。jsDesign 组件的子节点默认约束是
+   * `SCALE`,组件初始尺寸又是 100×100 ⇒ 一次 `jsd_create_component{width:375,height:44,
+   * children:[…]}` 会把子节点整体乘 (3.75, 0.44),x≥287 的直接飞出 375 边界被
+   * clipsContent 裁掉(真机实测,见 docs/design-decisions/0044)。Figma 子节点默认约束是
+   * MIN 故未暴露,但同一份 core 代码不该赌平台默认值。
+   *
+   * ⚠ **可选成员**:MasterGo 的 `LayoutMixin` 只有 `resize()`(无此重载),
+   * 调用方必须回退到 `resize()`。平台事实见 `dicts/platform-knowledge.ts`。
+   */
+  resizeWithoutConstraints?(width: number, height: number): void;
 
   fills?: shared.Paint[] | null;
   strokes?: shared.Paint[] | null;

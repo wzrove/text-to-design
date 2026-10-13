@@ -1,3 +1,4 @@
+import { BLEND_MODE_VALUES } from '../dicts/platform-value-domain';
 import type {
   ComponentPropertyReferences,
   Paint,
@@ -12,6 +13,28 @@ export const MAX_SERIALIZE_DEPTH = 2;
 
 function isMixed(v: unknown): v is typeof MIXED {
   return typeof v === 'string' && (v as string) === MIXED;
+}
+
+/**
+ * 引擎回读的 paint `blendMode` 是否在契约取值域内(17 值,见
+ * `dicts/platform-value-domain.ts` 的 `BLEND_MODE_VALUES` —— 那是唯一真源)。
+ *
+ * 为什么不能直接透传:jsDesign 对**绑了 fill style 的 paint**回读 `blendMode: "NOTTHROUGH"` ——
+ * 一个它自己 typings 里都没有的字面(`BlendMode` 只 16 值),全仓 grep 也从未出现过。
+ * 透传的后果不是「多一个怪字段」,而是**整条读路径判失败**:
+ * `serialized-node.ts` 的枚举校验不过 → `mcp-server/src/core/response.ts` 把工具结果标成
+ * `isError` 并清空 `structuredContent` → `jsd_batch` 认为该步未成功 → 下游占位符
+ * 报「步骤不存在或未成功」并中止整批。于是「绑样式」这个动作会把**后续所有步骤**一起带走,
+ * 调用方看到的是失败,而画布上其实已经改好了(真机实测,见 docs/design-decisions/0044)。
+ *
+ * 与 `normalizePropertyReferences` 同一条纪律:**认不出的引擎取值不进线格式** ——
+ * 未知值按「没有这个字段」处理(等于 NORMAL),不抛错、不静默改成别的已知值。
+ */
+function isWireBlendMode(v: unknown): v is SerializedNode['blendMode'] {
+  return (
+    typeof v === 'string' &&
+    (BLEND_MODE_VALUES as readonly string[]).includes(v)
+  );
 }
 
 /**
@@ -157,7 +180,7 @@ export function serializeNode(
           color: { r: f.color.r, g: f.color.g, b: f.color.b },
           ...(f.opacity != null && f.opacity < 1 ? { opacity: f.opacity } : {}),
           ...(f.visible != null ? { visible: f.visible } : {}),
-          ...(f.blendMode != null && f.blendMode !== 'NORMAL'
+          ...(isWireBlendMode(f.blendMode) && f.blendMode !== 'NORMAL'
             ? { blendMode: f.blendMode }
             : {}),
         };
@@ -259,10 +282,11 @@ export function serializeNode(
     base.dashPattern = [...node.dashPattern];
   if (
     'blendMode' in node &&
+    isWireBlendMode(node.blendMode) &&
     node.blendMode !== 'PASS_THROUGH' &&
     node.blendMode !== 'NORMAL'
   )
-    base.blendMode = node.blendMode as SerializedNode['blendMode'];
+    base.blendMode = node.blendMode;
   if (
     'cornerSmoothing' in node &&
     typeof node.cornerSmoothing === 'number' &&

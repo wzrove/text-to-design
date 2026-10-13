@@ -228,7 +228,15 @@ type NodeAbsentGap =
   | 'setFillStyleIdAsync'
   | 'setStrokeStyleIdAsync'
   | 'setTextStyleIdAsync'
-  | 'setEffectStyleIdAsync';
+  | 'setEffectStyleIdAsync'
+  /**
+   * 契约里是**可选**成员:改尺寸但不施加约束的重载。Figma(plugin-api.d.ts:7379)与
+   * jsDesign(:753)都有,MG 的 `LayoutMixin` 只有 `resize(width, height)`
+   * (index.d.ts:1776 / 2477)⇒ 登记为缺,`core/utils.ts` 的 `resizeContainer` 回退到
+   * `resize()`。对 MG **无影响**:它容器子节点的默认约束是 MIN,`resize` 不缩放子节点
+   * (会踩的是 jsDesign —— 组件子节点默认 SCALE,见 0044)。
+   */
+  | 'resizeWithoutConstraints';
 
 /**
  * 「存在但形状不同」的两项:

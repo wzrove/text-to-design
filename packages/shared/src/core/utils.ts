@@ -96,6 +96,52 @@ export function fontNotResolved(
 export type LayoutMode = 'NONE' | 'HORIZONTAL' | 'VERTICAL';
 
 /**
+ * 给**已经有子节点**的容器压尺寸:优先走不施加约束的重载,别让子节点被等比缩放。
+ *
+ * 为什么单开一个函数:`resize()` 在 Figma / jsDesign 上都会**递归施加 constraints**
+ * (Figma 官方注释原话:*"Since this function applies constraints recursively … use
+ * `resizeWithoutConstraints` if you don't need to apply constraints"*),而本仓的创建路径
+ * 收尾动作恰好是「子节点插完再压尺寸」(`core/component.ts`、`core/buildNode.ts` 的
+ * settle、`core/nodes.ts` 的组框贴合)。于是子节点的默认约束值成了**平台默认值的赌注**:
+ *
+ * | 平台 | 容器子节点默认约束 | resize 后果 |
+ * |---|---|---|
+ * | jsDesign | `SCALE` | **子节点按 (w/oldW, h/oldH) 各轴独立缩放** |
+ * | Figma | `MIN` | 不动 |
+ * | MasterGo | `MIN` | 不动(且无 `resizeWithoutConstraints` 重载) |
+ *
+ * 真机实测(即时设计,2026-10-14):`jsd_create_component{width:375,height:44,children:[4 个]}` ——
+ * 组件壳初始 100×100,收尾 resize 把子节点整体乘 (3.75, 0.44):`时间` 由 (24,14) 变成 (90,6)、
+ * `信号` 由 287 变成 1076(x≥287 的全部飞出 375 边界被 `clipsContent` 裁掉),导图里「只剩第一个
+ * 子件」。同一份调用在 Figma/MG 上正常,是**只赌了平台默认值**才没暴露(见 0044)。
+ *
+ * 调用约定:只有「容器尺寸是调用方给的结论、子节点坐标也是调用方给的结论」时才用它 ——
+ * 即创建路径与组框贴合。**用户驱动的改尺寸语义**(`jsd_resize_node`)保持 `resize()`,
+ * 那里「按约束缩放子节点」可能正是调用方想要的,不在本函数职责内。
+ *
+ * @returns 实际走的哪条路:`'withoutConstraints'` 正常;`'constraints'` = 本平台无此重载
+ * (MasterGo),已回退 —— 调用方若明知子节点带 SCALE 约束,应点名而不是静默接受。
+ */
+export function resizeContainer(
+  node: object,
+  width: number,
+  height: number,
+): 'withoutConstraints' | 'constraints' {
+  const target = node as {
+    resize?: (w: number, h: number) => void;
+    resizeWithoutConstraints?: (w: number, h: number) => void;
+  };
+  if (typeof target.resizeWithoutConstraints === 'function') {
+    target.resizeWithoutConstraints(width, height);
+    return 'withoutConstraints';
+  }
+  if (typeof target.resize === 'function') {
+    target.resize(width, height);
+  }
+  return 'constraints';
+}
+
+/**
  * 写 `layoutMode` 并**回读校验**(与既有的布局回读补丁同族:布局属性写完不能假定它还在)。
  *
  * 实测:引擎在布局重算之后会回写容器方向 —— 出现「显式传 `HORIZONTAL`、回读却是

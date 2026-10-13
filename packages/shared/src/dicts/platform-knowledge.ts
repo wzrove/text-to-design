@@ -133,10 +133,11 @@ export const PLATFORM_KNOWLEDGE: Readonly<
       // 缺席也得给出口:`variable-binding` 配方第 3 节在无写入口时直接引这条,
       // 留 null 就等于对着调用方说「跳过」而不给做法(0007)。
       fallback:
-        '两条路,都不是变量那种玩法:① **本地样式** —— `jsd_create_style` 从一个既有节点抄出样式(四类:PAINT / TEXT / EFFECT / GRID),回 id;绑上去用 jsd_set_fill_color 的 fillStyleId / jsd_set_text 的 textStyleId / jsd_set_effects 的 effectStyleId / jsd_set_stroke 的 strokeStyleId,清单读 jsd://styles(只读资源)。一条样式改一次,全档跟随。② **结构继承** —— 抽成 COMPONENT 后改主件,实例自动继承(批量套覆盖走 variant-sync 配方)。',
+        '两条路,都不是变量那种玩法:① **本地样式** —— `jsd_create_style` 从一个既有节点抄出样式(四类:PAINT / TEXT / EFFECT / GRID),回 id;绑上去用 jsd_set_fill_color 的 fillStyleId / jsd_set_text 的 textStyleId / jsd_set_effects 的 effectStyleId / jsd_set_stroke 的 strokeStyleId。**⚠ 本平台未声明 `styleEnumeration`,样式清单(`jsd://styles` / `assets.styles`)恒空、列不出来**:已有样式的 id 只能从正用着它的节点上读(`*StyleId` 字段),新建的 id 从 `jsd_create_style` 回包记账(建重复了用 `jsd_delete_style` 删)。一条样式改一次,全档跟随。② **结构继承** —— 抽成 COMPONENT 后改主件,实例自动继承(批量套覆盖走 variant-sync 配方)。',
       evidence: [
         `${JSD}(全文无 variable 声明:grep -in variable 零命中)`,
-        'packages/ui/src/code/jsdesign/meta.ts capabilities=[styles](样式面是有的)',
+        'packages/ui/src/code/jsdesign/meta.ts capabilities=[styles](按 id 应用样式是有的;**不声明 styleEnumeration** —— 列不出样式,见 0043)',
+        'packages/shared/src/core/access.ts:174(listStylesAsync 在未声明 styleEnumeration 时直接返回空,四个 getter 一次都不调)',
         'packages/ui/src/code/jsdesign/host.ts:48(createStyle 已接:`jsd_create_style` 走 jsDesign.createPaintStyle 等四工厂;四类样式的共同契约在 packages/shared/src/core/styles.ts)',
         `${JSD}:88-91(createPaintStyle / createTextStyle / createEffectStyle / createGridStyle)`,
       ],
@@ -155,6 +156,8 @@ export const PLATFORM_KNOWLEDGE: Readonly<
         `${JSD}:1093 setProperties 只收 string`,
         `${JSD}:1081-1085 ComponentNode(createInstance / instances)`,
         'packages/ui/src/code/jsdesign/sync-guarantee.ts:97 反向断言 componentProperties 缺席',
+        // 运行期行为(不是类型事实):别在这张表里当「签名收什么」用,它是「调了会怎样」。
+        'packages/ui/src/code/jsdesign/sync-guarantee.ts:367-393 setProperties 签名只收字符串;真机 2026-10-14 的运行期行为:给**没有变体属性**的 INSTANCE 调它不是点名报错,而是挂到转发超时(25s)—— 没有变体集时别拿它当切状态的通道',
       ],
     },
     // 变体:读得到(Readonly),写变体值可以(值是字符串,正好落在 setProperties 的取值域里);
@@ -173,6 +176,11 @@ export const PLATFORM_KNOWLEDGE: Readonly<
         `${JSD}:1074-1079 ComponentSetNode 只有 clone / defaultVariant / variantGroupProperties`,
         `${JSD}:127 combineAsVariants 是 ComponentSetNode 的唯一产出路径`,
         'packages/shared/src/core/component.ts:245-256 三种姿势全败的兜底与分流',
+        // 真机 2026-10-14(即时设计):三姿势全败,引擎错 `in get_booleanOperation:
+        // Value is not a string`;但画布上**真的多出一个 COMPONENT_SET**(维度被引擎
+        // 默认命名为「分类 1」/ 取值「变量 2」,成员取不到实例)+ 3 个 BOOLEAN_OPERATION。
+        // 所以「做不出来」= 调用必抛、产物不可用,**不是**「引擎没建东西」—— 残留要清。
+        'packages/shared/src/core/nodes.ts:1006 repairNodes 是清残骸的唯一入口(jsd_delete_node 对它们报「没有要删除的节点」);真机 2026-10-14(即时设计):合成抛错后 assets.variants 从 0 变 1(畸形集合,成员 jsd_create_instance 报「node with id undefined does not exist」),另有 3 个 BOOLEAN_OPERATION 残骸',
       ],
     },
   },

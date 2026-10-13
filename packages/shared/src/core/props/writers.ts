@@ -8,7 +8,7 @@ import {
   normalizeLayoutGrids,
   normalizePaints,
 } from '../normalize';
-import { loadFont, MIN_RESIZE_SIZE } from '../utils';
+import { loadFont, MIN_RESIZE_SIZE, resizeContainer } from '../utils';
 import { nodeLabel } from './outcome';
 import { platformRejectsProp } from './platform-gate';
 import {
@@ -112,8 +112,16 @@ function applySize(ctx: WriteCtx): void {
       `${node.type} 的 width/height 最小为 ${MIN_RESIZE_SIZE}(引擎 resize 校验);要画横线/竖线请改用 LINE 并把一维传 0`,
     );
   }
-  node.resize(w, h);
-  if (!create) ctx.outcome.readback.push({ key: 'size', ok: true });
+  // 创建路径:尺寸是调用方明确给的结论,子节点坐标也是 —— 不能借 resize 顺手缩放它们。
+  // settle 那次尤其危险:此时子节点已在容器里,jsDesign 上带 SCALE 约束的子节点会被
+  // 按 (w/oldW, h/oldH) 缩放(见 core/utils.ts 的 resizeContainer)。修改路径保持
+  // `resize()` 原语义(用户驱动的改尺寸允许按约束缩放子节点)。
+  if (create) {
+    resizeContainer(node, w, h);
+  } else {
+    node.resize(w, h);
+    ctx.outcome.readback.push({ key: 'size', ok: true });
+  }
 }
 
 /** 填充/描边/效果/网格:两条路径都要先归一化,引擎对未归一化的入参会抛难懂的错 */

@@ -57,6 +57,45 @@ describe('单类型 create 工具的 type 口径(0034)', () => {
     expect(parsed.success).toBe(true);
   });
 
+  it('样式引用字段在 create 入参上放行(0044:此前只有修改类工具收)', () => {
+    // 运行时本来就支持:core/props/writers.ts 的 supersetWriter 第一件事就是写这四个键,
+    // 平台不具备时由能力门控点名跳过。此前只有 split-ops 的修改类 schema 放行,
+    // 于是同一个字段「写进 children 生效、写顶层被拒」,调用方被迫绕道「建完再绑」。
+    const parsed = nodeCreateInputSchema('FRAME').safeParse({
+      width: 100,
+      height: 40,
+      fillStyleId: 'S:1',
+      strokeStyleId: 'S:2',
+      effectStyleId: 'S:3',
+    });
+    expect(parsed.success).toBe(true);
+    // TEXT 也要有(文字样式是 TEXT 专属的主力用法)
+    expect(
+      nodeCreateInputSchema('TEXT').safeParse({
+        characters: '确定',
+        textStyleId: 'S:4',
+      }).success,
+    ).toBe(true);
+  });
+
+  it('四个样式 id 原样进 op 负载(不被 payload 丢掉)', async () => {
+    let captured: { ops: Array<Record<string, unknown>> } | null = null;
+    const bridge = {
+      request: async (
+        _method: string,
+        params: { ops: Array<Record<string, unknown>> },
+      ) => {
+        captured = params;
+        return { created: [] };
+      },
+    } as unknown as Bridge;
+    buildServer(bridge);
+    const exec = lookupExecutor('jsd_create_frame');
+    await exec?.({ width: 10, height: 20, fillStyleId: 'S:1' }, undefined);
+    const sent = captured as unknown as { ops: Array<Record<string, unknown>> };
+    expect(sent.ops[0].fillStyleId).toBe('S:1');
+  });
+
   it('越界字段点名:给可删的动作,不退化成 (root): Unrecognized key', () => {
     const message = describeInvalidArgs(
       z.object({ width: z.number() }),

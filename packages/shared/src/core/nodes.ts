@@ -20,7 +20,7 @@ import type {
 } from './host';
 import type { RuntimeContext } from './runtime';
 import { serializeNode, trySerialize } from './serialize';
-import { ensureLayoutMode, type LayoutMode } from './utils';
+import { ensureLayoutMode, type LayoutMode, resizeContainer } from './utils';
 
 /**
  * 节点在页面坐标系里的原点(绝对坐标)。
@@ -167,7 +167,9 @@ function pinnedSizeOf(
   return out;
 }
 
-/** 把被引擎吃掉的显式尺寸压回去(尺寸最后写,免得又被方向/尺寸模式的写入带走) */
+/** 把被引擎吃掉的显式尺寸压回去(尺寸最后写,免得又被方向/尺寸模式的写入带走)。
+ *  ⚠ 走 `resizeContainer`:此时子节点已在容器里,而组框的尺寸是**包围盒算出来的结论**,
+ *  不能借 resize 顺手缩放子节点(jsDesign 上带 SCALE 约束的子节点会被等比乘,见 core/utils.ts)。 */
 function applyPinnedSize(container: ContainerSkeleton, size: PinnedSize): void {
   if (size.width == null && size.height == null) return;
   const n = container as unknown as {
@@ -179,7 +181,7 @@ function applyPinnedSize(container: ContainerSkeleton, size: PinnedSize): void {
   const w = size.width ?? n.width;
   const h = size.height ?? n.height;
   if (typeof w !== 'number' || typeof h !== 'number') return;
-  n.resize(w, h);
+  resizeContainer(n, w, h);
 }
 
 /**
@@ -758,7 +760,12 @@ export async function groupNodes(
     // 纯归组:组框尺寸贴合包围盒,正好容纳所有子节点。
     // 引擎 resize 校验要求 >= 0.01(实测),同尺寸/单点节点会算出 0,
     // 这里夹到最小值避免 "Expected width to have value >= 0.01" 报错。
-    frame.resize(Math.max(maxX - minX, 0.01), Math.max(maxY - minY, 0.01));
+    // 走 resizeContainer:尺寸是包围盒算出来的结论,不能顺手缩放刚归拢进来的子节点。
+    resizeContainer(
+      frame,
+      Math.max(maxX - minX, 0.01),
+      Math.max(maxY - minY, 0.01),
+    );
   }
 
   return { created: serializeNode(frame) };

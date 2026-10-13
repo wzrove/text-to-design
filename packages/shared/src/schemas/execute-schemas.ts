@@ -148,6 +148,26 @@ const visualFields = {
     .array(layoutGridSchema)
     .optional()
     .describe('schema.executeSchemas.layoutGrids'),
+  // ---- 样式引用(四个 `*StyleId`)----
+  //
+  // 为什么必须在这个字段组里:运行时本来就支持(`core/props/writers.ts` 的
+  // `supersetWriter` 第一件事就是写这四个键,平台不具备时由能力门控点名跳过),
+  // 但创建入参此前只在**修改类**工具上放行(`split-ops.ts` 的 `setFillColorProps` 等)。
+  // 于是同一个字段出现两种结果:写进 `children`(该 schema 是 `.catchall` 放行)生效、
+  // 写在顶层被 strict 拒掉并报 `Unrecognized key` —— 调用方只能绕道「建完再绑」,
+  // 白多一轮往返。平台能力面见 `dicts/platform-knowledge.ts`(jsDesign 只有 styles
+  // 这一面)。⚠ 绑了 fill style 的节点回读会带引擎私货 `blendMode:"NOTTHROUGH"`,
+  // 读侧已在 `core/serialize.ts` 收口(见 0044)。
+  fillStyleId: z.string().optional().describe('schema.sharedProps.fillStyleId'),
+  strokeStyleId: z
+    .string()
+    .optional()
+    .describe('schema.sharedProps.strokeStyleId'),
+  textStyleId: z.string().optional().describe('schema.sharedProps.textStyleId'),
+  effectStyleId: z
+    .string()
+    .optional()
+    .describe('schema.sharedProps.effectStyleId'),
 };
 
 /**

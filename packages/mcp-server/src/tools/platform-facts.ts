@@ -67,9 +67,17 @@ export function variantStrategyText(
     return `造新维度/新取值不用绕实例:本平台有集合级管理入口(${ops.join(' / ')})—— 先 mg_list_variant_properties 看现状,再建维度/加成分/改取值,每个 op 都写完回读(各自的行为注意写在它的描述里,调用前读一眼);换绑(jsd_set_instance_properties)只负责切到**已有**成分。`;
   };
   if (platform != null && claimed != null) {
+    // 「造不出来」不等于「平台上没有变体」:本平台变体集的读面可能照样在(jsDesign 有
+    // variantGroupProperties / variantProperties),文档里已有的变体集照样能读能切。
+    // 少了这句,调用方会把「脚本造不出集合」推成「这个平台没有变体」,连读都不读了。
+    const readFace = platformDomainFact(platform, 'variants')?.read;
+    const reuseExisting =
+      readFace == null
+        ? ''
+        : `文档里**已有**的变体集不受影响:\`${readFace}\` 与组件集上的维度取值照常读得到,已有取值照常用 jsd_set_instance_properties 切 —— 缺的只是「用脚本造一个新的」;`;
     const head = claimed
       ? `${label(platform)}声明了原位合并(inPlaceVariants) ⇒ 直接调用即可:并入集合的就是实例所指的 COMPONENT 本身,已有实例链接不断、页面不残留冗余原件,不需要先克隆。`
-      : `${label(platform)}未声明原位合并(inPlaceVariants),合成路径在本平台做不出来 —— 别重试、也别去改组件结构。替代路径:${fallbackOf(platform, 'variants')}。`;
+      : `${label(platform)}未声明原位合并(inPlaceVariants),合成路径在本平台做不出来 —— 别重试、也别去改组件结构。${reuseExisting}替代路径:${fallbackOf(platform, 'variants')}。`;
     const extra = setLevel(platform);
     return extra === '' ? head : `${head}${extra}`;
   }
@@ -256,7 +264,7 @@ export function reuseGuideText(platform: PlatformKey | null): string {
     return [
       '- 组件:`jsd_create_instance` 用 `componentId` 铺实例;同类单元 ≥2 个时**先查清单**,别新建重复组件。',
       '- 变体集:切到**已有**取值用 `jsd_set_instance_properties`(取值清单看 `assets.variants[].properties`;MG 原生读不到该字段时用 `mg_list_variant_properties` 看)。要造新值用集合级 op,不要靠改主件名字。',
-      '- 样式:节点字段 `fillStyleId` / `strokeStyleId` / `textStyleId` / `effectStyleId` 直接引用样式 id(清单见 `assets.styles` 或 `jsd://styles`);**清单里没有就建一条** —— `jsd_create_style` 从指定节点抄(MG 原生就是「从这个图层取」)。',
+      '- 样式:节点字段 `fillStyleId` / `strokeStyleId` / `textStyleId` / `effectStyleId` 直接引用样式 id。⚠ 本平台只声明了 `styles`(**按 id 应用**),**没声明 `styleEnumeration`**(列出有哪些样式)—— 四个 `getLocal*Styles` 都在但永不返回(同步调用还会冻死插件线程,见 0043),故 `assets.styles` 与 `jsd://styles` **恒空**:别拿「清单里没有」当「文档里没有」,要复用已有样式就从**正用着它的节点**上读 id(`jsd_find` / `jsd_get_selection` 的 `*StyleId` 字段);确认没有才 `jsd_create_style` 从指定节点抄,并**把回包 id 记账**(这份平台列不出来,丢了找不回;建重复了用 `jsd_delete_style` 按 id 删)。',
       '- 变量:`mg_variables_apply` 绑到图层属性,变量 id 从 `mg_list_variables` 或 `assets.variables` 取。',
     ].join('\n');
   }

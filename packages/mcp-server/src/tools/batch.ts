@@ -50,13 +50,39 @@ function getPath(
   return { ok: true, value: cur };
 }
 
+/**
+ * 占位符引用了一个**已执行但失败**的步骤(区别于「这个 id 根本不存在」)。
+ *
+ * 为什么要分类:前者说明计划本身是对的,只是那一步的返回没拿到 —— 该受
+ * `stopOnError` / `continueOnError` 管,和普通执行期失败一视同仁;后者是计划写错了,
+ * 一律中止。此前两者共用一条「一律 break」的分支,于是文档里承诺的
+ * 「stopOnError=false 可走完全部」在占位符这条路径上是空承诺 ——
+ * 实测一批 33 步只跑了 12 步就整批中止,而画布上其实已经改好了
+ * (触发源见 `docs/design-decisions/0044`:输出过不了 schema 也会被标成失败)。
+ */
+class StepFailedRefError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'StepFailedRefError';
+  }
+}
+
 /** 解析单个引用表达式;步骤不存在/路径不可达时抛错(附可用步骤) */
-function resolveStepRef(expr: string, steps: Map<string, unknown>): unknown {
+function resolveStepRef(
+  expr: string,
+  steps: Map<string, unknown>,
+  failed: ReadonlySet<string>,
+): unknown {
   const dot = expr.indexOf('.');
   const id = dot === -1 ? expr : expr.slice(0, dot);
   const path = dot === -1 ? '' : expr.slice(dot + 1);
   if (!steps.has(id)) {
     const known = [...steps.keys()].join(', ') || '无';
+    if (failed.has(id)) {
+      throw new StepFailedRefError(
+        `占位符「${expr}」引用的步骤「${id}」执行失败,本步未执行。修掉那一步,或用 stopOnError=false / 该步 continueOnError=true 跳过引用它的步骤(已成功的步骤: ${known})`,
+      );
+    }
     throw new Error(
       `占位符引用的步骤不存在或未成功:「${expr}」(已完成: ${known})`,
     );
@@ -249,12 +275,13 @@ async function resolveRefs(
   value: unknown,
   steps: Map<string, unknown>,
   loadAssets: AssetLoader,
+  failed: ReadonlySet<string>,
 ): Promise<unknown> {
   const one = async (expr: string): Promise<unknown> => {
     const asset = ASSET_RE.exec(expr.trim());
     return asset != null
       ? resolveAssetRef(asset[1] as 'comp' | 'var', asset[2], loadAssets)
-      : resolveStepRef(expr, steps);
+      : resolveStepRef(expr, steps, failed);
   };
   if (typeof value === 'string') {
     const whole = WHOLE_REF_RE.exec(value.trim());
@@ -272,13 +299,14 @@ async function resolveRefs(
   }
   if (Array.isArray(value)) {
     const out: unknown[] = [];
-    for (const v of value) out.push(await resolveRefs(v, steps, loadAssets));
+    for (const v of value)
+      out.push(await resolveRefs(v, steps, loadAssets, failed));
     return out;
   }
   if (value != null && typeof value === 'object') {
     const out: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(value))
-      out[k] = await resolveRefs(v, steps, loadAssets);
+      out[k] = await resolveRefs(v, steps, loadAssets, failed);
     return out;
   }
   return value;
@@ -359,6 +387,9 @@ export function registerBatchTools(
         })();
         return assetsPromise;
       };
+      // 已执行但失败的步骤 id:占位符引用到它们时走 StepFailedRefError(受容错开关管),
+      // 与「id 根本不在计划里」区分开。
+      const failedSteps = new Set<string>();
       for (let i = 0; i < calls.length; i++) {
         const call = calls[i];
         const id =
@@ -366,6 +397,7 @@ export function registerBatchTools(
             ? `step${i + 1}`
             : call.id.trim();
         const fail = (msg: string): void => {
+          failedSteps.add(id);
           results.push({ id, tool: call.tool, ok: false, error: msg });
         };
         // ---- 编排期错误:计划本身有问题,一律中止 ----
@@ -384,9 +416,19 @@ export function registerBatchTools(
             call.args ?? {},
             steps,
             loadAssets,
+            failedSteps,
           )) as Record<string, unknown>;
         } catch (e) {
           fail(e instanceof Error ? e.message : String(e));
+          // 引用了「已执行但失败」的步骤:计划没问题,只是上游没拿到 ——
+          // 与执行期失败同等对待,让容错开关生效;引用了计划里根本没有的 id 才是
+          // 编排期错误,一律中止。
+          if (
+            e instanceof StepFailedRefError &&
+            (stopOnError === false || call.continueOnError === true)
+          ) {
+            continue;
+          }
           break;
         }
         // ---- 执行期:受 stopOnError/continueOnError 控制 ----

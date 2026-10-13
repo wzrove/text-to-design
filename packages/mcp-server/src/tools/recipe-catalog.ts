@@ -69,7 +69,7 @@ export const RECIPES: RecipeEntry[] = [
     uri: 'jsd://recipes/design-strategy',
     titleKey: 'prompt.designStrategy.title',
     whenToUse:
-      '画布创作的通用纪律。**从零设计整页 / 界面之前先读这一条**:先摸底、结构分层(成品该多深就多深,调用才分批)、语义化命名、抽组件、归组后再布局、图形区走 SVG 还是原生图元的分流、间距与字号阶梯、层序与遮挡、出错回滚,附示例结构树',
+      '画布创作的通用纪律。**从零设计整页 / 界面之前先读这一条**:先查可复用件(按「要复用的是什么」选件类 —— 结构走组件、状态走变体、固定视觉走样式、语义 token 走变量,含各平台复用入口与「命中就复用 / 改源头不逐个改实例」的纪律,以及**什么时候别抽组件**:差异落在实例子节点上、平台未声明 inPlaceVariants、往返预算压不住),再摸底、结构分层(成品该多深就多深,调用才分批)、语义化命名、归组后再布局、图形区走 SVG 还是原生图元的分流、间距与字号阶梯、层序与遮挡、出错回滚,附示例结构树',
     render: () => designStrategyRecipe(undefined, currentPlatform()),
   },
   {
