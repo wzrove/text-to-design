@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import type { PluginPlatform } from 'text-to-design-shared';
-import { defineConfig, type Plugin, type UserConfig } from 'vite';
+import { defineConfig, loadEnv, type Plugin, type UserConfig } from 'vite';
 import { viteSingleFile } from 'vite-plugin-singlefile';
 import solid from 'vite-plugin-solid';
 import manifestPlugin from './scripts/vite-plugin-manifest.js';
@@ -54,7 +54,10 @@ export default defineConfig(({ mode }): UserConfig => {
     // jsDesign 的 Proxy scoped evaluator 影子化(决策 0012,仅 jsdesign);
     // ② `BigInt` 全局三平台都缺,而 zod 顶层 `BIGINT_FORMAT_RANGES` 直接
     // 裸调 `BigInt(...)`(决策 0027)。②是三平台共有,所以三个分支统一挂载。
-    const platformPlugins: Plugin[] = [manifestPlugin(platform)];
+    // 插件 id 等本机才有的值从 .env.local 读(仓库只有 *.local 之外的东西),
+    // 读不到时 manifestPlugin 落成占位 id(见 scripts/vite-plugin-manifest.ts)
+    const env = loadEnv(mode, import.meta.dirname, '');
+    const platformPlugins: Plugin[] = [manifestPlugin(platform, env)];
     platformPlugins.push(zodSandboxFix());
     return {
       plugins: platformPlugins,
