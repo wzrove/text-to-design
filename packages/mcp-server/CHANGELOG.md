@@ -1,5 +1,11 @@
 # text-to-design-mcp
 
+## 0.13.1
+
+### Patch Changes
+
+- [`0c44a82`](https://github.com/wzrove/text-to-design/commit/0c44a82576da19ac7d90d46b1bb5ee5c1433f1e0) Thanks [@wzrove](https://github.com/wzrove)! - feat: enhance component resizing behavior and serialization
+
 ## 0.13.0
 
 ### Minor Changes
