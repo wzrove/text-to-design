@@ -208,16 +208,34 @@ function jsonSize(value: unknown): number {
   }
 }
 
-/** 深度裁剪:节点对象只留摘要字段,大字段整键丢弃,其余结构原样保留 */
-function trimEcho(value: unknown): unknown {
+/**
+ * 节点对象的判据:`id` + `name` + `type` 三个字符串**不够** —— 样式与变量的摘要
+ * 恰好也是这三个字段(`StyleSummary` / `AssetRef`),于是 `figma_style_variables_list`
+ * 回包里的 `values` 与 `boundVariables` 会被整片收掉,批内「写完回读」读到的是空壳,
+ * 看起来就像没生效(dec 0007 的形态)。真节点一定带几何或父级,拿它当判别位。
+ */
+const NODE_SHAPE_FIELDS = ['x', 'y', 'width', 'height', 'parentId'] as const;
+
+function looksLikeNode(src: Record<string, unknown>): boolean {
+  if (
+    typeof src.id !== 'string' ||
+    typeof src.type !== 'string' ||
+    typeof src.name !== 'string'
+  )
+    return false;
+  return NODE_SHAPE_FIELDS.some((k) => src[k] !== undefined);
+}
+
+/**
+ * 深度裁剪:节点对象只留摘要字段,大字段整键丢弃,其余结构原样保留。
+ * 导出只为让不变式测试能直接喂形状(`__tests__/echo-trim.test.ts`)—— 判据错了的
+ * 症状是「回包成功、字段没了」,拿端到端用例去撞太贵。
+ */
+export function trimEcho(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(trimEcho);
   if (value == null || typeof value !== 'object') return value;
   const src = value as Record<string, unknown>;
-  if (
-    typeof src.id === 'string' &&
-    typeof src.type === 'string' &&
-    typeof src.name === 'string'
-  ) {
+  if (looksLikeNode(src)) {
     const node: Record<string, unknown> = {};
     for (const k of ECHO_NODE_FIELDS) {
       if (src[k] !== undefined) node[k] = src[k];

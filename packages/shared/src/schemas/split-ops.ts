@@ -215,7 +215,7 @@ export const createStyleSchema = z
     kind: z
       .enum(STYLE_KINDS)
       .describe(
-        '样式类别(四类各对应引擎自己的工厂;MG 另有 cornerRadius/padding/spacing 等专属入口,本工具不提供)',
+        '样式类别。八项是三家 `StyleType` 的并集:**PAINT / TEXT / EFFECT / GRID 三家都有**;`STROKE_WIDTH / CORNER_RADIUS / PADDING / SPACING` **只 MasterGo 能建**—— 在 Figma / 即时设计传这四类会被写前点名拒(不静默、不 fallthrough 建成别的类)。MG 上和另四类一样是「从取值节点抄」,所以间距类要那节点是自动布局容器、圆角类要它真有圆角,读不出值时前置检查就会拦下',
       ),
     name: z
       .string()

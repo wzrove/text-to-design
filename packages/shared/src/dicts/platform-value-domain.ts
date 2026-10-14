@@ -24,6 +24,7 @@
 
 import type { NodeTypeKey } from './node-type';
 import type { PlatformKey } from './platform';
+import { COMMON_STYLE_KINDS, STYLE_KINDS, type StyleKind } from './style-kind';
 
 /**
  * 一条取值域规则。两种形态**互斥使用**,不要同时写:
@@ -472,3 +473,73 @@ export type MethodParamAllowViolations<
     Denied
   >]: MethodParamKindProbe[K] extends Value ? never : K;
 }[Exclude<MethodParamValueKind, Denied>];
+
+/**
+ * **契约枚举取值的按平台适用集**(第五类登记)。
+ *
+ * 与第四类分开的理由:第四类回答「这个方法收不收这种**值形态**」(键是方法名,值是
+ * `string|boolean|variableAlias` 这类形状),这一类回答「这个**枚举取值**在哪个平台有对应
+ * 的引擎入口」。两者都要由对应平台的 `sync-guarantee.ts` 断言,但断言对象不同 ——
+ * 一个查方法签名的参数类型,一个查 `StyleType` 联合里有没有那个字面量。混成一张表,
+ * 一张表就得同时守两个方向(0022 的断言方向冲突,见运行时表那段)。
+ *
+ * 为什么需要它:契约的 `STYLE_KINDS` 是三家 `StyleType` 的**并集**(八项),而
+ * STROKE_WIDTH / CORNER_RADIUS / PADDING / SPACING 只有 MasterGo 有工厂
+ * (`createStrokeWidthStyle` 等,`dist/index.d.ts:1459-1468`)。Figma 与 jsDesign 的
+ * `StyleType` 各自只有四项(`plugin-api.d.ts:12372` / `:1137`)—— 并集进契约是对的
+ * (否则三家要各一套枚举),但**不收窄就是静默失效**:适配器拿到没有工厂的类别要么 fallthrough
+ * 建成别的类(建出来一条内容不对的样式),要么抛一句没有上下文的引擎错。
+ *
+ * 登记方向:列**适用集**(allow),不列 deny。理由就是上面那条 —— 契约是并集,
+ * 「没有哪几类」等于「只有另外四类」,两种写法互为反面,选读起来与 typings 声明同形的那个
+ * (Figma / jsDesign 的 `StyleType` 就是那四项,MG 就是八项)。
+ */
+export const PLATFORM_STYLE_KINDS: Readonly<
+  Partial<Record<PlatformKey, readonly StyleKind[]>>
+> = {
+  /** `@figma/plugin-typings@1.139.0 plugin-api.d.ts:12372 StyleType` 四项 */
+  figma: COMMON_STYLE_KINDS,
+  /** `@mastergo/plugin-typings@2.19.2 dist/index.d.ts:1810 StyleType` 八项全收 */
+  mastergo: STYLE_KINDS,
+  /** `@jsdesigndeveloper/plugin-typings@1.0.12 plugin-api.d.ts:1137 StyleType` 四项 */
+  jsdesign: COMMON_STYLE_KINDS,
+};
+
+/** 该平台有没有这一类样式的入口;平台未知或未登记一律放行(沿 0022 的 fail-open) */
+export function platformStyleKindAllowed(
+  platform: PlatformKey | null,
+  kind: StyleKind,
+): boolean {
+  if (platform == null) return true;
+  const accepted = PLATFORM_STYLE_KINDS[platform];
+  if (accepted == null) return true;
+  return accepted.some((k) => k === kind);
+}
+
+/**
+ * 被拒时的可执行出口:说清本平台有哪几类。类别名单从表里算,不在调用方手写第二份。
+ * 表里没有该平台(或平台未知)时返回 null,调用方走通用兜底句。
+ */
+export function platformStyleKindRejectionHint(
+  platform: PlatformKey | null,
+): string | null {
+  if (platform == null) return null;
+  const accepted = PLATFORM_STYLE_KINDS[platform];
+  if (accepted == null) return null;
+  return `本平台只支持 ${accepted.join(' / ')}`;
+}
+
+/**
+ * 「登记的适用集里有没有本平台根本没有的类别」(空 = 登记诚实)。
+ *
+ * 与各侧 `sync-guarantee.ts` 配合使用:那侧把宿主 `StyleType` 传进来,类型级判掉
+ * 「把别家独有的类别登记成自己有」。方向与 {@link MethodParamDenyViolations} 相反 ——
+ * 这张表是 allow 名单,所以**登记项必须真在**宿主取值域里。
+ */
+export type StyleKindAllowViolations<
+  Allowed extends StyleKind,
+  HostStyleType extends string,
+> =
+  Exclude<Allowed, HostStyleType> extends never
+    ? never
+    : Exclude<Allowed, HostStyleType>;

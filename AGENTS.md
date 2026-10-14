@@ -16,6 +16,24 @@ Rules:
 - 能靠命名/类型表达的，绝不写注释。
 - 静态字典统一分类放到`packages/shared/src/dicts`下
 
+## 决策记录引用
+
+主键两套并存：旧记录四位数字号（`0024`，只读，不改名不重编）、新记录 8 位短 hex（`25827d0c`）。
+注释里引记录一律写 `dec <标识>`，两种形态同等对待：
+
+```ts
+// 类别适用性在值域守卫之前判(dec 25827d0c)：…
+// 不允许静默失效(dec 0007)
+```
+
+- 为什么不写裸编号：`\b[0-9]{4}\b` 在包内先撞上 97 个 `2026`(日期)、18 个 `1024`(体积)与一片
+  typings 行号，假命中比真引用多，机器无法验证指针有效性；`dec` 前缀让门禁只扫标注即可。
+- 归属规则：写**做出这次形状变更的那条**，不是「相关的那条」。
+- 旧注释不追认，但棘轮只许降：`node scripts/decision-refs.mjs check`（测试 `tests/decision-refs.test.ts`）。
+- 反查：`node scripts/decision-refs.mjs locate <file>`（这个文件牵到哪些记录）/ `resolve <标识>`；
+  取号与改状态仍走 `.agents/skills/software-design-patterns/scripts/new_decision.mjs`（仓内代码不 import 它，见 0009）。
+- 索引两个文件都要看：`INDEX.md`（现行有效 + 最近 10 条）与 `INDEX-2026.md`（全量年档）。只查一个会漏。
+
 
 ## 验证命令（不产出编译产物）
 

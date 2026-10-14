@@ -149,8 +149,12 @@ export const host: DesignHost = {
    * 是图层 id,引擎从那个图层抄样式(`dist/index.d.ts:1455` + `CreateStyleConfig:3186`),
    * 所以这里不需要像 Figma / jsDesign 那样逐字段灌值,`fillStyleFromNode` 在本平台无调用方。
    *
-   * 只接四类(与契约的 `StyleKind` 同宽):MG 另有 cornerRadius / padding / spacing /
-   * strokeWidth 等专属工厂,不在本仓样式面里(契约未声明这些类别,接了就是第二套词汇)。
+   * 八类都接(契约的 `StyleKind` 是三家 `StyleType` 的并集,而这八项正是 MG 的那一份):
+   * 后四类(cornerRadius / padding / spacing / strokeWidth)只此一家有工厂,另两家由 core
+   * 的类别适用性守卫写前点名(见 `dicts/platform-value-domain.ts` 的 `PLATFORM_STYLE_KINDS`)。
+   * ⚠ 这四类的**清单**没接(`getLocalStrokeWidthStyles` 等 MG:1517-1520 未投影成契约成员):
+   * 本平台未声明 `styleEnumeration`,四个 getter 本来就一个都不调(0043),加了是死面。
+   * 要列就得先把 `styleEnumeration` 的实测结论翻过来。
    */
   createStyle: async ({ kind, name, description, node }) => {
     const config = {
@@ -158,6 +162,9 @@ export const host: DesignHost = {
       id: node.id,
       ...(description == null ? {} : { description }),
     };
+    // 八个工厂同形(`CreateStyleConfig{name,id,description?}` MG:3186),都是
+    // 「引擎从该图层抄」—— 本平台没有灌值这一步,`fillStyleFromNode` 在此无调用方。
+    // 后四类(cornerRadius/padding/spacing/strokeWidth)只此一家(契约的并集在这里才真有入口)。
     const style =
       kind === 'PAINT'
         ? mg.createFillStyle(config)
@@ -165,7 +172,15 @@ export const host: DesignHost = {
           ? mg.createTextStyle(config)
           : kind === 'EFFECT'
             ? mg.createEffectStyle(config)
-            : mg.createGridStyle(config);
+            : kind === 'GRID'
+              ? mg.createGridStyle(config)
+              : kind === 'CORNER_RADIUS'
+                ? mg.createCornerRadiusStyle(config)
+                : kind === 'PADDING'
+                  ? mg.createPaddingStyle(config)
+                  : kind === 'SPACING'
+                    ? mg.createSpacingStyle(config)
+                    : mg.createStrokeWidthStyle(config);
     return { id: style.id, name: style.name, type: kind };
   },
   /**

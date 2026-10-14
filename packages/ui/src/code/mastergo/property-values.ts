@@ -22,6 +22,8 @@
   type: string;
   value: boolean | string;
   preferredValues?: Array<{ type: string; key: string }>;
+  /** MG 组件侧的「该属性绑了哪个变量」裸 id,见 typings :3001;实例侧没有,故可选 */
+  variableId?: string;
 }
 
 /**
@@ -53,6 +55,8 @@ export function readVariantProperties(
  * 键取 `id ?? name`:MG 的 `id` 是可选的(typings 3023 行 `id?: string`),缺省时名字本身就是
  * 稳定标识 —— 与 `remapPropertyIds` 的判据保持同一套,读出来的键才能原样写回去(round-trip)。
  * 只透传契约认得的三个字段,`alias` / `valueAlias` / `isDefaultValue` 是 MG 专有,丢掉。
+ * 实例侧的 `ComponentProperties`(:3030)**没有** `variableId` —— 属性绑变量的证据只在
+ * 组件侧那一张表上(见 {@link readComponentPropertyValues})。
  */
 export function readComponentProperties(
   value: unknown,
@@ -91,6 +95,12 @@ export function readComponentProperties(
  * 为什么非要有这条:调用方要写组件属性(布尔/文本/换绑)必须**先知道属性名与类型**,
  * 而组件是唯一能问出「这个组件有哪些可写属性」的地方。没有它,MG 上读组件的
  * `componentProperties` 恒为 undefined,`jsd_set_instance_properties` 就只剩瞎猜名字。
+ *
+ * `variableId`(typings :3001,仅 TEXT/BOOLEAN 可能存在)是 MG 组件属性**绑了哪个变量**的
+ * 唯一出口,原样透传(0024 的「不替平台编形状」):此前它被当成 MG 专有字段丢了,于是
+ * 「MG 组件属性不能绑变量」这句在事实表里被写成了「没有这层关系」—— 真相是**读得到、写不了**
+ * (`setProperties` :3097 只收 `string|boolean`)。实例侧的 `ComponentProperties`(:3030)
+ * 没有这一项,故只在组件侧透传。
  */
 export function readComponentPropertyValues(
   value: unknown,
@@ -105,6 +115,7 @@ export function readComponentPropertyValues(
       type?: unknown;
       defaultValue?: unknown;
       preferredValues?: unknown;
+      variableId?: unknown;
     };
     const key = pickKey(it);
     if (key == null) continue;
@@ -114,6 +125,8 @@ export function readComponentPropertyValues(
     const entry: ContractPropertyValue = { type: it.type, value: v };
     const preferred = pickPreferred(it.preferredValues);
     if (preferred.length > 0) entry.preferredValues = preferred;
+    if (typeof it.variableId === 'string' && it.variableId !== '')
+      entry.variableId = it.variableId;
     out[key] = entry;
   }
   // 同 readComponentProperties:空数组是「可读且没有」,不是「读不到」

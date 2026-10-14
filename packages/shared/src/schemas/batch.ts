@@ -86,9 +86,11 @@ export const batchResultSchema = z.object({
 });
 export type BatchResult = z.infer<typeof batchResultSchema>;
 
-/** 平台特有操作结果:plugin 统一回 {ok, data},data 结构随 op 而定 */
-export const platformOpResultSchema = z.object({
-  ok: z.boolean(),
-  data: z.unknown().optional(),
-});
+/**
+ * 平台特有操作结果:**回包就是该 op 自己的返回**(形状随 op 而定,由 ping 的
+ * platformOps 描述下发)。此前插件在协议信封之外又套了一层 `{ok,data}`,于是
+ * `jsd_batch` 的占位符要写成 `{{步骤.data.variables[0].id}}` —— 与它给全部工具的
+ * 那一条(`{{步骤.字段}}`)不一致,照文档写必然中止整批。信封已剥(见 `ui/code/plugin.ts`)。
+ */
+export const platformOpResultSchema = z.record(z.string(), z.unknown());
 export type PlatformOpResult = z.infer<typeof platformOpResultSchema>;

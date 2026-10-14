@@ -1,3 +1,7 @@
+import {
+  platformStyleKindAllowed,
+  platformStyleKindRejectionHint,
+} from '../dicts/platform-value-domain';
 import type { StyleKind } from '../dicts/style-kind';
 import { resolveNodes } from './access';
 import { hostCapabilityState } from './capabilities';
@@ -23,6 +27,46 @@ function styleSourceGap(kind: StyleKind, node: NodeSkeleton): string | null {
     return (node.layoutGrids?.length ?? 0) > 0
       ? null
       : '取值节点没有任何布局网格';
+  if (kind === 'STROKE_WIDTH') {
+    // 描边宽度族在契约里是裸 `number`(引擎不会在这几项上给 mixed),故只判有无
+    const has = [
+      node.strokeWeight,
+      node.strokeTopWeight,
+      node.strokeRightWeight,
+      node.strokeBottomWeight,
+      node.strokeLeftWeight,
+    ].some((v) => v != null);
+    return has
+      ? null
+      : '取值节点没有任何描边宽度可抄(STROKE_WIDTH 样式要的是这个)';
+  }
+  if (kind === 'CORNER_RADIUS') {
+    const has = [
+      node.cornerRadius,
+      node.topLeftRadius,
+      node.topRightRadius,
+      node.bottomLeftRadius,
+      node.bottomRightRadius,
+    ].some((v) => v != null);
+    return has
+      ? null
+      : '取值节点没有圆角,抄不出 CORNER_RADIUS 样式(整组读不出时先 jsd_set_cornerRadius 定一个值)';
+  }
+  if (kind === 'PADDING') {
+    const has = [
+      node.paddingTop,
+      node.paddingRight,
+      node.paddingBottom,
+      node.paddingLeft,
+    ].some((v) => v != null && v !== MIXED);
+    return has
+      ? null
+      : '取值节点不是自动布局容器或四向 padding 全是混值,抄不出 PADDING 样式';
+  }
+  if (kind === 'SPACING')
+    return node.itemSpacing != null && node.itemSpacing !== MIXED
+      ? null
+      : '取值节点不是自动布局容器或 itemSpacing 读不出(混值),抄不出 SPACING 样式';
   const fontName = node.fontName;
   return fontName == null || fontName === MIXED
     ? '取值节点的字体是混值(mixed)或读不到,无法收成单一 TEXT 样式;先用 jsd_set_text 把字体统一'
@@ -43,6 +87,18 @@ export async function createStyle(
     // i18n-exempt: 随结果上行给模型,不走面板文案
     throw new Error(
       '本平台未声明 styles 能力,没有建样式的入口(能力表见 jsd_ping 的 capabilities)',
+    );
+  }
+  // 类别适用性在值域守卫**之前**判(dec 25827d0c):契约的 StyleKind 是三家 StyleType 的并集,
+  // 本平台没有该类的工厂时,adapter 要么 fallthrough 建出错的东西,要么抛一句没有
+  // 上下文的引擎错 —— 两者都是 dec 0007 不允许的静默失效形态。
+  if (!platformStyleKindAllowed(ctx.platform, params.kind)) {
+    // i18n-exempt: 随结果上行给模型,不走面板文案
+    const hint = platformStyleKindRejectionHint(ctx.platform);
+    throw new Error(
+      `${params.kind} 类样式本平台没有对应工厂,建不出来${hint ? `(${hint})` : ''};` +
+        `STROKE_WIDTH / CORNER_RADIUS / PADDING / SPACING 只在 MasterGo 能建为样式,` +
+        `另两家的间距与圆角只能落在节点字段上(见 jsd_set_layout / jsd_set_cornerRadius / jsd_set_stroke)`,
     );
   }
   const [node] = await resolveNodes(host, [params.fromNodeId]);
@@ -171,6 +227,10 @@ async function writeToStyle(
     draft.layoutGrids = node.layoutGrids;
     return;
   }
+  if (kind !== 'TEXT')
+    // 只有 TEXT 会落到下面的灌值分支:那四类 MG 独有的样式走的是「引擎从图层抄」,
+    // 不进本函数(调用点是 figma / jsdesign 两个 adapter)。走到这里说明值域守卫漏了。
+    throw new Error(`本平台没有 ${kind} 类样式的灌值路径`);
   const fontName = node.fontName;
   // 引擎纪律:字体未 loadFont 就写排版字段会抛,故先加载再灌
   await loadFont(fontName as { family: string; style: string });

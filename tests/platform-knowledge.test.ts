@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import {
   componentFaceText,
   componentWriteText,
+  resourceRelationText,
   variableFaceText,
   variantStrategyText,
 } from '../packages/mcp-server/src/tools/platform-facts';
@@ -330,6 +331,9 @@ describe('投影:平台文案不串平台', () => {
         variableFaceText(platform),
         componentFaceText(platform),
         componentWriteText(platform),
+        // 四类可复用资源的关系投影:样式能不能列清单只影响一条旁注,两种都给一遍
+        resourceRelationText(platform, true),
+        resourceRelationText(platform, false),
       ].join('\n');
       for (const other of otherPlatformNames(platform)) {
         expect(text, `${platform} 的文案里出现了 ${other}`).not.toContain(
@@ -346,6 +350,7 @@ describe('投影:平台文案不串平台', () => {
       variableFaceText(null),
       componentFaceText(null),
       componentWriteText(null),
+      resourceRelationText(null, null),
     ].join('\n');
     for (const label of labels) {
       expect(text, `装配期文案漏了 ${label}`).toContain(label);
@@ -360,6 +365,10 @@ describe('投影:平台文案不串平台', () => {
         variableFaceText(platform),
         componentFaceText(platform),
         componentWriteText(platform),
+        resourceRelationText(
+          platform,
+          platform == null ? null : platform === 'figma',
+        ),
       ].join('\n');
       expect(text).not.toContain('undefined');
       expect(text).not.toContain('[object');

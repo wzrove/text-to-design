@@ -573,8 +573,10 @@ export function registerPlugin(
             }
             params = parsed.data;
           }
-          const r = await op.run(host, params);
-          send(id, true, { ok: true, data: r });
+          // 回包**就是 op 自己的返回**,不再套 `{ok,data}`:协议信封已经带过一次 ok/data,
+          // 这层重复信封会渗进模型的占位符词汇(批内得写 `{{步骤.data.variables[0].id}}`,
+          // 而 batch 文档给所有工具写的是 `{{步骤.字段}}`),实测第一次调用就中止整批。
+          send(id, true, await op.run(host, params));
           break;
         }
         default:

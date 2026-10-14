@@ -28,6 +28,7 @@
  * 字段面与取值域。
  */
 import type {
+  COMMON_STYLE_KINDS,
   DesignHost,
   JSDESIGN_METHOD_PARAM_DOMAIN,
   JSDESIGN_RUNTIME_VALUE_DOMAIN,
@@ -35,9 +36,11 @@ import type {
   MethodParamAllowViolations,
   MethodParamDenyViolations,
   MethodParamValue,
+  MG_ONLY_STYLE_KINDS,
   NodeSkeleton,
   NodeType,
   PageSkeleton,
+  StyleKindAllowViolations,
   BlendMode as WireBlendMode,
   Effect as WireEffect,
   Paint as WirePaint,
@@ -400,4 +403,21 @@ export type JsDesignSetPropsDenyAbsentCheck = ExpectNever<
 /** ② 没登记的形态必须真收得下(漏登记 = 静默收窄) */
 export type JsDesignSetPropsAllowPresentCheck = ExpectNever<
   MethodParamAllowViolations<JsDesignSetPropsDenied, JsDesignSetPropsValue>
+>;
+
+// ---- 契约样式类别的按平台适用集(第五类登记) ----
+
+/**
+ * jsDesign 的 `StyleType` 只有四类(`plugin-api.d.ts:1137`),而契约的 `STYLE_KINDS` 是
+ * 三家并集(八项)⇒ 两个方向都要守:
+ * ① 登记给本平台的四类必须**真在**宿主取值域里;
+ * ② MG 独有的那四类必须**真不在**这里 —— 少了这条,哪天 jsDesign 补上 `createSpacingStyle`
+ *    之类的工厂,`PLATFORM_STYLE_KINDS.jsdesign` 会继续谎称没有,而 core 会拦下一个本来
+ *    能建的类别(与 0022 的「双向都要守」同因)。
+ */
+export type JsDesignStyleKindAllowedCheck = ExpectNever<
+  StyleKindAllowViolations<(typeof COMMON_STYLE_KINDS)[number], StyleType>
+>;
+export type JsDesignStyleKindAbsentCheck = ExpectNever<
+  Extract<StyleType, (typeof MG_ONLY_STYLE_KINDS)[number]>
 >;

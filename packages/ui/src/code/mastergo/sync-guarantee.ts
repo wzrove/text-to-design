@@ -43,6 +43,8 @@ import type {
   NodeSkeleton,
   NodeType,
   PageSkeleton,
+  STYLE_KINDS,
+  StyleKindAllowViolations,
   BlendMode as WireBlendMode,
   Effect as WireEffect,
   Paint as WirePaint,
@@ -57,7 +59,7 @@ import type {
   TEXT_RANGE_SETTERS,
   VALUE_TO_MG,
 } from './node-facade';
-import type { MG_VARIABLE_TYPES } from './ops';
+import type { MG_VARIABLE_TYPES, MG_VARIABLE_TYPES_UNSUPPORTED } from './ops';
 
 /** 联合类型全部成员的键并集 */
 type KeysOf<T> = T extends unknown ? keyof T : never;
@@ -598,14 +600,41 @@ export type MastergoVariableMethodsCheck = ExpectNever<MissingVariableMethods>;
  * 类型而我们没跟上」—— 后者才是真正会静默少一个选项的那种。故这里从 `ops.ts` 的清单
  * 派生(不手抄第二份),两侧一起受守。
  *
- * ⚠ 官方文档的 `PluginVariableType` 表只列 11 项(**没有 `SPACING`**),与 typings 不同宽。
- * 本仓按 typings 走(引擎签名以 typings 为准);哪天文档补上或 typings 删掉,这条会红。
+ * ⚠ 2026-10-14 真机改了口径:官方文档 `PluginVariableType` 少的那一项(`SPACING`)不是
+ * 文档漏写,是**引擎真不收**(`mg_variables_create type=SPACING` 抛
+ * `Unsupported variable type`)。所以「typings 有而我们没列」这一侧不再要求全等 ——
+ * 差额必须**恰好等于**登记的 `MG_VARIABLE_TYPES_UNSUPPORTED`(多登记、少登记都会红)。
  */
 type MgVariableType = (typeof MG_VARIABLE_TYPES)[number];
+type MgUnsupportedVariableType = (typeof MG_VARIABLE_TYPES_UNSUPPORTED)[number];
 
 export type MgVariableTypeInTypingsCheck = ExpectNever<
   Exclude<MgVariableType, VariableType>
 >;
+/** typings 里没登记的项:必须一个都不剩(挡「typings 新增类型而我们没跟上」) */
 export type MgVariableTypeCompletenessCheck = ExpectNever<
-  Exclude<VariableType, MgVariableType>
+  Exclude<VariableType, MgVariableType | MgUnsupportedVariableType>
+>;
+/** 反向:登记的「引擎不收」名单必须真在 typings 里(否则这条登记是幻影) */
+export type MgUnsupportedVariableTypeInTypingsCheck = ExpectNever<
+  Exclude<MgUnsupportedVariableType, VariableType>
+>;
+
+// ---- 契约样式类别的按平台适用集(第五类登记) ----
+
+/**
+ * MG 的 `StyleType` 是八项(`dist/index.d.ts:1810`),正好等于契约 `STYLE_KINDS`(三家并集)
+ * ⇒ 本平台是**唯一**需要「四类之外的样式」的一方,两个方向都要守:
+ * ① 契约八项必须**真在** MG 取值域里(少一项就是 `PLATFORM_STYLE_KINDS.mastergo` 谎报,
+ *    而 `host.ts` 的 createStyle 会去调一个不存在的工厂);
+ * ② MG 的取值域不得**超出**契约八项 —— 哪天 MG 再加一类(如 gradient style),
+ *    这条会红,提醒把它补进 `dicts/style-kind.ts` 并补工厂分支,而不是静默少一类建不出的样式。
+ */
+type MgStyleType = StyleType;
+
+export type MgStyleKindAllowedCheck = ExpectNever<
+  StyleKindAllowViolations<(typeof STYLE_KINDS)[number], MgStyleType>
+>;
+export type MgStyleKindCompletenessCheck = ExpectNever<
+  Exclude<MgStyleType, (typeof STYLE_KINDS)[number]>
 >;

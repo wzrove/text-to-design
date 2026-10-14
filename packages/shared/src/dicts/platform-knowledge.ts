@@ -16,6 +16,13 @@
  * **收录范围(刻意收窄)**:只登记「三平台不同」的部分。三平台同形的部分一个字不写
  * (同 0022 的口径)—— 收进来只是把超集抄第二遍,还会把「该平台没有」误报成「都不支持」。
  *
+ * ⚠ **四类可复用件里「样式」没有独立的域**,别按 `styles` 去这张表里找:
+ * 「变量 ↔ 样式」这条关系是三平台塌缩方式差异的落点(Figma 变量**喂**样式、
+ * MG 变量**含**样式、jsDesign 只有样式),它记在 `variables` 域的注释 /
+ * `nativeUnwired` / `evidence` 里;样式自身的能力差异(能不能按 id 应用 vs 能不能列清单)
+ * 在 `dicts/capability.ts` 的 `styles` 与 `styleEnumeration` 两条(0043)。
+ * 加第四个域会让每条事实都被复制一遍(0029 已为此删过一处)。
+ *
  * 事实来源两档,都写在 `evidence` 里、都要可追溯:
  * - **typings 声明**(`包名@版本 文件:行`)—— 类型级事实,由对应平台的
  *   `sync-guarantee.ts` 反向断言守(登记的缺席项必须真缺席);
@@ -133,13 +140,17 @@ export const PLATFORM_KNOWLEDGE: Readonly<
       // 缺席也得给出口:`variable-binding` 配方第 3 节在无写入口时直接引这条,
       // 留 null 就等于对着调用方说「跳过」而不给做法(0007)。
       fallback:
-        '两条路,都不是变量那种玩法:① **本地样式** —— `jsd_create_style` 从一个既有节点抄出样式(四类:PAINT / TEXT / EFFECT / GRID),回 id;绑上去用 jsd_set_fill_color 的 fillStyleId / jsd_set_text 的 textStyleId / jsd_set_effects 的 effectStyleId / jsd_set_stroke 的 strokeStyleId。**⚠ 本平台未声明 `styleEnumeration`,样式清单(`jsd://styles` / `assets.styles`)恒空、列不出来**:已有样式的 id 只能从正用着它的节点上读(`*StyleId` 字段),新建的 id 从 `jsd_create_style` 回包记账(建重复了用 `jsd_delete_style` 删)。一条样式改一次,全档跟随。② **结构继承** —— 抽成 COMPONENT 后改主件,实例自动继承(批量套覆盖走 variant-sync 配方)。',
+        '两条路,都不是变量那种玩法:① **本地样式** —— `jsd_create_style` 从一个既有节点抄出样式(本平台四类:PAINT / TEXT / EFFECT / GRID;契约的类别是三家 `StyleType` 的八项并集,余下四类本平台没有工厂,传过去会被写前点名拒),回 id;绑上去用 jsd_set_fill_color 的 fillStyleId / jsd_set_text 的 textStyleId / jsd_set_effects 的 effectStyleId / jsd_set_stroke 的 strokeStyleId。**⚠ 本平台未声明 `styleEnumeration`,样式清单(`jsd://styles` / `assets.styles`)恒空、列不出来**:已有样式的 id 只能从正用着它的节点上读(`*StyleId` 字段),新建的 id 从 `jsd_create_style` 回包记账(建重复了用 `jsd_delete_style` 删)。一条样式改一次,全档跟随。② **结构继承** —— 抽成 COMPONENT 后改主件,实例自动继承(批量套覆盖走 variant-sync 配方)。',
       evidence: [
         `${JSD}(全文无 variable 声明:grep -in variable 零命中)`,
         'packages/ui/src/code/jsdesign/meta.ts capabilities=[styles](按 id 应用样式是有的;**不声明 styleEnumeration** —— 列不出样式,见 0043)',
         'packages/shared/src/core/access.ts:174(listStylesAsync 在未声明 styleEnumeration 时直接返回空,四个 getter 一次都不调)',
         'packages/ui/src/code/jsdesign/host.ts:48(createStyle 已接:`jsd_create_style` 走 jsDesign.createPaintStyle 等四工厂;四类样式的共同契约在 packages/shared/src/core/styles.ts)',
         `${JSD}:88-91(createPaintStyle / createTextStyle / createEffectStyle / createGridStyle)`,
+        // 替代路径为什么只有样式:本平台的样式面就是「一组固定视觉」的唯一落点,
+        // 而它比 MG 还窄 —— 四类(与 Figma 同宽)且 **BaseStyle 没有集合字段**,
+        // 样式是扁平一张表,没有 MG 那种「样式挂在集合里」的分组维度(:1990 对照)。
+        `${JSD}:1137-1143 StyleType 四类 / BaseStyle 只有 id+type+name+remove,无 collectionId、collectionName`,
       ],
     },
     // 组件:`componentProperties` 读侧不存在(已在 sync-guarantee 里反向断言),
@@ -185,26 +196,41 @@ export const PLATFORM_KNOWLEDGE: Readonly<
     },
   },
   figma: {
-    // 变量:两条读出口 + 两个写 op。`read` 是**两个**通道(Figma 比另两家多一条):
+    // 变量:三条读出口 + 四个写 op。`read` 是**三个**通道(Figma 比另两家多两条):
     // ① 节点上的绑定(`boundVariables`,0024,与写侧 `boundProperty` 同源词汇);
     // ② 0040 补的**库存面** `figma_variables_list`(集合 / 模式 / 值)—— 此前没有它,
-    //    「有哪些变量、值是多少」在画布上根本没有出口,绑变量前只能靠猜 id。
-    // `readShape` 描述的是①(键值表);②返回数组。这个字段是粗粒度提示,两级形态并列时
+    //    「有哪些变量、值是多少」在画布上根本没有出口,绑变量前只能靠猜 id;
+    // ③ 样式对象自身的值与绑定 `figma_style_variables_list` —— 「变量 → 样式 → 节点」
+    //    这条三层链的中间一环,只有这里能看到(节点上的 boundVariables 不含样式内部)。
+    // `readShape` 描述的是①(键值表);②③返回数组。这个字段是粗粒度提示,两级形态并列时
     // 以注释为准 —— 若将来第三家也要挂读 op,该把「读 op 名单」拆成独立字段(见 0040「退出条件」)。
     variables: {
-      read: 'boundVariables / figma_variables_list',
+      read: 'boundVariables / figma_variables_list / figma_style_variables_list',
       readShape: 'map',
-      write: ['figma_variables_create', 'figma_variables_apply'],
+      write: [
+        'figma_variables_create',
+        'figma_variables_apply',
+        'figma_variables_remove',
+        'figma_style_variables_apply',
+      ],
       nativeUnwired: [
         'Variable.setValueForMode / rename(改变量值与生命周期里的改名,本仓未接;删除已接成 figma_variables_remove)',
         'VariableCollection 的模式增删改名(addMode / renameMode / removeMode)',
+        '样式的反查面 StyleConsumers / getStyleConsumersAsync(:12387)——「这条样式被哪些节点用着」未接,改样式前只能靠名字猜影响面',
       ],
       fallback: null,
       evidence: [
-        'packages/ui/src/code/figma/ops.ts figma_variables_create / figma_variables_apply(0040 起带 unbind;此后一次吃 bindings[] 多组)/ figma_variables_list',
+        'packages/ui/src/code/figma/ops.ts figma_variables_create / figma_variables_apply(dec 0040 起带 unbind;dec 7165f370 起一次吃 bindings[] 多组)/ figma_variables_list / figma_variables_remove',
         'packages/shared/src/schemas/platform.ts:90-118 boundVariables 线格式',
         `${FIG}:2149 getLocalVariablesAsync / :2160 getLocalVariableCollectionsAsync`,
         `${FIG}:6817-6852 VariableBindableNodeField / TextField(paint 与 effect / grid 项是另外三个入口,故 boundProperty 分三档)`,
+        `${FIG}:6855-6861 VariableBindablePaintStyleField / EffectStyleField / GridStyleField = paints / effects / layoutGrids,ComponentPropertyField = value —— 样式级与组件属性级绑定各一套字段,不在节点那三档里`,
+        // 样式档的写入口**不对称**:只有 TextStyle 有 setBoundVariable(:12507),
+        // 另三类是 readonly boundVariables + 可写的 paints / effects / layoutGrids,
+        // 绑定要经 setBoundVariableFor{Paint,Effect,LayoutGrid} 拿副本再整数组赋回。
+        `${FIG}:12432 / :12496 / :12521 / :12537 四类样式的 boundVariables;:12507 TextStyle.setBoundVariable(唯一有 setter 的那类)`,
+        'packages/ui/src/code/figma/ops.ts figma_style_variables_apply / figma_style_variables_list(样式 ↔ 变量的读写两端)',
+        `${FIG}:11571 VariableResolvedDataType 六种里没有 VARIANT,也没有「一组值」的样式类型 —— Figma 的样式是**独立资源**,靠自身 boundVariables 引变量;这一点与 MG 相反(见 mastergo.variables)`,
         'docs/design-decisions/0024-变量绑定进入读路径：boundVariables-按引擎词汇原样透传，不引入归一化层.md',
       ],
     },
@@ -221,6 +247,11 @@ export const PLATFORM_KNOWLEDGE: Readonly<
         `${FIG}:11123 setProperties(string | boolean | VariableAlias)`,
         `${FIG}:2214 createVariableAliasByIdAsync(官方给的「属性值绑变量」构造入口)`,
         `${FIG}:11571 VariableResolvedDataType 无 VARIANT —— 变体属性值绑不了变量`,
+        // SLOT 是 Figma 属性类型的第五项,写侧引擎明说不收:读形态已收进线格式
+        // (`schemas/platform.ts` 的 componentPropertyValueSchema),写形态由
+        // `core/component.ts:154` 归进 skipped 点名,不靠 try/catch 兜。
+        `${FIG}:10985 ComponentPropertyType 五项(BOOLEAN|TEXT|INSTANCE_SWAP|VARIANT|SLOT)`,
+        `${FIG}:11121 setProperties 不收 SLOT,抛 cannotSetSlotProperty`,
         `${FIG}:9577 componentPropertyDefinitions / :9581 addComponentProperty`,
         'packages/shared/src/core/component.ts:124-160 读形态 → 写形态单点映射(0023)',
       ],
@@ -256,23 +287,56 @@ export const PLATFORM_KNOWLEDGE: Readonly<
     //
     // 与「jsDesign 连 API 都没有」仍是两种不同的缺席:那边只能提替代路径,这边是「可以接、
     // 大部分还没接」—— 未接项见 `nativeUnwired`(模式/分组/别名/作用域/一步建绑)。
+    //
+    // ⚠ **本平台是「变量 ⊇ 样式」,不是 Figma 那种「变量喂样式」**:
+    // `VariableType`(:1832)十二项里有八个复合样式类型(PAINT / TEXT / EFFECT / GRID /
+    // STROKE_WIDTH / CORNER_RADIUS / PADDING / SPACING),建出来就是一条样式;
+    // 而 `StyleType`(:1810)八项与它们**逐字重名**,`type Style`(:2079)联合里还直接
+    // 混进了 `Variable` —— 于是 `getStyleById` 连变量都查得出来,样式与变量共用同一套
+    // id 空间与同一套类别词汇。区分只有一条:`BaseStyle` 有 `collectionName`(:1990)、
+    // `Variable` 没有(:1874)—— `mastergo/host.ts:175-201` 的 removeStyle 守卫就靠它
+    // (真机 2026-10-14 拿变量 id `3:7` 调 `jsd_delete_style`,回包 removed、变量真没了)。
     variables: {
       read: 'mg.variables.getVariables()',
       readShape: 'array',
-      write: ['mg_variables_create', 'mg_variables_apply'],
+      write: [
+        'mg_variables_create',
+        'mg_variables_apply',
+        'mg_variables_remove',
+      ],
       nativeUnwired: [
         'mg.variables 的 Mode 管理:addMode / renameMode / deleteMode / setVariableMode / setPageVariableMode(读侧已给 getModes,见 mg_list_variables)',
         'mg.variables 的分组管理:getGroupList / createGroup / addVariablesToGroup / removeVariablesFromGroup / renameGroup / disbandGroup / deleteGroup',
         'mg.variables.createVariableInLayer(一步建变量 + 绑图层;与 create + apply 的组合重叠,未接)',
         'mg.variables.setVariableReference / unlinkVariable(变量引用变量、跨类型别名与复合样式变量的子属性引用)',
         'mg.variables 的作用域与代码语法:setVariableScopes / setCodeSyntax / getVariableIndexes / addVariableValue(复合变量补子项)',
+        // 四类专属样式**建**已接(dec 25827d0c:`jsd_create_style` 的 kind 收八项,MG 的
+        // createCornerRadiusStyle / createPaddingStyle / createSpacingStyle /
+        // createStrokeWidthStyle 都在 `:1459-1468`)。仍未接的是它们的**样式侧枚举**
+        // (`getLocalStrokeWidthStyles` 等 :1517-1520 没投影成契约成员)—— 但真机 2026-10-14
+        // 查清了两件事:① 本平台**确实声明了** `styleEnumeration`,且 `assets.styles` 列得出来
+        // (PAINT / EFFECT 三条,不退超时)—— 0043 的「MG 待验」结掉;② 这四类建出来**落在变量面**
+        // (出现在 `assets.variables`,不进 `assets.styles`,删除走 `mg_variables_remove`)——
+        // `mg.createSpacingStyle` 与「SPACING 复合样式变量」在 MG 里本来就是同一个东西。
+        // ⚠ 但**两份清单不互补、按创建路径随机可见**(同日复验:同一个 PAINT 复合样式变量
+        // 走 `mg_variables_create` 建出来只进 `assets.styles`,`mg_list_variables` 两种筛法都列不出它)。
+        'mg.getLocalStrokeWidthStyles / getLocalCornerRadiusStyles / getLocalPaddingStyles / getLocalSpacingStyles(:1517-1520):四类样式的样式侧枚举未接(它们改由 assets.variables 那侧可见)',
       ],
       fallback: null,
       evidence: [
         `${MG}:1522 readonly variables: VariableAPI`,
         `${MG}:1098-1108 VariableAPI(Collection / Mode)`,
         `${MG}:1176 getVariables() / :1874 Variable{id,name,…}`,
-        'packages/ui/src/code/mastergo/ops.ts 三个变量 op 与槽位表(官方文档 URL 见该文件头注释;mg_variables_apply 与 Figma 同形,一次吃 bindings[] 多组)',
+        `${MG}:1832 VariableType 十二项(八项与 :1810 StyleType 逐字重名)/ :2079 type Style 联合含 Variable / :1990 BaseStyle.collectionName`,
+        `${MG}:1920 VariableValue(含 :1901 TextVariableValue 与 Record<string,unknown>):复合样式变量走**部分更新**,不传的子项就是空样式`,
+        // 四条真机事实(2026-10-14,MG 客户端)—— typings 与官方文档都给不出这些,
+        // 每条挂在**承住它的那段代码**上(证据行的开头必须是仓内路径或 @包名)。
+        'packages/ui/src/code/mastergo/ops.ts MG_VARIABLE_TYPES_UNSUPPORTED —— 真机:`mg_variables_create type=SPACING` 抛 `Unsupported variable type: SPACING`;官方文档的 PluginVariableType 11 项才是引擎实况,typings 的 VariableType 十二项含幻影',
+        'packages/ui/src/code/mastergo/ops.ts createVariables 的回读分支 —— 真机:复合样式变量**不进 `getVariables()` 列表**(按 collectionId、按 type 两种筛法当次与下一次都列不出),但 `getVariableById(id)` 读得到 ⇒ 回读判据必须是按 id 查;两条都读不到才落 `pendingReadback`(判成失败会让调用方重试、攒出重复变量)',
+        'packages/ui/src/code/mastergo/ops.ts listVariablesOp 的取变量分支 —— 真机:`mg.variables.getVariables(undefined)` 抛 `Cannot read properties of undefined (reading collectionId)`:typings 把 options 标成可选,引擎实现不判空,空筛选必须一个参数都不传',
+        'packages/ui/src/code/mastergo/host.ts createStyle 的八工厂分支 —— 真机:`jsd_create_style` 的四类新 kind 建得出(id 6:12~6:15),但它们进的是 `assets.variables` 而不是 `assets.styles`;反向 `mg_variables_create type=PAINT`(id 6:45)只进 `assets.styles`,`mg_variables_remove` 对它无效并点名走 `jsd_delete_style`(删后回读判据生效,不再假报 removed)。⇒ 两份清单是同一批资源的两个视角,**按创建路径随机可见**,只有 id 是可靠判据',
+        'packages/ui/src/code/mastergo/meta.ts capabilities 声明 styleEnumeration —— 真机:`assets.styles` 列得出来(PAINT / EFFECT 三条,不退超时),0043 的「MG 是否也这样」那一半结掉',
+        'packages/ui/src/code/mastergo/ops.ts 三个变量 op 与槽位表(官方文档 URL 见该文件头注释;mg_variables_apply 与 Figma 同形:形制对齐见 dec 0040,一次吃 bindings[] 多组见 dec 7165f370)',
         `${MG}:1832 VariableType 十二项里没有 VARIANT —— 变体属性无从绑变量`,
         'packages/ui/src/code/mastergo/meta.ts capabilities 声明 variables(0040 起)',
       ],
@@ -280,16 +344,34 @@ export const PLATFORM_KNOWLEDGE: Readonly<
     // 组件:读侧由门面投影成契约形状(原生是数组),写侧有 mg_add_component_property;
     // `setProperties` 签名是 string|boolean(键必须是 propertyId,名字归一在门面里)。
     // 能力位仍**不声明**:写侧真机未验证通过(meta.ts:12-14)。
+    //
+    // ⚠ 「MG 的组件属性绑不了变量」这句此前写成了「没有这层关系」,更正:
+    // **关系在引擎里存在、类型里读得到**(`ComponentPropertyValue.variableId` :3001,
+    // 官方注释「当组件属性绑定到变量时,对应的变量 id,仅 TEXT/BOOLEAN 类型可能存在」),
+    // 缺的只是**插件侧写入口**(:3097 只收 string|boolean)。读出口 0024 起已透传
+    // (见 `schemas/platform.ts` 的 componentPropertyValueSchema 与
+    // `mastergo/property-values.ts` 的 readComponentPropertyValues)—— 只在**组件侧**那张表,
+    // 实例侧的 `ComponentProperties`(:3030)没有这一项。
     components: {
       read: 'componentProperties',
       readShape: 'map',
-      write: ['mg_add_component_property', 'jsd_set_instance_properties'],
-      nativeUnwired: [],
+      write: [
+        'mg_add_component_property',
+        'mg_bind_component_property',
+        'mg_edit_component_property',
+        'mg_delete_component_property',
+        'jsd_set_instance_properties',
+      ],
+      nativeUnwired: [
+        '把组件属性绑成变量:MG 只在读侧给 variableId(:3001),写侧没有任何入口 —— 要绑只能在设计器里手动做,插件只能验证它存不存在',
+      ],
       fallback: null,
       evidence: [
         `${MG}:3096 readonly componentProperties: Array<ComponentProperties>`,
         `${MG}:3097 setProperties({ [propertyId: string]: string | boolean })——**不收变量别名**,值绑变量只此 Figma 一家(dicts/platform-value-domain.ts 的第四类表按平台 deny)`,
+        `${MG}:3001 ComponentPropertyValue.variableId —— 属性 ↔ 变量的**只读**证据(仅组件侧;实例侧 :3030 无此字段)`,
         `${MG}:2965-2980 ComponentPropertiesMixin(add / edit / delete)`,
+        `${MG}:3004 ComponentPropertyType 四项,没有 Figma 的 SLOT(:10985)`,
         'packages/ui/src/code/mastergo/meta.ts:12-14 写侧真机未验,故不 claim',
       ],
     },

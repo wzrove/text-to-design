@@ -988,8 +988,21 @@ export const MG_VARIABLE_TYPES = [
   'STROKE_WIDTH',
   'CORNER_RADIUS',
   'PADDING',
-  'SPACING',
 ] as const;
+
+/**
+ * typings 的 `VariableType` 列了、**引擎实建不收**的类型:真机 2026-10-14(MG 客户端)
+ * 对 `mg_variables_create type=SPACING` 直接抛 `Unsupported variable type: SPACING`,
+ * 与官方文档 `PluginVariableType` 表(11 项、没有 SPACING)一致。
+ *
+ * 此前这里按 typings 走(注释写着「文档少一项,本仓按 typings 为准」)—— 那是**没有实测时**
+ * 的取舍,现在有实测:签名声明不等于引擎实现。登记成名单而不是删掉注释:建侧与列侧的 enum
+ * 都用这 11 项(引擎建不出,也就列不出),`mg_list_variables` 因此少一个永远为空的筛选项。
+ *
+ * ⚠ 别和**样式类别**混起来:`jsd_create_style kind=SPACING` 在 MG 建得出来(走
+ * `mg.createSpacingStyle`),建出来的东西落在**变量面**(见 `platform-knowledge.ts`)。
+ */
+export const MG_VARIABLE_TYPES_UNSUPPORTED = ['SPACING'] as const;
 
 /**
  * 绑定槽位表:官方文档「属性参数一览」(https://developers.mastergo.com/apis/variables)。
@@ -1075,9 +1088,13 @@ async function listVariablesOp(
   const filter: { collectionId?: string; type?: never } = {};
   if (p.collectionId != null) filter.collectionId = p.collectionId;
   if (p.type != null) filter.type = p.type as never;
-  const all = mg.variables.getVariables(
-    Object.keys(filter).length > 0 ? filter : undefined,
-  );
+  // ⚠ typings 把 `options` 标成可选,引擎实现却**不做判空**:传显式 `undefined` 直接抛
+  // `Cannot read properties of undefined (reading 'collectionId')`(真机 2026-10-14,
+  // 不带 collectionId/type 的 `mg_list_variables` 每次都崩)。要么给对象,要么**一个参数都不传**。
+  const all =
+    Object.keys(filter).length > 0
+      ? mg.variables.getVariables(filter)
+      : mg.variables.getVariables();
   const slice = all.slice(0, limit);
   return {
     // 集合恒列全量(它还带模式表,而模式是变量值的索引维度,不是可选信息)
@@ -1112,6 +1129,11 @@ async function createVariables(
     type: string;
     created: boolean;
   }>;
+  /**
+   * 本轮执行内读不到、但**下一次调用就能读到**的复合样式类型(见函数体那条真机记录)。
+   * 出现它不等于失败 —— 资源已落盘,只是引擎的读面在本轮不认它。
+   */
+  pendingReadback?: Array<{ id: string; name: string; type: string }>;
 }> {
   const p = params as {
     collectionName?: string;
@@ -1187,19 +1209,51 @@ async function createVariables(
     if (existing == null) mg.variables.deleteCollection(collection.id);
     throw e;
   }
-  // 回读:本平台有「回包成功、值没变」的前科(0018),存在性必须再读一次
+  // 回读:本平台有「回包成功、值没变」的前科(0018),存在性必须再读一次。
+  // ⚠ 但**复合样式类型(PAINT / TEXT / EFFECT / …)在同一次执行内读不到**:真机 2026-10-14
+  // 建 `type=PAINT` 后,`getVariables({collectionId})` 与 `getVariableById(id)` 都拿不到它,
+  // 而**下一次调用**的清单里它好好地在那儿(id 与名字都对得上,集合归属也是指定的那个)。
+  // 判据不能是「本轮读不到 = 建失败」—— 那会把已落盘的资源报成错误,调用方重试就攒一堆
+  // 重复变量(比静默失效更糟)。故分三档:本轮读到 / 本轮读不到但交给下一次 / 名字类型不符。
   const after = mg.variables.getVariables({ collectionId: collection.id });
-  assertNoProblems(
-    created
-      .filter((c) => !after.some((x) => x.id === c.id))
-      .map((c) => `变量 ${c.name}(${c.id}) 回读不到`),
-    '建/改变量后回读失败',
-  );
+  const pending: Array<{ id: string; name: string; type: string }> = [];
+  const missing: string[] = [];
+  for (const c of created) {
+    const listed = after.find((x) => x.id === c.id);
+    if (listed != null) {
+      if (listed.name !== c.name || listed.type !== c.type)
+        missing.push(
+          `变量 ${c.id} 回读到的名字/类型与请求不符(请求 ${c.name}/${c.type},回读 ${listed.name}/${listed.type})`,
+        );
+      continue;
+    }
+    if (mg.variables.getVariableById(c.id) != null) continue;
+    // 单值类型本轮就该读到,读不到是真失败;复合样式类型交给下一次确认
+    if (isCompositeStyleType(c.type))
+      pending.push({ id: c.id, name: c.name, type: c.type });
+    else missing.push(`变量 ${c.name}(${c.id}) 回读不到`);
+  }
+  assertNoProblems(missing, '建/改变量后回读失败');
   return {
     collectionId: collection.id,
     collectionName: collection.name,
     variables: created,
+    ...(pending.length > 0 ? { pendingReadback: pending } : {}),
   };
+}
+
+/** 复合样式类型:建出来是「一条样式」的那种,引擎在本轮执行内不把它们列进集合 */
+function isCompositeStyleType(type: string): boolean {
+  return (
+    type === 'PAINT' ||
+    type === 'TEXT' ||
+    type === 'EFFECT' ||
+    type === 'GRID' ||
+    type === 'STROKE_WIDTH' ||
+    type === 'CORNER_RADIUS' ||
+    type === 'PADDING' ||
+    type === 'SPACING'
+  );
 }
 
 interface MGBinding {
@@ -1402,7 +1456,11 @@ const variablesCreateSchema = z.object({
     .array(
       z.object({
         name: z.string().min(1),
-        type: z.enum(MG_VARIABLE_TYPES),
+        type: z
+          .enum(MG_VARIABLE_TYPES)
+          .describe(
+            '变量类型。⚠ typings 的 VariableType 有 12 项,但 **SPACING 引擎实建不收**(真机抛 `Unsupported variable type: SPACING`,官方文档的类型表也没有它)—— 所以这里只放 11 项。要 SPACING 那层复用走 `jsd_create_style kind=SPACING` MG 建得出来)',
+          ),
         value: z
           .unknown()
           .optional()
@@ -1479,7 +1537,11 @@ const variablesRemoveSchema = z.object({
 
 /**
  * 删变量:`mg.variables.deleteVariable(id)` 是同步 void(typings :1218),引擎不在返回值
- * 里报告成败,所以「存不存在」只能先查一次 `getVariableById` —— 查不到就进 failed 点名。
+ * 里报告成败,所以**删前删后各读一次** `getVariableById`:
+ * - 删前查不到 → 进 failed(不存在没什么好删);
+ * - 删后仍查得到 → 也进 failed —— 真机 2026-10-14 实测:拿已被 `jsd_delete_style` 删掉的
+ *   复合样式变量 id 走这条,原先只报 `removed`(存在性预检过了、删除本身没生效)。
+ *   MG 的样式与变量共用 id 空间,「另一面删过」在这里读起来就是「没删动」。
  */
 async function removeVariables(
   _host: DesignHost,
@@ -1493,6 +1555,10 @@ async function removeVariables(
       if (mg.variables.getVariableById(id) == null)
         throw new Error(`没有找到变量: ${id}`);
       mg.variables.deleteVariable(id);
+      if (mg.variables.getVariableById(id) != null)
+        throw new Error(
+          `deleteVariable 调用后该 id 仍读得到(引擎没删动;MG 的样式与变量共用 id 空间,若它是样式,走 jsd_delete_style)`,
+        );
       removed.push(id);
     } catch (e) {
       failed.push({ id, reason: e instanceof Error ? e.message : String(e) });
@@ -1602,7 +1668,7 @@ export const mastergoOps: PlatformOp[] = [
     name: 'mg_variables_create',
     title: '批量建变量',
     description:
-      'MasterGo 特有:批量建变量(与 Figma 的 `figma_variables_create` 同形,便于两个平台共用一套调用纪律)。params: { collectionName?, variables: [{ name, type, value?, description? }] }。type 取 typings 全表 12 项:单值 BOOLEAN / NUMBER / STRING / COLOR(COLOR 用 {r,g,b,a},**0-1 浮点**),复合样式 PAINT / TEXT / EFFECT / GRID / STROKE_WIDTH / CORNER_RADIUS / PADDING / SPACING(建出来是空样式,value 走部分更新语义)。**同名集合复用、同名同类型变量就地更新值**;失败回滚本次新建的集合(复用既有集合时不删,避免连坐)。写完回读确认每个变量都在 —— 本平台有「回包成功、值没变」的前科(0018)',
+      'MasterGo 特有:批量建变量(与 Figma 的 `figma_variables_create` 同形,便于两个平台共用一套调用纪律)。params: { collectionName?, variables: [{ name, type, value?, description? }] }。type 收 11 项:单值 BOOLEAN / NUMBER / STRING / COLOR(COLOR 用 {r,g,b,a},**0-1 浮点**),复合样式 PAINT / TEXT / EFFECT / GRID / STROKE_WIDTH / CORNER_RADIUS / PADDING(建出来是空样式,value 走部分更新语义)。⚠ typings 的 `VariableType` 有 12 项,但 **SPACING 引擎实建不收**(真机 2026-10-14 抛 `Unsupported variable type: SPACING`,官方文档的类型表也没有它)—— 要 SPACING 那层复用走 `jsd_create_style kind=SPACING`。**同名集合复用、同名同类型变量就地更新值**;失败回滚本次新建的集合(复用既有集合时不删,避免连坐)。⚠ 复合样式类型**不进 `mg.variables.getVariables()` 列表**(真机 2026-10-14:建成功后,下一次调用按 `collectionId` 或按 `type` 筛都列不出它,但 `getVariableById(id)` 读得到,而它会出现在 `assets.styles` 那一份清单里)。所以本 op 的回读按 **id** 查而不是按列表查;两条都读不到才落进回包的 `pendingReadback`(判成失败会让调用方重试、攒出重复变量)。要确认它在不在,用回包的 id 走 `getStyleById` 侧的 `jsd_*` 或直接改值,别依赖 `mg_list_variables`',
     inputSchema: variablesCreateSchema,
     run: createVariables,
   },
@@ -1610,7 +1676,7 @@ export const mastergoOps: PlatformOp[] = [
     name: 'mg_variables_apply',
     title: '批量绑定/解绑变量到图层属性',
     description:
-      'MasterGo 特有:一次调用绑**多组**变量(与 Figma 的 `figma_variables_apply` 同形),unbind=true 则解绑(解绑**不用**给 variableId)。params: { bindings: [{ nodeIds, variableId?, property, value, index?, unbind? }] } —— 一组 = 一个变量 × 一个槽位 × 一批节点。property 与 value 是一对,取值来自官方文档「属性参数一览」:`baseProperty`(opacity / fillColor / visible)、`strokeProperty`(top / right / bottom / left / all / color)、`radiusProperty`(topLeft / topRight / bottomRight / bottomLeft / all)、`paddingProperty`(top / right / bottom / left / topBottom / leftRight / all)、`dimensionProperty`(width / height / maxWidth / maxHeight / minWidth / minHeight)、`effectProperty`(x / y / blur / spread / color)、`gridProperty`(sectionSize / count / gutterSize / offset / color)、`textProperty`(fontFamily / fontWeight / fontSize / lineHeight / letterSpacing / paragraphSpacing);传错会在入参校验就被点名。数组型属性(fills / effects / grids)**必须**给 index。⚠ 本平台的组件/变体属性**绑不了变量**:`setProperties` 签名只收 string|boolean(dist/index.d.ts:3097),变量类型表里也没有 VARIANT(:1832)—— 要切变体取值走 jsd_set_instance_properties 或集合级 op。⚠ MG **没有**「图层属性 ↔ 变量」的反读接口:回读只能拿到该图层用到了哪些集合(getLayerVariableModes),所以绑完要 jsd_export 目视确认渲染真的变了',
+      'MasterGo 特有:一次调用绑**多组**变量(与 Figma 的 `figma_variables_apply` 同形),unbind=true 则解绑(解绑**不用**给 variableId)。params: { bindings: [{ nodeIds, variableId?, property, value, index?, unbind? }] } —— 一组 = 一个变量 × 一个槽位 × 一批节点。property 与 value 是一对,取值来自官方文档「属性参数一览」:`baseProperty`(opacity / fillColor / visible)、`strokeProperty`(top / right / bottom / left / all / color)、`radiusProperty`(topLeft / topRight / bottomRight / bottomLeft / all)、`paddingProperty`(top / right / bottom / left / topBottom / leftRight / all)、`dimensionProperty`(width / height / maxWidth / maxHeight / minWidth / minHeight)、`effectProperty`(x / y / blur / spread / color)、`gridProperty`(sectionSize / count / gutterSize / offset / color)、`textProperty`(fontFamily / fontWeight / fontSize / lineHeight / letterSpacing / paragraphSpacing);传错会在入参校验就被点名。数组型属性(fills / effects / grids)**必须**给 index。⚠ 组件属性 ↔ 变量在 MG **只读不写**:`setProperties` 只收 string|boolean(dist/index.d.ts:3097),插件侧没有任何把属性绑成变量的入口;但关系本身存在 —— 组件侧的 `componentProperties[].variableId`(:3001,仅 TEXT/BOOLEAN 可能存在)会告诉你设计器里手动绑的是哪个变量,别把它当「没有这层关系」。变体属性另说:变量类型表里没有 VARIANT(:1832),切取值走 jsd_set_instance_properties 或集合级 op。⚠ MG **没有**「图层属性 ↔ 变量」的反读接口:回读只能拿到该图层用到了哪些集合(getLayerVariableModes),所以绑完要 jsd_export 目视确认渲染真的变了',
     inputSchema: variablesApplySchema,
     run: applyVariableReference,
   },
@@ -1618,7 +1684,7 @@ export const mastergoOps: PlatformOp[] = [
     name: 'mg_variables_remove',
     title: '删除变量',
     description:
-      'MasterGo 特有:删本地变量(逐个删,单条 id 不存在只进 failed、不连坐其余)。params: { variableIds: [id…] }。`deleteVariable` 是同步且不回报告(`dist/index.d.ts:1218`),所以本 op 先查一次存在性再删 —— 「静默没删」比报错更难查。与 `jsd_delete_style` 成对:接上删除之后,`mg_variables_create` / `jsd_create_style` 才不是「建了撤不回」的单向门。⚠ 分组管理(`addVariablesToGroup` / `disbandGroup` 等)与模式切换仍未接',
+      'MasterGo 特有:删本地变量(逐个删,单条 id 不存在只进 failed、不连坐其余)。params: { variableIds: [id…] }。`deleteVariable` 是同步且不回报告(`dist/index.d.ts:1218`),所以**删前删后各读一次** `getVariableById`:删前查不到 → failed(不存在没什么好删);删后仍读得到 → 也进 failed(引擎没删动 —— 真机 2026-10-14 拿已被 `jsd_delete_style` 删掉的复合样式变量 id 走这条,原先只报 removed)。与 `jsd_delete_style` 成对:接上删除之后,`mg_variables_create` / `jsd_create_style` 才不是「建了撤不回」的单向门。⚠ **删之前先确认它是变量还是样式**:MG 的样式与变量共用 id 空间、类别词汇还逐字重名(`getStyleById` 连变量都查得出来,`jsd_delete_style` 拿变量 id 会点名拒而不是误删 —— 守卫已接),复合样式变量(如 PAINT 类型)建出来是样式形状却**属于变量**,归这条管。⚠ 分组管理(`addVariablesToGroup` / `disbandGroup` 等)与模式切换仍未接',
     inputSchema: variablesRemoveSchema,
     run: removeVariables,
   },

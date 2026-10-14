@@ -30,14 +30,17 @@
  * RGBA 的 `a`)。真正能类型化、也真正要守的是下面第 1 节的两条:字段面与取值域。
  */
 import type {
+  COMMON_STYLE_KINDS,
   DesignHost,
   FIGMA_ONLY_NODE_TYPES,
   FIGMA_RUNTIME_VALUE_DOMAIN,
   MethodParamAllowViolations,
   MethodParamValue,
+  MG_ONLY_STYLE_KINDS,
   NodeSkeleton,
   NodeType,
   PageSkeleton,
+  StyleKindAllowViolations,
   BlendMode as WireBlendMode,
   Effect as WireEffect,
   Paint as WirePaint,
@@ -332,4 +335,20 @@ export const _figmaSetPropertiesDeclared: Declared<
 
 export type FigmaSetPropsAllKindsAcceptedCheck = ExpectNever<
   MethodParamAllowViolations<never, FigmaSetPropsValue>
+>;
+
+// ---- 7) 契约样式类别的按平台适用集(第五类登记) ----
+
+/**
+ * Figma 的 `StyleType` 只有四类(`plugin-api.d.ts:12372`),而契约的 `STYLE_KINDS` 是
+ * 三家并集(八项)⇒ 两个方向都要守:
+ * ① 登记给 Figma 的那四类必须**真在**宿主取值域里(登记笔误会红);
+ * ② MG 独有的那四类必须**真不在**这里 —— 否则 `PLATFORM_STYLE_KINDS.figma` 就是漏登记,
+ *    而漏登记的后果是「Figma 收到一个没有工厂的 kind」静默走进 TEXT 分支。
+ */
+export type FigmaStyleKindAllowedCheck = ExpectNever<
+  StyleKindAllowViolations<(typeof COMMON_STYLE_KINDS)[number], StyleType>
+>;
+export type FigmaStyleKindAbsentCheck = ExpectNever<
+  Extract<StyleType, (typeof MG_ONLY_STYLE_KINDS)[number]>
 >;

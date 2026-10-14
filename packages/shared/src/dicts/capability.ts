@@ -67,10 +67,16 @@ export const HOST_CAPABILITY_SPEC = {
   // 字段,属展示位。
   //
   // ⚠ 三平台**缺的形态不同**,别一句话糊过去(逐个核对 typings,2026-09-29;MG 侧 2026-10-10 接上读写):
-  //   - Figma:读写都通(读 boundVariables,写两个 platformOp)⇒ 声明;
+  //   - Figma:读写都通 ⇒ 声明。读**三条**通道(节点 `boundVariables` / 库存
+  //     `figma_variables_list` / 样式档 `figma_style_variables_list`),写四个 op
+  //     (建 / 绑节点 / 删 / 绑样式)—— 「变量 → 样式 → 节点」这条三层链两端都接上了,
+  //     中间那环的证据出口是样式档那条读面;
   //   - MG:typings 里有整套 `mg.variables`(集合 / Mode / 变量),0040 起本仓接了
-  //     只读枚举 + 建变量 + 绑定图层属性三个 op ⇒ 声明(claim 的含义是「有变量能力面」,
+  //     只读枚举 + 建变量 + 绑定图层属性 + 删变量四个 op ⇒ 声明(claim 的含义是「有变量能力面」,
   //     而写入口真接上了,不再是空口);模式/分组/别名等旁支未接,登记在 nativeUnwired;
+  //     ⚠ 本平台是「变量**含**样式」(八项复合样式类型 :1832,与 :1810 StyleType 逐字重名、
+  //     与样式共用 id 空间),与 Figma 的「变量喂样式」是两条相反的链路 —— 完整关系见
+  //     `platform-knowledge.ts` 的 mastergo.variables;
   //   - jsDesign:`@jsdesigndeveloper/plugin-typings@1.0.12` 全文**没有任何** variable
   //     声明(grep -in variable 零命中)⇒ 属「**接不了**」,与 MG 那种「可以接」不是一回事。
   // 三域的完整事实(读路径 / 写入口 / 替代路径 / 证据行号)在

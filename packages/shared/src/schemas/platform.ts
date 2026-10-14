@@ -68,7 +68,15 @@ export type VariableAliasRef = z.infer<typeof variableAliasRefSchema>;
 
 /** 实例组件属性值(Figma ComponentPropertyValue 的线格式,preferredValues 对齐 InstanceSwapPreferredValue) */
 export const componentPropertyValueSchema = z.object({
-  type: z.enum(['BOOLEAN', 'VARIANT', 'TEXT', 'INSTANCE_SWAP']),
+  /**
+   * `SLOT` 是 Figma `ComponentPropertyType` 的第五项(plugin-api.d.ts:10985),MG 只有四项
+   * (`dist/index.d.ts:3004`)。此前枚举漏它:引擎读得回来,输出校验(:11089 那套)却判它
+   * 不合法 ⇒ 带插槽的实例整条 `componentProperties` 过不了 schema。
+   * ⚠ 只进**读**形态:写侧 `setProperties` 对 SLOT 直接抛 `cannotSetSlotProperty`
+   * (`:11121`),`core/component.ts:154` 把它归进 skipped,别名形态
+   * {@link componentPropertyAliasValueSchema} 里也没有它。
+   */
+  type: z.enum(['BOOLEAN', 'VARIANT', 'TEXT', 'INSTANCE_SWAP', 'SLOT']),
   value: z.union([z.boolean(), z.string()]),
   preferredValues: z
     .array(
@@ -92,6 +100,20 @@ export const componentPropertyValueSchema = z.object({
   boundVariables: z
     .object({ value: variableAliasRefSchema.optional() })
     .optional(),
+  /**
+   * MasterGo 的**组件属性 ↔ 变量**证据:`ComponentPropertyValue.variableId`
+   * (`dist/index.d.ts:3001`,官方注释「当组件属性绑定到变量时,对应的变量 id,
+   * 仅 TEXT/BOOLEAN 类型可能存在」)。只在 MG 的**组件侧**表(`componentPropertyValues`)里
+   * 有这一项,实例侧的 `ComponentProperties`(:3030)没有。
+   *
+   * 为什么不并进上面的 `boundVariables`:0024 的纪律是「按引擎词汇原样透传,不引入归一化层」
+   * —— MG 给的是裸 id 字符串而不是 `{type:'VARIABLE_ALIAS', id}`,合成一套等于替平台编形状,
+   * 写后回读就没法比对同一个字段了。
+   *
+   * ⚠ 它是**只读**出口:MG 的 `setProperties`(:3097)只收 `string|boolean`,插件侧没有把属性
+   * 绑成变量的入口 —— 「关系存在、能读到、写不了」与「没有这层关系」是两件事,别混成前者。
+   */
+  variableId: z.string().optional(),
 });
 export type ComponentPropertyValue = z.infer<
   typeof componentPropertyValueSchema

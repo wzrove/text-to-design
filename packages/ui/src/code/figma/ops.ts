@@ -243,6 +243,60 @@ const styleApplyByNameSchema = z.object({
   styleName: z.string(),
 });
 
+const styleVariablesListSchema = z.object({
+  styleId: z
+    .string()
+    .optional()
+    .describe(
+      '点名一条样式(团队库样式也能解析,值面只读);不给就按 kind 列本地样式',
+    ),
+  kind: z
+    .enum(['PAINT', 'TEXT', 'EFFECT', 'GRID'])
+    .optional()
+    .describe('只看某一类;省略 = 四类都列'),
+  limit: z.number().int().min(1).optional().describe('默认 200'),
+});
+
+const styleBindingSchema = z
+  .object({
+    styleIds: z
+      .array(z.string())
+      .min(1)
+      .describe('一组 = 一个变量 × 一个字段 × 一批样式'),
+    boundProperty: z
+      .string()
+      .describe(
+        '样式档的引擎字段名:排版档 fontFamily / fontSize / fontStyle / fontWeight / letterSpacing / lineHeight / paragraphSpacing / paragraphIndent(仅 TEXT 样式),或数组档 paints / effects / layoutGrids',
+      ),
+    subField: z
+      .string()
+      .optional()
+      .describe(
+        '数组档必填:paints→color;effects→color/radius/spread/offsetX/offsetY;layoutGrids→sectionSize/count/offset/gutterSize',
+      ),
+    index: z
+      .number()
+      .int()
+      .min(0)
+      .optional()
+      .describe(
+        '数组项下标;effects / layoutGrids 必填,paints 省略即该数组全部 SOLID 项',
+      ),
+    variableId: z
+      .string()
+      .optional()
+      .describe('要绑的变量 id;`unbind: true` 时不用给'),
+    unbind: z
+      .boolean()
+      .optional()
+      .describe('true = 摘掉该字段上的绑定(不需要 variableId)'),
+  })
+  .strict();
+
+const styleVariablesApplySchema = z.object({
+  bindings: z.array(styleBindingSchema).min(1),
+});
+
 const componentPropertiesSetSchema = z.object({
   nodeIds: z.array(z.string()).min(1),
   properties: z.record(
@@ -621,6 +675,327 @@ async function applyStyleByName(
   return { applied, ...(failed.length > 0 ? { failed } : {}) };
 }
 
+/**
+ * 样式对象上的**数组型**可绑字段 → 该档的子字段表。
+ *
+ * ⚠ 词汇与节点档**不同源**:节点上填充/描边叫 `fills` / `strokes`,样式上那一份叫
+ * `paints`(`VariableBindablePaintStyleField = 'paints'`,typings :6855)。把
+ * `figma_variables_apply` 的名字照抄过来会打在不存在的面上传,故点名拒。
+ */
+const STYLE_ITEM_BOUND_FIELDS = {
+  paints: ['color'],
+  effects: ['color', 'radius', 'spread', 'offsetX', 'offsetY'],
+  layoutGrids: ['sectionSize', 'count', 'offset', 'gutterSize'],
+} as const;
+
+/**
+ * 样式上的**排版档**可绑字段 = `VariableBindableTextField`(typings :6845-6853)。
+ * 只有 `TextStyle` 有 `setBoundVariable`(:12507);另三类靠 `boundVariables` 只读回显
+ * + 整数组赋回(`paints` / `effects` / `layoutGrids` 三个属性本身可写)。
+ */
+const STYLE_TEXT_BOUND_FIELDS = [
+  'fontFamily',
+  'fontSize',
+  'fontStyle',
+  'fontWeight',
+  'letterSpacing',
+  'lineHeight',
+  'paragraphSpacing',
+  'paragraphIndent',
+] as const;
+
+/** 一条样式回包:摘要 + 它自己的值 + 它内部的变量绑定(全量面只读,不改) */
+interface StyleDetailRow {
+  id: string;
+  name: string;
+  type: string;
+  description?: string;
+  /** 该样式抄出来的值(键 = paints / effects / layoutGrids / 排版那几项),原样透传 */
+  values: Record<string, unknown>;
+  /**
+   * 样式内部的变量绑定,键是**样式档**的字段名(`paints` / `effects` / `layoutGrids` /
+   * 排版字段),值形态由引擎给(PAINT/EFFECT/GRID 是数组、TEXT 是单个别名)。
+   */
+  boundVariables?: Record<string, unknown>;
+}
+
+/** 逐类异步 getter(0011:dynamic-page 下同步 getter 全抛);kind 省略 = 四类都问 */
+async function stylesByKind(
+  kind: 'PAINT' | 'TEXT' | 'EFFECT' | 'GRID' | undefined,
+): Promise<BaseStyle[]> {
+  if (kind === 'PAINT')
+    return (await figma.getLocalPaintStylesAsync()) as BaseStyle[];
+  if (kind === 'TEXT')
+    return (await figma.getLocalTextStylesAsync()) as BaseStyle[];
+  if (kind === 'EFFECT')
+    return (await figma.getLocalEffectStylesAsync()) as BaseStyle[];
+  if (kind === 'GRID')
+    return (await figma.getLocalGridStylesAsync()) as BaseStyle[];
+  const [p, t, e, g] = await Promise.all([
+    figma.getLocalPaintStylesAsync(),
+    figma.getLocalTextStylesAsync(),
+    figma.getLocalEffectStylesAsync(),
+    figma.getLocalGridStylesAsync(),
+  ]);
+  return [...p, ...t, ...e, ...g] as unknown as BaseStyle[];
+}
+
+/** 样式的值面:按类别取「这组固定视觉到底是什么」,排版档只带属于样式的那几项 */
+function styleValuesOf(style: BaseStyle): Record<string, unknown> {
+  const s = style as unknown as Record<string, unknown>;
+  if (style.type === 'PAINT') return { paints: s.paints };
+  if (style.type === 'EFFECT') return { effects: s.effects };
+  if (style.type === 'GRID') return { layoutGrids: s.layoutGrids };
+  const out: Record<string, unknown> = {};
+  for (const field of [
+    'fontName',
+    'fontSize',
+    'fontStyle',
+    'fontWeight',
+    'letterSpacing',
+    'lineHeight',
+    'paragraphSpacing',
+    'paragraphIndent',
+    'textCase',
+    'textDecoration',
+  ]) {
+    const v = s[field];
+    if (v !== undefined) out[field] = v;
+  }
+  return out;
+}
+
+function toStyleRow(style: BaseStyle): StyleDetailRow {
+  const bound = (
+    style as unknown as { boundVariables?: Record<string, unknown> }
+  ).boundVariables;
+  const description = (style as unknown as { description?: string })
+    .description;
+  return {
+    id: style.id,
+    name: style.name,
+    type: style.type,
+    ...(description ? { description } : {}),
+    values: styleValuesOf(style),
+    ...(bound && Object.keys(bound).length > 0
+      ? { boundVariables: bound }
+      : {}),
+  };
+}
+
+/**
+ * 样式 ↔ 变量的**读出口**:回答「这条样式里哪个字段跟着变量走」。
+ * 存在理由:`assets.styles` 只有 id + 名称,节点上的 `boundVariables` 又**不含**样式内部
+ * 的绑定 —— 这条链(变量 → 样式 → 节点)此前在画布上没有出口,绑完无从验证。
+ */
+async function listStyleVariables(
+  _host: DesignHost,
+  params: unknown,
+): Promise<{
+  styles: StyleDetailRow[];
+  count: number;
+  truncated?: boolean;
+}> {
+  const p = params as {
+    styleId?: string;
+    kind?: 'PAINT' | 'TEXT' | 'EFFECT' | 'GRID';
+    limit?: number;
+  };
+  const limit = p.limit ?? 200;
+  if (p.styleId != null) {
+    // 按 id 点名:团队库样式也在 getStyleByIdAsync 的解析范围内,但它的值面是只读的
+    const found = await figma.getStyleByIdAsync(p.styleId);
+    if (found == null) throw new Error(`没有找到样式: ${p.styleId}`);
+    return { styles: [toStyleRow(found)], count: 1 };
+  }
+  const all = await stylesByKind(p.kind);
+  const slice = all.slice(0, limit);
+  return {
+    styles: slice.map(toStyleRow),
+    count: all.length,
+    ...(all.length > slice.length ? { truncated: true } : {}),
+  };
+}
+
+interface StyleBinding {
+  styleIds: string[];
+  boundProperty: string;
+  subField?: string;
+  index?: number;
+  variableId?: string;
+  unbind?: boolean;
+}
+
+interface StyleBindGroupResult {
+  boundProperty: string;
+  variableId?: string;
+  applied: string[];
+  failed: string[];
+  /** 写完立刻从样式对象读回的绑定(每组各条样式的当前状态) */
+  styles: StyleDetailRow[];
+}
+
+/** 表外的 boundProperty 点名:多数误写是拿**节点档**的词汇来绑样式 */
+function styleRejectionReason(field: string): string | null {
+  if ((STYLE_TEXT_BOUND_FIELDS as readonly string[]).includes(field))
+    return null;
+  if (field in STYLE_ITEM_BOUND_FIELDS) return null;
+  if (field === 'fills' || field === 'strokes')
+    return `节点档才叫 ${field};样式上那一份叫 paints(PAINT 类的可绑字段只有 paints,子字段固定 color)`;
+  if (field === 'color')
+    return 'color 是 paints 的**子字段**,不是样式档的字段名:boundProperty 传 paints、subField 传 color';
+  if (field === 'backgrounds')
+    return 'backgrounds 是即时设计的词汇,Figma 的样式与节点都没有它';
+  return `样式上只有两档可绑:排版档(${STYLE_TEXT_BOUND_FIELDS.join(' / ')};仅 TEXT 样式)与数组档(${Object.keys(STYLE_ITEM_BOUND_FIELDS).join(' / ')};各要 subField,effects / layoutGrids 还要 index)。节点字段(width / cornerRadius / opacity …)不能绑到样式上`;
+}
+
+/**
+ * 把一组绑定落到一批样式上,并**回读**当前绑定 —— 「变量 → 样式」这条链没有别的证据源,
+ * 引擎的 `boundVariables` 是只读面(0024 同口径:写后回读比的就是同一个 variableId)。
+ */
+async function runStyleBinding(
+  b: StyleBinding,
+  label: string,
+): Promise<StyleBindGroupResult> {
+  const reject = styleRejectionReason(b.boundProperty);
+  if (reject != null)
+    throw new Error(`${label} boundProperty=${b.boundProperty}:${reject}`);
+  const unbind = b.unbind === true;
+  const variable = unbind
+    ? null
+    : await figma.variables.getVariableByIdAsync(b.variableId ?? '');
+  if (!unbind && variable == null) {
+    throw new Error(
+      `${label} 没有找到变量: ${b.variableId ?? '(未给 variableId)'}`,
+    );
+  }
+  if (b.styleIds.length === 0) throw new Error(`${label} 没有给 styleIds`);
+  const isItem = b.boundProperty in STYLE_ITEM_BOUND_FIELDS;
+  const applied: string[] = [];
+  const failed: string[] = [];
+  const rows: StyleDetailRow[] = [];
+  for (const styleId of b.styleIds) {
+    const style = await figma.getStyleByIdAsync(styleId);
+    if (style == null) {
+      failed.push(styleId);
+      continue;
+    }
+    try {
+      if (isItem) {
+        const target = style as unknown as Record<string, unknown>;
+        const items = target[b.boundProperty];
+        if (!Array.isArray(items) || items.length === 0) {
+          failed.push(styleId);
+          continue;
+        }
+        const allowed = STYLE_ITEM_BOUND_FIELDS[
+          b.boundProperty as keyof typeof STYLE_ITEM_BOUND_FIELDS
+        ] as readonly string[];
+        if (b.subField == null || !allowed.includes(b.subField)) {
+          throw new Error(
+            `${label} ${b.boundProperty} 要 subField:${allowed.join(' / ')}`,
+          );
+        }
+        // paints 省略 index = 全部 SOLID 项(与节点档同一取舍);effects / layoutGrids 必须给
+        const needIndex = b.boundProperty !== 'paints';
+        if (b.index == null && needIndex) {
+          throw new Error(
+            `${label} ${b.boundProperty} 必须给 index(数组项逐条绑)`,
+          );
+        }
+        const indices =
+          b.index == null
+            ? items.map((_, i) => i)
+            : b.index < items.length
+              ? [b.index]
+              : null;
+        if (indices == null) {
+          failed.push(styleId);
+          continue;
+        }
+        const next = [...items] as unknown[];
+        let touched = 0;
+        for (const i of indices) {
+          const item = items[i] as { type?: string };
+          if (b.boundProperty === 'paints' && item?.type !== 'SOLID') continue;
+          next[i] =
+            b.boundProperty === 'paints'
+              ? figma.variables.setBoundVariableForPaint(
+                  items[i] as SolidPaint,
+                  b.subField as VariableBindablePaintField,
+                  variable,
+                )
+              : b.boundProperty === 'effects'
+                ? figma.variables.setBoundVariableForEffect(
+                    items[i] as Effect,
+                    b.subField as VariableBindableEffectField,
+                    variable,
+                  )
+                : figma.variables.setBoundVariableForLayoutGrid(
+                    items[i] as LayoutGrid,
+                    b.subField as VariableBindableLayoutGridField,
+                    variable,
+                  );
+          touched++;
+        }
+        if (touched === 0) {
+          failed.push(styleId);
+          continue;
+        }
+        // 三个入口都返回**副本**,必须整数组赋回才落到样式上
+        target[b.boundProperty] = next;
+        applied.push(styleId);
+        rows.push(
+          toStyleRow((await figma.getStyleByIdAsync(styleId)) ?? style),
+        );
+        continue;
+      }
+      // 排版档:只有 TextStyle 有 setBoundVariable(:12507)
+      if (style.type !== 'TEXT') {
+        throw new Error(
+          `${label} ${b.boundProperty} 是排版档,只有 TEXT 样式能绑(这条是 ${style.type})`,
+        );
+      }
+      style.setBoundVariable(
+        b.boundProperty as VariableBindableTextField,
+        variable,
+      );
+      applied.push(styleId);
+      rows.push(toStyleRow((await figma.getStyleByIdAsync(styleId)) ?? style));
+    } catch (e) {
+      // 引擎拒收(类型不匹配 / 该面只读):点名到具体样式,不静默跳过
+      failed.push(`${styleId}(${e instanceof Error ? e.message : String(e)})`);
+    }
+  }
+  return {
+    boundProperty: b.boundProperty,
+    ...(b.variableId != null ? { variableId: b.variableId } : {}),
+    applied,
+    failed,
+    styles: rows,
+  };
+}
+
+async function applyStyleVariables(
+  _host: DesignHost,
+  params: unknown,
+): Promise<{
+  groups: StyleBindGroupResult[];
+  applied: string[];
+  failed: string[];
+}> {
+  const { bindings } = params as { bindings: StyleBinding[] };
+  if (bindings == null || bindings.length === 0)
+    throw new Error('变量绑定列表为空');
+  const groups: StyleBindGroupResult[] = [];
+  for (const [i, b] of bindings.entries()) {
+    groups.push(await runStyleBinding(b, `bindings[${i}]`));
+  }
+  const applied = [...new Set(groups.flatMap((g) => g.applied))];
+  const failed = [...new Set(groups.flatMap((g) => g.failed))];
+  return { groups, applied, failed };
+}
+
 async function setComponentProperties(
   host: DesignHost,
   params: unknown,
@@ -784,7 +1159,7 @@ export const figmaOps: PlatformOp[] = [
     name: 'figma_variables_apply',
     title: '批量绑定/解绑变量',
     description:
-      'Figma 特有:一次调用绑**多组**变量,`unbind: true` 则解绑(解绑**不用**给 variableId)。params: { bindings: [{ nodeIds, boundProperty, variableId?, subField?, index?, unbind? }] } —— 一组 = 一个变量 × 一个字段 × 一批节点。boundProperty 用引擎词汇,三档入口不同:① 节点级(width/height/characters/itemSpacing/padding*/corner*/四角 radius/minmax*/stroke*Weight/opacity/gridRowGap/gridColumnGap/visible/fontFamily/fontSize/fontStyle/fontWeight/letterSpacing/lineHeight/paragraphSpacing/paragraphIndent)走 setBoundVariable;② fills / strokes 绑在 paint 自身(节点级会抛),子字段固定 color,index 省略 = 该数组**全部 SOLID 项**,渐变等其余 paint 原样保留;③ effects / layoutGrids 绑数组项,**必须**给 index + subField(effects:color/radius/spread/offsetX/offsetY;layoutGrids:sectionSize/count/offset/gutterSize)。表外字段当场点名拒:backgrounds 是即时设计词汇、variantProperties 不可绑(切变体用 jsd_set_instance_properties)、componentProperties 改走 figma_component_properties_set 的别名值。回包 groups 逐组给 applied/failed,failed = 该节点上这个字段不存在 / 非 SOLID / 引擎拒。⚠ 可绑的变量类型 = `VariableResolvedDataType` 六种(BOOLEAN / COLOR / EASING / FLOAT / STRING / TIMING,typings :11571),**没有 VARIANT 类型变量** —— 变体属性也不在可绑字段表里(:6817-6844)',
+      'Figma 特有:一次调用绑**多组**变量,`unbind: true` 则解绑(解绑**不用**给 variableId)。params: { bindings: [{ nodeIds, boundProperty, variableId?, subField?, index?, unbind? }] } —— 一组 = 一个变量 × 一个字段 × 一批节点。boundProperty 用引擎词汇,三档入口不同:① 节点级(width/height/characters/itemSpacing/padding*/corner*/四角 radius/minmax*/stroke*Weight/opacity/gridRowGap/gridColumnGap/visible/fontFamily/fontSize/fontStyle/fontWeight/letterSpacing/lineHeight/paragraphSpacing/paragraphIndent)走 setBoundVariable;② fills / strokes 绑在 paint 自身(节点级会抛),子字段固定 color,index 省略 = 该数组**全部 SOLID 项**,渐变等其余 paint 原样保留;③ effects / layoutGrids 绑数组项,**必须**给 index + subField(effects:color/radius/spread/offsetX/offsetY;layoutGrids:sectionSize/count/offset/gutterSize)。表外字段当场点名拒:backgrounds 是即时设计词汇、variantProperties 不可绑(切变体用 jsd_set_instance_properties)、componentProperties 改走 figma_component_properties_set 的别名值。回包 groups 逐组给 applied/failed,failed = 该节点上这个字段不存在 / 非 SOLID / 引擎拒。⚠ 本 op 只吃**节点**:样式对象自己的变量绑定(`PaintStyle` / `TextStyle` / `EffectStyle` / `GridStyle` 的 `boundVariables`,typings :12432 / :12496 / :12521 / :12537)是另一档词汇,走 `figma_style_variables_apply` 绑、`figma_style_variables_list` 回读 —— 两边字段名不同(节点上叫 fills/strokes,样式上叫 paints),别混着传。⚠ 可绑的变量类型 = `VariableResolvedDataType` 六种(BOOLEAN / COLOR / EASING / FLOAT / STRING / TIMING,typings :11571),**没有 VARIANT 类型变量** —— 变体属性也不在可绑字段表里(:6817-6844)',
     inputSchema: variablesApplySchema,
     run: applyVariables,
   },
@@ -803,6 +1178,22 @@ export const figmaOps: PlatformOp[] = [
       'Figma 特有:按名称应用本地样式到节点(团队库样式无法按名检索,不在支持范围)。params: { nodeIds, kind: fill|stroke|text|effect, styleName }',
     inputSchema: styleApplyByNameSchema,
     run: applyStyleByName,
+  },
+  {
+    name: 'figma_style_variables_list',
+    title: '查看样式的值与变量绑定',
+    description:
+      'Figma 特有:读**样式对象自身**的值与它内部的变量绑定 —— 「变量 → 样式 → 节点」这条三层链的中间那一环**只有这里能看到**(`jsd_get_page` 的 `assets.styles` 只有 id + 名称,节点上的 `boundVariables` 又不含样式内部的绑定)。params: { styleId?, kind?: PAINT|TEXT|EFFECT|GRID, limit? }。回每条 `values`(PAINT→paints / EFFECT→effects / GRID→layoutGrids / TEXT→排版那几项)与 `boundVariables`(键是**样式档**的字段名,与节点档不同:填充那一份叫 paints,不叫 fills)。`styleId` 点名时团队库样式也能解析出来,但那条是只读的 —— 别拿它当本地样式改。绑定前后的摸底与回读都走这条',
+    inputSchema: styleVariablesListSchema,
+    run: listStyleVariables,
+  },
+  {
+    name: 'figma_style_variables_apply',
+    title: '批量绑定/解绑变量到样式',
+    description:
+      'Figma 特有:把变量绑到**样式对象的字段**上(与 `figma_variables_apply` 同形,但落点是样式:改一次,所有引用该样式的节点跟着变)。params: { bindings: [{ styleIds, boundProperty, variableId?, subField?, index?, unbind? }] }。两档词汇:① **排版档**(仅 TEXT 样式)`fontFamily / fontSize / fontStyle / fontWeight / letterSpacing / lineHeight / paragraphSpacing / paragraphIndent`(= `VariableBindableTextField`,typings :6845;走 `TextStyle.setBoundVariable` :12507);② **数组档** `paints / effects / layoutGrids`(`VariableBindable*StyleField` :6855-6860),必须给 `subField`,effects / layoutGrids 还要 `index`;paints 省略 index = 该数组全部 SOLID 项,渐变等其余 paint 原样保留。⚠ **别照抄节点档词汇**:`fills` / `strokes` 在样式上叫 `paints`,`color` 是 paints 的子字段而不是样式档字段,节点字段(width / cornerRadius / opacity …)绑不到样式上 —— 表外字段当场点名拒。⚠ 数组档的三个入口都返回**副本**,op 内部整数组赋回才落到样式上。解绑传 `unbind: true`(不用给 variableId)。回包每组带**写完立刻回读**的 `styles[].boundVariables` —— 这是这条链唯一的证据,别只看 applied 计数;节点级圆角、组件属性值绑变量走 `figma_variables_apply` / `figma_component_properties_set`,不是这条',
+    inputSchema: styleVariablesApplySchema,
+    run: applyStyleVariables,
   },
   {
     name: 'figma_component_properties_set',

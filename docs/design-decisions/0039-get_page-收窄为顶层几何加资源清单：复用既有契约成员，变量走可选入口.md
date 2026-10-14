@@ -88,6 +88,13 @@
   Figma 与 MG 两侧各投影一个 `getLocalVariablesAsync`（Figma 是 `figma.variables.getLocalVariablesAsync`，
   MG 是命名空间下的 `mg.variables.getVariables()`）；即时设计登记为该符号的缺口 ——
   它是**接不了**（typings 里没有任何变量声明），不是「还没接」。
+  - ⚠ **四桶不互斥，MG 上尤其如此**（真机 2026-10-14，见 dec 25827d0c 的 MasterGo 复验）：
+    `assets.styles` 与 `assets.variables` 在 MG 上是**同一批资源的两个视角** ——
+    `jsd_create_style` 的四类新 kind 建出来只进 `assets.variables`，而
+    `mg_variables_create type=PAINT` 建的复合样式变量只进 `assets.styles`
+    （`mg_list_variables` 按集合、按类型两种筛法都列不出它）。清单本身没错（它照抄引擎给的
+    两份枚举），但**调用方不能拿「在哪一桶里」当资源的身份判据** —— MG 的样式与变量共用 id
+    空间，唯一可靠的定位方式是 id 本身。
 - **本批不做**：MG 变量的**写侧**接入（建集合 / 建变量 / 绑值，形状与 Figma 不同，属独立决策；
   0033 那两个别名 op 仍在等它）；因此 MG 的 `variables` 能力位 claim 继续关着 ——
   claim 的含义是「这个平台有变量能力面」，会把「能改变量」的预期一起放出去；
@@ -139,3 +146,4 @@
 | 2026-10-10 | 用户提「这个名字是不是得换一个，希望它给的是**当前页**的组件/变体/样式/变量 + 第一层节点基础信息」 | **工具标识符 `jsd_get_page` 与资源 URI `jsd://page` 都不动**（0003：drift-watch 按该名直调配对 `nodes[].id/x/y`；改名还要同步配方/CHANGELOG/README 等 10 处已发布引用），只改**展示名**：`getPage.title` 与 `resources.title4` 改为「当前页概览：第一层节点 + 可复用资源清单」，描述钉死范围语义。顺带校正一处口径：**样式与变量是文档级**（引擎枚举 API 本身就是文档级，与页面无关），能按页收口的只有组件与变体 —— 这点写进工具描述与 `jsd://page` 描述 |
 | 2026-10-10 | 上一行的第一版判据（「有没有 `loadAllPagesAsync`」）**被真机推翻**：按符号收口后 `find scope=document` 照样 25008ms `forward_timeout`。原因与 0042 的样式 getter 是同一个坑 —— jsDesign 的 host 是 `Object.create(native)`，typings 里没有的符号**运行时照样透出来**，于是 `loadAllPagesAsync` 存在且**永不返回** | 判据换成**平台声明**（新增能力位 `documentScopeRead`，形制同 0043）；并连 `ensurePagesLoaded` 一起跳过 —— 它 await 的正是那个永不返回的调用。Figma 声明（真有 dynamic-page 且会返回），即时设计 / MG 不声明（MG 未真机验，按保守默认收口，验过能跨页再放开） |
 | 2026-10-10 | 用户提出「重新组织资源：做设计前得知道这页/文档有没有定义好组件、变体、样式、变量，要求复用这些重复内容」→ 资源清单改为**面向复用**的形状：加 `summary` 计数；`variants` 展开「维度 → 可选值」；样式由「仅 PAINT」改为**全量四类**并改名 `paintStyles` → `styles`（带 `type`）；并新增**复用纪律**（工具描述 / `jsd://page` 描述 / `mcp.instructions` / `design-strategy` 配方第 0 条四处同源，入口句按平台由 `reuseGuideText` 投影） | 结论不变（仍不引模式、仍复用既有通路）。变了两处的**口径**：① 键数：`paintStyles` → `styles` 是**改名**（未发布，随本批一起走），四类键恒在的约定不变；② `variants[].properties` 在平台读不到时**整个键省略**，不写空对象 —— 「空对象」会被当成「确实没有维度」，那是谎话。用户明确否掉了「每项带 page」：只要文档级清单，不要页归属 |
+| 2026-10-14 | dec 25827d0c 的 MasterGo 真机复验补了一条本记录没写的前提：清单四桶**互不相干** | 结论不变（五键形状、能力门控、文档级口径全部照旧），只在「本批做」那一段补一条 ⚠：MG 上 `styles` 与 `variables` 互为镜像、按创建路径随机可见 ⇒ 「在哪一桶」不是身份判据，id 才是 |

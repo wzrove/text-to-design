@@ -13,6 +13,7 @@ import { getPlatformState } from '../platform-state';
 import {
   componentWriteText,
   layoutHintText,
+  resourceRelationText,
   reuseGuideText,
   variableBindBulkText,
   variableBindShapeText,
@@ -443,6 +444,13 @@ export function designStrategyRecipe(
   );
   // 复用入口按平台给(句子在 platform-facts,配方只拼接)
   const reuseGuide = reuseGuideText(platform);
+  // 四类件之间的连线(三平台塌缩方式不同)—— 判据选对了仍接错就会白做,故紧跟入口
+  const relations = resourceRelationText(
+    platform,
+    platform == null
+      ? null
+      : getPlatformState()?.capabilities.includes('styleEnumeration') === true,
+  );
   // 排布的两条路(自动布局 / 栅格参考线)与逐平台可落性,同样只拼接不另写事实
   const layoutHint = layoutHintText(platform);
   return `# 画布创作纪律
@@ -455,10 +463,12 @@ export function designStrategyRecipe(
      - **一个语义 token**(主色 / 间距 / 圆角,且要随模式或主题变)→ **变量**;本平台没有变量面就退回上一条的样式。
    - 复用入口(按当前平台):
 ${indentLines(reuseGuide, '     ')}
+   - **它们之间怎么连(三平台的接法完全不同,别照搬别家)**:
+${indentLines(relations, '     ')}
    - **命中就复用,禁止新建重复件**:同名/同用途的组件、已有的变体取值、已有的颜色/文字/效果样式、已有的变量,一律先用现成的;清单里确实没有才新建,并按「组件族/状态」命名 —— 命名是它下一次能被命中的唯一依据。反向也一样别做过头:只出现一次的结构不必提组件(提了也没有第二次可复用),一次性装饰不必建样式。
    - **清单是空的,先分清两种「看不到」** —— 判错就会白建一堆重复件:① **本平台读不出来**:样式与变量是能力门控面,平台未声明时 \`assets.styles\` / \`assets.variables\` **恒空**,回包 note 会点名「恒空:本平台未声明对应能力,这一面清单读不出来(不等于文档里没有)」;组件/变体集则可能因某页枚举失败而不全,note 里点名的是具体页名。别拿「看不到」当「没有」 —— 先用 \`jsd_find\` 按名字/类型再确认一遍;名字寻址(\`{{@comp:…}}\` / \`{{@var:…}}\`)读的是同一份清单,同样会不命中。② **确实没有** → 按下面从零建。
    - **从零建的落点顺序:先做样板 → 抄成件 → 再铺开**,别先铺十个同样的再回头提炼(那时每个都要改一遍):
-     - 第一个单元做出来就立刻定型:**视觉类** \`jsd_create_style\` 从该节点抄出 PAINT / TEXT / EFFECT,后续节点直接引用 \`*StyleId\`;**语义 token** 用本平台的建变量 op(名单见 platformOps),没有变量面的平台就落在样式上;**结构类**是否 \`jsd_create_component\` 提组件,按下一条的判据来 —— 不该抽的别抽。
+     - 第一个单元做出来就立刻定型:**视觉类** \`jsd_create_style\` 从该节点抄出 PAINT / TEXT / EFFECT / GRID,后续节点直接引用 \`*StyleId\`;**语义 token** 用本平台的建变量 op(名单见 platformOps),没有变量面的平台就落在样式上;**结构类**是否 \`jsd_create_component\` 提组件,按下一条的判据来 —— 不该抽的别抽。
      - 抽不抽的一句话判据:**结构完全一致 + 差异能收敛到变体属性 / 文本属性** → 抽,其余同类一律 \`jsd_create_instance\` 铺;**差异落在子节点上、或状态要靠多主件扛** → 不抽(理由见下面「复用不是无条件」那三条)。多状态:能合成变体集就合成,不能就多主件按「族 / 状态」命名。
      - **命名是它下一次能被命中的唯一依据**:按「族 / 状态」命名,不留「矩形 1」。
      - **建完回读**:再取一次资源清单,确认它真的进了 \`assets\`(看 \`summary\` 计数或名字)—— 没出现等于没建,下一次调用照样命中不了。⚠ 例外:**未声明 \`styleEnumeration\` 的平台(即时设计)连样式都列不出来**,建完在清单里永远看不到 —— 那就把 \`jsd_create_style\` 回包的 id **记账**(节点上的 \`*StyleId\` 也读得到),别指望回读清单。
@@ -576,6 +586,7 @@ ${variableBindBulkText(platform)}
 - 整条链(建变量 → 绑定 → 回读复核)合并进 jsd_batch:本批新建的中间 id 用 {{步骤id.字段路径}} 占位符(不回传模型),**已存在的组件 / 变量按名字取**用 {{@comp:名称}} / {{@var:名称}} —— 它读一次 jsd_get_page 的资源清单,省掉「先查 id 再拼批」那一趟往返;名字不唯一或没命中都会点名中止。
 - ⚠ 名字一律按 assets 里**原样**写,不要照搬创建时用的路径:即时设计会把带斜杠的组件名拆成「集合 / 成分」,assets.components[].name 存的是叶子名(真机 2026-10-14:建「探针/组件」之后清单里叫「组件」,而「探针」落在 assets.variants 的集合名上)—— 按创建时那个路径写会不命中,没命中时错误里会给出现有名字。
 - ⚠ 可建 / 可绑的变量类型:Figma 是 VariableResolvedDataType 六种(BOOLEAN / COLOR / EASING / FLOAT / STRING / TIMING),MG 是那 12 项(单值 STRING / BOOLEAN / COLOR / NUMBER + 复合样式 PAINT / TEXT / EFFECT / GRID / STROKE_WIDTH / CORNER_RADIUS / PADDING / SPACING)—— **两家都没有 VARIANT 类型** —— 「把变体属性绑到变量」在这两个平台上都不存在,别去试;切变体取值走 jsd_set_instance_properties。另两条容易混成一件事的:Figma 能把**组件属性值**(BOOLEAN / TEXT / INSTANCE_SWAP)绑变量,properties 的值传 {type, value:{type:'VARIABLE_ALIAS', id}};而「一个变量的值引用另一个变量」是**值形态**(把 {type:'VARIABLE_ALIAS', id} 作为 value 传给 figma_variables_create),不是第五种可建类型 —— EXPRESSION 与 VARIABLE_ALIAS 只出现在原型交互的 VariableData 表里,createVariable 的第三参收不了它们。
+- ⚠ MG 那八项**复合样式类型建出来就是一条样式**(它自己带 paints / 排版子项),所以它只进 \`assets.variables\`、**不进** \`assets.styles\`;而 MG 的样式与变量**共用一套 id 空间且类别词汇重名** —— 删除时分入口:变量走 \`mg_variables_remove\`,样式走 \`jsd_delete_style\`,拿样式入口删变量会回包成功、变量真没了(真机 2026-10-14)。Figma 反过来:样式是**独立资源**,变量可以绑进样式里(改一次,所有引用该样式的节点都跟)—— 写用 \`figma_style_variables_apply\`、回读用 \`figma_style_variables_list\`,**词汇与节点档不同**:样式上那份填充叫 paints(不是 fills / strokes)、子字段固定 color,排版档(fontSize / lineHeight / …)只有 TEXT 样式能绑;要「这一个节点的某个字段跟变量」仍走 \`figma_variables_apply\`,两档别混。
 
 ## 4. 复核(写后必须回读)
 ${variableBindVerifyText(platform)}

@@ -265,7 +265,7 @@ export function reuseGuideText(platform: PlatformKey | null): string {
       '- 组件:`jsd_create_instance` 用 `componentId` 铺实例;同类单元 ≥2 个时**先查清单**,别新建重复组件。',
       '- 变体集:切到**已有**取值用 `jsd_set_instance_properties`(取值清单看 `assets.variants[].properties`;MG 原生读不到该字段时用 `mg_list_variant_properties` 看)。要造新值用集合级 op,不要靠改主件名字。',
       '- 样式:节点字段 `fillStyleId` / `strokeStyleId` / `textStyleId` / `effectStyleId` 直接引用样式 id。⚠ 本平台只声明了 `styles`(**按 id 应用**),**没声明 `styleEnumeration`**(列出有哪些样式)—— 四个 `getLocal*Styles` 都在但永不返回(同步调用还会冻死插件线程,见 0043),故 `assets.styles` 与 `jsd://styles` **恒空**:别拿「清单里没有」当「文档里没有」,要复用已有样式就从**正用着它的节点**上读 id(`jsd_find` / `jsd_get_selection` 的 `*StyleId` 字段);确认没有才 `jsd_create_style` 从指定节点抄,并**把回包 id 记账**(这份平台列不出来,丢了找不回;建重复了用 `jsd_delete_style` 按 id 删)。',
-      '- 变量:`mg_variables_apply` 绑到图层属性,变量 id 从 `mg_list_variables` 或 `assets.variables` 取。',
+      '- 变量:`mg_variables_apply` 绑到图层属性,变量 id 从 `mg_list_variables` 或 `assets.variables` 取。要的是「一组值一起复用」(间距 / 圆角 / 描边宽度 / 填色这套)就建 **复合样式变量**:`mg_variables_create` 的 type 有 PAINT / TEXT / EFFECT / GRID / STROKE_WIDTH / CORNER_RADIUS / PADDING(11 项,**SPACING 引擎不收**)—— 建出来本身就是一条样式,只进 `assets.variables`。',
     ].join('\n');
   }
   if (platform === 'figma') {
@@ -273,7 +273,7 @@ export function reuseGuideText(platform: PlatformKey | null): string {
       '- 组件:`jsd_create_instance` 用 `componentId` 铺实例;同类单元 ≥2 个时**先查清单**,别新建重复组件。',
       '- 变体集:切到**已有**取值用 `jsd_set_instance_properties`(取值清单看 `assets.variants[].properties`)。',
       '- 样式:平台 op `figma_style_apply_by_name` 按名应用,或直接写节点字段 `fillStyleId` / `strokeStyleId` / `textStyleId` / `effectStyleId`;**清单里没有就建一条** —— `jsd_create_style` 从指定节点抄。',
-      '- 变量:平台 op `figma_variables_apply` 绑到节点(变量 id 先 `figma_variables_list` 或从 `assets.variables` 取)。',
+      '- 变量:`figma_variables_apply` 绑到节点(变量 id 先 `figma_variables_list` 或从 `assets.variables` 取);**绑进样式里**用 `figma_style_variables_apply`(改一次,所有引用该样式的节点都跟),回读走 `figma_style_variables_list`。',
     ].join('\n');
   }
   if (platform === 'jsdesign') {
@@ -289,6 +289,78 @@ export function reuseGuideText(platform: PlatformKey | null): string {
     '- 变体集:切到**已有**取值用 `jsd_set_instance_properties`(取值清单看 `assets.variants[].properties`)。',
     '- 样式:节点上的 `*StyleId` 字段引用样式 id(`jsd_create_style` 能从既有节点建出一条),或本平台提供的按名应用入口(清单见 `jsd://platform/state` 的 platformOps)。',
     '- 变量:本平台的变量入口见 `jsd://platform/state` 的 platformOps(`assets.variables` 恒空即本平台没有变量面)。',
+  ].join('\n');
+}
+
+/**
+ * 「四类可复用件**之间**怎么连」—— 设计策略第 0 条里,选型判据之外的那段关系。
+ *
+ * 为什么单独一段:`reuseGuideText` 说的是「每一类各自的复用入口」,但真正让调用方选错的
+ * 是**连线方式三平台根本不同**:Figma 是「变量 → 样式 → 节点」的三层链,MG 把样式塌进
+ * 变量(八项复合样式类型),jsDesign 只有样式一层。缺了这段,Figma 上养成的习惯会被照搬
+ * 到 MG 去找「样式的变量绑定」、或搬到即时设计去找变量入口。
+ *
+ * 取舍写在**这一处**,不在 prompts 里按平台分支重写(0032);平台侧的入口名/读路径仍取
+ * `dicts/platform-knowledge.ts`,本函数只拼关系。`styleEnumerated` 由调用方从 ping 回包
+ * 的 capabilities 传(claim 的唯一真源是插件侧 meta,本文件不复制,见 0043)。
+ */
+export function resourceRelationText(
+  platform: PlatformKey | null,
+  styleEnumerated: boolean | null,
+): string {
+  const shared = [
+    '- **三平台一致的三条**:① 分层是「变量(一个值)→ 样式(一组固定视觉)→ 组件(一组节点)→ 变体(组件的多态维度)」,越往下越贵也越难改;② 「改一处影响全部」有**三种源头** —— 改值(变量)/ 改一组值(样式)/ 改结构(主组件),按差异落在哪一层选,别一律抽组件;③ **变体取值绑变量三家都做不到**:三平台的变量类型表里都没有 `VARIANT`(行号见 `dicts/platform-knowledge.ts` 三家的 evidence)——「切到禁用态时颜色跟着主题变」得拆成两件事:变体只管**结构态**,颜色/间距仍由变量或样式扛。',
+    '- **三套词汇别混用**:组件属性走 `jsd_set_instance_properties`,节点字段走 `jsd_set_*`,变量绑定走本平台的变量 op —— 拿错入口的典型症状是「回包成功、画布没变」。',
+  ];
+  const styleFace =
+    styleEnumerated === false
+      ? [
+          '- ⚠ **样式这一面列不出来**:本平台声明了 `styles`(按 id 应用是通的)但没声明 `styleEnumeration`,故 `assets.styles` / `jsd://styles` **恒空**(0043)。已有样式的 id 只能从**正用着它的节点**上读 `fillStyleId` / `strokeStyleId` / `textStyleId` / `effectStyleId`,新建的必须把 `jsd_create_style` 回包的 id **记账** —— 丢了找不回(重复建了按 id 走 `jsd_delete_style`)。',
+        ]
+      : [];
+  if (platform === 'figma') {
+    return [
+      '- **Figma:三层链(变量 → 样式 → 节点)三端都通,但一套链一套词汇**,别把三档的字段名混着传:① **节点档** `figma_variables_apply`(width / cornerRadius / opacity… 与 fills / strokes / effects / layoutGrids);② **样式档** `figma_style_variables_apply`(数组档叫 **paints** / effects / layoutGrids —— 节点上的 fills / strokes 在样式上叫 paints,子字段固定 color;排版档 fontFamily / fontSize / … 仅 TEXT 样式);③ **组件属性档** `figma_component_properties_set`(值传 `{type, value:{type:"VARIABLE_ALIAS", id}}`,**只此一家**能这么写)。选哪档就一个问句:**改一次要带动多大一片** —— 一个节点(①)/ 所有引用这条样式的节点(②)/ 所有实例的这个属性(③)。',
+      '- **验证走各自的读面,别拿一端的证据宣布另一端生效**:①回读节点 `boundVariables`;②回读 `figma_style_variables_list`(样式档的绑定**只有这里能看到** —— `assets.styles` 只给 id + 名称,节点上的 `boundVariables` 不含样式内部的绑定;`figma_style_variables_apply` 的回包已带写完立刻回读的 `styles[].boundVariables`);③回读 `componentProperties[].boundVariables.value`。',
+      '- ⚠ **两类东西绑不了**:变体属性(`VARIANT` —— 变量类型表里没有它)与 `SLOT` 组件属性(读得到、写侧引擎抛 `cannotSetSlotProperty`);样式档里也没有节点字段(圆角、宽高、透明度绑不到样式上,它们本来就属于节点)。',
+      '- **改值与删除的口子**:同名同类型再调一次 `figma_variables_create` 就是就地更新(没有独立的改值 op);变量删除走 `figma_variables_remove`(删完空集合会留着,集合与模式的生命周期未接),样式删除走 `jsd_delete_style`。',
+      ...styleFace,
+      ...shared,
+    ].join('\n');
+  }
+  if (platform === 'mastergo') {
+    return [
+      '- **MG:变量**包含**样式** —— 不是「变量喂样式」。`mg_variables_create` 的 type 里有八项复合样式(PAINT / TEXT / EFFECT / GRID / STROKE_WIDTH / CORNER_RADIUS / PADDING / SPACING),建出来**本身就是一条样式**。⇒「一组固定视觉,还要随模式切」在 MG 上是**一条变量**、不是一条样式;两条路都通,选错的症状是**在另一半清单里找不到它**:复合样式变量只进 `assets.variables`,不进 `assets.styles`。',
+      '- ⚠ **样式与变量共用一套 id 空间,类别词汇还逐字重名**(它的 `getStyleById` 连变量都查得出来)。删除**必须分入口**:变量走 `mg_variables_remove`,样式走 `jsd_delete_style` —— 拿样式入口删变量会**回包成功、变量真没了**(真机 2026-10-14)。名字在两份清单里撞车时,先确认它在哪一面再动。',
+      '- **样式面八类都通,但落点分两面**:本平台的 `StyleType` 就是那八项(`:1810`),`jsd_create_style` 全收(后四类 STROKE_WIDTH / CORNER_RADIUS / PADDING / SPACING **只此一家**有工厂 —— 另两家没有,传过去会被写前点名拒)。⚠ 真机 2026-10-14:**`assets.styles` 与 `assets.variables` 是同一批资源的两个视角,列出来的内容不互补、也不可预测** —— 后四类走 `jsd_create_style` 建出来进了 `assets.variables`;而 `mg_variables_create type=PAINT` 建的复合样式变量反过来只出现在 `assets.styles`,`mg_list_variables` 按集合筛、按类型筛都列不出它。⇒ **别拿「哪份清单里有它」当判据**:要确认就用回包的 id 直接读(`getVariableById` / `getStyleById` 共用同一套 id,都解析得出来),要删就按错误提示换入口(两边都会点名拒,不会误删)。',
+      '- ⚠ `mg_variables_create` 的 type 只有 **11 项**:typings 的 `VariableType` 列了 SPACING,引擎实建抛 `Unsupported variable type: SPACING`(官方文档也没有它)—— 要 SPACING 走 `jsd_create_style kind=SPACING`。',
+      '- ⚠ 复合样式类型的变量**不进 `mg.variables.getVariables()` 列表**(按集合筛、按类型筛都列不出;`getVariableById(id)` 读得到)。op 的回读因此按 id 查,两条都读不到才落 `pendingReadback` —— 看到它**不要重试**,拿 id 走样式侧确认即可。',
+      '- ⚠ 这四类的**样式侧枚举面没接**(`getLocalStrokeWidthStyles` 等 MG:1517-1520 未投影成契约成员)—— 但它们会出现在 `assets.variables` 里,所以不是找不到,是**在另一份清单里找**。',
+      '- **组件属性 ↔ 变量:读得到、写不了**。`componentProperties[].variableId` 是 MG 给的绑定证据(仅**组件侧**那张表、仅 TEXT/BOOLEAN 属性可能存在),但 `setProperties` 只收 `string|boolean`,平台没有任何写入口 ⇒ 别在这里传 `{type,value:{type:"VARIABLE_ALIAS",…}}`,core 按方法参数登记表点名中止;要绑只能在设计器里手动做,插件这一侧只能验证它存不存在。',
+      '- **模式切换没有入口**:`setVariableMode` / `setPageVariableMode` 未接 ⇒ 换主题要么在设计器里手动切模式,要么每个主题各建一套变量 —— 别拿「建了多个 mode」当它已经会跟着切。',
+      ...styleFace,
+      ...shared,
+    ].join('\n');
+  }
+  if (platform === 'jsdesign') {
+    return [
+      '- **jsDesign:只有样式一层** —— typings 全文没有任何 variable 声明(`grep -in variable` 零命中),这是**平台没有这个面**,不是「本仓还没接」。⇒ 变量能做的「一个语义 token 随模式/主题变」在这里没有对应物:色板、间距、排版一律落**样式**;深浅两套主题只能建成两套样式族按名字批量重刷(`jsd_find` 定位 → `jsd_batch` 改写),或抽成两个组件族 —— 别去试变量 op(daemon 拦成 `platform_unsupported`,白跑一趟往返)。',
+      '- **组件属性只收字符串**:`setProperties` 的签名只有 `string`(布尔 / 换绑 / 文本属性的值形态一概不收)⇒ 状态差异不要押在组件属性上,走「族名 / 状态」命名的多主件;另:给**没有变体属性的实例**调 `jsd_set_instance_properties` 不是报错,是挂到 25s 转发超时(真机 2026-10-14)。',
+      '- ⚠ 契约的样式类别是三家 `StyleType` 的**八项并集**,本平台只有四类(PAINT / TEXT / EFFECT / GRID,`plugin-api.d.ts:1137`)⇒ 传 STROKE_WIDTH / CORNER_RADIUS / PADDING / SPACING 会在写前被点名拒(不静默、不会建成别的类);间距与圆角要统一就落节点字段(`jsd_set_layout` / `jsd_set_cornerRadius`),或按「族 / 值」命名后 `jsd_find` + `jsd_batch` 批量刷。',
+      '- **变体集造不出来**:`combineAsVariants` 是唯一产出路径且真机必崩,失败还会留下畸形集合与布尔运算残骸(用 `jsd_repair_nodes` 清)。已有的变体集照样能读、能切取值,缺的只是「用脚本新建一个」。',
+      ...styleFace,
+      ...shared,
+    ].join('\n');
+  }
+  // 平台未探测:只给会漂移的那一条 —— 先探平台再选路
+  return [
+    '- **三平台的连线方式不同,先探平台再选路**(`jsd_ping` 的 capabilities / `jsd://platform/state`):Figma 是「变量 → 样式 → 节点」三层链,三端都有入口(样式档的绑定靠 `figma_style_variables_list` 才看得见);MasterGo 把样式塌进变量(八项复合样式类型,且与样式共用一套 id 空间、类别词汇逐字重名);即时设计只有样式一层(typings 里没有任何变量声明)。照搬别家做法的典型症状:去找本平台没有的入口,或在另一份清单里找已经建好的那一条。',
+    ...(styleEnumerated == null
+      ? [
+          '- 样式能不能列清单同样按能力位判(`styleEnumeration`):未声明的平台上 `assets.styles` 恒空 —— **别把「列不出来」当「文档里没有」**,已有样式的 id 从节点上的 `*StyleId` 读。',
+        ]
+      : []),
+    ...shared,
   ].join('\n');
 }
 
