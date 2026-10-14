@@ -23,7 +23,7 @@
  */
 
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
-import { dirname, join, relative, resolve } from 'node:path';
+import { dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -236,7 +236,10 @@ function main(argv) {
       process.exitCode = 1;
       return;
     }
-    for (const name of hit) console.log(join('docs/design-decisions', name));
+    // 输出路径一律 POSIX 分隔符:`join` 在 Windows 上给 `docs\design-decisions\…`,
+    // 既不便粘贴,也让吃 stdout 的断言要按平台分支(测试守的就是这条命令的输出)。
+    for (const name of hit)
+      console.log(join('docs/design-decisions', name).split(sep).join('/'));
     return;
   }
   const out = report();
@@ -264,5 +267,9 @@ function main(argv) {
   if (out.problems.length > 0) process.exitCode = 1;
 }
 
-if (import.meta.url === `file://${process.argv[1]}`)
+// `process.argv[1]` 是**调用时怎么写**的路径(相对或绝对),而 `import.meta.url` 恒为绝对
+// file: URL —— 两边不归一成绝对路径就永远不相等,main 静默不执行(CLI 无输出、测试的
+// `JSON.parse('')` 直接炸)。故这里 resolve 后比对,不用 `file://${argv[1]}` 拼字符串。
+const invokedPath = process.argv[1] != null ? resolve(process.argv[1]) : '';
+if (invokedPath !== '' && fileURLToPath(import.meta.url) === invokedPath)
   main(process.argv.slice(2));

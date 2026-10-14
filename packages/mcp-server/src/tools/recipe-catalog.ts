@@ -1,4 +1,5 @@
 import {
+  autoLayoutRecipe,
   chartByCodeRecipe,
   componentPropertyRecipe,
   currentPlatform,
@@ -69,8 +70,18 @@ export const RECIPES: RecipeEntry[] = [
     uri: 'jsd://recipes/design-strategy',
     titleKey: 'prompt.designStrategy.title',
     whenToUse:
-      '画布创作的通用纪律。**从零设计整页 / 界面之前先读这一条**:先查可复用件(按「要复用的是什么」选件类 —— 结构走组件、状态走变体、固定视觉走样式、语义 token 走变量,含各平台复用入口与「命中就复用 / 改源头不逐个改实例」的纪律,以及**什么时候别抽组件**:差异落在实例子节点上、平台未声明 inPlaceVariants、往返预算压不住),再摸底、结构分层(成品该多深就多深,调用才分批)、语义化命名、归组后再布局、图形区走 SVG 还是原生图元的分流、间距与字号阶梯、层序与遮挡、出错回滚,附示例结构树',
+      '画布创作的通用纪律。**从零设计整页 / 界面之前先读这一条**:先查可复用件(按「要复用的是什么」选件类 —— 结构走组件、状态走变体、固定视觉走样式、语义 token 走变量,含各平台复用入口与「命中就复用 / 改源头不逐个改实例」的纪律,以及**什么时候别抽组件**:差异落在实例子节点上、平台未声明 inPlaceVariants、往返预算压不住)、**样式落地流程**(归一化 → 建样式 → 绑 `*StyleId`,含即时设计的样式 id 记账与文本宽度归零的复核纪律),再摸底、结构分层(成品该多深就多深,调用才分批)、语义化命名、归组后再布局(**auto-layout 判据 + 最容易漏掉的分区清单**,机制见 `jsd://recipes/auto-layout`)、图形区走 SVG 还是原生图元的分流、间距与字号阶梯、层序与遮挡、出错回滚,附示例结构树',
     render: () => designStrategyRecipe(undefined, currentPlatform()),
+  },
+  {
+    id: 'auto-layout',
+    uri: 'jsd://recipes/auto-layout',
+    titleKey: 'prompt.autoLayout.title',
+    whenToUse:
+      '**屏内分区排布一律先读这一条**。容器该不该上 auto-layout(判据 + 复核清单:标签栏 / 胶囊组 / 卡片头 / 列表行 / 整屏纵向分区 —— 这些恰是间距唯一靠手调坐标凑的地方)、两条落地路径(建容器时带 sizingMode=推荐 / 事后 set_layout 再用 resize 钉回尺寸)、执行顺序、平台硬约束(layoutWrap 等 Figma 字段本平台没有)、验收四条判据与常见坑(容器被 hug、TEXT 宽度被钉成 1px、手摆坐标在布局里不显形)',
+    argsHint:
+      '参数 target(要上布局的容器 / 分区描述,如「标签栏」;留空返回通用纪律)',
+    render: () => autoLayoutRecipe(undefined, currentPlatform()),
   },
   {
     id: 'chart-by-code',

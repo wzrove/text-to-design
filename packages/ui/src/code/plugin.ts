@@ -521,9 +521,9 @@ export function registerPlugin(
           break;
         }
         case 'list_styles': {
-          // 无筛选参数:0042 的单类入口是为「哪一类挂死」取证的探针,0043 把判据换成
-          // 平台能力声明后已摘掉 —— 不该问的平台一个 getter 都不会调(同步 getter
-          // 不可中断,问了不回答就是冻死整条调用)。
+          // 无筛选参数:dec 0042 的单类入口是为「哪一类挂死」取证的探针,dec 0043 把判据
+          // 换成平台能力声明后已摘掉 —— 不该问的平台一个 getter 都不会调(真机上问了不回答的
+          // 是永不 resolve 的 `*Async`,见 dec 0043 的 2026-10-15 更正)。
           const r = await listStyles(host, ctx);
           send(id, true, r);
           break;

@@ -71,6 +71,14 @@ describe('属性方法名单', () => {
   const SHARED_FIELDS: Record<string, readonly string[]> = {
     x: ['move', 'resize'],
     y: ['move', 'resize'],
+    // `set_text` 是刻意的聚合(文本的属性组互相牵制:字号 ↔ 宽度 ↔ 自动尺寸),
+    // 2026-10-15 一次放开颜色组与尺寸,免得「改一段文本」要跑四次调用。
+    // 全部字段同源:颜色取自 visualPropsSchema、尺寸取自 resizePropsSchema。
+    fills: ['set_fill', 'set_text'],
+    fillStyleId: ['set_fill', 'set_text'],
+    blendMode: ['set_fill', 'set_text'],
+    width: ['resize', 'set_text'],
+    height: ['resize', 'set_text'],
   };
 
   it('11 组字段互斥 —— 共享字段必须显式登记在上表', () => {

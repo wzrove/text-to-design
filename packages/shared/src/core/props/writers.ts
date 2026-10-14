@@ -339,6 +339,52 @@ export const shapeWriter: PropWriter = {
  * 文本字段整体处理:字体加载必须先于逐属性赋值,所以按节点类型整体进入,
  * 而不是逐字段 if。创建路径额外带 characters / fontSize 的默认值。
  */
+/**
+ * 「写进去了但渲染不出来」的点名(真机 2026-10-15,即时设计)。
+ *
+ * 复现链:建一个 characters 为空的 TEXT 并给一维尺寸(实测只给 `height: 60`)→ 引擎的
+ * resize 把缺省的 WIDTH_AND_HEIGHT 置成 NONE 并把宽度钉在最小值(实测 1px)→ 之后
+ * `jsd_set_text` 填 characters,**宽度不再重算**:21 个字挤在 1px 的框里,回读 characters
+ * 完整、回包零告警,画面上什么都没有。这就是「TEXT 宽度被压到 0」的真实成因 ——
+ * 与 auto-layout 无关(开不开布局都这样)。
+ *
+ * 按 0007:这种「回显成功、画面空白」必须点名,不能靠调用方自己看导出图。
+ */
+const TINY_FIXED_TEXT_WIDTH = 1;
+
+/** 固定框 + 宽度被钉在最小值的 TEXT:内容写进去了也看不见,点名(见上一条注释) */
+function warnTinyFixedText(ctx: WriteCtx): void {
+  const node = ctx.node as unknown as {
+    width?: unknown;
+    characters?: unknown;
+    textAutoResize?: unknown;
+  };
+  const w = node.width;
+  if (
+    typeof w !== 'number' ||
+    // ⚠ 是 `>` 不是 `>=`:`TINY_FIXED_TEXT_WIDTH` 是**被钉住的那个最小值本身**
+    // (实测 1px),等于它正是要点名的那一档 —— 写成 `>=` 会把唯一要报的形状整段跳过。
+    w > TINY_FIXED_TEXT_WIDTH ||
+    typeof node.characters !== 'string' ||
+    node.characters.length === 0
+  ) {
+    return;
+  }
+  // 两种模式都要点名(dec 0007):真机 2026-10-15 实测宽度被引擎钉成 0 时,textAutoResize
+  // 停在 WIDTH_AND_HEIGHT —— 旧判据只认 NONE,整段漏报(26 个文本节点全空、零告警)。
+  if (node.textAutoResize !== 'NONE') {
+    ctx.outcome.warnings.push(
+      `文本内容已写入,但该 TEXT 的宽度只有 ${w}px(textAutoResize=${String(
+        node.textAutoResize,
+      )})—— 画面上看不见内容。根因:引擎在本次写入之前已把框钉死过(常见于先前的尺寸写入,或被 25s 超时中断的那次操作),之后填字不再重算宽度。修法:jsd_resize_node 传 width 钉回宽度(要高度随内容走再同时把 textAutoResize 设成 "HEIGHT")。`,
+    );
+    return;
+  }
+  ctx.outcome.warnings.push(
+    `文本内容已写入,但该 TEXT 是固定框(textAutoResize=NONE)且宽度只有 ${w}px —— 画面上看不见内容。根因:这个文本框建出来时 characters 为空(或只给了一维尺寸),引擎把缺省的 WIDTH_AND_HEIGHT 置成 NONE 并把宽度钉在最小值,之后填字不再重算宽度。修法:jsd_resize_node 传 width 钉回宽度(要高度随内容走就同时把 textAutoResize 设成 "HEIGHT"),或重建时一次给全 characters 与 width/height。`,
+  );
+}
+
 export const textWriter: PropWriter = {
   id: 'text',
   keys: [
@@ -439,6 +485,12 @@ export const textWriter: PropWriter = {
         apply(['fontSize'], 16);
       }
       apply(ALIGN_KEYS);
+      if (src.characters === '' && (src.width != null || src.height != null)) {
+        ctx.outcome.warnings.push(
+          '空文本 + 显式尺寸:引擎会把缺省的 textAutoResize 置成 NONE 并按给定尺寸定框(实测只给 height 时宽度停在 1px)。之后再用 jsd_set_text 填字**不会重算宽度**,文字会看不见 —— 要么这次就写全 characters 与 width/height,要么填字后用 jsd_resize_node 传 width 钉回去(要高度随内容走就同时把 textAutoResize 设成 "HEIGHT")。',
+        );
+      }
+      warnTinyFixedText(ctx);
       return;
     }
 
@@ -484,6 +536,7 @@ export const textWriter: PropWriter = {
     writeProp(ctx, node, 'characters', src.characters);
     if (ready) apply(STYLE_KEYS);
     apply(ALIGN_KEYS);
+    warnTinyFixedText(ctx);
   },
 };
 
@@ -670,6 +723,92 @@ export function rememberLayoutOrder(node: NodeSkeleton): void {
 }
 
 /**
+ * 轴 → 该轴的 sizingMode 回读值。宽轴是不是主轴取决于 `layoutMode` 的方向。
+ */
+function axisSizingMode(
+  node: SerializedNode,
+  dim: 'width' | 'height',
+): string | undefined {
+  const widthIsPrimary = node.layoutMode === 'HORIZONTAL';
+  return (dim === 'width') === widthIsPrimary
+    ? node.primaryAxisSizingMode
+    : node.counterAxisSizingMode;
+}
+
+function numOrUndefined(v: unknown): number | undefined {
+  return typeof v === 'number' && Number.isFinite(v) ? v : undefined;
+}
+
+/**
+ * 把「声明了 FIXED、却被引擎按内容重算」的轴**钉回**目标尺寸(真机 2026-10-15)。
+ *
+ * 为什么不能只告警:声明 FIXED 的语义就是「尺寸由调用方定」,引擎却按内容 hug,
+ * 而字段回读仍写着 FIXED —— 字段与行为不一致时,调用方每次都得自己补一步 resize,
+ * 还得先读到 warnings 才知道要补。这里把字段直接兑现成行为。
+ *
+ * **判据自带平台收敛,不写平台名**:只有「该轴 sizingMode 回读为 FIXED」才修。
+ * 即时设计两轴都回读 FIXED(实际却被 hug)→ 两轴都钉回;Figma 的主轴回读 AUTO
+ * (引擎自称 hug)→ 不修,保留它的 hug 语义。少一处将来会漂的平台分支。
+ *
+ * 走 `resizeContainer`(不施加约束的重载):这属于「尺寸是调用方给的结论」那一类,
+ * 不是用户驱动的缩放,子节点不该被按比例拉伸(约定见 core/utils.ts)。
+ *
+ * ⚠ 序列化此刻已经发生:钉回后必须把 `serialized` 的尺寸一起改掉,否则回显还是
+ * hug 后的旧值 —— 那会造出反向的「回显与画布不一致」。
+ */
+export function pinFixedAxisDrift(
+  node: NodeSkeleton,
+  serialized: SerializedNode,
+  want: { width?: unknown; height?: unknown },
+): string[] {
+  const label = nodeLabel(node);
+  const out: string[] = [];
+  const pin: Partial<
+    Record<'width' | 'height', { target: number; got: number }>
+  > = {};
+  for (const dim of ['width', 'height'] as const) {
+    const target = numOrUndefined(want[dim]);
+    const got = numOrUndefined(serialized[dim]);
+    if (target == null || got == null) continue;
+    if (Math.abs(got - target) <= 0.5) continue;
+    const mode = axisSizingMode(serialized, dim);
+    if (mode === 'FIXED') {
+      pin[dim] = { target, got };
+      continue;
+    }
+    out.push(
+      [
+        `${label} 的 ${dim} 被 auto-layout 按内容重算成 ${got}(开布局前 / 请求 ${target};该轴 sizingMode 回读为 ${mode ?? '读不到'})。`,
+        '这是引擎的 hug 语义,不算失败 —— 要固定该轴就显式声明该轴 sizingMode=FIXED;要的就是撑开,保持现状即可。',
+      ].join(''),
+    );
+  }
+  // 没有任何轴需要钉回 → 立刻返回,一个字段都别动。
+  // ⚠ 少了这一句就会在「尺寸本来就对」的场合照样 resize 一次、并推出
+  // 「的 :已按声明钉回」这种空告警(真机 2026-10-15 抓到:每次 create 带布局都发一条)。
+  if (pin.width == null && pin.height == null) return out;
+  const w = pin.width?.target ?? numOrUndefined(serialized.width);
+  const h = pin.height?.target ?? numOrUndefined(serialized.height);
+  if (w == null || h == null) return out;
+  const path = resizeContainer(node, w, h);
+  const parts = (['width', 'height'] as const)
+    .filter((d) => pin[d] != null)
+    .map((d) => `${d} ${pin[d]?.got} → ${pin[d]?.target}`);
+  serialized.width = w;
+  serialized.height = h;
+  out.push(
+    [
+      `${label} 的 ${parts.join('、')}:已按声明钉回(该轴 sizingMode=FIXED,引擎却按内容重算了)。`,
+      path === 'constraints'
+        ? '本平台没有 resizeWithoutConstraints,已回退 resize —— 子节点若带 SCALE 约束可能被一起缩放,请核对。'
+        : '走 resizeWithoutConstraints,子节点不会被按比例拉伸。',
+      '不需要这个行为就别声明该轴 FIXED(显式传 AUTO),免得字段与行为打架。',
+    ].join(''),
+  );
+  return out;
+}
+
+/**
  * 序列化后比对:开启 auto-layout 到底把什么改掉了(次序 / 尺寸)。
  * 读取深度不够(children 没序列化出来)时那一项**不比** —— 拿不准就别报。
  */
@@ -697,22 +836,13 @@ export function layoutDriftNotices(
   }
   // 尺寸:引擎开布局时按内容 hug 掉容器尺寸,而**两个 sizingMode 字段本身落库成
   // FIXED**(实测 2026-10-12 jsDesign:120×260 → 100×80)—— 字段对账抓不到,
-  // 只能拿开布局前后的实测尺寸比。
-  const label = nodeLabel(node);
-  for (const dim of ['width', 'height'] as const) {
-    const was = before[dim];
-    const now = serialized[dim];
-    if (typeof was !== 'number' || typeof now !== 'number') continue;
-    if (Math.abs(now - was) <= 0.5) continue;
-    out.push(
-      [
-        `${label} 的 ${dim} 被 auto-layout 改成 ${now}(开布局前 ${was})。`,
-        '引擎在开启布局时按内容重算容器尺寸,而该轴的 sizingMode 回读仍是 FIXED —— 字段落了库,尺寸没保住。',
-        '处理:布局与子节点都就位后,用 jsd_resize_node 传 width/height 钉回尺寸;',
-        '重发 set_layout 会再吃掉一次。要的就是按内容撑开,则显式把该轴 sizingMode 传 AUTO,让意图与结果一致。',
-      ].join(''),
-    );
-  }
+  // 只能拿开布局前后的实测尺寸比。声明 FIXED 的轴直接钉回;回读 AUTO 的轴保留 hug。
+  out.push(
+    ...pinFixedAxisDrift(node, serialized, {
+      width: before.width,
+      height: before.height,
+    }),
+  );
   return out;
 }
 

@@ -79,6 +79,12 @@ export const batchResultSchema = z.object({
    */
   echoTrimmed: z.boolean().optional(),
   /**
+   * 裁剪汇总:点名哪几步被裁、缺了哪些字段、要明细该单独调哪个工具。
+   * 只回一个裸的 `echoTrimmed` 布尔时,调用方读不出可行动信息 —— 真机 2026-10-15
+   * 把字段的缺席误判成「工具没生效」(批内 depth:1 的读看不到 children)。
+   */
+  echoNote: z.string().optional(),
+  /**
    * 结构变更类批次收尾的同层几何复核结果。引擎在批量删除/移父后会重算同层
    * 约束,把本次操作没触及的节点静默挪走(无报错、回显正常),这里点名并给出原值。
    */

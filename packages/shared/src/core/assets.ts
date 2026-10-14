@@ -19,7 +19,8 @@ const COMPONENT_BUCKETS = ['COMPONENT', 'COMPONENT_SET'] as const;
  * 组件/变体集不在此表:`findAllWithCriteria` 三平台同构且是常规的失败可捕获调用,
  * 按平台再声明一条能力位没有收益(0022 的口径)。
  * 样式与变量必须在此表 —— 判据只有声明:即时设计四个 `getLocal*Styles` 都在,
- * 但同步 getter 不可中断、调用即冻死,`typeof` 探测会把它当成「可以问」。
+ * 而坑在**选路**(运行时透出的 `*Async` 永不 resolve,见 access.ts),`typeof` 探测
+ * 对它一律答「可以问」。
  */
 const GATED_SURFACES = [
   { capability: 'styleEnumeration', surface: 'styles' },
@@ -92,8 +93,9 @@ export type DocumentAssets = {
  * 未声明的平台(即时设计 / MG)触碰非当前页会直接挂到转发超时 —— 实测即时设计
  * `find scope=document` 25425ms / 25466ms / 25008ms `forward_timeout`,而当前页只要
  * 44ms。故这里按 `canReadDocumentScope(ctx)` 决定遍历**全部页**还是**只当前页**,
- * 不靠 try/catch(同步调用不可中断,失败根本走不到 catch)。判据用**声明**而不是
- * `loadAllPagesAsync` 的符号存在性:即时设计运行时有该符号且永不返回(0042 同坑)。
+ * 不靠 try/catch(它是**异步**成员:`await` 永不 settle ⇒ 既 catch 不到、加超时也只是
+ * 放弃这次调用)。判据用**声明**而不是 `loadAllPagesAsync` 的符号存在性:
+ * 即时设计运行时有该符号且永不返回(与 dec 0042 / dec 0043 的样式枚举同一模式)。
  *
  * 四个面**都恒在**:某个面在本平台读不到就给空数组,不报错 —— 三平台能力面不对称
  * 是常态(见 0032 的三域事实表),让缺口把整条只读调用打成错误没有收益。
@@ -157,8 +159,8 @@ export async function listDocumentAssets(
 
   // 样式收全量四类(PAINT / TEXT / EFFECT / GRID):复用样式是不重复造件的大头,
   // 只给颜色样式会让文字 / 效果 / 网格样式只能靠新建绕过。
-  // 未声明 `styleEnumeration` 的平台一次 getter 都不调(0043):同步 getter 不可中断,
-  // 问了不回答就等于把整条 get_page 冻死。
+  // 未声明 `styleEnumeration` 的平台一次 getter 都不调(dec 0043):问了不回答的那条路
+  // (本平台是永不 resolve 的 `*Async`)会把整条 get_page 挂到 25s 超时。
   for (const style of await listStylesAsync(host, ctx)) {
     assets.styles.push({
       id: style.id,

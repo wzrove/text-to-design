@@ -112,11 +112,12 @@ export async function resolveMainComponent(
  * 即时设计的 typings 是 Figma API v1 update 40 的 fork(没有该声明),而 host 是
  * `Object.create(native)` —— 原生成员整个透出来,于是该符号**在运行时存在且永不返回**
  * (先按符号判据收口一次后,`find scope=document` 照样 25008ms `forward_timeout`)。
- * 这与 0042 的样式 getter 是同一个坑:符号在,不代表能问。
+ * 这与 dec 0042 / dec 0043 的样式枚举是**同一个模式**:typings 没声明的成员运行时照样在,
+ * 符号在 ≠ 能问(dec 0043 于 2026-10-15 更正:那次永挂的是 `*Async`,不是同步 getter)。
  *
  * ⇒ 未声明时**连 `ensurePagesLoaded` 都不能调**(它 await 的正是那个永不返回的调用),
- * 一切跨页读退回当前页。同步调用不可中断 ⇒ 既 `catch` 不到也加不了超时,
- * 判断必须在**调用前**做出。
+ * 一切跨页读退回当前页。它是异步成员 ⇒ `await` 永不 settle,既 `catch` 不到、
+ * 加超时也只是放弃这次调用 —— 判断必须在**调用前**做出。
  *
  * 0011 那句「jsDesign 无 dynamic-page、文档常驻,直接遍历即可」在这条实测面前不成立:
  * 文档常驻不等于非当前页可随时读。
@@ -157,13 +158,20 @@ export function ensurePagesLoaded(host: DesignHost): Promise<boolean> {
 }
 
 /**
- * 本地样式枚举:优先 `*Async`(dynamic-page),无则回落同步 getter。
+ * 本地样式枚举:两条入口(同步 getter / `*Async`)按**声明**选路。
  *
- * ⚠ **先把 0043 的判据写在最前面**:同步 getter **不可中断** —— 引擎侧不返回时插件
- * JS 线程直接冻死,既 `catch` 不到也没有任何超时可加。所以「这个平台能不能问」必须在
- * **调用前**定下来,而唯一答得出来的是平台声明的能力位 `styleEnumeration`
- * (即时设计四个 getter **都在**,但一个都不返回 ⇒ `typeof` 探测会把 `get_page`
- * 整个拖死)。能力缺失 ⇒ 恒空、一次都不调。
+ * ⚠ **dec 0043 的判据写在最前面**:「这个平台能不能问」必须在**调用前**定下来 ——
+ * 真机(2026-10-15)测得永挂的那条路是**异步**的:`getLocal*StylesAsync` 从不
+ * settle ⇒ `await` 撞满 25s 转发上限,既 `catch` 不到、加超时也只是放弃这次调用。
+ * 唯一答得出来的是平台声明的能力位 `styleEnumeration`:能力缺失 ⇒ 恒空、一次都不调。
+ *
+ * ⚠ **选路同样不能靠探测**:这里是「有 async 就用 async」(dec 0010)—— 每类先取
+ * `host.getLocal*StylesAsync?.bind(host)`,`?.` 成立就 `await` 它,**只有该成员不存在
+ * 时才退同步 getter**。而 typings 里的「没有」≠ 运行时的「没有」:即时设计的
+ * `Object.create(native)` 把这四个未声明的成员整透出来 ⇒ `?.` 恒成立 ⇒ 同步 getter
+ * 从头到尾没被调用过(而它实测 0~1ms 就返回、数据正确)。故由 `styleEnumerationSync`
+ * 声明只问同步入口(即时设计声明;Figma 不声明:dynamic-page 下同步入口必抛,只能走 async)。
+ * 决策记录:dec e1e66f0a。
  *
  * `ctx.capabilities == null`(未注入)时沿用 `typeof` 探测(fail-open,与 0002 一致)。
  */
@@ -172,8 +180,10 @@ export async function listStylesAsync(
   ctx: RuntimeContext,
 ): Promise<StyleSummary[]> {
   if (hostCapabilityState(ctx, 'styleEnumeration') === false) return [];
+  // 选路见上面的注释:**只认声明**,不靠 `?.` 探测(在这平台探测恒答「有 async」)。
+  const preferSync = hostCapabilityState(ctx, 'styleEnumerationSync') === true;
   // 四类**逐个独立调用**,不是一次批量查询:任一类失败不该连坐其余三类
-  // (0042 的结论;当初为「哪一类挂死」取证加的 `kinds` 筛选已随 0043 摘掉 ——
+  // (dec 0042 的结论;当初为「哪一类挂死」取证加的 `kinds` 筛选已随 dec 0043 摘掉 ——
   //  判据换成平台声明后,不该问的平台一个 getter 都不会调)。
   const sources: {
     asyncGet?: () => Promise<readonly StyleSummary[]>;
@@ -198,7 +208,7 @@ export async function listStylesAsync(
   ];
   const out: StyleSummary[] = [];
   for (const { asyncGet, syncGet } of sources) {
-    if (asyncGet != null) {
+    if (!preferSync && asyncGet != null) {
       try {
         out.push(...((await asyncGet()) ?? []));
         continue;
@@ -208,8 +218,8 @@ export async function listStylesAsync(
     }
     if (syncGet != null) {
       // ⚠ 同步入口**不可中断**:它若在引擎侧永不返回,插件线程直接冻死,
-      // 这里既 catch 不到、也没有任何超时可加(实测即时设计四类全调必超时)。
-      // 唯一能做的是**调用前**决定问不问 —— 那道闸在上面(能力位),不在这里。
+      // 这里既 catch 不到、也没有任何超时可加(对**同步**调用这条始终成立)。
+      // 唯一能做的是**调用前**决定问不问、走哪条路 —— 闸在上面(能力位),不在这里。
       try {
         out.push(...(syncGet() ?? []));
       } catch {

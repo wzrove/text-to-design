@@ -22,8 +22,9 @@ export function registerPlatformTools(
     name: 'jsd_platform_op',
     title: 'platformOp.title',
     description: 'platformOp.description',
-    // 平台归属:Figma 与 MasterGo 各有一档 op(jsDesign 仍是空数组)。先 jsd_ping 读
-    // platformOps 名单再调;平台不匹配时 daemon 直接拦截,不必等插件侧报「平台不支持」
+    // 平台归属:Figma 与 MasterGo 各有一档 op(jsDesign 是空数组:dynamic-page 系与
+    // 变量面都接不了,见 ui/src/code/jsdesign/meta.ts)。先 jsd_ping 读 platformOps
+    // 名单再调;平台不匹配时 daemon 直接拦截,不必等插件侧报「平台不支持」。
     platforms: ['figma', 'mastergo'],
     platformNote: `(平台特有 op 名单以 jsd_ping 的 platformOps 为准 —— 有的平台该名单是空数组,此时没有平台 op 可调;本地样式读 jsd://styles(只读资源,没有同名工具);变体值读 jsd_find 的 variantProperties、切已存在的值用 jsd_set_instance_properties;**变体集本身**(建维度/加成分/改取值/删维度)只有提供集合级 op 的平台才改得动,名单同样在 platformOps 里 —— 没这组 op 的平台只能靠主件命名承载。${componentFaceText(null)}${componentWriteText(null)}。变量面:${variableFaceText(null)})`,
     method: 'platform_op',

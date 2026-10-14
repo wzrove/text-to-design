@@ -27,14 +27,15 @@
 | [0039](0039-get_page-收窄为顶层几何加资源清单：复用既有契约成员，变量走可选入口.md) | `get_page` 收窄为「顶层几何 + 资源清单」：复用既有契约成员，变量走可选入口 | 已采纳（真机已修订） | `shared/schemas`、`shared/core`、`shared/dicts`、`ui/code`、`mcp-server/tools` | 2026-10-10 |
 | [0040](0040-MG-变量读写接入-platformOps：op-形制对齐-Figma，槽位取值以官方文档为据.md) | MG 变量读写接入 platformOps：op 形制对齐 Figma，槽位取值以官方文档为据 | 已采纳（真机待验） | `ui/code/mastergo`、`shared/dicts`、`mcp-server/tools` | 2026-10-10 |
 | [0041](0041-组件属性两处静默缺口：写侧键归一回-core，读侧暴露图层引用.md) | 组件属性两处静默缺口：写侧键归一回 core，读侧暴露图层引用 | 已采纳（真机待验） | `shared/core`、`shared/schemas`、`ui/code/jsdesign`、`mcp-server/tools` | 2026-10-10 |
-| [0042](0042-本地样式枚举按类拆分：同步-getter-不可中断，单类入口兼作定位探针.md) | 本地样式枚举按类拆分：同步 getter 不可中断，单类入口兼作定位探针 | 已采纳 | `shared/dicts`、`shared/schemas`、`shared/core`、`ui`、`mcp-server/tools` | 2026-10-10 |
-| [0043](0043-样式枚举拆出独立能力位：get_page-与-jsd-styles-按平台声明返空.md) | 样式枚举拆出独立能力位：`get_page` 与 `jsd://styles` 按平台声明返空 | 已采纳（MG 声明待验） | `shared/dicts`、`shared/core`、`ui/code`、`mcp-server/tools` | 2026-10-10 |
+| [0042](0042-本地样式枚举按类拆分：同步-getter-不可中断，单类入口兼作定位探针.md) | 本地样式枚举按类拆分：同步 getter 不可中断，单类入口兼作定位探针 | 已采纳（机制描述已更正） | `shared/dicts`、`shared/schemas`、`shared/core`、`ui`、`mcp-server/tools` | 2026-10-15 |
+| [0043](0043-样式枚举拆出独立能力位：get_page-与-jsd-styles-按平台声明返空.md) | 样式枚举拆出独立能力位：`get_page` 与 `jsd://styles` 按平台声明返空 | 已采纳（机制描述已更正） | `shared/dicts`、`shared/core`、`ui/code`、`mcp-server/tools` | 2026-10-15 |
 | [942910d2](942910d2-website-多语言沿用-0016-口径：locale-由-Solid-context-显式提供，不引库也不做-en-预渲染.md) | website 多语言沿用 0016 口径：locale 由 Solid context 显式提供 | 已采纳 | `website/i18n`、`website/components` | 2026-10-12 |
 | [de446d4e](de446d4e-决策记录改用-8-位短-id-取号，旧数字号只读保留.md) | 决策记录改用 8 位短 id 取号，旧数字号只读保留 | 已采纳（scratch 已验） | `.agents/skills/software-design-patterns`、`AGENTS.md`、`INDEX.md` | 2026-10-12 |
 | [89d02d1b](89d02d1b-决策索引只存定位信息：状态列收词表值、影响范围降粒度、体积门禁复活.md) | 决策索引只存定位信息：状态列收词表值、影响范围降粒度、体积门禁复活 | 已采纳 | `INDEX.md`、`tests/skill-doc-budget.test.ts`、`.agents/skills/software-design-patterns/` | 2026-10-12 |
 | [7165f370](7165f370-批量编排补上资源名字寻址与变量聚合绑定：一次调用绑多组，VARIANT-只能点名拒绝.md) | 批量编排补上资源名字寻址与变量聚合绑定：一次调用绑多组，VARIANT 只能点名拒绝 | 已采纳 | `mcp-server/tools`、`shared/{schemas,core,dicts}`、`ui/code/{figma,mastergo}` | 2026-10-13 |
 | [25827d0c](25827d0c-四类可复用资源的关系面补齐：样式档读写两端、MG-样式面加宽到八类.md) | 四类可复用资源的关系面补齐：样式档读写两端、MG 样式面加宽到八类 | 已采纳（两家已验） | `shared/`（dicts、schemas、core/styles）、三侧 `ui/code/*`、`mcp-server/tools` 投影与配方 | 2026-10-14 |
 | [cec4a120](cec4a120-两套主键并存改为显式-dec-引用记法加棘轮门禁.md) | 两套主键并存改为显式 dec 引用记法加棘轮门禁 | 已采纳 | `scripts/`、`tests/`、`AGENTS.md`、`shared/` 首批引用改写 | 2026-10-14 |
+| [e1e66f0a](e1e66f0a-样式枚举选路按平台声明：新增-styleEnumerationSync，不靠-.-探测.md) | 样式枚举选路按平台声明：新增 `styleEnumerationSync`，不靠 `?.` 探测 | 已采纳（端到端真机已验） | `shared/dicts`、`shared/core`、`ui/code/jsdesign` | 2026-10-15 |
 
 ## 依赖关系
 
@@ -80,7 +81,8 @@
 0040 (MG 变量读写)      ── 与 0039 是同一件事两半；沿 0020/0019/0033/0018/0007/0034/0022/0032
 0041 (组件属性两处缺口) ── 沿 0023/0025/0007/0040
 0042 (样式枚举按类拆分) ── 沿 0007/0011/0032/0039；被 0043 引用
-0043 (样式枚举能力位)   ── 依赖 0042；沿 0039/0029/0032/0002/0007；被 25827d0c 结掉「MG 待验」项
+0043 (样式枚举能力位)   ── 依赖 0042；沿 0039/0029/0032/0002/0007；被 25827d0c 结掉「MG 待验」项；被 e1e66f0a 修订
+e1e66f0a (枚举选路靠声明) ── 依赖 0043；沿 0010/0022/0032/0002/0011；更正 0042/0043 的机制描述
 89d02d1b (索引只存定位) ── 沿 0008/0005/0009；不取代任何记录
 25827d0c (资源关系面补齐) ── 沿 0024/0022/0032/0020/0007/0010/0040/0043/0039/0023；补 0041 的同类缺口
                     ── 被 cec4a120 引用（归属含糊那两处由它改）

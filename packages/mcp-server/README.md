@@ -162,6 +162,7 @@ Figma 用户不会再读到 jsDesign 的兜底细节;平台未探测时给「先
 | prompt | 用途 |
 | --- | --- |
 | `design-strategy` | 设计策略总纲:命名/层级/间距字号阶梯/出错回滚,附登录页示例结构树 |
+| `auto-layout` | **屏内分区排布的主路径**:判据(该不该上布局 + 复核清单,含最易漏的标签栏/胶囊组/卡片头/列表行/整屏纵向分区)、两条落地路径(建容器时带 `sizingMode` / 事后 `jsd_set_layout` 再用 `jsd_resize_node` 钉回)、执行顺序、平台硬约束、验收四条判据与坑(容器被 hug、TEXT 宽度被钉成 1px、手摆坐标在布局里不显形) |
 | `text-replace-strategy` | 大改文案:jsd_clone_node 留底 → 语义分块 → jsd_set_text 批量替换 → 逐块导小图复核 |
 | `variant-sync` | 把一个实例的样式/文案批量套用到多个同类实例(优先 jsd_sync_overrides / copy+apply,手工 jsd_set_* 兜底) |
 | `variable-binding` | 变量绑定与批量套用:按本平台变量面分流(读写都通 / typings 有 API 但未接 / 接不了),含批量绑定与回读复核 |

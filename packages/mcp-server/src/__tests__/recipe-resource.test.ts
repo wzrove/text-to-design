@@ -99,6 +99,7 @@ describe('配方资源', () => {
    */
   const ARGLESS_IDS = [
     'design-strategy',
+    'auto-layout',
     'script-ops',
     'text-replace-strategy',
     'variant-sync',

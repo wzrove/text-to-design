@@ -138,9 +138,10 @@ export async function listFonts(
  * 本地样式枚举:两平台 API 同构(PAINT/TEXT/EFFECT/GRID),getter 缺失时跳过。
  * dynamic-page 下同步 getter 会抛,故走 Access 层的异步入口(0011)。
  *
- * 未声明 `styleEnumeration` 能力的平台恒回空清单(0043):同步 getter 不可中断,
- * 问了不回答就等于把整条调用冻死 —— 所以判断必须在调用前由**能力声明**做出,
- * 而不是靠筛选参数少问几类(0042 的 `kinds` 探针已随 0043 摘掉)。
+ * 未声明 `styleEnumeration` 能力的平台恒回空清单(dec 0043):「问了不回答」的那条路
+ * 在真机上是**永不 resolve 的 `*Async`**(2026-10-15 更正,见 dec 0043),会把整条调用挂到
+ * 25s 超时 —— 所以判断必须在调用前由**能力声明**做出,而不是靠筛选参数少问几类
+ * (dec 0042 的 `kinds` 探针已随 dec 0043 摘掉)。
  */
 export async function listStyles(
   host: DesignHost,

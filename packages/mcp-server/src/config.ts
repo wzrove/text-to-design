@@ -59,6 +59,19 @@ export const MAX_CALLS_FILE_BYTES = Number(
   process.env.TEXT_TO_DESIGN_MCP_MAX_CALLS_FILE_BYTES ?? 8 * 1024 * 1024,
 );
 
+/**
+ * jsd_batch 明细落盘的单文件上限(字节)。
+ *
+ * 背景:步骤回显超预算时,把**整批**的完整明细写成 JSONL 落盘、回显只给路径 ——
+ * 否则「超预算」等于「拿不到」(此前只回 id 清单,要明细得整批重跑一次,还得再受
+ * 同一套预算约束)。坏掉的脚本会产出指数级膨胀的结果,一次写几十 MB 既拖住 daemon
+ * 又没人读,故封顶;超限不截断、不猜,退回 id 清单并在 warnings 里点名两个体积。
+ * 可用环境变量 TEXT_TO_DESIGN_MCP_MAX_BATCH_SPILL_BYTES 覆盖。
+ */
+export const MAX_BATCH_SPILL_BYTES = Number(
+  process.env.TEXT_TO_DESIGN_MCP_MAX_BATCH_SPILL_BYTES ?? 32 * 1024 * 1024,
+);
+
 /** jsd_create_svg 的 SVG 源码体积上限(字节)。
  *  代码生成的图表常见几十 KB(正常),但坏掉的脚本会输出指数级膨胀的节点串,
  *  整份经文本帧下发会一路吃掉宿主内存。超限时不静默截断,直接报错并给抽稀建议。

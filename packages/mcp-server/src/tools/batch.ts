@@ -1,3 +1,6 @@
+import { writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import type { McpServer } from '@modelcontextprotocol/server';
 import {
   type BatchParams,
@@ -6,7 +9,7 @@ import {
   batchSchema,
 } from 'text-to-design-shared';
 import type { Bridge } from '../bridge';
-import { BATCH_TIMEOUT_MS } from '../config';
+import { BATCH_TIMEOUT_MS, MAX_BATCH_SPILL_BYTES } from '../config';
 import { loadBatchCallsFile } from '../core/calls-file';
 import {
   bridgeTool,
@@ -269,23 +272,110 @@ function collectIds(value: unknown, out: string[]): void {
 /**
  * 单步回显:先裁摘要,仍超预算再降级为 id 清单。占位符解析走的是 steps 里的
  * **完整**结构化数据,不受这里影响 —— 裁剪只影响回显给模型看的量。
+ *
+ * 两个标记都回给调用方记账(dec 0007):`trimmed` = 这步的节点被摘要化过(子节点、
+ * characters、fills、*StyleId 等都不在回显里),`omitted` = 连摘要都超预算、只剩 id 清单。
+ * 裸的 `echoTrimmed` 布尔读不出「哪几步被裁、裁掉了什么」—— 那正是「回显成功、
+ * 画面空白」被误判成工具没干活的入口,故由 batch 汇总成一句可读的 note。
  */
-function echoStep(structured: unknown): { data: unknown; trimmed: boolean } {
+function echoStep(
+  structured: unknown,
+  tool: string,
+): { data: unknown; trimmed: boolean; omitted: boolean } {
   const data = trimEcho(structured);
   const size = jsonSize(data);
   if (size <= ECHO_BUDGET_CHARS) {
-    return { data, trimmed: size !== jsonSize(structured) };
+    return { data, trimmed: size !== jsonSize(structured), omitted: false };
   }
   const ids: string[] = [];
   collectIds(data, ids);
   return {
     data: {
       echoOmitted: true,
-      note: `本步回显裁剪后仍 ${size} 字符,已省略明细;需要细节请把该工具单独调用一次`,
+      note: `本步回显裁剪后仍 ${size} 字符,已省略明细;需要细节请把 ${tool} 单独调用一次`,
       ids: [...new Set(ids)],
     },
     trimmed: true,
+    omitted: true,
   };
+}
+
+/**
+ * 裁剪汇总:把「哪几步被裁、缺了什么字段、要明细怎么办」写成人话。
+ *
+ * 为什么不能只回布尔:节点一旦被摘要化,`children` 与 `characters` / `fills` /
+ * `*StyleId` 就整片不在回显里 —— 调用方看起来就是「子节点没了 / 字段没生效」。
+ * 真机 2026-10-15 实测踩过:批内 `jsd_find(depth:1)` 只回 frame 本体,同一条查询
+ * 单独直调才回出子树。这类误读的成本是一次白跑的排查,而提示的成本只有一行字。
+ */
+function echoNoteText(
+  trimmed: readonly string[],
+  omitted: readonly string[],
+  spill?: { path: string; bytes: number },
+): string {
+  const parts = [
+    `回显已裁剪:${trimmed.length} 步(${trimmed.join(' / ')})的节点只保留 id/name/type/x/y/width/height/z/parentId`,
+    ' —— 子节点、characters、fills、*StyleId、vectorPaths 等字段不在回显里。',
+    '要读这些字段,请把对应工具**单独调用一次**;批内回显不是验收证据。',
+    '占位符 `{{步骤id.…}}` 不受影响,它取的是裁剪前的完整数据。',
+  ];
+  if (omitted.length > 0) {
+    parts.push(
+      spill == null
+        ? `其中 ${omitted.length} 步(${omitted.join(' / ')})连摘要都超预算,已降级为 id 清单,步骤内的 note 已点名工具名。`
+        : `其中 ${omitted.length} 步(${omitted.join(' / ')})连摘要都超预算,完整明细已落盘到 ${spill.path}(${spill.bytes} 字节,JSONL 一行一步),按各步 data 里的 line 读即可。`,
+    );
+  }
+  return parts.join('');
+}
+
+/** 同一毫秒内多次落盘时的去重序号:文件名要可排序、且不互相覆盖 */
+let spillSeq = 0;
+
+/**
+ * 明细落盘:整批结果写成 JSONL(一行一步),回显里只给路径 —— 预算外的东西仍然拿得到,
+ * 但要「可寻址」,不是「塞回上下文」。
+ *
+ * 为什么整批一个文件、而不是每步一个:一批最多 50 步,逐步入栈会堆出几十个碎文件;
+ * JSONL 一行一步恰好对应「按步分片读」,批与文件一一对应也好回收。
+ * 为什么每行都带 id/tool/ok:文件是**复核**用的,失败步骤也要在文件里对得上号 ——
+ * 只写成功步骤的 data,「这一步到底跑没跑」在文件里就查无实据。
+ * 路径与 jsd_export 的自动落盘同源(tmpdir + 时间戳文件名),不另立目录约定。
+ * 超上限或写盘失败都**不静默**:退回 id 清单,由调用方记进 warnings(dec 0007)。
+ */
+function spillBatch(
+  results: readonly { id: string; tool: string; ok: boolean; error?: string }[],
+  steps: ReadonlyMap<string, unknown>,
+):
+  | { path: string; bytes: number; line: Map<string, number> }
+  | { error: string } {
+  const lines: string[] = [];
+  const line = new Map<string, number>();
+  for (const r of results) {
+    line.set(r.id, lines.length + 1);
+    lines.push(
+      JSON.stringify(
+        r.ok
+          ? { id: r.id, tool: r.tool, ok: true, data: steps.get(r.id) }
+          : { id: r.id, tool: r.tool, ok: false, error: r.error },
+      ),
+    );
+  }
+  const text = `${lines.join('\n')}\n`;
+  const bytes = Buffer.byteLength(text, 'utf8');
+  if (bytes > MAX_BATCH_SPILL_BYTES) {
+    return { error: `明细 ${bytes} 字节 > 上限 ${MAX_BATCH_SPILL_BYTES} 字节` };
+  }
+  const path = join(
+    tmpdir(),
+    `jsd-batch-${Date.now().toString(36)}-${++spillSeq}.jsonl`,
+  );
+  try {
+    writeFileSync(path, text, 'utf8');
+  } catch (e) {
+    return { error: `写盘失败:${e instanceof Error ? e.message : String(e)}` };
+  }
+  return { path, bytes, line };
 }
 
 /** 深度遍历入参:引用占位符独占整值时保留原类型;内嵌于长字符串时以 JSON 文本展开 */
@@ -382,6 +472,9 @@ export function registerBatchTools(
       const steps = new Map<string, unknown>();
       const results: BatchResult['results'] = [];
       let echoTrimmed = false;
+      // 被裁 / 被降级的步骤名:汇总成 echoNote 时要逐步点名,别只回一个裸布尔
+      const trimmedSteps: string[] = [];
+      const omittedSteps: string[] = [];
       // 复核不再由 batch 自己做:结构变更类工具在注册时就挂了漂移复核钩子,
       // 单工具调用与编排内调用走同一条路(此前只有 batch 内的步骤有复核)。
       // checkDrift=false 时按「本次调用不实例化钩子」传给执行体 —— 开关是按调用的,
@@ -465,8 +558,12 @@ export function registerBatchTools(
         }
         // 占位符解析用完整数据,回显用裁剪后的摘要:两者分离,
         // 剪掉 vectorPaths 不会让下游 {{id.created[0].id}} 解析失败。
-        const echo = echoStep(out.structuredContent);
-        if (echo.trimmed) echoTrimmed = true;
+        const echo = echoStep(out.structuredContent, call.tool);
+        if (echo.trimmed) {
+          echoTrimmed = true;
+          trimmedSteps.push(id);
+        }
+        if (echo.omitted) omittedSteps.push(id);
         steps.set(id, out.structuredContent);
         if (out.warnings != null) stepWarnings.push(...out.warnings);
         results.push({
@@ -478,12 +575,39 @@ export function registerBatchTools(
       }
       const complete = results.length === calls.length;
       const warnings = stepWarnings;
+      // 有步骤被降级成 id 清单时,把整批明细落盘、并在那几步上补 path / line。
+      // 落盘失败**不当作批失败**:退回 id 清单 + warnings 点名,调用方照样能重取。
+      const spilled =
+        omittedSteps.length === 0 ? undefined : spillBatch(results, steps);
+      const spill = spilled != null && 'error' in spilled ? undefined : spilled;
+      if (spilled != null && 'error' in spilled) {
+        warnings.push(
+          `本批有 ${omittedSteps.length} 步回显超预算,但完整明细未落盘(${spilled.error});已保留 id 清单,要明细请把对应工具单独调用一次。`,
+        );
+      }
+      if (spill != null) {
+        for (const r of results) {
+          if (!omittedSteps.includes(r.id)) continue;
+          const data = r.data as Record<string, unknown> | undefined;
+          const ln = spill.line.get(r.id);
+          if (data == null || data.echoOmitted !== true || ln == null) continue;
+          r.data = {
+            ...data,
+            path: spill.path,
+            line: ln,
+            note: `本步明细已随整批落盘(第 ${ln} 行);也可把 ${r.tool} 单独调用一次。`,
+          };
+        }
+      }
       return {
         ok: complete && results.every((r) => r.ok),
         executed: results.length,
         total: calls.length,
         results,
         ...(echoTrimmed ? { echoTrimmed: true } : {}),
+        ...(echoTrimmed
+          ? { echoNote: echoNoteText(trimmedSteps, omittedSteps, spill) }
+          : {}),
         ...(warnings.length > 0 ? { warnings } : {}),
       };
     },

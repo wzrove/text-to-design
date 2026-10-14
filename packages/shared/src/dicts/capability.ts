@@ -42,13 +42,34 @@ export const HOST_CAPABILITY_SPEC = {
   // 本地样式**清单**的枚举(get_page 的 assets.styles 与 jsd://styles)。
   //
   // 与上面的 `styles` 是**两件事**:那条管「能不能按 id 应用样式」,这条管「能不能列出
-  // 有哪些样式」。拆开是 0043 的结论 —— 即时设计 claim 了 `styles`(按 id 应用正常),
-  // 但四个 `getLocal*Styles` 一个都不返回(同步 getter 不可中断,调用即冻死线程)。
+  // 有哪些样式」。拆开是 dec 0043 的结论 —— 即时设计 claim 了 `styles`(按 id 应用正常),
+  // 而枚举那一面是「问了没回音」(25s 转发超时 ⇒ `get_page` 全废)。
+  //
+  // ⚠ 2026-10-15 真机更正了「没回音的是谁」:四类同步 `getLocal*Styles` **直接调
+  // 0~1ms 正常返回**(PAINT 6 / TEXT 1);永挂的是 typings 未声明、运行时由
+  // `Object.create(native)` 透出的 `getLocal*StylesAsync` —— `await` 它**永不 resolve**
+  // (挂着的是 Promise,线程并不冻死),同步 getter 从未被调用。选路改由下一条声明决定。
+  //
   // 合成一条,「有样式能力」就会把「能列清单」一起假定下来,而这一假定正是让
   // `get_page` 在即时设计上全废的原因。
   styleEnumeration: {
     kind: 'flow',
     labelKey: 'capability.host.styleEnumeration',
+  },
+  // 行为型:**本平台的样式枚举走同步入口** —— 运行时的 `getLocal*StylesAsync` 不可用。
+  //
+  // 为什么需要这一位(真机 2026-10-15):即时设计的 typings 里没有这四个 async 符号,
+  // 但运行时对象把它们**透出来了**(四个 `typeof === 'function'`),而那个 async 版本
+  // **永不 resolve** —— `?.` 一成立就 `await` 它,撞满 25s 转发上限;同步 getter 因此
+  // 从头到尾没被调用过,而它只要 0~1ms 且数据正确(PAINT 6 / TEXT 1)。
+  // ⇒「有 async 就用 async」这条运行时探测在本平台给出的是**错误答案**,选路只能靠声明。
+  // 与 `documentScopeRead` 同一族教训(符号存在性 ≠ 可用性,dec 0042 / dec 0043 的坑)。
+  // 决策记录:dec e1e66f0a(选路由声明决定,不靠 `?.` 探测)。
+  //
+  // 平台:即时设计声明(走同步);Figma 不声明(dynamic-page 下同步入口必抛,必须走 async)。
+  styleEnumerationSync: {
+    kind: 'flow',
+    labelKey: 'capability.host.styleEnumerationSync',
   },
   // 文本截断与最大行数(仅 TEXT;类型不匹配的判定见 core/capabilities.ts)
   textTruncation: {
@@ -91,7 +112,9 @@ export const HOST_CAPABILITY_SPEC = {
   // 即时设计的 typings 是 Figma API v1 update 40 的 fork(没有该声明),但运行时
   // `Object.create(native)` 会把原生成员整个透出来 —— 实测该符号**存在且永不返回**:
   // 2026-10-10 真机 `find scope=document` 25008ms `forward_timeout`,而当前页 find
-  // 只要 44ms。同步调用不可中断 ⇒ 判据只能是声明,这是 0042 那个坑的第二次出现。
+  // 只要 44ms。它是**异步**成员 ⇒ `await` 永不 settle,既 `catch` 不到、加超时也只是
+  // 放弃这次调用 ⇒ 判据只能是**调用前的声明**。与 dec 0042 / dec 0043 同一族坑:
+  // typings 未声明的运行时成员,符号在 ≠ 能问。
   //
   // 三平台:Figma 声明(真有 dynamic-page 且能加载);即时设计不声明(实测挂死);
   // MasterGo 同样不声明 —— 它也没有该入口,且**未真机验过能否跨页**,按保守默认收口,

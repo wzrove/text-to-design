@@ -39,7 +39,7 @@ export const UNAPPLIED_PROP_HINT: Readonly<Record<string, string>> = {
   height:
     'TEXT 的 height 被引擎改写:固定高要传 textAutoResize:"NONE";只想固定宽、高度随内容走传 "HEIGHT"(缺省 WIDTH_AND_HEIGHT 与两者都不兼容)',
   textAutoResize:
-    'TEXT 的 textAutoResize 未声明却被引擎改成 NONE:给了 width/height 时,引擎的 resize 会把缺省的 WIDTH_AND_HEIGHT 置为 NONE —— 文本仍会换行,但文本框高度不再随内容重算(实测 200 宽的长文本渲染 4 行、height 回读仍是 15),父容器与 auto-layout 会按这个旧高度算,表现为文字被裁切/错位。修法:要「固定宽 + 自动撑高」显式传 width + textAutoResize:"HEIGHT";要「固定框尺寸」显式传 "NONE"(至少让意图与结果一致)',
+    'TEXT 的 textAutoResize 未声明却被引擎改成 NONE:给了 width/height 时,引擎的 resize 会把缺省的 WIDTH_AND_HEIGHT 置为 NONE —— 文本仍会换行,但文本框高度不再随内容重算(实测 200 宽的长文本渲染 4 行、height 回读仍是 15),父容器与 auto-layout 会按这个旧高度算,表现为文字被裁切/错位。修法:要「固定宽 + 自动撑高」显式传 width + textAutoResize:"HEIGHT";要「固定框尺寸」显式传 "NONE"(至少让意图与结果一致)。⚠ 更狠的一档是**宽度被钉在最小值**(真机 2026-10-15):建 TEXT 时 characters 为空、又给了一维尺寸,引擎按那次 resize 把宽度钉到 1px(实测只给 height:60 → 宽度 1),之后填 characters 不重算宽度 —— 内容完整写进去了、零告警、画面空白。修法:jsd_resize_node 传 width 钉回去,或建时一次给全 characters 与 width/height',
 };
 
 /** 字段不在上表时的兜底说明(仍以回读为证据,只是没有专门的修法提示) */

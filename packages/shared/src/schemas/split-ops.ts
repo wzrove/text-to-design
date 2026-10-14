@@ -291,7 +291,29 @@ const setCornerRadiusProps = {
   cornerSmoothing: visualPropsSchema.shape.cornerSmoothing,
 };
 
-const setTextProps = { ...textPropsSchema.shape };
+/**
+ * `set_text` 的字段组 = 排版组 + 颜色组 + 尺寸。
+ *
+ * 为什么放开(2026-10-15):改一段文本几乎总是「内容 + 字号字重 + 颜色 + 宽度」
+ * 一起动,拆成几次调用除了多几趟往返,中间态还会被引擎的自动尺寸/重排改写。
+ * 另外原描述里写着「要换行须 width + textAutoResize:"HEIGHT"」,而 `width` 当时
+ * 根本不被收 —— 文档与 schema 打架,放开后这句话才真的能照做。
+ *
+ * ⚠ 与「单职责小工具」的拆分取向相反(见 tools/props.ts 头部):这是**刻意的聚合**,
+ * 因为文本是唯一一类多项互相牵制的属性组(字号 ↔ 宽度 ↔ 自动尺寸)。位置 x/y 不并
+ * 进来 —— 那属 move / resize 的语义。
+ *
+ * 字段全部取自既有定义(`visualPropsSchema` / `resizePropsSchema`,与
+ * `set_fill_color` / `resize` 同源),不是第二套。
+ */
+const setTextProps = {
+  ...textPropsSchema.shape,
+  fills: visualPropsSchema.shape.fills,
+  fillStyleId: visualPropsSchema.shape.fillStyleId,
+  blendMode: visualPropsSchema.shape.blendMode,
+  width: resizePropsSchema.shape.width,
+  height: resizePropsSchema.shape.height,
+};
 
 const moveNodeProps = {
   x: transformPropsSchema.shape.x,

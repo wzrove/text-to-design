@@ -16,6 +16,7 @@ import {
   nodeLabel,
   unappliedWarning,
 } from './props/outcome';
+import { pinFixedAxisDrift } from './props/writers';
 import type { RuntimeContext } from './runtime';
 import { serializeNode } from './serialize';
 import { fontNotResolved } from './utils';
@@ -255,6 +256,16 @@ export async function executeOps(
       specs[i] as unknown as Readonly<Record<string, unknown>>,
       serialized[i],
       notes,
+    );
+  }
+  // 声明了 FIXED 的轴被引擎按内容重算 → 按请求值钉回(判据与修改路径同一份)
+  for (let i = 0; i < specs.length; i += 1) {
+    warnings.push(
+      ...pinFixedAxisDrift(
+        created[i],
+        serialized[i],
+        specs[i] as unknown as { width?: unknown; height?: unknown },
+      ),
     );
   }
   if (notes.skipped.size > 0) {

@@ -1310,7 +1310,7 @@ describe('布局 sizingMode 回读 + 开启布局的次序漂移', () => {
     expect(r.warnings?.join('')).toContain('重排了 容器(2:1) 的子节点次序');
   });
 
-  it('修改路径:开布局把容器 hug 小了 → 点名尺寸漂移(字段落库不等于尺寸保住)', async () => {
+  it('修改路径:开布局把容器 hug 小了 → 声明 FIXED 的轴按开布局前的尺寸钉回', async () => {
     const frame = makeFrame('2:1', '容器');
     frame.width = 120;
     frame.height = 260;
@@ -1345,9 +1345,78 @@ describe('布局 sizingMode 回读 + 开启布局的次序漂移', () => {
     const warn = r.warnings?.join('') ?? '';
     expect(
       warn,
-      '120×260 被 hug 成 100×80 而回包零告警,就是现场踩到的那条',
-    ).toContain('被 auto-layout 改成');
-    expect(warn).toContain('jsd_resize_node');
+      '声明了 FIXED 就该真的固定:钉回,而不是让调用方自己补一次 resize',
+    ).toContain('已按声明钉回');
+    expect(frame.width, '120 被 hug 成 100 之后必须钉回').toBe(120);
+    expect(frame.height, '260 被 hug 成 80 之后必须钉回').toBe(260);
+  });
+
+  it('修改路径:该轴回读 AUTO 时保留引擎的 hug 语义(不钉回)', async () => {
+    const frame = makeFrame('2:1', '容器');
+    frame.width = 120;
+    frame.height = 260;
+    frame.children = [makeRect('1:1', 'a'), makeRect('1:2', 'b')];
+    let mode: string = 'NONE';
+    // 复刻 Figma:开布局后主轴自己是 AUTO(引擎自称 hug),尺寸按内容重算。
+    // ⚠ 用 HORIZONTAL:主轴 = 堆叠方向 = **width**,上面 fake 置 AUTO 的
+    // `primaryAxisSizingMode` 才落在被测的 width 上(height 是 counter 轴)。
+    Object.defineProperty(frame, 'layoutMode', {
+      get: () => mode,
+      set: (v: string) => {
+        mode = v;
+        if (v !== 'NONE') {
+          frame.width = 100;
+          frame.height = 80;
+          frame.primaryAxisSizingMode = 'AUTO';
+        }
+      },
+      configurable: true,
+    });
+    host = makeHost([frame]);
+    const r = await updateSelection(
+      host,
+      ctx,
+      {
+        ids: [frame.id],
+        props: { layoutMode: 'HORIZONTAL' },
+      },
+      'set_layout',
+    );
+    const warn = r.warnings?.join('') ?? '';
+    expect(warn, '回读 AUTO = 引擎在按内容撑开,不该被当成失败钉回去').toContain(
+      'hug 语义',
+    );
+    expect(frame.width, 'AUTO 轴(HORIZONTAL 的主轴)就该跟着内容走').toBe(100);
+    expect(frame.height, 'counter 轴仍回读 FIXED,就该钉回开布局前的尺寸').toBe(
+      260,
+    );
+  });
+
+  it('修改路径:尺寸没漂移就一条布局告警都不发(空告警是纯噪声)', async () => {
+    const frame = makeFrame('2:1', '容器');
+    frame.width = 120;
+    frame.height = 260;
+    frame.children = [makeRect('1:1', 'a'), makeRect('1:2', 'b')];
+    let mode: string = 'NONE';
+    // 这次引擎没重算尺寸:字段落库、尺寸原样 —— 不该有任何告警
+    Object.defineProperty(frame, 'layoutMode', {
+      get: () => mode,
+      set: (v: string) => {
+        mode = v;
+      },
+      configurable: true,
+    });
+    host = makeHost([frame]);
+    const r = await updateSelection(
+      host,
+      ctx,
+      { ids: [frame.id], props: { layoutMode: 'VERTICAL' } },
+      'set_layout',
+    );
+    const warn = r.warnings?.join('') ?? '';
+    expect(warn, '没漂移却发「已按声明钉回」= 空告警').not.toContain('钉回');
+    expect(warn).not.toContain('hug 语义');
+    expect(frame.width).toBe(120);
   });
 
   it('创建路径:子树布局字段没落地也要点名(子树此前不进回收袋)', async () => {
@@ -1903,6 +1972,37 @@ describe('Figma 运行时收窄与节点序列化容错', () => {
     expect(ok).toMatchObject({ id: 'F:good', type: 'RECTANGLE' });
     expect(ok.width).toBeDefined();
   });
+
+  it('空文本的退化 lineHeight 归一到 AUTO(不把一次读判失败)', () => {
+    // 真机 2026-10-15(即时设计):characters 为空的 TEXT 回读
+    // lineHeight={unit:'PIXELS', value:''} —— value 不是数字,原样透传会撞
+    // outputSchema,于是连 jsd_create_text / jsd_find 这种调用都被判 isError
+    // (structured() 把读到的数据本身当错误正文回给调用方,见 response.ts)。
+    const empty = makeText('S:9', '空文本');
+    (empty as unknown as Record<string, unknown>).characters = '';
+    (empty as unknown as Record<string, unknown>).lineHeight = {
+      unit: 'PIXELS',
+      value: '',
+    };
+
+    const out = serializeNode(empty);
+
+    expect(out.lineHeight).toEqual({ unit: 'AUTO' });
+    expect(serializedNodeSchema.safeParse(out).success).toBe(true);
+  });
+
+  it('合法 lineHeight 原样保留(归一不是一刀切)', () => {
+    const fixed = makeText('S:10', '固定行高');
+    (fixed as unknown as Record<string, unknown>).lineHeight = {
+      unit: 'PIXELS',
+      value: 24,
+    };
+
+    expect(serializeNode(fixed).lineHeight).toEqual({
+      unit: 'PIXELS',
+      value: 24,
+    });
+  });
 });
 
 describe('变量绑定的读出口(0024)', () => {
@@ -2143,6 +2243,45 @@ describe('组件属性写形态与覆盖套用(0023)', () => {
     });
     expect(r.applied[0]?.ok).toBe(true);
     expect(writes).toEqual([{ 'Property 1': 'A' }]);
+    expect(r.warnings).toBeUndefined();
+  });
+});
+
+describe('文本写后点名(0007)', () => {
+  it('往被钉住的固定框里填字 → 点名「写进去了但看不见」', async () => {
+    // 真机 2026-10-15(即时设计):空文本 + 只给 height 建出来的 TEXT 宽度是 1px、
+    // textAutoResize 被引擎置成 NONE;之后填 characters 不重算宽度 —— 内容完整写进
+    // 去了、回包零告警、画面空白。这种「回显成功、画面空白」必须点名。
+    const t = makeText('T:tiny', '被钉住的文本框');
+    (t as unknown as { width: number }).width = 1;
+    (t as unknown as { characters: string }).characters = '';
+    host = makeHost([t]);
+
+    const r = await updateSelection(host, ctx, {
+      ids: [t.id],
+      props: { characters: '填进去的正文' },
+    });
+
+    const warn = r.warnings?.join('') ?? '';
+    expect(warn, '内容写进去了但画面空白,必须点名').toContain('看不见');
+    expect(warn, '要给出钉宽度的修法').toContain('jsd_resize_node');
+    // 内容照写:点名不是拦写
+    expect((t as unknown as { characters: string }).characters).toBe(
+      '填进去的正文',
+    );
+  });
+
+  it('正常宽度的固定框不告警(点名不是一刀切)', async () => {
+    const t = makeText('T:wide', '正常文本框');
+    (t as unknown as { width: number }).width = 200;
+    (t as unknown as { characters: string }).characters = '';
+    host = makeHost([t]);
+
+    const r = await updateSelection(host, ctx, {
+      ids: [t.id],
+      props: { characters: '正文' },
+    });
+
     expect(r.warnings).toBeUndefined();
   });
 });

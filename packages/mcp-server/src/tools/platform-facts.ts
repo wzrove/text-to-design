@@ -264,7 +264,7 @@ export function reuseGuideText(platform: PlatformKey | null): string {
     return [
       '- 组件:`jsd_create_instance` 用 `componentId` 铺实例;同类单元 ≥2 个时**先查清单**,别新建重复组件。',
       '- 变体集:切到**已有**取值用 `jsd_set_instance_properties`(取值清单看 `assets.variants[].properties`;MG 原生读不到该字段时用 `mg_list_variant_properties` 看)。要造新值用集合级 op,不要靠改主件名字。',
-      '- 样式:节点字段 `fillStyleId` / `strokeStyleId` / `textStyleId` / `effectStyleId` 直接引用样式 id。⚠ 本平台只声明了 `styles`(**按 id 应用**),**没声明 `styleEnumeration`**(列出有哪些样式)—— 四个 `getLocal*Styles` 都在但永不返回(同步调用还会冻死插件线程,见 0043),故 `assets.styles` 与 `jsd://styles` **恒空**:别拿「清单里没有」当「文档里没有」,要复用已有样式就从**正用着它的节点**上读 id(`jsd_find` / `jsd_get_selection` 的 `*StyleId` 字段);确认没有才 `jsd_create_style` 从指定节点抄,并**把回包 id 记账**(这份平台列不出来,丢了找不回;建重复了用 `jsd_delete_style` 按 id 删)。',
+      '- 样式:节点字段 `fillStyleId` / `strokeStyleId` / `textStyleId` / `effectStyleId` 直接引用样式 id;`assets.styles` 与 `jsd://styles` **列得出来**(2026-10-14 真机已验),按 id / 名复用即可。⚠ 别拿「哪份清单里有它」当判据 —— `assets.styles` 与 `assets.variables` 是同一批资源的两个视角(后四类复合样式建出来进 `assets.variables`),详见下面「四类件之间怎么连」。',
       '- 变量:`mg_variables_apply` 绑到图层属性,变量 id 从 `mg_list_variables` 或 `assets.variables` 取。要的是「一组值一起复用」(间距 / 圆角 / 描边宽度 / 填色这套)就建 **复合样式变量**:`mg_variables_create` 的 type 有 PAINT / TEXT / EFFECT / GRID / STROKE_WIDTH / CORNER_RADIUS / PADDING(11 项,**SPACING 引擎不收**)—— 建出来本身就是一条样式,只进 `assets.variables`。',
     ].join('\n');
   }
@@ -280,7 +280,7 @@ export function reuseGuideText(platform: PlatformKey | null): string {
     return [
       '- 组件:`jsd_create_instance` 用 `componentId` 铺实例;同类单元 ≥2 个时**先查清单**,别新建重复组件。⚠ 本平台把带 `/` 的组件名拆成「集合 / 成分」—— `assets.components[].name` 是**叶子名**(建 `组/主件` 后清单里叫 `主件`,集合名在 `assets.variants` 上),按名字取组件(`{{@comp:…}}`)时一律照清单里的原样写。',
       '- 变体集:切到**已有**取值用 `jsd_set_instance_properties`(取值清单看 `assets.variants[].properties`)。',
-      '- 样式:节点字段 `fillStyleId` / `strokeStyleId` / `textStyleId` / `effectStyleId` 直接引用样式 id(清单见 `assets.styles` 或 `jsd://styles`);**清单里没有就建一条** —— `jsd_create_style` 从指定节点抄。',
+      '- 样式:节点字段 `fillStyleId` / `strokeStyleId` / `textStyleId` / `effectStyleId` 直接引用样式 id;`assets.styles` 与 `jsd://styles` **列得出来**(2026-10-15 真机:7 条 = 6 PAINT + 1 TEXT),按 id / 名复用即可。⚠ 枚举走**同步**入口(能力位 `styleEnumerationSync`):运行时的 `getLocal*StylesAsync` 是引擎透出的未声明成员,`await` 它**永不 resolve**(0043 / dec e1e66f0a)—— 别想着「换 async 更快」。色板与字体**一律落样式**(PAINT / TEXT / EFFECT / GRID 本平台有工厂,实测可建可绑、可从节点 `*StyleId` 回读);间距与圆角没有样式工厂,只能落节点字段(`jsd_set_layout` / `jsd_set_cornerRadius`)。',
       '- 变量:本平台没有变量面(`assets.variables` 恒空),别去找变量入口;统一色板走上一条的样式路。',
     ].join('\n');
   }
@@ -315,7 +315,7 @@ export function resourceRelationText(
   const styleFace =
     styleEnumerated === false
       ? [
-          '- ⚠ **样式这一面列不出来**:本平台声明了 `styles`(按 id 应用是通的)但没声明 `styleEnumeration`,故 `assets.styles` / `jsd://styles` **恒空**(0043)。已有样式的 id 只能从**正用着它的节点**上读 `fillStyleId` / `strokeStyleId` / `textStyleId` / `effectStyleId`,新建的必须把 `jsd_create_style` 回包的 id **记账** —— 丢了找不回(重复建了按 id 走 `jsd_delete_style`)。',
+          '- ⚠ **样式这一面列不出来**:本平台声明了 `styles`(按 id 应用是通的)但没声明 `styleEnumeration`,故 `assets.styles` / `jsd://styles` **恒空**(0043)。已有样式的 id 只能从**正用着它的节点**上读 `fillStyleId` / `strokeStyleId` / `textStyleId` / `effectStyleId`,新建的必须把 `jsd_create_style` 回包的 id **记账** —— 丢了找不回(重复建了按 id 走 `jsd_delete_style`)。⚠ **本仓没有「改样式」的入口**(样式面只有建 `jsd_create_style` 与删 `jsd_delete_style`):样式一旦建成就**改不了值** —— 要换值只有两条路,删了重建(引用它的节点要重新绑 `*StyleId`),或在设计器里手动改。⇒ 所以「改一处全档跟随」这条卖点**在本仓 MCP 侧验证不了**,建样式时就得一次给对(要改就去设计器里手动改,或删了重建)。这是**仓库级缺口**,不分平台。',
         ]
       : [];
   if (platform === 'figma') {
@@ -348,6 +348,9 @@ export function resourceRelationText(
       '- **组件属性只收字符串**:`setProperties` 的签名只有 `string`(布尔 / 换绑 / 文本属性的值形态一概不收)⇒ 状态差异不要押在组件属性上,走「族名 / 状态」命名的多主件;另:给**没有变体属性的实例**调 `jsd_set_instance_properties` 不是报错,是挂到 25s 转发超时(真机 2026-10-14)。',
       '- ⚠ 契约的样式类别是三家 `StyleType` 的**八项并集**,本平台只有四类(PAINT / TEXT / EFFECT / GRID,`plugin-api.d.ts:1137`)⇒ 传 STROKE_WIDTH / CORNER_RADIUS / PADDING / SPACING 会在写前被点名拒(不静默、不会建成别的类);间距与圆角要统一就落节点字段(`jsd_set_layout` / `jsd_set_cornerRadius`),或按「族 / 值」命名后 `jsd_find` + `jsd_batch` 批量刷。',
       '- **变体集造不出来**:`combineAsVariants` 是唯一产出路径且真机必崩,失败还会留下畸形集合与布尔运算残骸(用 `jsd_repair_nodes` 清)。已有的变体集照样能读、能切取值,缺的只是「用脚本新建一个」。',
+      '- **PAINT 这条链是通的,也是本平台做统一色板的唯一正路**(真机 2026-10-15,6 条样式绑 23 个节点):①先**归一化** —— 同名用途却差一两度的色(分割线 `#EDEDEB` / 侧栏边框 `#EAEAE8` / 卡片描边 `#E8E8E6`)必须先收敛成一套值,不收就建样式,建出来只套得住一半节点;②`jsd_create_style({kind:"PAINT", name:"色板/主色", fromNodeId:样板节点})` 从样板抄,回包 id 记账;③绑回 `jsd_set_fill_color` 的 `fillStyleId` / `jsd_set_stroke` 的 `strokeStyleId` —— **创建入参与这两个 set 工具的顶层都收这四个 `*StyleId` 键**,不必「建完再绑」两趟。两个坑(其一是过去式):`jsd_set_text` **原先不收 `fills`**(文字颜色得另跑一趟 `jsd_set_fill_color`),2026-10-15 已放开 —— 现在 `fills` 与排版一趟写入;`strokeStyleId` 的写入**回包会报「插件响应超时」但写入已落**(真机:批量内一次、单发一次都超时,事后 `jsd_find` 回读 `strokeStyleId` 已绑上)⇒ 不要重试,回读一次确认。',
+      '- ⚠ **TEXT 样式:排版能跟,但绑完必须补一次宽度修复,而且不带颜色**(真机 2026-10-15,隔一次独立读 + 导图目检):① 绑 `textStyleId` 后排版**确实跟源** —— fontSize 14 → 20、fontName Regular → Bold、lineHeight AUTO → 32px(全部回读确认);② **但引擎同时把宽度钉成 0**(`textAutoResize` 仍是 WIDTH_AND_HEIGHT、`width=0`)⇒ 画面**完全不可见**(导出 167 字节空白 vs 同尺寸样板 4281 字节);⚠ **写入同 tick 的回显看不到这条** —— 它仍报 112 / 84 / 101 原值,**必须隔一次调用独立读**才现形(这条曾把我误导成「绑定无损」);③ **修法:`jsd_set_text({width: N, textAutoResize:"HEIGHT"})` 两个字段同批传**(你的实测:回读 240 / 32 恢复正常)。只传 `width` 不行、解绑 `textStyleId` 不行、重设 characters 也不行 —— 三种都试过,只有这一种组合有效;④ **样式不带颜色**:`TextStyle` 只有排版字段(typings `:1151-1161`,没有 `fills`),绑完节点 `fills` 保持原色 ⇒ 颜色**一律走 PAINT 样式 + `fillStyleId`**,别指望文本样式带色。⇒ 文字排版**可以用** TEXT 样式,代价是「绑一条补一次宽」;要零成本就用**样板节点当事实来源**(读它的 fontSize / fontName / lineHeight / fills,逐条写进同类文本)。',
+      '- ⚠ **TEXT 宽度被钉成 0 是另一回事,不要归因到样式绑定**:2026-10-15 出现过 26 个文本节点宽度归零、画面全空(导出体积 108KB → 43KB 是这个信号),而那次现场**同一会话里先有两次 25s 超时**(挂死的 `strokeStyleId` 写)且发生在多步批次内;隔离复现三种姿势都不出现 ⇒ 归因未定,别写成「某个字段导致的」。症状的修法走已知那条链:`jsd_resize_node` 传 `width` 把宽度钉回去(要高度随内容走再同时设 `textAutoResize:"HEIGHT"`),`core/props/writers.ts` 的 `warnTinyFixedText` 会点名这种「写进去了但看不见」。⇒ 真正的规矩是:**超时之后必须复核受影响的子树**(单独 `jsd_find` 读几何 + 导图目检),别接着往下写。',
       ...styleFace,
       ...shared,
     ].join('\n');
@@ -404,6 +407,21 @@ export function layoutHintText(platform: PlatformKey | null): string {
     '(节奏按上一条:归组摆好后用 jsd_set_layout);② **栅格参考线** —— `layoutGrids`(仅 ' +
       hosts +
       ')。',
+    ...(platform === 'jsdesign'
+      ? [
+          '⚠ **开布局会按内容重算容器尺寸,但声明了 FIXED 的轴会被写路径自动钉回**(真机 2026-10-15):① 建容器那一次带上 `layoutMode` + 两轴 FIXED → 尺寸原样保住(实测 400×300 建出来还是 400×300);② **事后**用 `jsd_set_layout` 开布局,引擎那一瞬间仍会把 400×300 按内容 hug 成 112×176(内容 80 + padding 32)—— **但写路径随后按该轴 sizingMode 的回读值判定:即时设计两轴都回读 FIXED,于是两轴都 `resizeContainer` 钉回开布局前的尺寸**,并在 warnings 里点名「已按声明钉回」、回显尺寸同步为真值;③ ⇒ **要固定就声明该轴 FIXED,不必再手工补 `jsd_resize_node`**;**要按内容撑开就显式传该轴 `AUTO`**(传了 AUTO 就不会钉回);不声明时按引擎自己的回读值走,别靠猜。',
+          '✅ **其余自动布局能力真机全部生效**(2026-10-15,同一组容器实测):`itemSpacing` 与 `padding*`(纵向 3 个子项 y = 16 / 68 / 120,恰好 40+12 递推)、`primaryAxisAlignItems:"SPACE_BETWEEN"`(横向 3 个子项 x = 16 / 160 / 304,此时 `itemSpacing` 按文档被忽略)、`counterAxisAlignItems:"CENTER"`(子项 y = 130 =(300-40)/2)、`layoutGrow`(纵向主轴 40 → 164,吃满剩余空间)、`layoutAlign:"STRETCH"`(交叉轴 80 → 368 = 400-32)、`constraints`(子项 STRETCH 后容器加宽 100,子项宽 80 → 180=16 左距 + 304 右距)、`layoutGrids`(创建入参可写,普通容器与**自动布局容器**上回读都落盘)。⇒ 布局这一面用得起来,别拿绝对坐标绕开。',
+          '⚠ **别传本平台没有的布局字段**:typings(`@jsdesigndeveloper/plugin-typings@1.0.12`)里 `layoutWrap` / `layoutPositioning` / `counterAxisSpacing` / `itemReverseZIndex` / `strokesIncludedInLayout` **一个都没有**(grep 零命中)—— 那是 Figma 的字段,换行与「布局内绝对定位」在这里做不到,别按 Figma 的习惯试。',
+          '⚠ TEXT 要固定宽 / 固定框,先显式传 `textAutoResize`(`"NONE"` 固定框、`"HEIGHT"` 固定宽自动高)再开布局;只给 width 时引擎会把缺省的 WIDTH_AND_HEIGHT 改成 NONE,高度不再随内容重算(实测固定宽 200 的长文本 height 回读仍是 15)—— 这类「高度没跟着内容走」的文本,**重设一次 characters 就触发重排**(同一节点重设后回读 82),别急着改尺寸。⚠ 更狠的一档是**宽度被钉在最小值**:建 TEXT 时 characters 为空(或只给一维尺寸),引擎把缺省的 WIDTH_AND_HEIGHT 置成 NONE 并把宽度钉到 1px(实测只给 height:60 → 宽度 1),之后填 characters **不会重算宽度** —— 21 个字挤在 1px 框里,回读 characters 完整、零告警、画面空白。这跟开不开布局无关;修法是 jsd_resize_node 传 width 钉回去,或建时一次给全 characters 与 width/height。',
+          '**别拿「绝对坐标、最后补布局」回避这套顺序**:布局容器接管子节点 x/y,手摆的坐标在布局里根本不显形 —— 该走的是上面的顺序,不是不开布局。',
+        ]
+      : []),
+    ...(platform === 'figma'
+      ? [
+          '⚠ **主轴默认按内容撑开(引擎自称 hug),交叉轴保得住**(真机 2026-10-15,400×300 容器 + 3 个 80×40 子节点):不声明 sizingMode 时,开纵向布局后 → **400×176**,回读 `primaryAxisSizingMode: **AUTO**`、`counterAxisSizingMode: FIXED` —— 字段与行为一致,**AUTO 那条不钉回**(保留 hug 语义)。**显式声明 FIXED 的轴会被自动钉回请求值**(同一判据:该轴回读 FIXED 而尺寸不符 → `resizeContainer` + warnings 点名「已按声明钉回」),所以「建容器时同批给 `layoutMode` + 两轴 FIXED + `height:300`」现在**真的会得到 300**(此前停在 176,只发一条 warning)。⇒ 要固定就声明该轴 FIXED,要 hug 就不声明或显式传 AUTO。',
+          '✅ 实测可用的部分:`layoutMode` / `itemSpacing` / `padding*` 落库且生效(纵向 3 子项 y = 16 / 68 / 120),交叉轴尺寸开布局时保得住,`primaryAxisSizingMode` **如实回读**(AUTO 就是 AUTO,不被请求值污染 —— 这点比即时设计可信)。',
+        ]
+      : []),
     '两者互斥:引擎只在**非自动布局**的容器上收网格。',
     targets(platform).map(gridStatus).join(';'),
   ].join('');

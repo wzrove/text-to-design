@@ -134,7 +134,7 @@ export function registerPrompts(
     {
       title: i18n.t('prompt.designStrategy.title'),
       description:
-        '画布创作的通用纪律:先查可复用件(组件/变体/样式/变量怎么选、怎么复用)、再摸底、结构分层(成品该多深就多深,调用才分批)、语义化命名、归组后再布局、间距与字号阶梯、出错回滚,附示例结构树',
+        '画布创作的通用纪律:先查可复用件(组件/变体/样式/变量怎么选、怎么复用)、再摸底、结构分层(成品该多深就多深,调用才分批)、语义化命名、归组后再布局(auto-layout 判据 + 最容易漏掉的分区清单)、间距与字号阶梯、出错回滚,附示例结构树',
       argsSchema: z.object({
         screen: z
           .string()
@@ -302,6 +302,37 @@ export function registerPrompts(
     }),
   );
 
+  const autoLayout = server.registerPrompt(
+    'auto-layout',
+    {
+      title: i18n.t('prompt.autoLayout.title'),
+      description: i18n.t('prompt.autoLayout.description'),
+      argsSchema: z.object({
+        target: z
+          .string()
+          .optional()
+          .describe(
+            '要上布局的容器 / 分区描述,如「标签栏」「参数行」;留空返回通用纪律',
+          ),
+      }),
+    },
+    ({ target }) => ({
+      messages: [
+        {
+          // 与 design-strategy 同:纪律类内容以 assistant 身份下发
+          role: 'assistant' as const,
+          content: {
+            type: 'text' as const,
+            text: autoLayoutRecipe(
+              target == null ? undefined : String(target),
+              currentPlatform(),
+            ),
+          },
+        },
+      ],
+    }),
+  );
+
   // 配方是静态引导词,不依赖插件连接 → 恒可用
   const chartByCode = server.registerPrompt(
     'chart-by-code',
@@ -341,6 +372,7 @@ export function registerPrompts(
     iconGrid,
     scriptOps,
     designStrategy,
+    autoLayout,
     textReplace,
     variantSync,
     variableBinding,
@@ -402,6 +434,8 @@ export function scriptRecipe(task?: string): string {
       : `请用「脚本化」方式完成下面的任务:\n${task}\n\n执行要求:`;
   return `${head}
 1) 多步流程一次成型:优先 jsd_batch 编排(create→reparent→update、find→批量修改、图标×N 等);宿主有代码执行工具时也可写一段脚本连续 await 多个 tools.jsd_*。
+   ⚠ **同一轮里不要并发发多个 MCP 调用** —— 每次转发上限 \`UI_FORWARD_TIMEOUT_MS = 25s\`(\`shared/src/connection.ts\`),它从「UI 发出请求」起算;而插件侧是一条单线程 + 单文档:真正碰画布的那次引擎调用会占住线程,谁在排队,谁的 25s 计时照样在走,到点就被判成「插件响应超时」。实测(即时设计 2026-10-15):单发 8 次全部成功;同一轮并发发 ≥2 个调用时 3/3 出现超时。而**把并发收进 jsd_batch 的多个步骤(批内本来就是顺序执行)后,同一条查询 1.82s 就跑完了**(含进程启动,量法:\`text-to-design-mcp exec <calls.json> --json\`)⇒ 超时几乎总是**排队**,不是查询本身慢;先怀疑「我是不是并发发了」,而不是去拆查询。
+   另一类是真的挂死(写入已落、回包永不返回,症状同样是 25s 超时,但重试无用):\`jsd_set_stroke\` 传 \`strokeStyleId\`、给**没有变体属性**的实例调 \`jsd_set_instance_properties\`、\`scope:"document"\` 触发的 \`loadAllPagesAsync\`(即时设计上它永不返回)。这类**别重试**,单独 \`jsd_find\` 回读一次确认是否已经落上(见第 8 条)。
 2) 中间值只在管道内流动:上游结果用双花括号占位符(步骤id.字段路径)注入下游参数(脚本内用变量传递);每步只提取后续需要的字段,不回传完整序列化结果。**占位符只在同一次调用的本批次内有效** —— 跨批次引用会报「占位符引用的步骤不存在或未成功」并中止整批,跨批次请硬编码上一步回显里的真实 id。
 3) 收敛:最后只做一次 jsd_get_selection(depth=1) 总复核,不要每步都复核。
 
@@ -468,10 +502,10 @@ ${indentLines(relations, '     ')}
    - **命中就复用,禁止新建重复件**:同名/同用途的组件、已有的变体取值、已有的颜色/文字/效果样式、已有的变量,一律先用现成的;清单里确实没有才新建,并按「组件族/状态」命名 —— 命名是它下一次能被命中的唯一依据。反向也一样别做过头:只出现一次的结构不必提组件(提了也没有第二次可复用),一次性装饰不必建样式。
    - **清单是空的,先分清两种「看不到」** —— 判错就会白建一堆重复件:① **本平台读不出来**:样式与变量是能力门控面,平台未声明时 \`assets.styles\` / \`assets.variables\` **恒空**,回包 note 会点名「恒空:本平台未声明对应能力,这一面清单读不出来(不等于文档里没有)」;组件/变体集则可能因某页枚举失败而不全,note 里点名的是具体页名。别拿「看不到」当「没有」 —— 先用 \`jsd_find\` 按名字/类型再确认一遍;名字寻址(\`{{@comp:…}}\` / \`{{@var:…}}\`)读的是同一份清单,同样会不命中。② **确实没有** → 按下面从零建。
    - **从零建的落点顺序:先做样板 → 抄成件 → 再铺开**,别先铺十个同样的再回头提炼(那时每个都要改一遍):
-     - 第一个单元做出来就立刻定型:**视觉类** \`jsd_create_style\` 从该节点抄出 PAINT / TEXT / EFFECT / GRID,后续节点直接引用 \`*StyleId\`;**语义 token** 用本平台的建变量 op(名单见 platformOps),没有变量面的平台就落在样式上;**结构类**是否 \`jsd_create_component\` 提组件,按下一条的判据来 —— 不该抽的别抽。
+     - 第一个单元做出来就立刻定型:**视觉类** \`jsd_create_style\` 从该节点抄出 PAINT / TEXT / EFFECT / GRID,后续节点直接引用 \`*StyleId\` —— **颜色与描边一律先落 PAINT 样式再上色,别在每个节点里各写一份 hex**(落地流程见第 10 条);**语义 token** 用本平台的建变量 op(名单见 platformOps),没有变量面的平台就落在样式上;**结构类**是否 \`jsd_create_component\` 提组件,按下一条的判据来 —— 不该抽的别抽。
      - 抽不抽的一句话判据:**结构完全一致 + 差异能收敛到变体属性 / 文本属性** → 抽,其余同类一律 \`jsd_create_instance\` 铺;**差异落在子节点上、或状态要靠多主件扛** → 不抽(理由见下面「复用不是无条件」那三条)。多状态:能合成变体集就合成,不能就多主件按「族 / 状态」命名。
      - **命名是它下一次能被命中的唯一依据**:按「族 / 状态」命名,不留「矩形 1」。
-     - **建完回读**:再取一次资源清单,确认它真的进了 \`assets\`(看 \`summary\` 计数或名字)—— 没出现等于没建,下一次调用照样命中不了。⚠ 例外:**未声明 \`styleEnumeration\` 的平台(即时设计)连样式都列不出来**,建完在清单里永远看不到 —— 那就把 \`jsd_create_style\` 回包的 id **记账**(节点上的 \`*StyleId\` 也读得到),别指望回读清单。
+     - **建完回读**:再取一次资源清单,确认它真的进了 \`assets\`(看 \`summary\` 计数或名字)—— 没出现等于没建,下一次调用照样命中不了。⚠ 例外:**未声明 \`styleEnumeration\` 的平台**连样式都列不出来(当前三家都已声明 —— 即时设计自 2026-10-15 起也列得出,见 dec e1e66f0a;这条只在将来新平台或摘掉声明时才命中),建完在清单里永远看不到 —— 那就把 \`jsd_create_style\` 回包的 id **记账**(节点上的 \`*StyleId\` 也读得到),别指望回读清单。
    - **别拿 \`jsd_clone_node\` 当复用**:复制出来的是与主件脱钩的副本,改主件它不动。要「同结构多份」就铺实例。
    - **「复用」不是无条件的 —— 这三类件不抽组件**,抽了比不抽更难改:
      - **差异落在实例子节点上**的同类件(会话项的头像色 / 名字 / 预览 / 未读数、气泡的文案 / 宽度):实例子节点的样式覆盖**不保证渲染生效**,命中时引擎只回 warnings 让你去改主组件(见第 10 条)。内容各不相同的件抽成组件,等于把所有差异押在不保证生效的覆盖上 —— 主组件全继承不可能(内容各不相同),到处覆盖又不生效,抽完更难改。
@@ -484,13 +518,17 @@ ${indentLines(relations, '     ')}
 1) 再摸底:jsd_get_selection(depth=2) 看现状(名称/类型/尺寸/填充/子结构),已有节点用 jsd_find 精确定位,不要重复创建同名元素。
 2) 结构分层,调用分批:**成品该多深就多深** —— 屏 → 语义分区 → 卡片 → 卡内图元,四层都要建出来,别只做到「屏 + 分区」就收手。受限的只是**单次调用的传参方式**:children 只用于「容器 + 其直属子节点」这类小结构,别在一次 create 里塞整棵树(易整批失败);分层分批用 jsd_batch 编排多个 per-type create 步骤,每批建完即用 jsd_reparent_nodes 归到父容器。
 3) 命名语义化:用「登录页 / Logo 容器 / 邮箱输入 / 主按钮」这类说明用途的名字,不用「矩形 1」「Frame 2」;同一批元素命名风格保持一致。
-4) 归组后再布局:**元素不许直挂屏根** —— 屏内每个语义分区(侧栏 / 顶栏 / 筛选条 / KPI 行 / 每张卡片)各自是一个容器,卡片内部的图元再按语义编组(GROUP:坐标轴 / 网格 / 数据系列 / 图例各一组)。一层不套、几十个元素平铺是后续最难改的形态,别走这个极端。做法:先建容器与元素,再用 jsd_reparent_nodes 逐层归入(**parentId 显式传目标容器 id**,别依赖「当前选中第一个」的缺省值;跨父级移动会保持节点绝对位置,不用手动摆回 x/y,移入 auto-layout 容器时位置交给布局);auto-layout(layoutMode/itemSpacing/padding*/primaryAxisAlignItems 等)最后用 jsd_set_layout 单独设,别在建节点时混着传。
+4) 归组后再布局:**元素不许直挂屏根** —— 屏内每个语义分区(侧栏 / 顶栏 / 筛选条 / KPI 行 / 每张卡片)各自是一个容器,卡片内部的图元再按语义编组(GROUP:坐标轴 / 网格 / 数据系列 / 图例各一组)。一层不套、几十个元素平铺是后续最难改的形态,别走这个极端。做法:先建容器与元素,再用 jsd_reparent_nodes 逐层归入(**parentId 显式传目标容器 id**,别依赖「当前选中第一个」的缺省值;跨父级移动会保持节点绝对位置,不用手动摆回 x/y,移入 auto-layout 容器时位置交给布局);auto-layout(layoutMode/itemSpacing/padding*/primaryAxisAlignItems 等)最后用 jsd_set_layout 单独设,别在建节点时混着传;**但 sizingMode 是例外** —— 开布局那一刻引擎会按内容重算容器尺寸,**写路径随后按「该轴 sizingMode 的回读值」把声明了 \`FIXED\` 的轴自动钉回**开布局前的尺寸(并在 warnings 里点名「已按声明钉回」、回显尺寸同步为真值):即时设计两轴都回读 FIXED → 两轴都钉回;Figma 主轴回读 AUTO → **保留它的 hug**,不钉回。⇒ **要固定就在建容器时或 \`jsd_set_layout\` 里显式声明该轴 \`FIXED\`,不必再手工补 \`jsd_resize_node\`**;**要 hug 就别声明(或显式传 \`AUTO\`)**。(逐平台实测见第 5 条。)
+   - **auto-layout 不是可选项,是屏内分区的默认解**(完整机制见配方 \`jsd://recipes/auto-layout\`)。判据:同类子项 + 沿一条轴 + 间距一致 → 一律上布局。屏内这几处**最容易漏**,而它们恰好是间距唯一靠手调坐标凑的地方:标签栏 / 分段控件(等分,每项 \`layoutGrow:1\`)、胶囊组 / 参数行 / 筛选条(\`itemSpacing\`)、卡片头(左标题 + 右操作,\`SPACE_BETWEEN\`)、列表行 / 表单行(外层 VERTICAL + **每行一个独立行 FRAME**)、整屏纵向分区(内容区 \`layoutGrow:1\` 吃满剩余高度)。
+   - **行内图元先归组,再进布局** —— 行内「图标 + 标题 + 值 + 箭头」若平铺在行容器里,直接开 VERTICAL 会把 N 个平铺子项**竖着摞起来**。这是「归组」与「布局」两件事的接缝,最容易出错。
+   - **正当的例外只有三条**:异质叠放(卡片头那种各在不同 x/y、视觉上不成等距序列的组合)、一次性装饰(光晕 / 渐隐遮罩 / 装饰线)、要「布局内绝对定位」的浮层(本平台没有 \`layoutPositioning\`,改用 z 序 + 绝对坐标)。
+   - **自检一句话**:加固完后每个分区都应能说出「它的间距是哪条 \`itemSpacing\`」。说不出、只能报坐标的,就是欠账 —— 欠账不会报错,只会在下一次要改间距时全部暴露。
 5) ${layoutHint}
 6) **绘图区用 SVG 还是原生图元,按「之后要改的是哪一类」分**(做法见 \`jsd://recipes/chart-by-code\`):**数值级**(换数据 / 改某根柱的高度 / 挪一个点)→ SVG,回源重算重导比在画布上挪一串节点便宜;\`vectorPaths.data\` **不回读**,画布上读不到也改不了坐标。**样式级**(改色 / 线宽 / 隐藏某个系列)→ 两边都行:SVG 按语义 \`<g id>\` 切层后在画布上就能点名改(实测 jsDesign 会落成同名子分组,渐变与 dash 保留;换平台先回读确认)。**结构级**(要排进 auto-layout 行列 / 要绑变量或样式 / 要做成组件复用 / 表格单元格 / 卡片骨架)→ 必须原生节点,**SVG 不吃布局**。**文案一律原生**(SVG 里的 \`<text>\` 字体字重由引擎解析,不保证)。三者常共存,一张卡的标准形态:卡片 FRAME + 标题/图例/数值/表格用原生节点,中间绘图区塞一个 SVG 子节点。
-7) 间距与字号阶梯:主标题 > 正文标签 > 按钮文本 > 辅助说明;同级元素间距一致,用 itemSpacing 统一控制,不靠手调坐标凑。**长段落要换行**:TEXT 缺省按内容撑开(textAutoResize 缺省 WIDTH_AND_HEIGHT),只给 width 会被引擎改成 NONE 且高度不随内容重算 —— 要固定宽+自动换行传 width + textAutoResize:"HEIGHT",要固定框尺寸传 "NONE"。**字体取 jsd_list_fonts 的 fonts[] 成对值**:family 用 fonts[].family 原样(如 SourceHanSansCN_family),style 用同一项的全名(如 SourceHanSansCN-Bold,不是简称 "Bold")—— 写错会被静默忽略、退回默认字面,结果 warnings 会点名。
+7) 间距与字号阶梯:主标题 > 正文标签 > 按钮文本 > 辅助说明;同级元素间距一致,用 itemSpacing 统一控制,不靠手调坐标凑。**长段落要换行**:TEXT 缺省按内容撑开(textAutoResize 缺省 WIDTH_AND_HEIGHT),只给 width 会被引擎改成 NONE 且高度不随内容重算 —— 要固定宽+自动换行传 width + textAutoResize:"HEIGHT",要固定框尺寸传 "NONE";高度没跟着内容走时**重设一次 characters 就触发重排**,别急着改尺寸。**字体取 jsd_list_fonts 的 fonts[] 成对值**:family 用 fonts[].family 原样(如 SourceHanSansCN_family),style 用同一项的全名(如 SourceHanSansCN-Bold,不是简称 "Bold")—— 写错会被静默忽略、退回默认字面,结果 warnings 会点名。
 8) 视觉顺序:自上而下按阅读顺序排布,主操作按钮放在输入项之后,次要链接(忘记密码/注册)放最后。
 9) 层序与遮挡:序列化里每个节点都带 \`z\`(= 父级 children 下标 = 绘制顺序,0 = 最底层,越大越靠上),判断谁压谁直接读 z。要调层序用 jsd_reparent_nodes + index(= 目标 z);auto-layout 容器同样支持,若引擎没落位会明确报错,那就改 itemSpacing / 对齐。别靠「新建一个节点压上去」改遮挡。
-10) 样式落点:纯描边图形只传 strokes 就行(fills 会被自动置空,不会变灰块);批量刷色给 ids + recursive(recursive 只作用于后代,容器自己不会被套上方框,要给容器也上色才传 includeSelf=true);实例子节点(位于 INSTANCE 内)的样式覆盖不保证渲染生效 —— 命中时结果的 warnings 会直接给出主组件里对应子节点的 id,改主组件即所有实例继承,只要单实例不同就先 jsd_detach_instance。
+10) 样式落点:**颜色与描边必须走样式,不内联**。流程是「**先归一化** → 建样式 → 引用」:① 同类视觉先收敛成**一套值** —— 同名用途却差一两度的色(分割线 / 侧栏边框 / 卡片描边各写一个 hex 是常见病)不收就建,样式只套得住一半节点、后续改色仍要逐个补;② \`jsd_create_style({kind:"PAINT", name:"色板/主色", fromNodeId:样板节点})\` 从样板抄(jsDesign 只收 PAINT / TEXT / EFFECT / GRID 四类);③ 引用走 \`fillStyleId\` / \`strokeStyleId\` —— **创建入参顶层就收这两个键**,建节点时一趟带上,不必「建完再绑」;④ **文字颜色直接放进 \`jsd_set_text\` 的 \`fills\`**(与排版同一趟写入;要批量刷色或绑 \`fillStyleId\` 时仍走 \`jsd_set_fill_color\`);⑤ 样式**清单读不回的平台(即时设计)必须把 \`jsd_create_style\` 回包的 id 记账**,丢了找不回。其余:纯描边图形只传 strokes 就行(fills 会被自动置空,不会变灰块);批量刷色给 ids + recursive(recursive 只作用于后代,容器自己不会被套上方框,要给容器也上色才传 includeSelf=true);实例子节点(位于 INSTANCE 内)的样式覆盖不保证渲染生效 —— 命中时结果的 warnings 会直接给出主组件里对应子节点的 id,改主组件即所有实例继承,只要单实例不同就先 jsd_detach_instance。
 11) 批量回显都做了摘要裁剪(jsd_batch 的节点只留 id/name/type/x/y):含图标/矢量克隆的批次要另配一次 jsd_export 目视验收,别拿回显当验收证据。
 12) 出错回滚:ok=false 或「没找到 X 节点」→ jsd_find 复核 id 是否已失效(可能被连坐删除),必要时 jsd_repair_nodes 清理后重试。**结果 warnings 一律读** —— 它点名的都是「回显成功却没生效」:能力门控字段被忽略、字段回读不一致(fontName 字重被降级 / TEXT 的 width 被 auto-resize 吃掉)、根节点 x/y 被 placement 覆盖;含删除/移父的批次还会报同层几何漂移(引擎把没碰到的兄弟节点静默挪走),照 warnings 给的原值回填,别把它当样式问题排查。
 13) 收敛复核:整批做完只做一次 jsd_get_selection(depth=1),或 jsd_export({ids:[要看的节点id], scale:0.5}) 导小图看效果(ids 为必填数组);**关键视觉改动靠导图目检,回显不等于生效**,不要每步都读一遍。
@@ -506,6 +544,95 @@ ${indentLines(relations, '     ')}
   - 辅助链接(FRAME:忘记密码 TEXT + 注册 TEXT)
 
 ${target}按这条链走;多步合并时优先用 jsd_batch 编排,中间 id 不回传模型。`;
+}
+
+/**
+ * 自动布局配方。
+ *
+ * 与 `design-strategy` 第 4 条的分工:那边只给**判据**(该不该上、哪类容器最容易漏),
+ * 这边给**机制**(两条落地路径、执行顺序、形态模板、验收与坑)。两份都会用到平台事实,
+ * 但事实不在本文件重写 —— 复用 `layoutHintText`,与工具描述、第 5 条同源。
+ */
+export function autoLayoutRecipe(
+  target: string | undefined,
+  platform: PlatformKey | null,
+): string {
+  const where = target == null ? '目标分区' : `「${target}」`;
+  return `# 自动布局(auto-layout)
+
+**结论先行:同类子项沿一条轴排的容器,一律上 auto-layout。** 用绝对坐标钉同类子项是**欠账**,不是「先这样,以后再改」—— 间距散在 N 个节点上,改一次要改 N 遍,中间插一项要挪后面全部;而漏掉的那些容器,恰恰是间距唯一靠手调坐标凑的地方。
+
+## 0) 先判:该不该上
+
+**该上**(同类子项 + 沿一条轴 + 间距一致)—— 这张表就是复核清单,屏内逐个分区过:
+
+| 形态 | 布局 | 关键字段 |
+| --- | --- | --- |
+| 标签栏 / 分段控件(等分) | HORIZONTAL | 每项 \`layoutGrow:1\`,itemSpacing 0 |
+| 胶囊组 / 参数行 / 筛选 chip(等距) | HORIZONTAL | \`itemSpacing\` |
+| 卡片头(标题左 + 操作右) | HORIZONTAL | \`primaryAxisAlignItems:"SPACE_BETWEEN"\`(此时 itemSpacing 被忽略) |
+| 整屏纵向分区(状态栏 / 头部 / 内容 / 底栏) | VERTICAL | itemSpacing 0;内容区 \`layoutGrow:1\` 吃满剩余高度 |
+| 列表行 / 表单行 | 外层 VERTICAL 排行,每行自己一个 HORIZONTAL | 行内 \`counterAxisAlignItems:"CENTER"\` |
+| 需要子项撑满交叉轴 | 继承 | 子项 \`layoutAlign:"STRETCH"\` |
+
+**不该上** —— 三条正当的例外,别硬套:
+- **异质叠放**:卡片头那种「头像 + 标题 + 副标题」各在不同 x/y、视觉上不是一条轴上的等距序列 → 容器 + 绝对坐标(要跟着伸缩再补 \`constraints\`)。
+- **一次性装饰**:光晕、渐变遮罩、装饰线 —— 没有第二次复用,也没有间距语义。
+- **要「布局内绝对定位」的浮层**:本平台没有 \`layoutPositioning\`,做不到 —— 改用 z 序 + 绝对坐标。
+
+**最容易漏的一条**:行内的图元没归组。列表行 / 表单行的「图标 + 标题 + 值 + 箭头」平铺在行容器里,直接开 VERTICAL 会把 N 个平铺子项**竖着摞起来** —— 必须先给每行建一层行 FRAME,再让行 FRAME 进外层布局。
+
+## 1) 两条落地路径,别混着走
+
+**路径 A —— 建容器那一次就带布局(推荐)**
+\`jsd_create_frame\` 同一次入参里给全:\`layoutMode\` + \`primaryAxisSizingMode:"FIXED"\` + \`counterAxisSizingMode:"FIXED"\` + \`itemSpacing\` + \`padding*\` + \`primary|counterAxisAlignItems\`。
+⇒ 尺寸按传入宽高**原样保住**。子节点的 x/y 交给布局,**建子节点时不必写 x/y**(写了也被覆盖)。
+
+**路径 B —— 事后给已有容器开布局**
+\`jsd_set_layout\` → **立刻** \`jsd_resize_node\` 钉回原尺寸 → **不要再重发** \`jsd_set_layout\`(重发会再吃掉一次)。
+为什么必须钉:开布局会按内容重算容器尺寸,两个 \`sizingMode\` 即便**同时传 FIXED 也保不住**(实测数字与成因见第 3 节)。要的就是按内容撑开,则显式传 \`AUTO\`,让意图与结果一致。
+
+⚠ 两条路径的**前提都是结构已就位**:先 reparent 归组、排好顺序,再开布局。反过来做(先开布局,再逐个 reparent)每次 reparent 都触发一次回流,往返也多。
+
+## 2) 执行顺序(照抄)
+
+1) 建容器(**不带布局**)+ 建子项,先按绝对坐标摆到大致位置 —— 这一步只为「看得见」;
+2) \`jsd_reparent_nodes\` 逐层归入(**parentId 显式传**);
+3) 开布局:路径 A 的容器跳过本步;路径 B 在这里 \`jsd_set_layout\`;
+4) 路径 B 补 \`jsd_resize_node\` 钉回尺寸;
+5) 单独 \`jsd_find { ids:[容器id], depth:1 }\` 回读:容器尺寸对不对、子项 x/y 是否已被布局接管(变成 itemSpacing 递推值,而不是原来手摆的坐标);
+6) 关键分区另配一次 \`jsd_export\` 目检 —— **回显不等于生效**。
+
+## 3) 本平台可落性
+
+${layoutHintText(platform)}
+
+## 4) 验收判据(四条,缺一条就是没落上)
+
+- 容器尺寸 = 设计稿标称值,**不是** hug 后的内容尺寸;
+- 子项间距 = itemSpacing 的递推值,**不是**原来手摆的坐标;
+- warnings 里**没有**「尺寸被 auto-layout 改成 X(开布局前 Y)」;
+- 导图目检:纯加布局语义时应当**零视觉变化** —— 一旦有位移/裁切,说明原坐标与布局参数不等价(常见:padding 与手摆的边距对不上、交叉轴对齐方向反了)。
+
+## 5) 常见坑
+
+- **文本的两条前置**:进布局前先定 \`textAutoResize\`(固定宽 + 自动高传 \`"HEIGHT"\`,固定框传 \`"NONE"\`),且**建 TEXT 时一次给全 characters + width/height**。漏了前者:「只给 width → 引擎改成 NONE → 高度不随内容重算」,重设一次 characters 才触发重排,别急着改尺寸。漏了后者更狠:宽度被钉到 1px,回读 characters 完整、零告警、**画面空白** —— 修法是 \`jsd_resize_node\` 传 width 钉回去。两条的实测细节都在第 3 节。
+- **手摆的坐标在布局里不显形**:布局容器接管子节点 x/y —— 要调排布就改 \`itemSpacing\` / 对齐 / \`layoutGrow\`,不是改 x/y。
+- **Figma 专有的布局字段本平台没有**(换行 \`layoutWrap\`、布局内绝对定位 \`layoutPositioning\`、\`counterAxisSpacing\` 等)—— 别按 Figma 习惯试,名单见第 3 节。
+- **\`layoutGrids\` 与 auto-layout 互斥**:引擎只在**非自动布局**的容器上收网格。
+- **\`jsd_set_layout\` 不改尺寸**:它只管布局语义;改宽高走 \`jsd_resize_node\`。
+
+## 6) 加固后的复核清单
+
+- [ ] 标签栏 / 分段控件 —— HORIZONTAL,\`layoutGrow:1\` 等分
+- [ ] 胶囊组 / 参数行 —— HORIZONTAL + itemSpacing
+- [ ] 卡片头(左标题 + 右操作)—— HORIZONTAL + SPACE_BETWEEN
+- [ ] 列表 / 设置行 —— 外层 VERTICAL;**每行一个独立行 FRAME + 行内 HORIZONTAL**
+- [ ] 整屏纵向分区 —— VERTICAL,内容区 \`layoutGrow:1\`
+- [ ] 上述每处的**行内图元确已归组**(没有 N 个平铺子项直接进布局)
+- [ ] 每个分区都能说出它的间距是哪条 \`itemSpacing\`;靠手调坐标凑的就是欠账
+
+${where}按这条走;判据(该不该上、哪类容器最容易漏)见 \`jsd://recipes/design-strategy\` 第 4 条。`;
 }
 
 /** 文本批量替换策略:安全副本 + 语义分块 + 逐块复核,避免一次性全改后无法回退 */

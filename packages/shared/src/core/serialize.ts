@@ -136,6 +136,31 @@ function unwrapLetterSpacing(raw: unknown): WireLetterSpacing | undefined {
 }
 
 /**
+ * `lineHeight` 的退化值归一:**空文本**(引擎侧 characters 为空)回读是
+ * `{ unit:'PIXELS', value:'' }` —— value 不是数字,而线格式要的是 `{value:number, unit}`。
+ * 真机 2026-10-15(即时设计):建一个 characters 为空的 TEXT 之后,**连只读查询都失败**
+ * (`jsd_create_text` / `jsd_find` 的结果撞 outputSchema,`structured()` 把读到的数据本身
+ * 当错误正文回给调用方,见 response.ts)—— 与 `unwrapLetterSpacing` 同一族:宿主运行时的
+ * 形状差不该把一次读判失败。引擎对「没设过行高的文本」用的就是 AUTO 语义,故取不到数值
+ * 的那一档归 `{ unit:'AUTO' }`。
+ */
+function normalizeLineHeight(
+  raw: unknown,
+): SerializedNode['lineHeight'] | undefined {
+  if (raw == null || typeof raw !== 'object') return undefined;
+  const { unit, value } = raw as { unit?: unknown; value?: unknown };
+  if (unit === 'AUTO') return { unit: 'AUTO' };
+  if (
+    typeof value === 'number' &&
+    Number.isFinite(value) &&
+    (unit === 'PIXELS' || unit === 'PERCENT')
+  ) {
+    return { value, unit };
+  }
+  return { unit: 'AUTO' };
+}
+
+/**
  * @param zIndex 已知的父级下标(递归 children 时直接传入,省掉一次父级扫描);
  *   顶层调用留空则按父级 children 现算。
  */
@@ -522,8 +547,10 @@ export function serializeNode(
     if (node.textDecoration !== 'NONE' && !isMixed(node.textDecoration))
       base.textDecoration =
         node.textDecoration as SerializedNode['textDecoration'];
-    if (!isMixed(node.lineHeight))
-      base.lineHeight = node.lineHeight as SerializedNode['lineHeight'];
+    if (!isMixed(node.lineHeight)) {
+      const lh = normalizeLineHeight(node.lineHeight);
+      if (lh != null) base.lineHeight = lh;
+    }
     if (!isMixed(node.letterSpacing)) {
       base.letterSpacing = unwrapLetterSpacing(node.letterSpacing);
     }
