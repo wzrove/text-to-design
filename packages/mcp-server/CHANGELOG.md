@@ -1,5 +1,11 @@
 # text-to-design-mcp
 
+## 0.13.2
+
+### Patch Changes
+
+- [`db5982d`](https://github.com/wzrove/text-to-design/commit/db5982d59a6902432d84f3c436ae7f0e841f323b) Thanks [@wzrove](https://github.com/wzrove)! - feat: enhance text properties handling and schema updates
+
 ## 0.13.1
 
 ### Patch Changes
