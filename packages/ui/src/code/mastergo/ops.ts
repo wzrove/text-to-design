@@ -1128,6 +1128,8 @@ async function createVariables(
     name: string;
     type: string;
     created: boolean;
+    /** `setVariableValue` 的返回原样透传;可能为空/缺字段,不是验收判据 */
+    values?: Record<string, unknown>;
   }>;
   /**
    * 本轮执行内读不到、但**下一次调用就能读到**的复合样式类型(见函数体那条真机记录)。
@@ -1165,6 +1167,8 @@ async function createVariables(
     name: string;
     type: string;
     created: boolean;
+    /** `setVariableValue` 的返回(引擎侧更新后的值);单值类型用它确认值真的落盘 */
+    values?: Record<string, unknown>;
   }> = [];
   try {
     const before = mg.variables.getVariables({
@@ -1182,6 +1186,7 @@ async function createVariables(
           collectionId: collection.id,
         }));
       if (variable == null) throw new Error(`建变量失败:${v.name}`);
+      let values: Record<string, unknown> | undefined;
       if (v.value !== undefined) {
         // typings 里 modeId **必填**、文档里可选 —— 按 typings 走(引擎签名以 typings 为准);
         // 集合必然带模式,这里取不到就是异常态,点名报错而不是发一次没有模式的值写入
@@ -1190,17 +1195,24 @@ async function createVariables(
             `集合「${collection.name}」没有模式,写不了值(变量 ${v.name})`,
           );
         }
-        await mg.variables.setVariableValue({
+        // `setVariableValue` 返回更新后的 Variable(typings :1203-1207)。**不是验收判据**:
+        // 真机 2026-10-19 它的 `modes` 时有时无(同一批里有的带 `bool`/`floatData`,有的只有
+        // `{modeId}`,默认双模式集合甚至回空对象),且 **STRING 的任何读面都不带值**
+        // (列表 / 按 id / 写返回三面皆无)。故原样透传,缺值就是缺值 —— 别据此判写入成败。
+        const returned = await mg.variables.setVariableValue({
           id: variable.id,
           value: v.value as never,
           modeId,
         });
+        if (returned?.modes != null && Object.keys(returned.modes).length > 0)
+          values = returned.modes as Record<string, unknown>;
       }
       created.push({
         id: variable.id,
         name: variable.name,
         type: variable.type,
         created: same == null,
+        ...(values != null ? { values } : {}),
       });
     }
   } catch (e) {
@@ -1536,35 +1548,50 @@ const variablesRemoveSchema = z.object({
 });
 
 /**
- * 删变量:`mg.variables.deleteVariable(id)` 是同步 void(typings :1218),引擎不在返回值
- * 里报告成败,所以**删前删后各读一次** `getVariableById`:
- * - 删前查不到 → 进 failed(不存在没什么好删);
- * - 删后仍查得到 → 也进 failed —— 真机 2026-10-14 实测:拿已被 `jsd_delete_style` 删掉的
- *   复合样式变量 id 走这条,原先只报 `removed`(存在性预检过了、删除本身没生效)。
- *   MG 的样式与变量共用 id 空间,「另一面删过」在这里读起来就是「没删动」。
+ * 删变量:`mg.variables.deleteVariable(id)` 是同步 void(typings :1218),不回报告成败,只能回读判定。
+ * 真机(MG,2026-10-19 重载后两轮):
+ *
+ * - **单值类型**(BOOLEAN / NUMBER / STRING / COLOR):能删,但**跨执行才生效** —— 同一次执行里
+ *   再删一遍、再读一遍都还是「在」(实测 id 95:525 双删 + 回读全失败),下一次调用立刻 `removed`
+ *   (95:515 / 95:522)。⇒ 本执行内读得到**不是失败**,认作已下发(pending),下次复核。
+ * - **复合样式类型**(PAINT / TEXT / EFFECT / …):`deleteVariable` 是 **no-op**(跨多次执行仍在:
+ *   列表、`assets.variables`、拿它绑图层三面都证明它活着;同 id 走 `jsd_delete_style` 一次删掉)。
+ *   故这类**动手前就拒**,不调 `deleteVariable`。
  */
 async function removeVariables(
   _host: DesignHost,
   params: unknown,
-): Promise<{ removed: string[]; failed: { id: string; reason: string }[] }> {
+): Promise<{
+  removed: string[];
+  /** 已下发删除、但本执行内回读仍见该 id —— 引擎跨执行才生效,下次调用复核 */
+  pending?: string[];
+  failed: { id: string; reason: string }[];
+}> {
   const { variableIds } = params as { variableIds: string[] };
   const removed: string[] = [];
+  const pending: string[] = [];
   const failed: { id: string; reason: string }[] = [];
+  const listed = (id: string) =>
+    mg.variables.getVariables().some((v) => v.id === id);
   for (const id of variableIds) {
     try {
-      if (mg.variables.getVariableById(id) == null)
+      const before = mg.variables.getVariableById(id);
+      if (before == null && !listed(id))
         throw new Error(`没有找到变量: ${id}`);
-      mg.variables.deleteVariable(id);
-      if (mg.variables.getVariableById(id) != null)
+      if (before != null && isCompositeStyleType(before.type))
         throw new Error(
-          `deleteVariable 调用后该 id 仍读得到(引擎没删动;MG 的样式与变量共用 id 空间,若它是样式,走 jsd_delete_style)`,
+          `复合样式变量(${before.type})不走这条:deleteVariable 对它是 no-op(真机 2026-10-19),请走 jsd_delete_style({ ids: [${id}] })`,
         );
-      removed.push(id);
+      mg.variables.deleteVariable(id);
+      // 单值类型的删除跨执行生效(实测同执行内双删 + 回读仍全失败),本执行内等不到 —— 不白等:
+      // 读得到就归 pending,报 failed 会把成功报成失败,那正是 10-15 记的假失败。
+      if (listed(id)) pending.push(id);
+      else removed.push(id);
     } catch (e) {
       failed.push({ id, reason: e instanceof Error ? e.message : String(e) });
     }
   }
-  return { removed, failed };
+  return { removed, ...(pending.length > 0 ? { pending } : {}), failed };
 }
 
 export const mastergoOps: PlatformOp[] = [
@@ -1668,7 +1695,7 @@ export const mastergoOps: PlatformOp[] = [
     name: 'mg_variables_create',
     title: '批量建变量',
     description:
-      'MasterGo 特有:批量建变量(与 Figma 的 `figma_variables_create` 同形,便于两个平台共用一套调用纪律)。params: { collectionName?, variables: [{ name, type, value?, description? }] }。type 收 11 项:单值 BOOLEAN / NUMBER / STRING / COLOR(COLOR 用 {r,g,b,a},**0-1 浮点**),复合样式 PAINT / TEXT / EFFECT / GRID / STROKE_WIDTH / CORNER_RADIUS / PADDING(建出来是空样式,value 走部分更新语义)。⚠ typings 的 `VariableType` 有 12 项,但 **SPACING 引擎实建不收**(真机 2026-10-14 抛 `Unsupported variable type: SPACING`,官方文档的类型表也没有它)—— 要 SPACING 那层复用走 `jsd_create_style kind=SPACING`。**同名集合复用、同名同类型变量就地更新值**;失败回滚本次新建的集合(复用既有集合时不删,避免连坐)。⚠ 复合样式类型**不进 `mg.variables.getVariables()` 列表**(真机 2026-10-14:建成功后,下一次调用按 `collectionId` 或按 `type` 筛都列不出它,但 `getVariableById(id)` 读得到,而它会出现在 `assets.styles` 那一份清单里)。所以本 op 的回读按 **id** 查而不是按列表查;两条都读不到才落进回包的 `pendingReadback`(判成失败会让调用方重试、攒出重复变量)。要确认它在不在,用回包的 id 走 `getStyleById` 侧的 `jsd_*` 或直接改值,别依赖 `mg_list_variables`',
+      'MasterGo 特有:批量建变量(与 Figma 的 `figma_variables_create` 同形,便于两个平台共用一套调用纪律)。params: { collectionName?, variables: [{ name, type, value?, description? }] }。type 收 11 项:单值 BOOLEAN / NUMBER / STRING / COLOR(COLOR 用 {r,g,b,a},**0-1 浮点**),复合样式 PAINT / TEXT / EFFECT / GRID / STROKE_WIDTH / CORNER_RADIUS / PADDING(建出来是空样式,value 走部分更新语义)。⚠ typings 的 `VariableType` 有 12 项,但 **SPACING 引擎实建不收**(真机 2026-10-14 抛 `Unsupported variable type: SPACING`,官方文档的类型表也没有它)—— 要 SPACING 那层复用走 `jsd_create_style kind=SPACING`。**同名集合复用、同名同类型变量就地更新值**;失败回滚本次新建的集合(复用既有集合时不删,避免连坐)。回包 `variables[].values` = `setVariableValue` 的返回**原样透传,不是验收判据**(真机 2026-10-19):它的 `modes` 时有时无(同批里有的带 `bool` / `floatData`,有的只有 `{modeId}`,默认双模式集合甚至回空对象,空就省掉这个键),而 **STRING 三个读面(列表 / 按 id / 写返回)都不带值** —— 别拿「有没有值字段」判写入成败,值只信画布效果。⚠ 复合样式类型**不进 `mg.variables.getVariables()` 列表**(真机 2026-10-14:建成功后,下一次调用按 `collectionId` 或按 `type` 筛都列不出它,但 `getVariableById(id)` 读得到,而它会出现在 `assets.styles` 那一份清单里)。所以本 op 的回读按 **id** 查而不是按列表查;两条都读不到才落进回包的 `pendingReadback`(判成失败会让调用方重试、攒出重复变量)。要确认它在不在,用回包的 id 走 `getStyleById` 侧的 `jsd_*` 或直接改值,别依赖 `mg_list_variables`',
     inputSchema: variablesCreateSchema,
     run: createVariables,
   },
@@ -1684,7 +1711,7 @@ export const mastergoOps: PlatformOp[] = [
     name: 'mg_variables_remove',
     title: '删除变量',
     description:
-      'MasterGo 特有:删本地变量(逐个删,单条 id 不存在只进 failed、不连坐其余)。params: { variableIds: [id…] }。`deleteVariable` 是同步且不回报告(`dist/index.d.ts:1218`),所以**删前删后各读一次** `getVariableById`:删前查不到 → failed(不存在没什么好删);删后仍读得到 → 也进 failed(引擎没删动 —— 真机 2026-10-14 拿已被 `jsd_delete_style` 删掉的复合样式变量 id 走这条,原先只报 removed)。与 `jsd_delete_style` 成对:接上删除之后,`mg_variables_create` / `jsd_create_style` 才不是「建了撤不回」的单向门。⚠ **删之前先确认它是变量还是样式**:MG 的样式与变量共用 id 空间、类别词汇还逐字重名(`getStyleById` 连变量都查得出来,`jsd_delete_style` 拿变量 id 会点名拒而不是误删 —— 守卫已接),复合样式变量(如 PAINT 类型)建出来是样式形状却**属于变量**,归这条管。⚠ 分组管理(`addVariablesToGroup` / `disbandGroup` 等)与模式切换仍未接',
+      'MasterGo 特有:删本地变量(逐个删,单条 id 不存在只进 failed、不连坐其余)。params: { variableIds: [id…] }。`deleteVariable` 是同步且不回报告(`dist/index.d.ts:1218`),回包三档(真机 2026-10-19 重载后两轮):**`removed`** = 本执行内回读已不见;**`pending`** = 已下发但**单值类型的删除跨执行才生效**,同执行内回读必然还见(实测双删同一 id + 回读全失败,下一次调用立刻 removed)—— 这不算失败,下次调用复核即可;**`failed`** = 找不到该 id,或它是**复合样式类型**(PAINT / TEXT / EFFECT / …),那类 `deleteVariable` 是 **no-op**(列表、`assets.variables`、绑定解析三面都证明它还活着),本 op **动手前就拒**并点名走 `jsd_delete_style`(实测同 id 走样式入口一次删掉)。删前查不到 → failed(不存在没什么好删)。⚠ 样式与变量共用一套 id 空间、类别词汇逐字重名(`getStyleById` 连变量都查得出来,`jsd_delete_style` 拿单值变量 id 会点名拒而不是误删 —— 守卫已接)。⚠ 分组管理(`addVariablesToGroup` / `disbandGroup` 等)与模式切换仍未接',
     inputSchema: variablesRemoveSchema,
     run: removeVariables,
   },

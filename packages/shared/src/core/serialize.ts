@@ -8,6 +8,10 @@ import type {
   VectorPath as WireVectorPath,
 } from '../schemas';
 import { MIXED, type NodeSkeleton } from './host';
+import {
+  normalizeVariantGroupProperties,
+  normalizeVariantProperties,
+} from './variant';
 
 export const MAX_SERIALIZE_DEPTH = 2;
 
@@ -451,7 +455,9 @@ export function serializeNode(
   // 是逐节点调 serializeNode 的,一个坏节点会把整次查找掀翻(2026-09-24 Figma 真机)。
   try {
     if ('variantProperties' in node && node.variantProperties != null) {
-      base.variantProperties = { ...node.variantProperties };
+      // 值同样按**实际运行期形状**归一(core/variant.ts):与集合维度表共用一份实现 ——
+      // 两处是同一个维度的两张表,各写一遍迟早早一起漂。
+      base.variantProperties = normalizeVariantProperties(node.variantProperties);
     }
   } catch {
     // 引擎 getter 抛:该字段省略,其余字段照常回传
@@ -513,13 +519,21 @@ export function serializeNode(
   } catch {
     // 引擎 getter 抛:该字段省略,其余字段照常回传
   }
-  if (node.type === 'COMPONENT_SET' && node.variantGroupProperties != null) {
-    base.variantGroupProperties = Object.fromEntries(
-      Object.entries(node.variantGroupProperties).map(([k, v]) => [
-        k,
-        [...v.values],
-      ]),
-    );
+  // 集合维度表:投影点归一到 `string[]`(见 core/variant.ts)。真机 2026-10-20(即时设计)
+  // `values` 元素**不保证是字符串**(多成员集合回 `[{name:"默认"}]`)—— 直接展开会让
+  // `jsd_find` 整条撞穿输出校验(一个字段的形状不符,整次只读调用报废)。
+  // 两段保护:① 读该字段本身会抛(Figma:文档里存在「带错误的组件集」时
+  // `in get_variantProperties: Component set for node has existing errors`);
+  // ② 读到了但取值形状不符(即时设计:`{name}` 对象)。摘要字段,取不到就省略。
+  if (node.type === 'COMPONENT_SET') {
+    try {
+      const dimensions = normalizeVariantGroupProperties(
+        node.variantGroupProperties,
+      );
+      if (dimensions != null) base.variantGroupProperties = dimensions;
+    } catch {
+      // 引擎 getter 抛:该字段省略,其余字段照常回传
+    }
   }
   if (node.type === 'BOOLEAN_OPERATION' && node.booleanOperation != null) {
     base.booleanOperation = node.booleanOperation;

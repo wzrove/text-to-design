@@ -1,7 +1,7 @@
 # 0029. 能力字典改规格表：kind 判别 + labelKey 收口，删死代码与重复事实
 
 - **日期：** 2026-09-29
-- **状态：** 已采纳（代码已落地并通过类型检查；`tests/i18n.test.ts` 按 `labelKey` 校验已改；三平台真机复验随下次重载）
+- **状态：** 已采纳（代码已落地并通过类型检查；`tests/i18n.test.ts` 按 `labelKey` 校验已改；**UI 侧已复验通过**（2026-10-15）：面板能力表里 `platformOps` 行已消失，与 `jsd_ping` 回包 `platformOps: []` 互为佐证 —— 不涉及画布、不需要三平台）
 - **影响范围：** `shared/`（`dicts/capability.ts` 重写为规格表、`schemas/platform.ts` 的线格式枚举、`core/host.ts` 的 `PlatformMeta` 收窄、`core/{capabilities,buildNode}.ts`、`dicts/i18n/*` 删一条键）、`ui/`（删 `i18n/capabilityKeys.ts`、`components/CapabilityCard.tsx`）、`code/figma/meta.ts` 少一个能力位、`mcp-server/`（无代码改动：只透传；线格式与取值表同宽后，旧插件与旧 MCP 不得混用）
 - **相关记录：** 沿 0002（能力表显式注入）、0007（静默失效出口）、0020（平台差异三档机制）、0021（逐平台核对后不引入能力位）、0022（平台类型事实收敛为声明表）的做法；不取代任何记录
 
@@ -73,6 +73,7 @@
 - **跨版本口径（不设兼容用例）：** 线格式等于取值表，退役的 `platformOps` 在两侧都是非法值；「旧插件 + 新 MCP」不在支持范围内，两端同步升级/重载。故 `mcp-server/` 无代码改动也无新增测试 —— 它只透传 `capabilities`，取值面由 shared 的枚举单点决定。
 - **边界用例：** 未注入能力表（`capabilities: null`）时判定仍 fail-open，`isGatedPropUnsupported` 退回 `'in'` 探测——`write-path.test.ts` 既有用例覆盖该口径。
 - **指标与日志：** `warnings` 文案不变（仍点名 `${key}(需 ${cap} 能力)`）；面板能力表少一行（`platformOps`），其余展示不变。
+- **UI 侧验收（2026-10-15 已跑通过，用户目检）**（`pnpm dev:ui`，一次即可）：面板能力表里 `platformOps` 那一行消失、其余行与顺序不变 —— 纯面板渲染，不需要画布宿主，也不需要三平台。
 
 ## 变更历史
 
@@ -80,4 +81,6 @@
 |---|---|---|
 | 2026-09-29 | 初次决策（排查「能力相关逻辑是否落后于三平台类型」时发现真源旁挂了四份副本） | 采用派生式声明表；不引入模式 |
 | 2026-09-29 | 追问「shared 的变更 mcp 侧要不要发版」→ 实测「旧插件 + 新 MCP」组合 | 先记「结论加固」：线格式改为容忍退役取值（第 6 条）、新增 `ping-capability-compat.test.ts`；发版面确认为 **ui + mcp 两个包**，`.changeset` 脚本不认识「shared 单独变更」这个缺口另记 |
+| 2026-10-15 | 验收口径更正：本条的宿主可见面只有面板能力表一行 | 结论不变；「三平台真机复验」降级为 UI 侧一次（`pnpm dev:ui`） |
+| 2026-10-15 | UI 侧复验（用户目检面板） | 结论不变：能力表 `platformOps` 行消失，与 `jsd_ping` 的 `platformOps: []` 一致 ⇒ 该条待验项结清 |
 | 2026-09-29 | 复核「要不要为版本错配设兼容层」→ 明确**不考虑兼容** | **改向**：删掉 `LEGACY_HOST_CAPABILITIES` 与 `ping-capability-compat.test.ts`，第 6 条改为「线格式与取值表同宽、两端同步升级」；`PlatformMeta` 的收窄保留（两端都不认退役值）。失败形态（旧插件 ping 回 `isError` 且无 `structuredContent`）已知且被接受 |

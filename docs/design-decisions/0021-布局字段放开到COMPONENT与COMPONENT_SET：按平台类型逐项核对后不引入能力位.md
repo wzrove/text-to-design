@@ -148,6 +148,23 @@ MG 上直接表现为变体集内 16 个变体重叠于 (20,20)、集合尺寸�
   `in get_name: Value is not a string`，于是**按名查找整体失败**(`jsd_find name:'TDD20C'` 只回这句错)，
   按 id / 按类型仍可用；`jsd_manage_nodes op=repair` 一次清干净(回 `cleaned:[3 个 id]`)。
   这是 0018「jsDesign 的 combineAsVariants 有已知问题」这条的具体形态，也给出失败后的清理动作。
+- **复核 + 排除调用方式（2026-10-20，即时设计，重载后多次）**：官方 API 参考页
+  （js.design/developer-doc/plugin/api/reference/jsDesign）确认语义「将任意数量的组件合并为变体」、
+  签名 `combineAsVariants(nodes, parent, index?)`，与我们的调用一致、无任何前置条件说明。逐项排除：
+  ① **receiver**：`host` 是 `Object.create(native)`，原型链调用时 `this` 是代理对象 —— 改成
+  `native.combineAsVariants(...)` 钉回全局后，报错**逐字相同**（`in get_name` / `in get_booleanOperation:
+  Value is not a string`）；② **命名**：组件名改成 `状态=默认` / `状态=禁用` 仍败；③ **子层**：带 RECTANGLE
+  子层仍败；④ **父级**：先 reparent 进 FRAME 再合并仍败。⇒ 引擎实现缺陷，不是调用方式 —— 结论不变。
+  残留形态也不稳定：这次连 `jsd_get_page` 都会抛同一条错（顶层 `name` 读不出来），
+  `jsd_manage_nodes op=repair` 一次清掉 9 个损坏节点后恢复。`host.ts` 里那层显式绑定**保留**（正确形状），
+  但注释写明「已排除，不是它」。`combineAsVariants` 失败是**引擎级**，因此「变体集只能手工合」仍然成立。
+- **⚠ 会毁入参组件（2026-10-20 第二次真机，收紧实现）**：对用户手工建的两个 `COMPONENT`（`13:100` / `13:102`）
+  调 `jsd_combine_as_variants` → 仍三式全败，随后 `jsd_get_page` 抛 `in get_name: Value is not a string`，
+  `jsd_manage_nodes op=repair` 回 `cleaned:["13:100","13:109","13:106"]` —— **原组件 `13:100` 直接被删掉**
+  （之前那次只是残骸，这次是用户资产丢失）。根因是「原位合并」这一姿势会动原节点。
+  修法（`core/component.ts`）：**原位合并只在平台声明 `inPlaceVariants` 时才尝试**（Figma 声明，行为不变）；
+  jsDesign 不声明 ⇒ 只跑两条克隆姿势，失败也伤不到原组件。失败文案同步改为「已尝试克隆两式、**未尝试原位合并**」，
+  不再说「三种姿势均失败」。教训：兜底姿势若有破坏性，不能排在最后当默认重试。
 - **遗留已清(2026-10-08，单点、不开新记录)**：`settle` 的回读面从「`layoutMode` + 两轴对齐」扩到
   含 `itemSpacing` / 四边 `padding*` —— 人工 `jsd_find` 那一步不再需要。
   - `shared/core/props/writers.ts`：`layoutWriter.settle` 增一个键表回读循环，**期望值口径与

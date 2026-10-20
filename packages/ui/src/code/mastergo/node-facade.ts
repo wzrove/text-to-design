@@ -183,7 +183,7 @@ function normalizeMixed(value: unknown): unknown {
  *
  * 两处形状差异(实测 `@mastergo/plugin-typings@2.19.2`):
  * ① `TextNode.textStyles` 是**分段样式表**,`[0]` 即首段;没设过样式的节点是空数组
- *    (读不到不等于没字体 —— 见 platform-limits 的 unloaded font 那条);
+ *    (读不到不等于没字体 —— 见 shared/src/core/props/writers.ts 的 unloaded font 兜底);
  * ② 字号/字体/行高/字距/大小写/装饰都在段的**嵌套**对象里(`seg.textStyle.fontSize`),
  *    只有 `textStyleId` 在段的顶层。按顶层读会永远 undefined(实测踩过:创建时写了
  *    fontSize,回读却没有该字段)。

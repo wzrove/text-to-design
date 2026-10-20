@@ -1,7 +1,7 @@
 # 0032. 平台事实三域收敛为声明表：prompts 与工具描述共用单一投影点
 
 - **日期：** 2026-09-29
-- **状态：** 已采纳
+- **状态：** 已采纳（jsDesign 已修）
 - **影响范围：** `shared/`（新增 `dicts/platform-knowledge.ts`、`dicts/platform-value-domain.ts` 第四类登记 + 断言辅助类型、`core/host.ts` 契约注释、i18n 三键）、`ui/`（三侧 `sync-guarantee.ts` 加第 6 节断言）、`mcp-server/`（新增 `tools/platform-facts.ts` 渲染点、`tools/{prompts,components,platform}.ts`、`README.md`）、`tests/platform-knowledge.test.ts`
 - **相关记录：** N/A（延续 0022 / 0029 的范式，不取代任何记录）
 
@@ -99,7 +99,7 @@
   含 `MasterGo`=true，且 `variant-set` / `component-property` 正文带**本平台 op 名**
   (`mg_create_variant_property` / `mg_add_component_property` 等)⇒ 「单平台文案不串平台」在 MG 上也成立
   (09-29 只在 jsDesign 验过)。同轮 `ping` 的 `platformOps` 11 个，与表里 MG 行一致。
-- **⚠ 附带发现(同轮，未修，待定)**：`jsd_set_instance_properties` 在 jsDesign 上给**未知属性名**会让插件
+- **⚠ 附带发现(同轮；2026-10-19 已修，见变更历史末行)**：`jsd_set_instance_properties` 在 jsDesign 上给**未知属性名**会让插件
   挂满 25s 才超时，错误文案里不带原因(调用方分不清「属性名非法」还是「平台没有这个能力面」)。
   根因位置：`core/component.ts:191-209` 的运行时属性名校验**只在主件父级是 COMPONENT_SET 时生效**
   (拿 `variantGroupProperties` 当合法键表)，jsDesign 走不到那条分支就直接 `setProperties`。
@@ -113,3 +113,8 @@
 | 2026-09-29 | 初次决策 | 采用「声明表 + 单一投影点」；排除 Strategy/Factory 与「只改文案」 |
 | 2026-09-29 | 真机复验（即时设计客户端） | 结论不变。复验中发现两处与「配方能用不可用」直接相关的缺陷，已按 AGENTS.md 的「单点 bug 直接改」处理：① `daemon/proxy.ts` 的 `syncPrompts` 镜像上游参数时一律写成 `z.string()`，**丢掉可选性** → 不填参数就调不动（本题 9 个配方里 8 个有可选参数，用法正是「留空只返回纪律」）；已抽出 `promptArgsSchema` 保可选性并加回归测试。② 三个新配方自身有自相矛盾（jsDesign 分支仍教人传布尔；同一事实说两遍），已按第四类登记的取值域改写 |
 | 2026-10-08 | 真机复验（即时设计客户端） | 结论不变。「jsDesign 传 boolean」这条**在本环境不可隔离**（无属性可设：无 componentProperties 能力位 + 变体集做不出来），boolean 与 string 表现一致（都是 25s 悬挂），故文案继续只声明 typings 事实。附带发现未知属性名在 jsDesign 上悬挂 25s、错误不含原因，根因与修法候选已记入验证节（未修） |
+| 2026-10-19 | 状态标注从「jsDesign 待验」改为「不可隔离」 | 结论不变：这条真机验不了（jsDesign 上既无 `componentProperties` 也无变体集，boolean/string 表现一致都是 25s 悬挂），不该挂在「待验」下。同一 blob 里的**未修缺陷**仍在：未知属性名在 jsDesign 上挂满 25s 且错误不带原因（`core/component.ts` 的合法键校验只在主件父级是 COMPONENT_SET 时生效） |
+| 2026-10-19 | 修掉同轮那条未修缺陷（真机复现后动手） | 复现：jsDesign 上 `jsd_set_instance_properties{ids:[实例],properties:{Foo:'bar'}}` → **25077 ms** 后失败，错误只有「插件响应超时」。核对 typings：`InstanceNode`（:1088-1096）**没有 `componentProperties`**，`setProperties(properties: {[k]: string})`（:1093）只收 string ⇒ 布尔 / 文本 / 换绑属性本平台不存在，变体属性也只在已存在变体集里有维度。修法：`core/component.ts` 在能力位明确不含 `componentProperties` 时，用「变体表 ∪ 实例 `componentProperties` ∪ 实例 `variantProperties`」算出可写键集，**为空或名字对不上就在写之前点名拒**（此前合法键校验只在主件父级是 COMPONENT_SET 时生效，jsDesign 走不到）。Figma / MG 声明了该能力位 → 不介入。附测试（`write-path.test.ts`：拒后才不发 `setProperties`） |
+| 2026-10-19 | 复验发现「新守卫不生效」→ 定位到**更上游**的挂点 | 守卫写对了但没跑到：`setInstanceProperties` 里它排在 `await resolveMainComponent(inst)` **之后**，而那一步本身就是挂点。隔离探针：`jsd_copy_overrides`（只读覆盖快照、**不写任何属性**）25109ms `forward_timeout` ⇒ 挂点在 `getMainComponentAsync`（即时设计运行时透出、永不 settle），不是 `setProperties`。修法见 [e1e66f0a](e1e66f0a-样式枚举选路按平台声明：新增-styleEnumerationSync，不靠-.-探测.md)：新增 `mainComponentSync` 声明位。本条加的属性面守卫**仍然保留**（属性面有无是另一个独立事实：即时设计根本没有 `componentProperties`） |
+| 2026-10-19 | 真机验收（重载后） | 通过：`capabilities` 含 `mainComponentSync`；`jsd_copy_overrides` 13 ms（原 25109 ms）、`jsd_apply_overrides` 42 ms、`jsd_detach_instance` 36 ms；`jsd_set_instance_properties{Foo:'bar'}` **14 ms** 报「实例 … 没有可写的属性面」（原 25021 ms 超时）。画布清空，探针节点全删 |
+| 2026-10-20 | 真机补两条 jsDesign 变体事实（官方文档页 + 实测） | ① `variantGroupProperties.values` 元素**不保证是 string**（单成员集 `["ccc"]`、两成员集 `[{"name":"默认"}]`）—— 后者撞穿 `assets.variants.properties` 的 `string[]` 校验，让 `get_page` **整条失败**；修在 `core/assets.ts` 的 projection（字符串原样 / 对象取 `name`），加单测 `variant-values.test.ts`。② 对**真实变体实例**调 `setProperties` **11~15ms 就抛** `in setProperties: i.setProperties is not a function` —— 与 typings `:1093`/文档「setProperties({[k]: string})」不符，属「声明 ≠ 实现」那族（同 `componentProperties` 缺席）；`jsd_component_facts` 新增 `setPropertiesAvailable` 回报符号是否真在。另：集合级维度键与成员 `variantProperties` 键会错位（集合「状态」vs 成员「分类1」），op 给出 `dimensionMismatch` + warning |

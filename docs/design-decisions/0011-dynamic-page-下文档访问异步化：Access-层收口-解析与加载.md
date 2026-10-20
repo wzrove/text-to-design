@@ -79,7 +79,7 @@
 - 引擎侧实测：批次 2 起涉及 `shared/` 与 `ui/`，每批需 `pnpm build` + 在即时设计/Figma 里**重载插件**；仅类型与单测不足以证明 dynamic-page 下不再抛。
 - 冒烟用例（Figma 侧，开 dynamic-page 后必须全绿）：`get_selection` → `find_nodes(ids)` → `update` → 回读；`create_instance` + 序列化；`list_styles`；`figma_variables_create`。
 - 台账证据（mcp-tdd 回归 run `run-20260919T123537Z`，用例 `case-20260919-0002` 原样重放，场地为 Figma/dynamic-page）：4 步全过，创建时对齐生效（`80759e34f71c` 修复保持）、实例化正向成功、负向报错按修复后文案点名 id（`2c97b8245071` 已挂 `--decision 0011`）；`2280202ae990` 是负向步骤设计内命中，scan-log 的「复发」告警为负向用例固有误报，按 `--force` 豁免收口。
-- 冒烟全清单实测（run `run-20260919T124937Z` + 回归 `run-20260919T125338Z`，Figma/dynamic-page）：`get_selection` → `find_nodes(ids)` → `update`(fill) → 回读一致；`create_instance` + 序列化（渐变完整）；`list_styles`（jsd://styles 空表正常）；`figma_variables_create`/`apply` 初测撞新指纹 `b300df0ec236`（增量模式拒收 collection id）——单点修复 `ops.ts` 改传 collection 节点后重放全绿，已闭环并登记 `platform-limits.md`。测试节点已清理；`0011-smoke` 变量集合留在文档中（无删除 op）。
+- 冒烟全清单实测（run `run-20260919T124937Z` + 回归 `run-20260919T125338Z`，Figma/dynamic-page）：`get_selection` → `find_nodes(ids)` → `update`(fill) → 回读一致；`create_instance` + 序列化（渐变完整）；`list_styles`（jsd://styles 空表正常）；`figma_variables_create`/`apply` 初测撞新指纹 `b300df0ec236`（增量模式拒收 collection id）——单点修复 `ops.ts` 改传 collection 节点后重放全绿，已闭环（原登记在 `.agents/skills/mcp-tdd/references/platform-limits.md`，该台账已随 9039a4a 删除）。测试节点已清理；`0011-smoke` 变量集合留在文档中（无删除 op）。
 
 ## 变更历史
 

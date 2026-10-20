@@ -421,7 +421,7 @@ export function registerPlugin(
               send(id, true, await createInstances(host, p.ids ?? []));
               break;
             case 'detach_instance':
-              send(id, true, await detachInstanceNodes(host, p.ids ?? []));
+              send(id, true, await detachInstanceNodes(host, ctx, p.ids ?? []));
               break;
             case 'import_component':
               send(
@@ -467,7 +467,7 @@ export function registerPlugin(
               send(
                 id,
                 true,
-                await copyInstanceOverrides(host, {
+                await copyInstanceOverrides(host, ctx, {
                   sourceId: p.sourceId ?? '',
                 }),
               );

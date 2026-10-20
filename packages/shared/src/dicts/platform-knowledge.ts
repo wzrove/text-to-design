@@ -160,7 +160,10 @@ export const PLATFORM_KNOWLEDGE: Readonly<
       read: null,
       readShape: null,
       write: ['jsd_set_instance_properties'],
-      nativeUnwired: [],
+      nativeUnwired: [
+        'Page.importComponentSetByKeyAsync(:111) —— 团队库「组件集」导入入口,本仓只接了组件那半(:110);拿到集合节点是目前唯一的非画布来源',
+        'Page.createNodeFromJSXAsync(:119) —— JSX 建节点,是否支持组件/集合标签未验(typings 无声明,只有 any)',
+      ],
       fallback:
         'jsd_swap_component(换绑到目标组件)+ jsd_set_fill_color / jsd_set_text(直接写可见样式)',
       evidence: [
@@ -169,22 +172,55 @@ export const PLATFORM_KNOWLEDGE: Readonly<
         'packages/ui/src/code/jsdesign/sync-guarantee.ts:97 反向断言 componentProperties 缺席',
         // 运行期行为(不是类型事实):别在这张表里当「签名收什么」用,它是「调了会怎样」。
         'packages/ui/src/code/jsdesign/sync-guarantee.ts:367-393 setProperties 签名只收字符串;真机 2026-10-14 的运行期行为:给**没有变体属性**的 INSTANCE 调它不是点名报错,而是挂到转发超时(25s)—— 没有变体集时别拿它当切状态的通道',
+        'packages/shared/src/core/component.ts setInstanceProperties 的属性面守卫 —— 2026-10-19 真机复现同一条(未知属性名 `Foo` → 25077ms 后失败、错误只有「插件响应超时」):能力位不含 componentProperties 且变体表 / variantProperties 都拿不到键时,写前点名拒,不再落到引擎空转',
+        'packages/shared/src/core/access.ts resolveMainComponent 的选路 —— 2026-10-19 真机隔离:typings 未声明的 `getMainComponentAsync` 在即时设计运行时**存在且永不 settle**(与 `*Async` 样式枚举同一模式),`?.` 探测让 `jsd_copy_overrides`(只读快照、不写属性)挂到 25109ms;改由 `mainComponentSync` 声明只问同步 `mainComponent`',
+        'packages/ui/src/code/jsdesign/ops.ts jsd_component_facts —— 2026-10-20 三页官方文档核对(js.design/developer-doc/plugin/api/node/{ComponentNode,InstanceNode,ComponentSetNode}):**成员与 typings 1.0.12 逐字一致,没有多出来的 API**;文档确认而契约缺的字段(ComponentNode.instances / key / remote / description / expanded / getPublishStatusAsync、InstanceNode.scaleFactor、ComponentSetNode.defaultVariant / variantGroupProperties / children)由本 op 透出。`getPublishStatusAsync` 单独可选:同族 async 成员有永不 settle 的先例(dec e1e66f0a)',
+        'packages/ui/src/code/jsdesign/ops.ts jsd_component_facts 真机(2026-10-20,重载后):COMPONENT 的 instances 可读且准确(建组件+2 实例 → instanceCount 2 / instanceIds 两条)、key 是空串、remote=false;description **可写**且回读一致(PublishableMixin :838);getPublishStatusAsync **21ms 返回、不永挂**(与 getMainComponentAsync 不同),但对非团队库节点回的是**错误串** "Failed to get node publish status" 而不是 PublishStatus 三值 ⇒ op 里三值才认,其余落 publishStatusError',
+        'packages/ui/src/code/jsdesign/ops.ts jsd_component_facts 的 INSTANCE 分支 + core/assets.ts readVariantProperties —— 真机 2026-10-20 两条:① `variantGroupProperties.values` 元素**不保证是字符串**(单成员集合 ["ccc"],两成员集合 [{"name":"默认"}]),撞穿 assets.variants.properties 的 string[] 校验使 `get_page` **整条失败**,故 projection 与 op 都按名字归一;② 对真实变体实例调 setProperties **11~15ms 就抛** `in setProperties: i.setProperties is not a function`(typings :1093 与文档都声明了它)⇒ 符号是否真在由 op 的 `setPropertiesAvailable` 回报复核',
+        'packages/ui/src/code/jsdesign/host.ts combineAsVariants 的显式绑定 —— 官方 API 参考页(js.design/developer-doc/plugin/api/reference/jsDesign)确认语义「将任意数量的组件合并为变体」、签名 (nodes, parent, index?);真机 2026-10-20 逐项排除:receiver 绑回全局后报错逐字相同、组件名改成 `状态=默认/禁用` 仍败、带子层仍败、先 reparent 进 FRAME 仍败 ⇒ **引擎实现缺陷,不是调用方式**',
+        'packages/shared/src/core/component.ts combineAsVariantsNodes 的姿势顺序 —— 真机 2026-10-20:合并失败会**毁入参组件**(用户组件 13:100 变损坏节点、repair 直接删),故「原位合并」只在平台声明 inPlaceVariants 时才尝试(Figma 声明、顺序不变);jsDesign 只跑两条克隆姿势,失败也不伤原组件',
+        // 2026-10-20 补做「干净画布 + 只跑原位姿势」的单姿势隔离实验(此前原位从未被单独测过:
+        // 它当时排在两式之后,只能在已被污染的画布上跑,结论因此不可靠)。结果仍是崩。
+        'packages/ui/src/code/jsdesign/host.ts combineAsVariants 的**单姿势隔离实验** —— 真机 2026-10-20(即时设计,干净画布,只跑原位姿势,传入真 COMPONENT、类型完全合规):仍抛 in get_booleanOperation: Value is not a string;后果是入参组件 13:332 被就地改成 BOOLEAN_OPERATION、13:333 幸存 ⇒ 坐实引擎实现缺陷,并排除两个替代解释:①「clone 返回 INSTANCE 导致参数类型不符才是根因」(原位传合规类型照样崩);②「被克隆两式弄脏画布才连带失败」(干净画布单跑照样崩)',
+        // 裸调实验(2026-10-20,取消 core 全部判断后直接交真 COMPONENT 给原生):
+        // 引擎返回 BOOLEAN_OPERATION 并把四个组件搬进去 ⇒ 与调用方判断无关,是引擎路由错误。
+        'packages/ui/src/code/jsdesign/host.ts combineAsVariants 的**裸调实验** —— 真机 2026-10-20(即时设计,画板 3 下 4 个真 COMPONENT,取消 core 的姿势选择 / clone 类型校验 / 父容器校验 / 跨父级校验 / 返回类型校验,直接 host.combineAsVariants(components, parent)):引擎**成功返回一个 type=BOOLEAN_OPERATION 的节点**(id 13:446),读它的 name 抛 in get_name: Value is not a string;四个原 COMPONENT **被搬进该布尔节点下**(parentId=13:446),画板 3 随即变空 ⇒ 坐实「引擎把合并路由成布尔运算」,并排除「core 的某个前置判断改变了入参」这一解释(裸调无任何判断,行为一致)。事后可用 jsd_reparent_nodes 把组件搬回原容器,损坏节点由 repair 清',
+        // 参数类型核验(2026-10-20,非破坏性探针):resolveNodes 返回的就是原生对象本身
+        // (sameAsApiGetNodeById=true),且 nodes 各有 createInstance、parent 有 children/appendChild
+        // ⇒ 引擎收到的入参完全满足原生签名,不是本仓包装/代理导致的。
+        'packages/shared/src/core/access.ts resolveNodes 的返回身份 —— 真机 2026-10-20(即时设计,只读探针,未执行合并):四个 COMPONENT 逐个比对 `=== jsDesign.getNodeById(id)`,**全部 true**(即返回的是原生对象本身,不是包装或代理);成员核验 nodes 各有 createInstance(ComponentNode 独有)、无 setProperties(那是 InstanceNode 的),parent 有 children/appendChild/insertChild 且无 createInstance、且不等于 currentPage ⇒ 入参**完全满足** combineAsVariants(nodes: ReadonlyArray<ComponentNode>, parent: BaseNode & ChildrenMixin) 的签名。故「参数类型不满足」这一解释被排除:类型层面的 `as never` 只是掩盖了静态证明,运行时要传的对象是对的',
+        'packages/shared/src/core/component.ts / jsd_reparent_nodes —— 真机 2026-10-20:RECTANGLE 可 reparent 进 COMPONENT(文档 ComponentNode 继承 BaseFrameMixin → appendChild :711),childCount 0→1,且**两个实例的 childCount 同步变 1**(主件加子层实时传播)',
+        // 实例三通道与变体成员两处类型差异:全部是「typings 声明了、运行期不是那样」,
+        // 故按**实际类型/实际行为**收口,不改 typings 断言(那里守的是成员在不在)。
+        'packages/shared/src/core/component.ts setInstanceProperties / swapComponents / detachInstanceNodes + packages/shared/src/core/nodes.ts cloneNodes + packages/shared/src/core/variant.ts —— 真机 2026-10-20(即时设计,逐条隔离):① **变体集成员**上 createInstance 必抛 in createInstance: The node with id undefined does not exist(集合内 8 个成员全复现;独立 COMPONENT 正常),clone() 返回 undefined;② swapComponent 必抛 in swapComponent: Cannot read properties of undefined (reading type)(独立组件之间 / 成员之间 / 克隆实例上全复现);③ detachInstance **原位返回同一个 INSTANCE**(type 仍 INSTANCE、mainComponentId 照旧)⇒ 静默 no-op;④ 集合维度键 状态 与成员键 分类1 **不是同一套**,只按集合键校验会把合法的成员键写入拒掉',
       ],
     },
     // 变体:读得到(Readonly),写变体值可以(值是字符串,正好落在 setProperties 的取值域里);
-    // 但**做不出变体集** —— `ComponentSetNode` 在 typings 里没有创建/追加成员的入口,
-    // 全 API 唯一产出路径是 `combineAsVariants`,而它实测必崩(2026-09-24 真机)。
-    // 故「多主件」不是替代做法,是唯一可行路径。
+    // 但**做不出变体集** —— **没有创建入口**:全 API 无 `createComponentSet` / `createVariant`
+    // (typings 零命中),唯一产出路径是 `combineAsVariants`(`:127`),而它实测必崩(09-24 / 10-14 / 10-19 三次)。
+    // ⚠ 别把「没有入口」说成「没有追加面」:`ComponentSetNode` 继承 `BaseFrameMixin` → 带
+    // `appendChild` / `insertChild`(`:708-712`)。只是**拿不到集合节点**去追加 —— 创建路径断了,
+    // 这一面在实际调用里不可达。故「多主件」不是替代做法,是唯一可行路径。
     variants: {
       read: 'variantProperties',
       readShape: 'map',
-      write: ['jsd_combine_as_variants', 'jsd_set_instance_properties'],
-      nativeUnwired: [],
+      // ⚠ 只剩合并入口:实例侧的**两条**写入通道运行期都不可用 ——
+      // `setProperties` 不是函数、`swapComponent` 抛内部错误(真机 2026-10-20)。
+      // 故「切到已有取值」在本平台**没有脚本入口**,别把 jsd_set_instance_properties 写进来
+      // (写了等于承诺一条必败的路径)。
+      write: ['jsd_combine_as_variants'],
+      nativeUnwired: [
+        'Page.importComponentSetByKeyAsync(:111) —— 未接;这是「不经画布拿到集合节点」的唯一路径',
+        'ComponentSetNode.appendChild / insertChild(:711-712,继承自 BaseFrameMixin)—— 类型上能追加成员,但没有创建入口 ⇒ 拿不到集合节点,这一面实际不可达',
+      ],
       fallback:
-        '多主件:每个状态各建一个 COMPONENT,按「族名 / 状态」命名(如 Nav / Inbox、Nav / Me)',
+        '多主件:每个状态各建一个 COMPONENT,按「族名 / 状态」命名(如 Nav / Inbox、Nav / Me);实例侧切值本平台运行期无入口(setProperties 不是函数、swapComponent 抛内部错误,真机 2026-10-20),变体取值只能在画布上手工切换',
       evidence: [
         `${JSD}:899-900 VariantMixin.variantProperties(readonly)`,
-        `${JSD}:1074-1079 ComponentSetNode 只有 clone / defaultVariant / variantGroupProperties`,
+        `${JSD}:1074-1079 ComponentSetNode 自身只多 clone / defaultVariant / variantGroupProperties;但 :1074 继承 BaseFrameMixin(:851)→ 带 appendChild / insertChild(:711-712)`,
+        // 读面形状事实:typings 说 string[],运行期给对象 —— 归一收在 core/variant.ts
+        'packages/shared/src/core/variant.ts + core/serialize.ts + core/assets.ts —— 真机 2026-10-20:variantGroupProperties.values 元素**不保证是字符串**(单成员集合 ["ccc"],两成员集合 [{"name":"默认"},{"name":"禁用"}]),不归一会撞穿线格式 string[] 并让 get_page / jsd_find **整条失败**(不是少字段,是这次只读调用报废);variantProperties 同理。归一实现单点(两个投影点共用),serializeNode 另加一层「getter 抛也省略该字段」的保护',
+        'packages/ui/src/code/jsdesign/host.ts / core/component.ts combineAsVariants 兜底 —— 真机 2026-10-19 复核(即时设计,重载后):72ms 抛「三种姿势均失败…in get_booleanOperation: Value is not a string」**与 09-24/10-14 逐字一致**;残留形态这次是 **3 个 BOOLEAN_OPERATION(原 COMPONENT 被就地改成 BOOLEAN_OPERATION、id 保留)+ 1 个幸存 COMPONENT,没有 COMPONENT_SET**(10-14 那次是留下畸形 COMPONENT_SET),`assets.variants` 回到 0 ⇒ 残留形态不稳定,清理一律走 `jsd_manage_nodes op=repair`(实测 `cleaned: 3 个`)',
         `${JSD}:127 combineAsVariants 是 ComponentSetNode 的唯一产出路径`,
         'packages/shared/src/core/component.ts:245-256 三种姿势全败的兜底与分流',
         // 真机 2026-10-14(即时设计):三姿势全败,引擎错 `in get_booleanOperation:
@@ -338,6 +374,8 @@ export const PLATFORM_KNOWLEDGE: Readonly<
         'packages/ui/src/code/mastergo/meta.ts capabilities 声明 styleEnumeration —— 真机:`assets.styles` 列得出来(PAINT / EFFECT 三条,不退超时),0043 的「MG 是否也这样」那一半结掉',
         'packages/ui/src/code/mastergo/ops.ts 三个变量 op 与槽位表(官方文档 URL 见该文件头注释;mg_variables_apply 与 Figma 同形:形制对齐见 dec 0040,一次吃 bindings[] 多组见 dec 7165f370)',
         `${MG}:1832 VariableType 十二项里没有 VARIANT —— 变体属性无从绑变量`,
+        'packages/ui/src/code/mastergo/ops.ts removeVariables 的三档 —— 真机 2026-10-19(重载后两轮):单值变量的 deleteVariable **跨执行才生效**(同执行内删两遍 + 回读仍全失败,下一次调用立刻 removed),故同执行回读判失败会把成功报成失败(10-15 那 5 条 failed 即此形态);复合样式变量(PAINT)的 deleteVariable 是 **no-op**(跨多次执行仍在:列表 / assets.variables / 拿它绑图层三面都证明它还活着,同 id 走 jsd_delete_style 一次删掉)',
+        'packages/ui/src/code/mastergo/ops.ts createVariables 的 values —— 真机 2026-10-19:setVariableValue 的返回 modes **时有时无**(同批里有的带 bool / floatData,有的只有 {modeId},默认双模式集合回空对象);STRING 变量在列表 / 按 id / 写返回三个读面都只有 {modeId} ⇒ 值不可验证,values 只原样透传不作判据',
         'packages/ui/src/code/mastergo/meta.ts capabilities 声明 variables(0040 起)',
       ],
     },

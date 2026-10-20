@@ -84,13 +84,25 @@ export async function resolveNodesMap(
 }
 
 /**
- * 实例的主组件:dynamic-page 下 `node.mainComponent` 直接抛,只有
- * `getMainComponentAsync` 能读;jsDesign 无该符号时回退同步字段。
+ * 实例的主组件:两条入口(同步 `mainComponent` / `getMainComponentAsync`)按**声明**选路。
+ *
+ * ⚠ **选路不能靠 `?.` 探测**(dec 0010;真机 2026-10-19 取证):即时设计的 host 是
+ * `Object.create(native)`,typings 未声明的 `getMainComponentAsync` 在运行时**照样存在
+ * 且永不 settle** ⇒ `?.` 恒成立、`await` 撞满 25s 转发上限。实测:jsDesign 上
+ * `jsd_copy_overrides`(只读快照、**不写任何属性**)25109ms 超时,`jsd_set_instance_properties`
+ * 同样超时 —— 两入口唯一共同前置就是这里。它与 `styleEnumerationSync`(四个
+ * `getLocal*StylesAsync`)、`documentScopeRead`(`loadAllPagesAsync`)同一族:
+ * **符号存在性 ≠ 可用性**。故由 `mainComponentSync` 声明只问同步字段
+ * (即时设计声明;Figma 不声明:dynamic-page 下同步字段必抛,只能走 async)。
+ *
+ * `ctx.capabilities == null`(未注入)时沿用 `typeof` 探测(fail-open,与 0002 一致)。
  */
 export async function resolveMainComponent(
   instance: NodeSkeleton,
+  ctx: RuntimeContext,
 ): Promise<NodeSkeleton | null> {
-  if (typeof instance.getMainComponentAsync === 'function') {
+  const preferSync = hostCapabilityState(ctx, 'mainComponentSync') === true;
+  if (!preferSync && typeof instance.getMainComponentAsync === 'function') {
     try {
       return await instance.getMainComponentAsync();
     } catch {

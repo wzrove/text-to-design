@@ -519,8 +519,9 @@ ${indentLines(relations, '     ')}
 2) 结构分层,调用分批:**成品该多深就多深** —— 屏 → 语义分区 → 卡片 → 卡内图元,四层都要建出来,别只做到「屏 + 分区」就收手。受限的只是**单次调用的传参方式**:children 只用于「容器 + 其直属子节点」这类小结构,别在一次 create 里塞整棵树(易整批失败);分层分批用 jsd_batch 编排多个 per-type create 步骤,每批建完即用 jsd_reparent_nodes 归到父容器。
 3) 命名语义化:用「登录页 / Logo 容器 / 邮箱输入 / 主按钮」这类说明用途的名字,不用「矩形 1」「Frame 2」;同一批元素命名风格保持一致。
 4) 归组后再布局:**元素不许直挂屏根** —— 屏内每个语义分区(侧栏 / 顶栏 / 筛选条 / KPI 行 / 每张卡片)各自是一个容器,卡片内部的图元再按语义编组(GROUP:坐标轴 / 网格 / 数据系列 / 图例各一组)。一层不套、几十个元素平铺是后续最难改的形态,别走这个极端。做法:先建容器与元素,再用 jsd_reparent_nodes 逐层归入(**parentId 显式传目标容器 id**,别依赖「当前选中第一个」的缺省值;跨父级移动会保持节点绝对位置,不用手动摆回 x/y,移入 auto-layout 容器时位置交给布局);auto-layout(layoutMode/itemSpacing/padding*/primaryAxisAlignItems 等)最后用 jsd_set_layout 单独设,别在建节点时混着传;**但 sizingMode 是例外** —— 开布局那一刻引擎会按内容重算容器尺寸,**写路径随后按「该轴 sizingMode 的回读值」把声明了 \`FIXED\` 的轴自动钉回**开布局前的尺寸(并在 warnings 里点名「已按声明钉回」、回显尺寸同步为真值):即时设计两轴都回读 FIXED → 两轴都钉回;Figma 主轴回读 AUTO → **保留它的 hug**,不钉回。⇒ **要固定就在建容器时或 \`jsd_set_layout\` 里显式声明该轴 \`FIXED\`,不必再手工补 \`jsd_resize_node\`**;**要 hug 就别声明(或显式传 \`AUTO\`)**。(逐平台实测见第 5 条。)
-   - **auto-layout 不是可选项,是屏内分区的默认解**(完整机制见配方 \`jsd://recipes/auto-layout\`)。判据:同类子项 + 沿一条轴 + 间距一致 → 一律上布局。屏内这几处**最容易漏**,而它们恰好是间距唯一靠手调坐标凑的地方:标签栏 / 分段控件(等分,每项 \`layoutGrow:1\`)、胶囊组 / 参数行 / 筛选条(\`itemSpacing\`)、卡片头(左标题 + 右操作,\`SPACE_BETWEEN\`)、列表行 / 表单行(外层 VERTICAL + **每行一个独立行 FRAME**)、整屏纵向分区(内容区 \`layoutGrow:1\` 吃满剩余高度)。
-   - **行内图元先归组,再进布局** —— 行内「图标 + 标题 + 值 + 箭头」若平铺在行容器里,直接开 VERTICAL 会把 N 个平铺子项**竖着摞起来**。这是「归组」与「布局」两件事的接缝,最容易出错。
+   - **auto-layout 不是可选项,是屏内分区的默认解**(完整机制见配方 \`jsd://recipes/auto-layout\`)。判据:同类子项 + 沿一条轴 + 间距一致 → 一律上布局。屏内这几处**最容易漏**,而它们恰好是间距唯一靠手调坐标凑的地方:标签栏 / 分段控件(等分,每项 \`layoutGrow:1\`)、胶囊组 / 参数行 / 筛选条(\`itemSpacing\`)、卡片头(左标题 + 右操作,\`SPACE_BETWEEN\`)、列表行 / 表单行(**每行一个独立行 FRAME**)、整屏分区(内容区 \`layoutGrow:1\` 吃满剩余高度)。
+   - **方向每个容器自判**: \`layoutMode\` = 直属子项流动轴(X→HORIZONTAL, Y→VERTICAL),配方不写死哪张形态用哪个值(见 \`jsd://recipes/auto-layout\`)。禁止把父级方向抄到子级;垂直居中走交叉轴对齐,不是 VERTICAL。
+   - **行内图元先归组,再进布局** —— 行内「图标 + 标题 + 值 + 箭头」若平铺进外层,开布局会按**外层那条轴**把它们排成一串。要成一行一项,先给每行建一层行 FRAME。
    - **正当的例外只有三条**:异质叠放(卡片头那种各在不同 x/y、视觉上不成等距序列的组合)、一次性装饰(光晕 / 渐隐遮罩 / 装饰线)、要「布局内绝对定位」的浮层(本平台没有 \`layoutPositioning\`,改用 z 序 + 绝对坐标)。
    - **自检一句话**:加固完后每个分区都应能说出「它的间距是哪条 \`itemSpacing\`」。说不出、只能报坐标的,就是欠账 —— 欠账不会报错,只会在下一次要改间距时全部暴露。
 5) ${layoutHint}
@@ -550,8 +551,9 @@ ${target}按这条链走;多步合并时优先用 jsd_batch 编排,中间 id 不
  * 自动布局配方。
  *
  * 与 `design-strategy` 第 4 条的分工:那边只给**判据**(该不该上、哪类容器最容易漏),
- * 这边给**机制**(两条落地路径、执行顺序、形态模板、验收与坑)。两份都会用到平台事实,
- * 但事实不在本文件重写 —— 复用 `layoutHintText`,与工具描述、第 5 条同源。
+ * 这边给**机制**(方向自判、两条落地路径、执行顺序、验收与坑)。不写死某形态的
+ * HORIZONTAL/VERTICAL —— 实测模型会把「外层 VERTICAL」抄到行 FRAME 上。
+ * 平台事实不在本文件重写 —— 复用 `layoutHintText`,与工具描述、第 5 条同源。
  */
 export function autoLayoutRecipe(
   target: string | undefined,
@@ -564,23 +566,29 @@ export function autoLayoutRecipe(
 
 ## 0) 先判:该不该上
 
-**该上**(同类子项 + 沿一条轴 + 间距一致)—— 这张表就是复核清单,屏内逐个分区过:
+**该上**(同类子项 + 沿一条轴 + 间距一致)—— 屏内这几处最容易漏,漏了间距只能手调坐标。表只标「要上布局 + 常用字段」,**不指定 HORIZONTAL/VERTICAL**。
 
-| 形态 | 布局 | 关键字段 |
+| 形态 | 为什么容易漏 | 常用字段(方向另判) |
 | --- | --- | --- |
-| 标签栏 / 分段控件(等分) | HORIZONTAL | 每项 \`layoutGrow:1\`,itemSpacing 0 |
-| 胶囊组 / 参数行 / 筛选 chip(等距) | HORIZONTAL | \`itemSpacing\` |
-| 卡片头(标题左 + 操作右) | HORIZONTAL | \`primaryAxisAlignItems:"SPACE_BETWEEN"\`(此时 itemSpacing 被忽略) |
-| 整屏纵向分区(状态栏 / 头部 / 内容 / 底栏) | VERTICAL | itemSpacing 0;内容区 \`layoutGrow:1\` 吃满剩余高度 |
-| 列表行 / 表单行 | 外层 VERTICAL 排行,每行自己一个 HORIZONTAL | 行内 \`counterAxisAlignItems:"CENTER"\` |
-| 需要子项撑满交叉轴 | 继承 | 子项 \`layoutAlign:"STRETCH"\` |
+| 标签栏 / 分段控件 | 等分靠手调宽度 | 每项 \`layoutGrow:1\`,itemSpacing 0 |
+| 胶囊组 / 参数行 / 筛选 chip | 等距靠手调 x | \`itemSpacing\` |
+| 卡片头(标题与操作分两端) | 两端拉开靠绝对坐标 | \`primaryAxisAlignItems:"SPACE_BETWEEN"\`(作用在主轴;此时 itemSpacing 被忽略) |
+| 列表 / 表单 | 行距靠手调 y;行内图元平铺 | **每行一个独立行 FRAME**;行内交叉轴居中用 \`counterAxisAlignItems:"CENTER"\` |
+| 整屏分区(状态栏 / 头部 / 内容 / 底栏) | 区间距靠手调 y | 吃剩余空间的那块 \`layoutGrow:1\` |
+| 需要子项撑满交叉轴 | — | 子项 \`layoutAlign:"STRETCH"\` |
+
+**方向每个容器自己判。** \`layoutMode\` = 该容器**直属子项**的流动轴,不是容器外形,不是对齐方向:
+- 子项意图沿 X 递增(左→右) → HORIZONTAL
+- 子项意图沿 Y 递增(上→下) → VERTICAL
+- 「垂直居中」≠ VERTICAL:那是交叉轴对齐。行里要竖向居中 → HORIZONTAL + \`counterAxisAlignItems:"CENTER"\`
+- **禁止把父级方向复制到子级**:侧栏整体可以竖排,头部「左 Logo + 右折叠」仍按头部自己的子项流动轴判
 
 **不该上** —— 三条正当的例外,别硬套:
 - **异质叠放**:卡片头那种「头像 + 标题 + 副标题」各在不同 x/y、视觉上不是一条轴上的等距序列 → 容器 + 绝对坐标(要跟着伸缩再补 \`constraints\`)。
 - **一次性装饰**:光晕、渐变遮罩、装饰线 —— 没有第二次复用,也没有间距语义。
 - **要「布局内绝对定位」的浮层**:本平台没有 \`layoutPositioning\`,做不到 —— 改用 z 序 + 绝对坐标。
 
-**最容易漏的一条**:行内的图元没归组。列表行 / 表单行的「图标 + 标题 + 值 + 箭头」平铺在行容器里,直接开 VERTICAL 会把 N 个平铺子项**竖着摞起来** —— 必须先给每行建一层行 FRAME,再让行 FRAME 进外层布局。
+**最容易漏的一条**:行内图元没归组。列表 / 表单的「图标 + 标题 + 值 + 箭头」若平铺进外层,开布局会按**外层那条轴**把它们排成一串 —— 要成「一行一项」,必须先给每行建一层行 FRAME,再让行 FRAME 进外层。
 
 ## 1) 两条落地路径,别混着走
 
@@ -621,15 +629,17 @@ ${layoutHintText(platform)}
 - **Figma 专有的布局字段本平台没有**(换行 \`layoutWrap\`、布局内绝对定位 \`layoutPositioning\`、\`counterAxisSpacing\` 等)—— 别按 Figma 习惯试,名单见第 3 节。
 - **\`layoutGrids\` 与 auto-layout 互斥**:引擎只在**非自动布局**的容器上收网格。
 - **\`jsd_set_layout\` 不改尺寸**:它只管布局语义;改宽高走 \`jsd_resize_node\`。
+- **\`layoutMode\` 不是容器外形,也不是对齐**:侧栏/整屏「看起来是竖的」不等于每个子容器都 VERTICAL;「垂直居中」走 \`counterAxisAlignItems:"CENTER"\`。写错方向的典型画面:行里的图标/标题/时间被竖着摞、挤出行高。
 
 ## 6) 加固后的复核清单
 
-- [ ] 标签栏 / 分段控件 —— HORIZONTAL,\`layoutGrow:1\` 等分
-- [ ] 胶囊组 / 参数行 —— HORIZONTAL + itemSpacing
-- [ ] 卡片头(左标题 + 右操作)—— HORIZONTAL + SPACE_BETWEEN
-- [ ] 列表 / 设置行 —— 外层 VERTICAL;**每行一个独立行 FRAME + 行内 HORIZONTAL**
-- [ ] 整屏纵向分区 —— VERTICAL,内容区 \`layoutGrow:1\`
-- [ ] 上述每处的**行内图元确已归组**(没有 N 个平铺子项直接进布局)
+- [ ] 标签栏 / 分段控件上了布局;等分用 \`layoutGrow:1\`
+- [ ] 胶囊组 / 参数行上了布局;间距走 itemSpacing
+- [ ] 卡片头上了布局;两端拉开走 SPACE_BETWEEN
+- [ ] 列表 / 设置:**每行一个独立行 FRAME**,行内图元不进外层
+- [ ] 整屏分区上了布局;吃剩余空间的那块 \`layoutGrow:1\`
+- [ ] 每个容器的 layoutMode 对应该容器直属子项的流动轴(X→HORIZONTAL, Y→VERTICAL);没把父级方向抄到子级
+- [ ] 没把「垂直居中」写成 layoutMode:VERTICAL
 - [ ] 每个分区都能说出它的间距是哪条 \`itemSpacing\`;靠手调坐标凑的就是欠账
 
 ${where}按这条走;判据(该不该上、哪类容器最容易漏)见 \`jsd://recipes/design-strategy\` 第 4 条。`;
@@ -930,7 +940,7 @@ export function chartByCodeRecipe(
 - 不要外链:不引外部图片 / 字体 / script(\`<image href="http://…">\`、\`@import\`)。
 - 文字用 \`<text>\` **并显式写** \`font-family\` 与 \`font-size\`(≥10)。SVG 里的文字最终由引擎的解析器渲染,**不保证按你写的字体走** —— 关键文案少而大。
 - 画布尺寸 ≤ 2000×2000;数据点先抽稀(几千个 \`<circle>\` 既慢又逼近入参体积上限)。
-- 曲线/弧用 \`C\`/\`Q\` 自己近似,**不要依赖 \`A\` 指令**(本仓 \`vectorPaths\` 的已知口径就是不支持 A,引擎 SVG 导入对 A 未验)。
+- 曲线/弧用 \`C\`/\`Q\` 自己近似,**不要依赖 \`A\` 指令**(本仓 \`vectorPaths\` 模型不支持 A;引擎的 SVG 导入实测会把 A 展平成 \`C\` 段 —— 2026-10-15 jsDesign,别假定所有平台都这样)。
 
 ## 4. 配色与字号:优先用画布上已有的,别自创
 - **先查再画**。动手前看这张文档本来在用哪套颜色与字号,新图跟它对齐:
@@ -951,9 +961,9 @@ export function chartByCodeRecipe(
 - **导入后读一次,判明层级有没有保住**:\`jsd_create_svg\` 回的是**一个**根节点,里面的 \`<g>\` 会不会落成子分组由引擎决定 —— **jsDesign 实测(2026-10-12)会**:每个 \`<g id>\` 变成同名 GROUP(如 \`grid\` / \`target\` / \`series-done\`),\`linearGradient\` 与 \`stroke-dasharray\` 也照常保留(圆环用 \`<circle>\` + dasharray 即可,不必碰 A 指令)。但**别把这条当跨平台事实**:换平台仍按下面回读判明。导入后立刻 \`jsd_find({ ids: [created.id], depth: 2 })\` 看一眼 —— 按 id 读子树要用 \`jsd_find\`(\`jsd_get_selection\` 只读当前选中、且只收 depth):
   - 有子层 → 直接用,顺手 \`jsd_rename_node\` 起成上面那套语义名;
   - 只有一层(整图一个矢量节点)→ 要么接受它,要么按第 6 节把「一定会改」的文字/色块另建原生节点。
-- **回读读不到路径数据**:\`vectorPaths.data\` 在序列化里是空串(实测 jsDesign),所以「看一眼线画得对不对」只能靠 \`jsd_export\` 导图,别指望从回显里读坐标;要改几何就回源 SVG 重算重导,别在画布上徒手挪矢量。
+- **回读路径数据看运气,别依赖它**:\`vectorPaths.data\` 在 jsDesign 上**只对「带描边」的 \`VECTOR\` 回读得到**(开放 / 闭合都行),**纯填充无描边的矢量回读是空串**(2026-10-15 真机:同一次 SVG 导入里 \`fill+stroke\` 的 \`data\` 正常、\`fill\` 的为空;几何本身没丢 —— \`jsd_export\` 导出的 SVG 里 \`d\` 完整)。所以「看一眼线画得对不对」一律靠 \`jsd_export\` 导图,别指望从回显里读坐标;要改几何就回源 SVG 重算重导,别在画布上徒手挪矢量。
 - **\`jsd_create_svg\` 单独一批**:它比其它步骤慢得多,和 create/reparent/move 混在同一 \`jsd_batch\` 里实测会**整次调用超时**(且超时那批什么都没落)—— 导入这一步自己一批,拿到 \`created.id\` 再排装配批。
-- **别用引用式复用**:\`<use>\` / \`<symbol>\` 的引用解析**未验**,别为省几行去用;\`<defs>\` 里放渐变照常(\`jsd_create_svg\` 的工具面声明保留渐变)。
+- **别用引用式复用**:\`<use>\` / \`<symbol>\` **实测(2026-10-15,jsDesign)不可用** —— 几何会被内联但**位置被丢掉**:两个 \`<use>\` 都叠在原点(回读里每个 \`<use>\` 落成一个 \`sym\` GROUP、坐标全是 0),导图只看到一个错位圆;别为省几行去用。\`<defs>\` 里的渐变照常保留(实测 GRADIENT_LINEAR 的两个 stop 颜色与位置都落库)。
 - 分层不亏:实测 jsDesign 会**白得一套语义子分组** —— 「把异常那条系列调淡 / 隐藏网格层」这类样式级改动就能直接在画布上做,不用回源;分组没保住的平台上,SVG 源码本身也还是一份能读能改的文件,不亏。
 
 ## 6. 要能单独改的文字,导入后另建原生节点

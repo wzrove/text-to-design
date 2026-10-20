@@ -15,18 +15,18 @@
 |---|---|---|---|---|
 | [0025](0025-Figma补上组件属性的定义入口：一个op承担定义即绑定，不照搬MG的四段式.md) | Figma 补上组件属性**定义**入口：一个 op 承担「定义 + 绑定」 | 已采纳（真机复验通过） | `ui/code/figma`、`mcp-server/tools` | 2026-09-25 |
 | [0029](0029-能力字典改规格表：kind-判别加-labelKey-收口，删死代码与重复事实.md) | 能力字典改规格表：kind 判别 + labelKey 收口 | 已采纳 | `shared/dicts`、`shared/core`、`ui/components` | 2026-09-29 |
-| [0030](0030-MCP-服务实例一次装配、跨请求复用（目录不再按请求重建）.md) | MCP 服务实例一次装配、跨请求复用（目录不再按请求重建） | 已采纳（真机待插件重载） | `mcp-server`、`daemon` | 2026-09-29 |
-| [0031](0031-MCP-声明面照-2026-07-28-补齐：目录缓存提示-+-工具注解四-hint-必填.md) | MCP 声明面照 2026-07-28 补齐：目录缓存提示 + 工具注解四 hint 必填 | 已采纳（真机待插件重载） | `mcp-server`（全工具注解） | 2026-09-29 |
-| [0032](0032-平台事实三域收敛为声明表：prompts-与工具描述共用单一投影点.md) | 平台事实三域收敛为声明表：prompts 与工具描述共用单一投影点 | 已采纳（jsDesign 一项待验） | `shared/dicts`、`shared/core`、`mcp-server/tools`、`ui/code` | 2026-10-08 |
+| [0030](0030-MCP-服务实例一次装配、跨请求复用（目录不再按请求重建）.md) | MCP 服务实例一次装配、跨请求复用（目录不再按请求重建） | 已采纳（真机已复验） | `mcp-server`、`daemon` | 2026-09-29 |
+| [0031](0031-MCP-声明面照-2026-07-28-补齐：目录缓存提示-+-工具注解四-hint-必填.md) | MCP 声明面照 2026-07-28 补齐：目录缓存提示 + 工具注解四 hint 必填 | 已采纳（shim 已验） | `mcp-server`（全工具注解） | 2026-09-29 |
+| [0032](0032-平台事实三域收敛为声明表：prompts-与工具描述共用单一投影点.md) | 平台事实三域收敛为声明表：prompts 与工具描述共用单一投影点 | 已采纳（真机已验） | `shared/dicts`、`shared/core`、`mcp-server/tools`、`ui/code` | 2026-10-08 |
 | [0033](0033-MG-集合级变体管理接入-platformOps：原生建维改值替代改名副作用.md) | MG 集合级变体管理接入 platformOps：原生建维改值替代改名副作用 | 已采纳（真机复验通过） | `ui/code/mastergo`、`shared/dicts`、`mcp-server/tools` | 2026-09-29 |
-| [0034](0034-单类型-create-工具容忍并校验-type：三处口径统一加越界字段点名.md) | 单类型 create 工具容忍并校验 `type`：三处口径统一 + 越界字段点名 | 已采纳（MG / jsDesign 待验） | `mcp-server/tools`、`shared/schemas` | 2026-10-08 |
+| [0034](0034-单类型-create-工具容忍并校验-type：三处口径统一加越界字段点名.md) | 单类型 create 工具容忍并校验 `type`：三处口径统一 + 越界字段点名 | 已采纳（两平台已验） | `mcp-server/tools`、`shared/schemas` | 2026-10-08 |
 | [0035](0035-图表支持：服务端单向编译加复用-SVG-导入通道，骨架原生绘图区-SVG，不引入模式.md) | 图表支持：服务端单向编译 + 复用 SVG 导入通道；另开配方 prompt | 已被取代 | `shared/schemas`、`mcp-server`（已回退） | 2026-10-09 |
-| [0036](0036-删掉内置图表编译器：图表一律走代码生成-SVG-再导入配方.md) | 删掉内置图表编译器：图表一律走代码生成 SVG 再导入配方 | 已采纳（真机待验） | `shared/schemas`、`shared/dicts`、`mcp-server/tools`、两个 `README.md` | 2026-10-09 |
-| [0037](0037-提示反馈收口：页头改用-daisyUI-tooltip，操作结果统一走-toast-出口.md) | 提示反馈收口：页头改用 daisyUI tooltip，操作结果统一走 toast 出口 | 已采纳（真机待验） | `ui/components`、`ui/utils`、`shared/i18n` | 2026-10-10 |
-| [0038](0038-版本升级提示：daemon代查npm-latest，页头条件挂载升级入口，Modal给分步清单与复制给LLM.md) | 版本升级提示：daemon 代查 npm latest，页头条件挂载升级入口 | 已采纳（真机待验） | `shared`、`mcp-server`、`ui/components` | 2026-10-10 |
-| [0039](0039-get_page-收窄为顶层几何加资源清单：复用既有契约成员，变量走可选入口.md) | `get_page` 收窄为「顶层几何 + 资源清单」：复用既有契约成员，变量走可选入口 | 已采纳（真机已修订） | `shared/schemas`、`shared/core`、`shared/dicts`、`ui/code`、`mcp-server/tools` | 2026-10-10 |
-| [0040](0040-MG-变量读写接入-platformOps：op-形制对齐-Figma，槽位取值以官方文档为据.md) | MG 变量读写接入 platformOps：op 形制对齐 Figma，槽位取值以官方文档为据 | 已采纳（真机待验） | `ui/code/mastergo`、`shared/dicts`、`mcp-server/tools` | 2026-10-10 |
-| [0041](0041-组件属性两处静默缺口：写侧键归一回-core，读侧暴露图层引用.md) | 组件属性两处静默缺口：写侧键归一回 core，读侧暴露图层引用 | 已采纳（真机待验） | `shared/core`、`shared/schemas`、`ui/code/jsdesign`、`mcp-server/tools` | 2026-10-10 |
+| [0036](0036-删掉内置图表编译器：图表一律走代码生成-SVG-再导入配方.md) | 删掉内置图表编译器：图表一律走代码生成 SVG 再导入配方 | 已采纳（三家已验） | `shared/schemas`、`shared/dicts`、`mcp-server/tools`、两个 `README.md` | 2026-10-09 |
+| [0037](0037-提示反馈收口：页头改用-daisyUI-tooltip，操作结果统一走-toast-出口.md) | 提示反馈收口：页头改用 daisyUI tooltip，操作结果统一走 toast 出口 | 已采纳（UI 侧已验） | `ui/components`、`ui/utils`、`shared/i18n` | 2026-10-10 |
+| [0038](0038-版本升级提示：daemon代查npm-latest，页头条件挂载升级入口，Modal给分步清单与复制给LLM.md) | 版本升级提示：daemon 代查 npm latest，页头条件挂载升级入口 | 已采纳（UI 侧已验） | `shared`、`mcp-server`、`ui/components` | 2026-10-10 |
+| [0039](0039-get_page-收窄为顶层几何加资源清单：复用既有契约成员，变量走可选入口.md) | `get_page` 收窄为「顶层几何 + 资源清单」：复用既有契约成员，变量走可选入口 | 已采纳（三家已验） | `shared/schemas`、`shared/core`、`shared/dicts`、`ui/code`、`mcp-server/tools` | 2026-10-10 |
+| [0040](0040-MG-变量读写接入-platformOps：op-形制对齐-Figma，槽位取值以官方文档为据.md) | MG 变量读写接入 platformOps：op 形制对齐 Figma，槽位取值以官方文档为据 | 已采纳（真机已复验） | `ui/code/mastergo`、`shared/dicts`、`mcp-server/tools` | 2026-10-10 |
+| [0041](0041-组件属性两处静默缺口：写侧键归一回-core，读侧暴露图层引用.md) | 组件属性两处静默缺口：写侧键归一回 core，读侧暴露图层引用 | 已采纳（真机已验） | `shared/core`、`shared/schemas`、`ui/code/jsdesign`、`mcp-server/tools` | 2026-10-10 |
 | [0042](0042-本地样式枚举按类拆分：同步-getter-不可中断，单类入口兼作定位探针.md) | 本地样式枚举按类拆分：同步 getter 不可中断，单类入口兼作定位探针 | 已采纳（机制描述已更正） | `shared/dicts`、`shared/schemas`、`shared/core`、`ui`、`mcp-server/tools` | 2026-10-15 |
 | [0043](0043-样式枚举拆出独立能力位：get_page-与-jsd-styles-按平台声明返空.md) | 样式枚举拆出独立能力位：`get_page` 与 `jsd://styles` 按平台声明返空 | 已采纳（机制描述已更正） | `shared/dicts`、`shared/core`、`ui/code`、`mcp-server/tools` | 2026-10-15 |
 | [942910d2](942910d2-website-多语言沿用-0016-口径：locale-由-Solid-context-显式提供，不引库也不做-en-预渲染.md) | website 多语言沿用 0016 口径：locale 由 Solid context 显式提供 | 已采纳 | `website/i18n`、`website/components` | 2026-10-12 |
@@ -36,6 +36,7 @@
 | [25827d0c](25827d0c-四类可复用资源的关系面补齐：样式档读写两端、MG-样式面加宽到八类.md) | 四类可复用资源的关系面补齐：样式档读写两端、MG 样式面加宽到八类 | 已采纳（两家已验） | `shared/`（dicts、schemas、core/styles）、三侧 `ui/code/*`、`mcp-server/tools` 投影与配方 | 2026-10-14 |
 | [cec4a120](cec4a120-两套主键并存改为显式-dec-引用记法加棘轮门禁.md) | 两套主键并存改为显式 dec 引用记法加棘轮门禁 | 已采纳 | `scripts/`、`tests/`、`AGENTS.md`、`shared/` 首批引用改写 | 2026-10-14 |
 | [e1e66f0a](e1e66f0a-样式枚举选路按平台声明：新增-styleEnumerationSync，不靠-.-探测.md) | 样式枚举选路按平台声明：新增 `styleEnumerationSync`，不靠 `?.` 探测 | 已采纳（端到端真机已验） | `shared/dicts`、`shared/core`、`ui/code/jsdesign` | 2026-10-15 |
+| [b2bee2b8](b2bee2b8-删掉-mcp-tdd-台账与报错文档：技能面收窄到设计决策一条.md) | 删掉 mcp-tdd 台账与报错文档：技能面收窄到设计决策一条 | 已采纳 | `.agents/skills`（删除）、`docs`、`AGENTS.md`、`tests` | 2026-10-15 |
 
 ## 依赖关系
 
@@ -50,8 +51,6 @@
 0004 (Pipeline)         ── 与 0001 同批；被 0007/0020 引用
 0006 (目录投影)         ── 独立；体积口径被 0020/0030/0034/0036/0039/0040 引用
 0007 (回读回收)         ── 被 0013/0018/0019/0022/0024/0025/0033/0036/0038/0039/0040/0041/0042/0043 引用
-0008 (归档阶段)         ── 独立于代码层；同源 0009；被 0032/0038/89d02d1b 引用
-0009 (依赖单向)         ── 独立于代码层；同源 0008；被 0010/0012/0017/0032/0039/0043 引用
 0010 (异步优先)         ── 沿 0005/0009；被 0011/0017/0024/0039 引用
 0011 (Access 层)        ── 依赖 0010；被 0017/0039/0042 引用
 0012 (zod 沙箱化)       ── 独立；同源 0009；被 0014/0015/0017 引用
@@ -87,6 +86,7 @@ e1e66f0a (枚举选路靠声明) ── 依赖 0043；沿 0010/0022/0032/0002/00
 25827d0c (资源关系面补齐) ── 沿 0024/0022/0032/0020/0007/0010/0040/0043/0039/0023；补 0041 的同类缺口
                     ── 被 cec4a120 引用（归属含糊那两处由它改）
 cec4a120 (dec 引用记法) ── 沿 de446d4e/0009/0005/0016/25827d0c；不取代任何记录
+b2bee2b8 (删台账)       ── 取代 0008；沿 0007/0022/0029/0032/cec4a120；0009 随其退出条件命中标「已废弃」
 ```
 
 更早的记录（0001–0024）见 [`INDEX-2026.md`](INDEX-2026.md)。

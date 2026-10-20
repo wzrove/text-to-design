@@ -28,6 +28,19 @@ const INDEX_MAX_ROWS = 40;
 const INDEX_ROW_MAX_BYTES = 400;
 const DEP_LINE_MAX_BYTES = 160;
 
+const ARCHIVE_REL = 'docs/design-decisions/INDEX-2026.md';
+/** 状态列口径（dec 89d02d1b）：封闭词表值 + 最多一个 ≤12 字标注 */
+const STATUS_CELL_RE = /^(提议|已采纳|已被取代|已废弃)(（.{0,12}）)?$/;
+/**
+ * 棘轮基线：口径定于 2026-10-12（dec 89d02d1b），此前的旧行不追认 —— 年档那 7 行的
+ * 影响范围抄了逐文件清单（单行 > 400 B）。**只许降不许增**：新增/改动的行必须自己合规，
+ * 摘掉一行旧违规就把这里的数改小。
+ */
+const STATUS_RATCHET: Record<string, number> = {
+  [INDEX_REL]: 0,
+  [ARCHIVE_REL]: 7,
+};
+
 const SKILL_DIRS = ['.agents/skills/software-design-patterns'];
 
 const kb = (bytes: number) => `${(bytes / 1024).toFixed(1)} KB`;
@@ -42,6 +55,22 @@ function indexRows(text: string): string[] {
   return text
     .split('\n')
     .filter((line) => /^\|\s*\[[^\]]+\]\([^)]+\.md\)\s*\|/.test(line));
+}
+
+/** 表体行的状态列 / 行宽违规清单（口径见 dec 89d02d1b） */
+function indexRowViolations(rel: string): string[] {
+  return indexRows(read(rel))
+    .map((line) => {
+      const status = (line.replace(/\r?\n$/, '').split('|')[3] ?? '').trim();
+      const width = bytesOf(line);
+      return {
+        width,
+        status,
+        ok: STATUS_CELL_RE.test(status) && width <= INDEX_ROW_MAX_BYTES,
+      };
+    })
+    .filter((row) => !row.ok)
+    .map((row) => `${row.width} B | ${row.status.slice(0, 40)}`);
 }
 
 /** 「依赖关系」代码块内的行 */
@@ -114,6 +143,19 @@ describe('技能与决策索引的文档预算', () => {
     expect(
       fat,
       `图里写论证摘要是第二份真相 —— 「沿 00xx / 撞 00xx」的理由归记录的「相关记录」行:\n${fat.join('\n')}`,
+    ).toEqual([]);
+  });
+
+  it('索引行的状态列是封闭词表值 + ≤12 字标注（年档按棘轮只降）', () => {
+    const over: string[] = [];
+    for (const [rel, baseline] of Object.entries(STATUS_RATCHET)) {
+      const bad = indexRowViolations(rel);
+      if (bad.length > baseline)
+        over.push(`${rel}: ${bad.length} 行不合规 > 基线 ${baseline}\n${bad.join('\n')}`);
+    }
+    expect(
+      over,
+      '状态列只写词表值 + ≤12 字标注,真机叙事归记录正文;影响范围只到层/包粒度(单行 ≤ 400 B)。见 dec 89d02d1b',
     ).toEqual([]);
   });
 

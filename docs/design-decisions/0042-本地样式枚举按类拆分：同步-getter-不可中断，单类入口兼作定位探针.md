@@ -64,7 +64,7 @@ r10 list_styles  ok=false 耗时=25008ms error=forward_timeout
 ## 验证
 
 - **不变量测试**（`__tests__/list-styles.test.ts`，4 例）：不给 `kinds` 四类全问；只给一类时**其余三类一次都不调**；给两类时只调这两类；getter 缺失的类别跳过而不报错（与「没选中」区分开）。
-- **真机探针（待跑，jsDesign）**：依次读 `jsd://styles/PAINT`、`/TEXT`、`/EFFECT`、`/GRID`，看哪一条超时 —— 超时的那一类就是「引擎声明了但没实现」的那个 getter。
+- **真机探针（2026-10-15 已跑，探针随后删除）**：四类 `getLocal*Styles` 直接调全部 0~1ms 返回 ⇒ 挂住的不是某一类，而是 `*Async` 那条选路（见「变更历史」与 e1e66f0a）。
 - **顺带确认**：`jsd://styles`（全部）在 Figma 上仍正常（此前实测返回 `{styles: [], count: 0}`）。
 
 ## 变更历史

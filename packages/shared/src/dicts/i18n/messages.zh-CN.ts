@@ -25,6 +25,8 @@ export const MESSAGES_ZH_CN = {
   'capability.host.styleEnumeration': '本地样式清单(能列出有哪些样式)',
   'capability.host.styleEnumerationSync':
     '样式枚举走同步入口(运行时的 *Async 成员不可用)',
+  'capability.host.mainComponentSync':
+    '主组件走同步字段(运行时的 getMainComponentAsync 永不返回)',
   'capability.host.textTruncation': '文本截断',
   'capability.host.componentProperties': '组件属性',
   'capability.host.documentScopeRead': '文档范围读(能读非当前页)',
@@ -605,7 +607,7 @@ export const MESSAGES_ZH_CN = {
   'prompt.designStrategy.title': '设计策略总纲',
   'prompt.autoLayout.title': '自动布局',
   'prompt.autoLayout.description':
-    '容器该不该上 auto-layout(判据 + 典型漏掉的容器清单)、两条落地路径(建容器时带 sizingMode / 事后开布局再用 resize 钉回尺寸)、平台硬约束、五个常用形态与验收坑',
+    '容器该不该上 auto-layout(判据 + 易漏分区)、方向自判(按直属子项流动轴,不写死 HORIZONTAL/VERTICAL)、两条落地路径、平台硬约束与验收坑',
   'prompt.textReplace.title': '文本批量替换策略',
   'prompt.variantSync.title': '同类实例样式批量同步',
   'prompt.variableBinding.title': '变量绑定与批量套用',

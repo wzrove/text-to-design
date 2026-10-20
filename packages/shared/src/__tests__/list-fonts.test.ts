@@ -69,7 +69,7 @@ describe('listFonts 分页与过滤', () => {
 
     const byHan = await listFonts(host, { family: '思源' });
     // 中文子串只命中中文字面名:family 是拉丁名时不会被「思源」匹配到
-    // (MasterGo 的家族名带 `_family` 后缀,那是平台列表里的原始名,见 platform-limits)
+    // (MasterGo 的家族名带 `_family` 后缀,那是平台列表里的原始名,见 ../core/utils.ts 的归一键)
     expect(byHan.families).toEqual(['思源黑体']);
   });
 

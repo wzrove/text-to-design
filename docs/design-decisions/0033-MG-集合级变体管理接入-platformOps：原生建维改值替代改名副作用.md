@@ -53,7 +53,7 @@
 - **不接两个别名 op**（`editVariantPropertiesAlias` / `editVariantPropertyValuesAlias`）：它们绑的是**变量别名**，而 MG 变量面（`mg.variables`）整体未接（属独立决策）。留着当缺口，不在这次顺手接一半。
 - **不改实例写入路径**：`InstanceNode.setVariantPropertyValues` 真机实测静默无效（0018 复验通过），继续只作门面内部回退，**不**因为「typings 里有」就再试一遍。
 - **不claim 新能力位**：`inPlaceVariants` 已声明；集合级 op 的存在由 `platformOps` 数组本身表达（0029 的口径：不再挂一个「本平台有 op 通道」的能力位）。
-- **不做真机复验**（本次环境无 MG 客户端）：记录为**待验**，逐条写在「验证」里，不写「已生效」。
+- ~~**不做真机复验**（本次环境无 MG 客户端）：记录为**待验**~~ **已补验**：2026-09-29 MG 客户端 7 项全通（见「变更历史」）。
 
 ## 成本与退出条件
 

@@ -71,6 +71,19 @@ export const HOST_CAPABILITY_SPEC = {
     kind: 'flow',
     labelKey: 'capability.host.styleEnumerationSync',
   },
+  // 行为型:**主组件读同步字段** —— 运行时透出的 `getMainComponentAsync` 在本平台永不 settle。
+  //
+  // 为什么需要这一位(真机 2026-10-19,即时设计):`jsd_copy_overrides`(只读覆盖快照、
+  // 不写任何属性)25109ms `forward_timeout`,`jsd_set_instance_properties` 同样超时 ——
+  // 两个入口的唯一共同前置是 `resolveMainComponent` 的 `?.` + `await` 选路。
+  // 与 `styleEnumerationSync` / `documentScopeRead` 同一族:typings 没声明 ≠ 运行时没有,
+  // `Object.create(native)` 把该成员整透出来且永不 settle ⇒ 选路只能靠声明。
+  // 平台:即时设计声明(走同步 `mainComponent`);Figma 不声明(dynamic-page 下同步字段必抛)。
+  // 决策记录:dec 0010(异步优先)+ dec e1e66f0a(选路由声明决定)。
+  mainComponentSync: {
+    kind: 'flow',
+    labelKey: 'capability.host.mainComponentSync',
+  },
   // 文本截断与最大行数(仅 TEXT;类型不匹配的判定见 core/capabilities.ts)
   textTruncation: {
     kind: 'propGate',

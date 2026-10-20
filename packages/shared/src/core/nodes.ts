@@ -524,15 +524,49 @@ export async function cloneNodes(
   }
   const page = host.currentPage;
   const created: NodeSkeleton[] = [];
+  const failed: { id: string; message: string }[] = [];
   for (const n of nodes) {
-    const c = n.clone();
-    c.x = n.x + 24;
-    c.y = n.y + 24;
-    page.appendChild(c);
-    created.push(c);
+    // 引擎**实际行为**:即时设计的 `clone()` 对**变体集成员**返回 undefined
+    // (真机 2026-10-20:`cannot set property 'x' of undefined`),而同为 COMPONENT
+    // 但独立于集合之外的克隆一切正常 —— 引擎缺陷,不能靠改调用方式绕开。
+    // 逐个收错并点名可执行出口,别让整批只回一句引擎原文。
+    try {
+      const c = n.clone();
+      if (c == null) throw new Error('clone() 返回了 undefined');
+      c.x = n.x + 24;
+      c.y = n.y + 24;
+      page.appendChild(c);
+      created.push(c);
+    } catch (e) {
+      failed.push({
+        id: n.id,
+        message: e instanceof Error ? e.message : String(e),
+      });
+    }
   }
-  host.viewport.scrollAndZoomIntoView(created);
-  return { created: created.map((n) => serializeNode(n)) };
+  if (created.length === 0 && failed.length > 0) {
+    const inSet = nodes.some((n) => n.parent?.type === 'COMPONENT_SET');
+    throw new Error(
+      [
+        `全部节点都无法复制:${failed.map((f) => `${f.id}(${f.message})`).join(', ')}。`,
+        inSet
+          ? '本次涉及**组件集成员**:本引擎的 clone() 对变体集内的 COMPONENT 返回 undefined(真机实测,同结构与独立组件均正常)。可执行出口:① 复制**实例**(画布上已存在的变体实例可克隆);② 要新实例请在画布上手工拖出;③ 需要可编辑副本时先 jsd_detach_instance(本平台同样不可用时只能用画布操作)。'
+          : '本引擎的 clone 未成功。可执行出口:在该平台客户端手工复制,或改走 jsd_create_* 重建节点。',
+      ].join(''),
+    );
+  }
+  if (created.length > 0) host.viewport.scrollAndZoomIntoView(created);
+  return {
+    created: created.map((n) => serializeNode(n)),
+    ...(failed.length > 0
+      ? {
+          warnings: [
+            // i18n-exempt: 随结果上行给模型,不走面板文案
+            `部分节点没能复制:${failed.map((f) => `${f.id}(${f.message})`).join(', ')}`,
+          ],
+        }
+      : {}),
+  };
 }
 
 /**

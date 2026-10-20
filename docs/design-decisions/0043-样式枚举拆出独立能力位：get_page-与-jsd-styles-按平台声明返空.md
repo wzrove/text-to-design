@@ -84,7 +84,7 @@ typings（plugin-api.d.ts:95-98）  只有四个同步版，没有 *Async
   - 断言对象是**调用记录**而非返回值 —— 只看返回值会放过「取回来再丢掉」，而那照样会把整条调用挂到 25s 超时。
 - **真机（即时设计，2026-10-10 已跑）**：✅ `jsd://styles` **11ms** 返回 `{styles:[],count:0,note:"本平台未声明本地样式枚举能力…"}`（此前是 25008ms 超时）；`jsd_ping` 5ms、`capabilities: ["styles"]`；MCP 资源表里 `jsd://styles/{kind}` 已消失（探针摘干净了）。
   ⚠ 同一轮里 `jsd_get_page` **仍然 25634ms `forward_timeout`** —— 但卡点**不是样式**：`find scope=document` 25425ms / 25466ms 同样超时，当前页 find 只要 44ms ⇒ 是**跨页读**（0039 引入的资源清单遍历各页）。那半已由 [0039](0039-get_page-收窄为顶层几何加资源清单：复用既有契约成员，变量走可选入口.md) 的修订接走（按「能否显式加载页」收口为只扫当前页），**待再一轮真机复验**。
-- **真机（待跑）**：① jsDesign：修订后 `get_page` 回到毫秒级且 `note` 点名只覆盖当前页；② MasterGo：**已跑（2026-10-14）** —— `assets.styles` 列得出来（PAINT / EFFECT 条目），`styleEnumeration` 这条声明为真；跨页那半仍按 0039 的收口只覆盖当前页（`note` 点名）。
+- **真机**：① jsDesign：**已跑**（0039 第三轮 —— `get_page` 42ms、`note` 点名只覆盖当前页）；② MasterGo：**已跑（2026-10-14）** —— `assets.styles` 列得出来（PAINT / EFFECT 条目），`styleEnumeration` 这条声明为真；跨页那半仍按 0039 的收口只覆盖当前页（`note` 点名）。
 - **指标与日志**：daemon 日志里 jsDesign 的 `get_page` 不再出现 `forward_timeout`。
 
 ## 晋级评估

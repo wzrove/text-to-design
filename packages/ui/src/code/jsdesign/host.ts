@@ -63,6 +63,21 @@ export const host: DesignHost = Object.create(native, {
     enumerable: true,
   },
   /**
+   * 合并为变体:**必须显式以全局为 receiver 调**。
+   *
+   * `host` 是 `Object.create(native)`,原型链上取到的原生方法被调用时 `this` 是
+   * **host 这个代理对象**而不是 `jsDesign` 全局。其它建图方法不受影响(不读 `this`),
+   * 但 `combineAsVariants` 曾疑似因此炸出 `in get_name / in get_booleanOperation:
+   * Value is not a string`。**已真机排除(2026-10-20)**:把 receiver 钉回全局后报错逐字相同,
+   * 且与组件命名、是否带子层、是否在 FRAME 里都无关 ⇒ 是引擎实现缺陷,不是调用方式。
+   * 保留这层显式绑定:它才是 `jsDesign.combineAsVariants(...)` 的正确形状,别退回原型链。
+   */
+  combineAsVariants: {
+    value: (nodes: readonly NodeSkeleton[], parent: NodeSkeleton): NodeSkeleton =>
+      native.combineAsVariants(nodes, parent as never),
+    enumerable: true,
+  },
+  /**
    * 删本地样式:本平台没有 dynamic-page,同步 `getStyleById` 就是官方入口
    * (`plugin-api.d.ts:50`),`Style.remove()` 同步(`:1143`)。
    */

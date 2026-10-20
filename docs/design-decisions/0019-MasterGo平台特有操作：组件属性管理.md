@@ -98,8 +98,9 @@ symbol sublayer` —— 绑定目标必须是**组件内部的 symbol 子层**�
 
 - `ui/src/code/mastergo/ops.ts`（新）、`ui/src/code/mastergo/meta.ts`（`platformOps`）
 - `mcp-server/src/tools/platform.ts`（平台归属与文案）
-- `.agents/skills/mcp-tdd/references/platform-limits.md`（「组件侧属性表为空」一行的口径改为
-  「用 `mg_add_component_property` 建属性，别去设计器手加」）
+- 原 `.agents/skills/mcp-tdd/references/platform-limits.md`（「组件侧属性表为空」一行的口径改为
+  「用 `mg_add_component_property` 建属性，别去设计器手加」）—— 台账已随 9039a4a 删除，该口径现落
+  `shared/src/dicts/platform-knowledge.ts` 的 components 域
 - `docs/design-decisions/{0017-*.md,INDEX.md}`（交叉引用与本决策的索引行）
 
 ## 真机复验（2026-09-24，插件重载后）
@@ -175,10 +176,15 @@ typings 的 `PublishableMixin.ukey`(1805) 与 `InstanceSwapPreferredValue{key}`(
 `remapPropertyIds` 原来只喂**实例侧** `componentProperties`（MG 上实测常为空表）→ 归一等于没做、
 属性名原样发给宿主。现改为两张表都喂（主组件侧 `componentPropertyValues` 优先，它带 `id`）。
 
-**仍待验**
+**仍待验（2026-10-15 真机复验后，两条都结清）**
 
-- 上述假设:用 `ukey` 作 `INSTANCE_SWAP` 取值能否真正换绑(需先补 `ukey` 回显);
-- 内层实例(`实例id/层id`)读不到 `mainComponentId`,换绑判据只能靠尺寸差 —— 有更直接的读法再换。
+- ~~用 `ukey` 作 `INSTANCE_SWAP` 取值能否真正换绑（需先补 `ukey` 回显）~~ **已结**：
+  - `ukey` 回显**已经在了**（`mg_list_sublayers` 的 `node.ukey` 与每个子层的 `ukey` 都带，`ops.ts:636/648`）—— 本条当年记的「需先补」已过期；
+  - 实测（`TDD19` 探针：组件 A 60×60 / B 140×60，宿主组件里放一个 A 的实例，`mg_add_component_property{type:"INSTANCE_SWAP"}` + `mg_bind_component_property{slot:"mainComponent"}` 绑定）：
+    - 写**组件 id** `10:060` → 内层实例名从 `TDD19-A` 变 `TDD19-B`、其内部矩形从 60×60 变 **140×60** ⇒ **换绑成功**；
+    - 写**组件 ukey** `207167025803318+10:060` → 回包 `updated:1`、**无 warnings**，但内层仍是 `TDD19-A` / 60×60 ⇒ **ukey 不换绑**（结论不变，本轮再证）。
+- ~~内层实例读不到 `mainComponentId`，换绑判据只能靠尺寸差~~ **已收窄**：本轮 `mg_list_sublayers` 的实例子层**仍然没有 `mainComponentId`**，但判据不止尺寸差 —— **内层实例的 `name` 也跟着换**（`TDD19-A` → `TDD19-B`），名字 + 内部子层尺寸两个信号都能判。
+- ⚠ 附带一条坑：换绑**不改内层实例自身的 `w/h` 回读**（写 B 之后该实例仍回 60×60，而它内部的矩形已经是 140×60）—— 拿「实例自身尺寸」当判据会误判成「没换」。
 
 **范围外(要做需另开决策)**
 
@@ -197,3 +203,4 @@ typings 的 `PublishableMixin.ukey`(1805) 与 `InstanceSwapPreferredValue{key}`(
 | 2026-09-24 | 四次复验：`findAll` 深度枚举 + 组件先 reparent 装子层 → 绑定与写实例属性**全部通过**（绑定层 `characters`/`isVisible` 跟随）；撤回上一轮的误判；门面去掉不可靠的实例侧回读校验；新增 `mg_list_sublayers` |
 | 2026-09-24 | 核实未决项：修 `slot` 枚举漏 `mainComponent`；`mg_list_sublayers` 补 `width`/`height` 与实例子层的 `mainComponentId`；收敛未决清单 |
 | 2026-09-24 | `INSTANCE_SWAP` 专项（结论已更正）：取值 = **组件 id**，写值**生效**；`ukey` 无效；上一轮「未生效」判据错了（换绑不改实例尺寸，要读内部子层）；顺带修 `remapPropertyIds` 只喂实例侧空表的 bug |
+| 2026-10-15 | 真机复验（MG）：`INSTANCE_SWAP` 取值 id vs ukey + 换绑判据 | 结论不变、两条待验结清：id 换绑生效（内层实例名 + 其内部矩形尺寸都变）、ukey **不换绑**（回包 `updated:1`、无 warnings、画面不动）；`ukey` 回显**已在**（`ops.ts:636/648`，当年那条「需先补」已过期）；内层实例仍无 `mainComponentId`，但 `name` 也能当判据 |

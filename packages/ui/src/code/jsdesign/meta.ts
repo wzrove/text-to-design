@@ -1,4 +1,5 @@
 import type { PlatformMeta } from 'text-to-design-shared';
+import { jsdesignOps } from './ops';
 
 /**
  * 即时设计能力面。
@@ -33,7 +34,16 @@ import type { PlatformMeta } from 'text-to-design-shared';
  * `variables` 不 claim:typings 全文无 variable 声明,属**接不了**(0039)。
  */
 export const meta: PlatformMeta = {
-  capabilities: ['styles', 'styleEnumeration', 'styleEnumerationSync'],
-  // 本平台无 platformOps(dynamic-page 系与变量面都接不了,见上)。
-  platformOps: [],
+  capabilities: [
+    'styles',
+    'styleEnumeration',
+    'styleEnumerationSync',
+    // 主组件读同步字段(真机 2026-10-19):运行时透出的 `getMainComponentAsync` 永不 settle ——
+    // `jsd_copy_overrides`(只读快照、不写属性)25109ms 超时即由它引起,见 dec 0010 / e1e66f0a。
+    'mainComponentSync',
+  ],
+  // 只读组件面(2026-10-20):三页官方文档与 typings 在组件/变体节点上逐字一致,契约里缺的
+  // 几个字段(实例数 / 发布 key / remote / description / scaleFactor / 变体集默认变体与成员)
+  // 由 jsd_component_facts 透出来。dynamic-page 系与变量面仍然没有(接不了,见上)。
+  platformOps: jsdesignOps,
 };

@@ -57,7 +57,7 @@ typings（plugin-api.d.ts:95-98）  只有四个同步版，没有 *Async
   - **单点选路**：`core/access.ts` 的 `listStylesAsync` —— 两个消费方（`core/export.ts` 的 `list_styles` ← MCP 的 `jsd://styles`；`core/assets.ts` 的资源清单 ← `get_page`）共用这一处，`preferSync` 只在这里判一次。
   - **扩展点**：将来再有「两条入口、该走哪条」的面，加一位 + 在选路处加一行；闸与 note 通道不动。
 - **本批做**：能力位 + 两语言 label + `preferSync` 选路 + jsDesign 声明 + 2 例单测（声明 ⇒ `asyncCalls` 为空；未声明 ⇒ 仍优先 async，Figma 语义不动）。
-- **本批不做**：① 把同一判据推广到 `resolveOne` 的 `getNodeByIdAsync` / `resolveMainComponent` 的 `getMainComponentAsync` —— 这两个也是 `?.` + `await` 的异步优先选路，但**没有真机证据说它们在即时设计上会挂**（probe-ops 只问了 `typeof`）；有证据再开一条，形状与本条一致；② 给 async 分支加 race 超时（见候选表）；③ MG 声明这一位（它的 `?.` 本来就落空，声明了反而是把未验证的事实写进声明表）。
+- ~~**本批不做**：① 把同一判据推广到 `resolveOne` 的 `getNodeByIdAsync` / `resolveMainComponent` 的 `getMainComponentAsync`~~ **① 已于 2026-10-19 做掉**（`mainComponentSync`，形状与本条一致；`getNodeByIdAsync` 那半**仍然不做** —— 即时设计上 `find` 一直是毫秒级，没有它挂的证据）：证据见「变更历史」末两行；② 给 async 分支加 race 超时（见候选表）；③ MG 声明这一位（它的 `?.` 本来就落空，声明了反而是把未验证的事实写进声明表）。
 
 ## 成本与退出条件
 
@@ -86,3 +86,6 @@ typings（plugin-api.d.ts:95-98）  只有四个同步版，没有 *Async
 |---|---|---|
 | 2026-10-15 | 初次决策。起因：0043 的闸让即时设计的样式面恒空，而真机证明同步 getter 0~1ms 可用 —— 卡点在「有 async 就用 async」的探测式选路 | 不引模式：新增 `styleEnumerationSync` flow 位，选路由平台声明决定；两级判据（能不能问 / 走哪条路）；声明 sync 即 fail-closed 不再回落 async。0042/0043 的机制描述同批更正为「永挂的是 typings 未声明、运行时透出的 `*Async`」 |
 | 2026-10-15 | 端到端真机（重载后）：ping 三位齐、`jsd://styles` 7 条、`assets.styles` 7 条、`note` 里那句消失 | 结论不变，状态转「已验」。**声明改了，机制没动**：样式面从恒空回到可用；三处把「即时设计列不出样式」写死的 MCP 文案（`platform-facts.ts` 的 jsDesign 段与 **MG 段**、prompts 的回读例外、两语言 create_style 描述）一并更正；临时探针删除 |
+| 2026-10-19 | 同一判据推广到**主组件读**（即时设计真机取证） | 新增 flow 位 `mainComponentSync`（即时设计声明），`core/access.ts` 的 `resolveMainComponent` 收 `RuntimeContext` 按声明选路，不再 `?.` 探测 `getMainComponentAsync`。取证：`jsd_copy_overrides`（**只读覆盖快照、不写任何属性**）25109ms `forward_timeout`，`jsd_set_instance_properties` 同 —— 两入口唯一共同前置就是这次主组件读 ⇒ 挂点从中被隔离出来，不是 `setProperties`。附带把 `detachInstanceNodes` / `copyInstanceOverrides` / `applyOverrides` 三个入口的 `ctx` 串上；Figma 不声明（dynamic-page 下同步字段必抛），MG 不声明（运行时无该符号） |
+| 2026-10-19 | 单测补 3 例（`__tests__/main-component-sync.test.ts`） | 声明 ⇒ `getMainComponentAsync` **一次都不碰**且读到同步字段；未声明（Figma 形状）⇒ 仍走 async；未注入能力表 ⇒ fail-open 沿用 async。三条都断言**调了哪条入口**，不是返回值 —— 只看返回值会放过「先 await 异步再回退」，那照样挂 25s |
+| 2026-10-19 | 端到端真机（重载后，即时设计） | 全部通过：`jsd_ping` 的 `capabilities` 出现 `mainComponentSync`（前置门禁）；`jsd_copy_overrides` **13 ms**（原 25109 ms）、`jsd_apply_overrides` 42 ms、`jsd_detach_instance` 36 ms，均 `applied/created` 正常；`jsd_set_instance_properties{Foo:'bar'}` **14 ms** 即报「没有可写的属性面」（属性面守卫这时才跑得到，原 25021 ms 超时） |

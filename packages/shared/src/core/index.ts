@@ -46,6 +46,13 @@ export {
   normalizeVectorPaths,
 } from './normalize';
 export {
+  normalizeVariantGroupProperties,
+  normalizeVariantProperties,
+  resolveVariantWriteKey,
+  variantValueName,
+  variantValueOffered,
+} from './variant';
+export {
   CONTAINER_SELF_VISIBLE_PROPS,
   INSTANCE_STYLE_RISK_PROPS,
   instanceStyleFixHint,

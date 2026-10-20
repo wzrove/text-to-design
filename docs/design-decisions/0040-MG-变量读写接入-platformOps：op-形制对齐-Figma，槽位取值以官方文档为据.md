@@ -1,7 +1,7 @@
 # 0040. MG 变量读写接入 platformOps：op 形制对齐 Figma，槽位取值以官方文档为据
 
 - **日期：** 2026-10-10
-- **状态：** 已采纳
+- **状态：** 已采纳（MG 真机已复验，2026-10-15 / 2026-10-19；两条新发现已按真机结论改代码并在真机验收）
 - **影响范围：** `ui/`（`code/mastergo/{ops,meta,sync-guarantee}.ts`、`code/figma/ops.ts`）、`shared/`（`dicts/{platform-knowledge,capability}.ts`）、`mcp-server/`（`tools/{platform-facts,prompts}.ts`、`README.md`）
 - **相关记录：** 走 0020 的第二档（platformOps 通道，不新造工具族）；op 形制沿 0019/0033；写完回读沿 0018/0007；平台差异只落声明表与投影点沿 0022/0032；变量面双平台并存沿 0039（它先接的 MG 只读枚举）
 
@@ -92,14 +92,44 @@ MG 的变量面此前是**半截**的：0039 接了只读枚举（`get_page.asse
   `create` 的回滚只覆盖本次新建的集合，复用既有集合时不删。
 - 指标与日志：daemon 日志里三个 op 的 `耗时=`；`platformOps` 名单从 11 变 14 后，
   `jsd_ping` 与面板能力区块应同时更新。
-- **真机待验（MasterGo 客户端）**：① 建单值变量（BOOLEAN / NUMBER / STRING / COLOR）并回读值；
-  ② 建复合样式变量（PAINT 等）不带 value；③ `strokeProperty: 'all'` 等槽位各绑一次，
-  确认画布真的变了（这是文档未覆盖「属性↔槽位」组合的那部分）；④ `unbind` 能解开；
-  ⑤ 传错槽位时错误里出现可选项清单。
+- **真机（MasterGo，2026-10-15 已跑）** —— 五项逐条：
+  ① **建单值变量并回读**：BOOLEAN `{bool:true}` ✓、NUMBER `{floatData:[42]}` ✓、COLOR `{floatData:[0.1,0.6,0.3,1]}` ✓；⚠️ **STRING 回读不到值** —— 写 `"你好"` 不报错，`mg_list_variables`（按集合 / 按 `type:"STRING"` 两种筛法）回的仍是 `{modeId}`，没有值字段（`values: v.modes` 是原样透传，不是我们的投影丢的）。**待处理**。
+  ② **复合样式变量不带 value**：`{name:"TDD40-样式变量", type:"PAINT"}` 建成，读回是**默认空样式**（`type:0` / `color` 白 / `alpha:1`）—— 与「不传就是空样式」的口径一致 ✓
+  ③ **槽位绑定真改画布**：`baseProperty/fillColor` 绑 COLOR 变量 → 矩形回读 `fills` 变成变量色 `0.1/0.6/0.3`；`strokeProperty/color` 再绑一次 → `strokes` 同样变 ✓；回包带 `applied:["10:06"]` + `linkedCollections:[{layerId,collectionIds:["10:6"]}]`
+  ④ **unbind 能解开**：`{property:"baseProperty", value:"fillColor", unbind:true}` 回 `applied`。⚠ 直接回读**看不出**是否解开（填充仍是当时的值），故用**判别实验**：把变量值改成蓝 —— 解绑过的 `fills` **不动**（保持绿），仍绑着的 `strokes` 跟着变蓝 ⇒ 解绑真的生效 ✓（这也是「解绑保留当时取值」的正确语义）
+  ⑤ **错槽位点名可选项**：`baseProperty` 传 `"nope"` → `baseProperty 不接受「nope」,可选:opacity / fillColor / visible` ✓；顺带取到另两张表：`strokeProperty` = `top / right / bottom / left / all / color`，`textProperty` = `fontFamily / fontWeight / fontSize / lineHeight / letterSpacing / paragraphSpacing`
+  ⑥ **额外发现**：`mg_variables_remove` 删后报 `failed`（5 条，理由「deleteVariable 调用后该 id 仍读得到」）—— 判成**回读滞后**，10-19 重载后复验证实（见下节）。
+
+**定位（2026-10-15，按 typings）**：`getVariableById(id): Variable | null`(:1176)、`deleteVariable(variableId): void`(:1218) —— 签名与用法一致，两个读面及时性不同。
+
+### 真机复验（MasterGo，2026-10-19，重载插件后两轮）
+
+第一轮结论有一半是错的，第二轮（重载后重跑）才把「跨执行生效」这条钉死：
+
+| 探针 | 真机结果 | 判据 |
+|---|---|---|
+| 单值变量删除 | **跨执行才生效**：同一执行内删两遍（id 95:525）仍读得到、报 failed；**下一次执行**再删立刻 `removed`（95:515 / 95:522）。10-15 那 5 条 `failed` 正是这个形态 ⇒ 「回读太早」的诊断是对的 | 本执行内读得到 ≠ 失败，归 `pending` |
+| 复合样式变量（PAINT）删除 | `deleteVariable` 是 **no-op**：跨多次执行仍在（`mg_list_variables`、`assets.variables`、拿它绑图层三面都证明它活着）；同 id 走 `jsd_delete_style` 一次删掉（95:474 / 95:492 / 95:518 同） | 引擎没收这个动作，**动手前就拒** |
+| STRING 变量值 | 三个读面（列表 / `getVariableById` / `setVariableValue` 的返回）都只有 `{modeId}`，`values` 也不带值；绑 `textProperty/fontFamily` 回 `applied` 但节点 `fontName` 不变，绑 `fontSize` 直接 `failed`（类型不合） | **值不可验证**，`values` 不作判据 |
+
+改法（最终版）：
+
+- `removeVariables` 回三档：`removed`（本执行内已不见）/ `pending`（已下发、本执行内仍见 —— 单值类型正常形态，下次调用复核）/ `failed`（找不到该 id；或复合样式类型，**动手前就拒**并点名走 `jsd_delete_style`）。分流依据是**删前读到的 `type`**。
+- `createVariables`：`setVariableValue` 的返回**只原样透传**（`values`）—— 它时有时无：同批里有的带 `bool`/`floatData`、有的只有 `{modeId}`、默认双模式集合回空对象（空则省键）。
+- 代码：`mastergo/ops.ts` 的 `removeVariables` / `createVariables` 与两条 op 描述；changeset `auto-mg-variable-readback.md`。`pnpm run typecheck` 通过。
+- ⚠ 第一版曾想「删后等两拍再回读」，用了 `window.setTimeout` → 真机上 `'window' is not defined`（**MG 插件沙箱没有 `window`**，仓内 `code/plugin.ts` 用的是裸 `setTimeout`）。既然同执行内等也等不到，索性不白等：直接按回读结果分 `removed` / `pending`。
+
+**顺带澄清一条早前的误判**：第一轮曾把「`TDD-RB`(95:466) 的 4 个单值变量怎么都删不动」记成引擎拒删 —— 重载后再删 95:468 一次成功 ⇒ 那只是**删除延迟**在连续同会话里的累积表现（同集合、同执行内反复报 failed），不是不可删。结论：判据永远别用「本执行内还读得到」。
+
+测试现场：矩形/文本节点、`TDD-RB2`~`TDD-RB6` 的探针变量、默认集合里的两个 STRING 变量、三个 PAINT 变量（走样式入口）均已删；`assets.variables` 会滞后一屏，隔次调用才对得上。
 
 ## 变更历史
 
 | 日期 | 需求变更 | 结论变化 |
 |---|---|---|
 | 2026-10-10 | 初次决策：用户要求「MG 变量的读写也给加上」 | 采用：走 platformOps 加三个 op，形制对齐 Figma；槽位取值以官方文档为据落表 |
+| 2026-10-15 | 真机复验（MG）：变量建/读、槽位绑定、解绑、错槽位点名 | 结论不变。①②③⑤ 通过；④ 用「改变量值」判别确认解绑生效（直接回读看不出）。**两条新发现**：STRING 变量值回读不到值字段；`mg_variables_remove` 删成功后仍报 `failed` |
+| 2026-10-15 | 按 typings 定位并改代码（`mastergo/ops.ts`） | 结论不变、实现变了：`removeVariables` 按类型分流判成败（单值看列表、复合样式看 id）；`createVariables` 回包补 `values`（`setVariableValue` 的返回）。`pnpm typecheck` 通过，changeset `auto-mg-variable-readback.md`；**真机复验待重载插件** |
+| 2026-10-19 | 真机验收（重载第三版插件） | 通过：删单值回 `pending:[id]` + `failed:[]`，隔次调用已不在清单；PAINT 走 pre-reject 并点名 `jsd_delete_style`，样式入口一次删掉；按 id 查滞后这条也复现（95:528 已不在清单，`getVariableById` 仍解析得到，没误报「没有找到变量」） |
+| 2026-10-19 | 真机复验（重载插件后，两轮探针） | 两条定死：① **单值类型的删除跨执行才生效**（同执行内双删仍报 failed，下一次执行立刻 removed）⇒ 10-15 的「回读太早」诊断成立，回包加 `pending` 档；② **复合样式变量的 `deleteVariable` 是真 no-op**（跨多次执行仍在），改为动手前就拒、点名走 `jsd_delete_style`。另 STRING 值的三个读面都没有值 ⇒ `values` 降级为原样透传。第一轮记的「含 PAINT 批量后变量删不动」已澄清为删除延迟，不是不可删 |
 | 2026-10-10 | 用户追问「mg 增加这么多 op，figma 呢」→ 对账后发现 Figma 变量面缺**清单**与**解绑**（MG 有、它没有），补 `figma_variables_list`（与 `mg_list_variables` 同形）+ `figma_variables_apply` 的 `unbind` | 结论不变（同一机制应用到另一半）。顺带把两个平台的 `variableId` 都改成**可选**：解绑不需要变量（Figma 的入口收 `null`、MG 的 `unlinkVariableReferenceInLayer` 不收 id），此前两个 schema 都把它写成必填 —— 那会让「解绑」这个动作凭白要求一个用不上的 id。绑定方向由 `superRefine` 守（缺 `variableId` 就点名）。另:这轮确认「读 op 名单」在 `DomainFact.read` 里是**第二个**用例(Figma 的 `boundVariables` + 清单 op 并列),字段已显粗粒度 —— 第三家再挂读 op 时应拆成独立字段(记进「退出条件」) |

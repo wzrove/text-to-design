@@ -2180,6 +2180,26 @@ describe('组件属性写形态与覆盖套用(0023)', () => {
     });
   });
 
+  it('属性面为空的平台(jsDesign:setProperties 只收 string):写前点名拒,不落引擎', async () => {
+    const inst = makeInstance('5:13', 'Plain');
+    const seen: unknown[] = [];
+    (inst as unknown as { setProperties(p: unknown): void }).setProperties = (
+      p,
+    ) => {
+      seen.push(p);
+    };
+    host = makeHost([inst]);
+    // 能力表明确不含 componentProperties ⇒ 权威判定「本平台没有这个面」;
+    // 真机上这种调用会挂满 25s 才超时且错误不带原因,故必须在写前拦(dec 0032 的未修项)
+    await expect(
+      setInstanceProperties(host, runtimeContext(['styles'], 'jsdesign'), {
+        ids: ['5:13'],
+        properties: { Foo: 'bar' },
+      }),
+    ).rejects.toThrow('没有可写的属性面');
+    expect(seen).toEqual([]);
+  });
+
   it('set_instance_properties:文档承诺的 {type,value} 必须以标量下发引擎', async () => {
     const inst = makeInstance('5:9', 'SM');
     const seen: unknown[] = [];

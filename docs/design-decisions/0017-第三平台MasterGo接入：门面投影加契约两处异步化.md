@@ -105,8 +105,9 @@
 10. **`jsd_set_instance_properties`**：MG `setProperties` 只收 `string | boolean`，线格式允许
     `ComponentPropertyValue` 对象 —— 传对象时的行为未实测，需要时补门面转换或门控。
 
-联调后按既有纪律把「平台限制」补进 `.agents/skills/mcp-tdd/references/platform-limits.md`
-（三档口径：代码兜住 → 提示词 → 记账），把实际报错补进台账。
+联调后按既有纪律把「平台限制」按三档口径落位（代码兜住 → 提示词 → 记账），把实际报错补进台账。
+⚠ 原承接文件 `.agents/skills/mcp-tdd/references/platform-limits.md` 已随 9039a4a 删除：类型系统事实现落
+`shared/src/dicts/platform-value-domain.ts` + 三侧 `sync-guarantee.ts`，域事实落 `shared/src/dicts/platform-knowledge.ts`。
 
 ## 联调记录（2026-09-24，首次接通）
 
@@ -170,11 +171,11 @@ UI 侧 `if (!pm.id) return` 又把这条回包丢掉 —— 两侧同时错位,�
 | 建文本带 fontName | ✅ 回读 `fontSize:24` + `fontName:{Inter,Black}` —— 嵌套读修复生效 |
 | 仅改字号(不传 fontName) | ✅ `jsd_set_text {fontSize:40}` 成功,回读 40 —— 字体加载前置修复生效 |
 | 建矩形 `fills:#ff6600` / 圆角 8 | ✅ 回读 `fills:[{type:"SOLID",color:{r:1,g:0.4,b:0}}]`、四角 8 —— paint 修复生效 |
-| 透明度(`#3366ff80` / `color.a:0.5`) | ⚠️ **写进去了、渲染也对**:导出 PNG 中心像素 `r=50 g=102 b=255 a=128`;但**回读**拿不到(`color.a` 被 MG 归一成 1)。已按「回读归一 ≠ 写失败」记进 platform-limits |
+| 透明度(`#3366ff80` / `color.a:0.5`) | ⚠️ **写进去了、渲染也对**:导出 PNG 中心像素 `r=50 g=102 b=255 a=128`;但**回读**拿不到(`color.a` 被 MG 归一成 1)。已按「回读归一 ≠ 写失败」处理（原记进 platform-limits，该台账已随 9039a4a 删除） |
 
 **又一个仓库级缺陷(非平台差异,已修)**:`jsd_list_fonts` 与 `jsd_get_selection` 声明了 `method` 却**没挂 `inputSchema`** —— 没有它时 MCP 侧按空对象校验,入参被**静默丢弃**(实测:`family`/`limit` 传了等于没传,`depth` 永远走默认值)。两处已补 schema,并加了入参非法值会被拒的验证(`limit must be <= 500`、`depth must be number`)。审计了全部 53 个工具:除 `jsd_ping`(本就无参)外无其它遗漏。
 
-三处修复的判定口径也补进了 `.agents/skills/mcp-tdd/references/platform-limits.md`(「撞一个坑补一行」)。
+三处修复的判定口径也按「撞一个坑补一行」落位（原补进 `.agents/skills/mcp-tdd/references/platform-limits.md`，该台账已随 9039a4a 删除）。
 修复后的复验要等 MasterGo 里**重跑插件**(面板保持着旧 bundle)。
 
 **冒烟 #3/#4(2026-09-24,覆盖剩余项)**
@@ -205,8 +206,13 @@ UI 侧 `if (!pm.id) return` 又把这条回包丢掉 —— 两侧同时错位,�
 「写实例值」的验证路径也打通了:用 `mg_list_sublayers` 读**绑定的图层**
 (`characters`/`isVisible` 跟随即生效)—— 详见 0019 的四次复验结论。
 
-**另一处观察(联调时反复撞到)**:`jsd_delete_node` 的 `ids` 列表里只要有一个 id 已不存在,
-整次调用就报错且**不部分执行** —— 批量清理时要先按 `jsd_find` 过滤出仍存在的 id。
+**另一处观察(联调时反复撞到;2026-10-15 真机收窄)**:`jsd_delete_node` 的 `ids` 列表里有一个 id 已不存在时,
+当年观察到「整次调用就报错且**不部分执行**」。本轮 MG 上三次对照**没能复现「报错」这一半**:
+传格式合法的缺失 id(`10:999`)、纯字符串坏 id、以及**组件内层子层的 id**,三次都**静默跳过缺失项、照删其余**、回包正常;
+唯一一次报错(`The node with id "10:062" does not exist`)出现在「前几个 id 已删、随后撞到一个已被换绑淘汰的内层实例 id」的批量清理里,
+事后复核**前面两个 id 确实已删** ⇒ **报错时可能已经部分执行**。
+⇒ 现行口径:**先按 `jsd_find` 过滤仍存在的 id 这条纪律照旧**(它同时防部分执行与噪音),
+但别当成硬约束 —— MG 对缺失 id 是宽容的;**删除调用一旦报错,必须重新 `jsd_find` 复核实际删掉了哪些**,不能假定「报错 = 什么都没动」。
 
 ## 按 typings 复核(2026-09-24 第三轮:把「找不到的字段/参数」回类型里找)
 
@@ -278,3 +284,4 @@ MG 同上但键是 propertyId)。也就是说**布尔组件属性在两个平台
 | 2026-09-24 | 变体/变体属性/变量三项：变体集验证为**原位**（claim `inPlaceVariants`）；变体属性读投影、写经 `setVariantPropertyValues` 分流；`mainComponent` 回退 `mainComponentId`；变量工具面不可达（不 claim） |
 | 2026-09-24 | 按 `@mastergo/plugin-typings` 复核：`componentProperties` 数组→Record 投影、`setProperties` 键归一到 propertyId（纯函数 + 单测）；连带把 `setProperties` 的值类型从 `string\|对象` 放宽为 `string\|boolean\|对象`（契约 + 两处 schema + core 形参 + 工具描述），修掉「布尔组件属性两平台都设不了」 |
 | 2026-09-24 | 真机复核通过：`variantProperties`/`componentProperties` 读投影生效、`mainComponentId` 回退生效（`copy_overrides` 拿到快照）、变体集**再次确认原位**（claim `inPlaceVariants`）；另发现变体**写入**静默无效 → 另立 0018（其换绑方案已真机复验通过） |
+| 2026-10-15 | 真机复核（MG）：`jsd_delete_node` 遇缺失 id 的行为 | 结论**收窄**：当年「有一个 id 不存在就整次报错且不部分执行」本轮三次对照未能复现（缺失 id / 坏 id / 内层子层 id 都静默跳过、照删其余）；唯一一次报错出现在批量清理撞到已被换绑淘汰的内层实例 id，事后复核**前面两个 id 已删** ⇒ 报错时可能已部分执行。纪律照旧（先 `jsd_find` 过滤），但报错后必须复核实际删除范围 |

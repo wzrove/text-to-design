@@ -1,7 +1,7 @@
 # 0038. 版本升级提示：daemon 代查 npm latest，页头条件挂载升级入口，Modal 给分步清单与复制给 LLM
 
 - **日期：** 2026-10-10
-- **状态：** 已采纳
+- **状态：** 已采纳（**UI + daemon 侧已复验通过**（2026-10-15）：升级钮 / Modal / 复制 toast / Esc 焦点回收、断连即消失 —— 与画布宿主无关，不需要三平台）
 - **影响范围：** `shared/version-channel.ts`（新）、`mcp-server/{version-check.ts（新）,bridge.ts,daemon/run.ts}`、`ui/vite.config.ts`、`ui/src/bridge/{router.ts,BridgeSocket.ts,types.ts,useBridge.tsx}`、`ui/src/{App.tsx,utils/version.ts（新）,components/{UpgradeButton,UpgradeModal}.tsx（新）}`、`shared/dicts/i18n/messages.{zh-CN,en}.ts`
 - **相关记录：** 0014（浮层不进流）、0015（浮层抬高窗口下限）、0016（i18n 键化）、0037（页头提示走 Tooltip、操作结果走 toast）、0007/0013（不允许静默失效）
 
@@ -54,11 +54,15 @@
 
 - 不变量/单测：`isVersionPushFrame` 守卫边界（照 `packages/shared/src/__tests__/camera-lock.test.ts`）；`isOutdated` 的 0.9.0 vs 0.10.0、相等、`latest=null`、非法串四类。
 - 门禁：`tests/i18n.test.ts`（键集一致 / 占位符一致 / 未译基线 0）、`pnpm typecheck`、三平台构建。
-- 真机：连上 daemon 后页头出现升级钮 → 点击开 Modal（版本号与步骤对）→ 复制按钮出 toast → Esc 关闭且焦点回到该钮；断开 daemon 后按钮消失（无 latest 不提示）；registry 不可达时全程无按钮、daemon 日志有 warn。
+- **UI + daemon 侧验收（2026-10-15 已跑通过，用户目检）**（`pnpm dev:ui` + 本地 daemon，一次即可，**不涉及画布、不需要三平台**）：连上 daemon 后页头出现升级钮 → 点击开 Modal（版本号与步骤对）→ 复制按钮出 toast → Esc 关闭且焦点回到该钮；断开 daemon 后按钮消失（无 latest 不提示）。
+  证据：面板自己连 daemon 就会触发推送帧 —— `packages/mcp-server/src/bridge.ts:44-49` 的 `onPluginConnect` 挂在 `transport.onConnect` 上，不要求画布侧参与。
+- **daemon 侧验收**（与宿主无关）：registry 不可达时全程无按钮、daemon 日志有 warn —— 断网或改 registry 即可造。
 
 ## 变更历史
 
 | 日期 | 需求变更 | 结论变化 |
 |---|---|---|
 | 2026-10-10 | 初次决策 | 采用「daemon 代查 + 推送帧 + 面板条件挂载 + daisyUI Modal」；不引入模式（Strategy / Retry / Observer 均排除） |
+| 2026-10-15 | 验收口径更正：本条不读画布 | 结论不变；验收路径改为「UI + daemon 侧一次」，去掉三平台真机 |
+| 2026-10-15 | UI + daemon 侧复验（用户目检） | 结论不变；「UI 侧待验」结清 |
 | 2026-10-10 | 「面板打开时能不能立刻查一次」 | 结论不变，只补投递时机：加 `onPluginConnect` 钩子在连接建立时立刻推，并在 daemon 启动时预热缓存（原来首个心跳前最多要等 30s）。不复用 `onConnectionChange` —— 那是单槽，已被平台状态刷新占用 |

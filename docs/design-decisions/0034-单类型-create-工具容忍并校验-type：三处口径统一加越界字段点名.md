@@ -103,7 +103,8 @@
   | `jsd_batch` 内层带错 `type` | `参数校验失败(jsd_create_frame): type: Invalid input: expected "FRAME"` |
   | `jsd_batch` 内层带越界 `kind` | 点名：`字段 [kind] 不被该工具接受,请删掉后重试…本次收到的 [type, kind, name] 里只有上述字段越界` |
   | 回读三个节点 | `type` 全为 `FRAME`、尺寸全 60×40 ⇒ 三条路径产出一致 |
-- **待验**：jsDesign / MasterGo 两个客户端各跑一遍同一组用例（本次环境只连了 Figma；判定逻辑与平台无关，但按纪律不替另两平台记「已生效」）。
+- **真机（jsDesign，2026-10-15 已跑）**：五条逐项与 Figma 一致 —— 直连不带 `type` / 直连带对 `type` / `jsd_batch` 内层带对 `type` 三条都产出 `FRAME` 60×40；batch 内层带错 `type` 报 `type: Invalid input: expected "FRAME"`；batch 内层带越界 `kind` 走 core 点名（本平台「该工具接受 51 个字段」，Figma 侧是 47 —— 字段数差异，文案形态相同）。测试节点已删净，`jsd_find name:'TDD34'` 回 0 条。
+- **不再排 MasterGo 单独一轮**：判定逻辑全在 `mcp-server` 侧、与平台无关，且 Figma / jsDesign 两平台已逐项一致；若后续改动触碰该路径（schema 或 registry 出口）再补。
 - **指标与日志**：沿用 `registry.ts` 的 `error()` 出口，不新增日志通道；真机确认新文案已进日志，可直接用于自纠。
 
 ## 变更历史
@@ -113,3 +114,4 @@
 | 2026-10-08 | 初次决策 | 采用「顶层 type 可选 + 值校验」「越界字段点名」；排除「10 条描述各写一句」「batch 内层加强校验」「废单类型工具」 |
 | 2026-10-08 | 落地与验证 | 结论不变。补一条**实现期发现**：`payload` 的 `{type, ...node}` 展开顺序会让调用方传入值覆盖固化类型 —— 虽然新口径下 schema 已保证「值相等」使覆盖无害，仍按防御性剔除（口径若放宽即为静默串味）；该行为由单测锁定 |
 | 2026-10-08 | 真机复验（Figma） | 结论不变。三条到达路径产出**完全一致**的 `FRAME`（含此前 5 次失败的那条 batch 内层路径）；两句新报错文案在真机确认可用。jsDesign / MasterGo 待切客户端补验，不替其记「已生效」 |
+| 2026-10-15 | 真机复验（jsDesign） | 结论不变。五条与 Figma 逐项一致（含 batch 内层三条路径与两句报错文案）；按「判定逻辑与平台无关」的口径不再排 MG 单独一轮 |

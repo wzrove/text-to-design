@@ -9,6 +9,7 @@ import {
 import { hostCapabilityState } from './capabilities';
 import type { DesignHost, NodeSkeleton } from './host';
 import type { RuntimeContext } from './runtime';
+import { normalizeVariantGroupProperties } from './variant';
 
 /** 资源清单里的组件与变体集都从这一趟引擎过滤里分拣,类型名即桶名 */
 const COMPONENT_BUCKETS = ['COMPONENT', 'COMPONENT_SET'] as const;
@@ -45,27 +46,20 @@ function pushRef(out: AssetRef[], node: NodeSkeleton): void {
 /**
  * 变体集的「维度 → 可选值」。
  *
- * 读自节点上的 `variantGroupProperties`(Figma / jsDesign 的原生字段,一次属性读;
- * 引擎给的形状是 `{维度: {values: [...]}}`,这里只留 `values` 数组)。
+ * 读自节点上的 `variantGroupProperties`(Figma / jsDesign 的原生字段,一次属性读)。
  * MasterGo 没有这个字段(它的读法在 `mg_list_variant_properties` op 里)⇒ 返回
  * undefined,即**整个键不发** —— 与 `assets` 整块的缺席语义一致,别写成空对象
  * (空对象会被当成「确实没有维度」,那是谎话)。
+ *
+ * ⚠ `values` 的元素**不保证是字符串**(真机 2026-10-20,即时设计):同一台机器上
+ * 单成员集合回 `["ccc"]`,两成员集合回 `[{"name":"默认"},{"name":"禁用"}]` ——
+ * 后者直接撞穿输出的 `string[]` 校验,让 `get_page` 整条失败。归一收在
+ * `core/variant.ts`(与 `serialize.ts` 的同一字段共用一份实现,不各写一遍)。
  */
 function readVariantProperties(
   node: NodeSkeleton,
 ): Record<string, string[]> | undefined {
-  try {
-    const raw = node.variantGroupProperties;
-    if (raw == null) return undefined;
-    const out: Record<string, string[]> = {};
-    for (const [dimension, entry] of Object.entries(raw)) {
-      out[dimension] = [...entry.values];
-    }
-    return out;
-  } catch {
-    // 失效节点 / 平台没有该字段:不发这个键
-    return undefined;
-  }
+  return normalizeVariantGroupProperties(node.variantGroupProperties);
 }
 
 /** 资源清单 + 清单不完整的三类原因(都由调用方在 note 里点名,不静默吞掉) */

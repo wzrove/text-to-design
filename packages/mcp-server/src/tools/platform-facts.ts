@@ -70,11 +70,19 @@ export function variantStrategyText(
     // 「造不出来」不等于「平台上没有变体」:本平台变体集的读面可能照样在(jsDesign 有
     // variantGroupProperties / variantProperties),文档里已有的变体集照样能读能切。
     // 少了这句,调用方会把「脚本造不出集合」推成「这个平台没有变体」,连读都不读了。
-    const readFace = platformDomainFact(platform, 'variants')?.read;
+    const variantsFact = platformDomainFact(platform, 'variants');
+    const readFace = variantsFact?.read;
+    // 「读得到」与「切得动」是两件事:有的平台实例侧写入通道运行期不可用(即时设计:
+    // setProperties 不是函数、swapComponent 抛内部错误,真机 2026-10-20)。判据取**事实表
+    // 的 write 名单**,不在这里按平台名分支(0032)。
+    const canSwitch =
+      variantsFact?.write.includes('jsd_set_instance_properties') === true;
     const reuseExisting =
       readFace == null
         ? ''
-        : `文档里**已有**的变体集不受影响:\`${readFace}\` 与组件集上的维度取值照常读得到,已有取值照常用 jsd_set_instance_properties 切 —— 缺的只是「用脚本造一个新的」;`;
+        : canSwitch
+          ? `文档里**已有**的变体集不受影响:\`${readFace}\` 与组件集上的维度取值照常读得到,已有取值照常用 jsd_set_instance_properties 切 —— 缺的只是「用脚本造一个新的」;`
+          : `文档里**已有**的变体集读得到:\`${readFace}\` 与组件集上的维度取值照常可读,但**实例侧切值本平台运行期没有可用入口**(引擎声明了 setProperties / swapComponent,实测分别是「not a function」与内部错误)—— 变体取值只能在画布上手工切换;**读得到 ≠ 切得动**;`;
     const head = claimed
       ? `${label(platform)}声明了原位合并(inPlaceVariants) ⇒ 直接调用即可:并入集合的就是实例所指的 COMPONENT 本身,已有实例链接不断、页面不残留冗余原件,不需要先克隆。`
       : `${label(platform)}未声明原位合并(inPlaceVariants),合成路径在本平台做不出来 —— 别重试、也别去改组件结构。${reuseExisting}替代路径:${fallbackOf(platform, 'variants')}。`;
@@ -279,7 +287,7 @@ export function reuseGuideText(platform: PlatformKey | null): string {
   if (platform === 'jsdesign') {
     return [
       '- 组件:`jsd_create_instance` 用 `componentId` 铺实例;同类单元 ≥2 个时**先查清单**,别新建重复组件。⚠ 本平台把带 `/` 的组件名拆成「集合 / 成分」—— `assets.components[].name` 是**叶子名**(建 `组/主件` 后清单里叫 `主件`,集合名在 `assets.variants` 上),按名字取组件(`{{@comp:…}}`)时一律照清单里的原样写。',
-      '- 变体集:切到**已有**取值用 `jsd_set_instance_properties`(取值清单看 `assets.variants[].properties`)。',
+      '- 变体集:取值清单读得到(`assets.variants[].properties`),但**切值本平台运行期没有入口** —— 引擎声明了 `setProperties` / `swapComponent`,实测分别是「not a function」与内部错误(2026-10-20),变体取值只能在画布上手工切换。需要脚本可切的多状态请改「每个状态一个独立 COMPONENT」。',
       '- 样式:节点字段 `fillStyleId` / `strokeStyleId` / `textStyleId` / `effectStyleId` 直接引用样式 id;`assets.styles` 与 `jsd://styles` **列得出来**(2026-10-15 真机:7 条 = 6 PAINT + 1 TEXT),按 id / 名复用即可。⚠ 枚举走**同步**入口(能力位 `styleEnumerationSync`):运行时的 `getLocal*StylesAsync` 是引擎透出的未声明成员,`await` 它**永不 resolve**(0043 / dec e1e66f0a)—— 别想着「换 async 更快」。色板与字体**一律落样式**(PAINT / TEXT / EFFECT / GRID 本平台有工厂,实测可建可绑、可从节点 `*StyleId` 回读);间距与圆角没有样式工厂,只能落节点字段(`jsd_set_layout` / `jsd_set_cornerRadius`)。',
       '- 变量:本平台没有变量面(`assets.variables` 恒空),别去找变量入口;统一色板走上一条的样式路。',
     ].join('\n');
@@ -345,9 +353,9 @@ export function resourceRelationText(
   if (platform === 'jsdesign') {
     return [
       '- **jsDesign:只有样式一层** —— typings 全文没有任何 variable 声明(`grep -in variable` 零命中),这是**平台没有这个面**,不是「本仓还没接」。⇒ 变量能做的「一个语义 token 随模式/主题变」在这里没有对应物:色板、间距、排版一律落**样式**;深浅两套主题只能建成两套样式族按名字批量重刷(`jsd_find` 定位 → `jsd_batch` 改写),或抽成两个组件族 —— 别去试变量 op(daemon 拦成 `platform_unsupported`,白跑一趟往返)。',
-      '- **组件属性只收字符串**:`setProperties` 的签名只有 `string`(布尔 / 换绑 / 文本属性的值形态一概不收)⇒ 状态差异不要押在组件属性上,走「族名 / 状态」命名的多主件;另:给**没有变体属性的实例**调 `jsd_set_instance_properties` 不是报错,是挂到 25s 转发超时(真机 2026-10-14)。',
+      '- **实例属性写入在本平台运行期不可用**:typings 与官方文档都声明了 `InstanceNode.setProperties`(`plugin-api.d.ts:1093`),实测调它立刻抛 `in setProperties: i.setProperties is not a function`(真机 2026-10-20,真实变体实例上 11~15ms 就失败)⇒ 布尔 / 文本 / 换绑 / 变体取值**一概写不了**。`jsd_component_facts` 的 `setPropertiesAvailable` 直接回报符号在不在,别拿一次失败去试探;`jsd_set_instance_properties` 会在写前点名拒。状态差异走「族名 / 状态」命名的多主件。',
       '- ⚠ 契约的样式类别是三家 `StyleType` 的**八项并集**,本平台只有四类(PAINT / TEXT / EFFECT / GRID,`plugin-api.d.ts:1137`)⇒ 传 STROKE_WIDTH / CORNER_RADIUS / PADDING / SPACING 会在写前被点名拒(不静默、不会建成别的类);间距与圆角要统一就落节点字段(`jsd_set_layout` / `jsd_set_cornerRadius`),或按「族 / 值」命名后 `jsd_find` + `jsd_batch` 批量刷。',
-      '- **变体集造不出来**:`combineAsVariants` 是唯一产出路径且真机必崩,失败还会留下畸形集合与布尔运算残骸(用 `jsd_repair_nodes` 清)。已有的变体集照样能读、能切取值,缺的只是「用脚本新建一个」。',
+      '- **变体集:造不出来、也切不动**。`combineAsVariants` 是唯一产出路径且真机必崩,失败还会留下畸形集合与布尔运算残骸(用 `jsd_repair_nodes` 清)。**已有的变体集读得到**(维度取值看 `assets.variants[].properties`、成员看 `jsd_component_facts` 的 `members`),但实例侧切值**没有可用入口** —— `setProperties` 不是函数、`swapComponent` 抛内部错误(读不到目标节点的 type,原文见 `jsd_component_facts` 的 `swapComponentAvailable`;真机 2026-10-20,独立组件 / 成员 / 克隆实例上全复现)。⚠ 别把「读得到」写成「能切」;要脚本可切的多状态请改「每个状态一个独立 COMPONENT」。',
       '- **PAINT 这条链是通的,也是本平台做统一色板的唯一正路**(真机 2026-10-15,6 条样式绑 23 个节点):①先**归一化** —— 同名用途却差一两度的色(分割线 `#EDEDEB` / 侧栏边框 `#EAEAE8` / 卡片描边 `#E8E8E6`)必须先收敛成一套值,不收就建样式,建出来只套得住一半节点;②`jsd_create_style({kind:"PAINT", name:"色板/主色", fromNodeId:样板节点})` 从样板抄,回包 id 记账;③绑回 `jsd_set_fill_color` 的 `fillStyleId` / `jsd_set_stroke` 的 `strokeStyleId` —— **创建入参与这两个 set 工具的顶层都收这四个 `*StyleId` 键**,不必「建完再绑」两趟。两个坑(其一是过去式):`jsd_set_text` **原先不收 `fills`**(文字颜色得另跑一趟 `jsd_set_fill_color`),2026-10-15 已放开 —— 现在 `fills` 与排版一趟写入;`strokeStyleId` 的写入**回包会报「插件响应超时」但写入已落**(真机:批量内一次、单发一次都超时,事后 `jsd_find` 回读 `strokeStyleId` 已绑上)⇒ 不要重试,回读一次确认。',
       '- ⚠ **TEXT 样式:排版能跟,但绑完必须补一次宽度修复,而且不带颜色**(真机 2026-10-15,隔一次独立读 + 导图目检):① 绑 `textStyleId` 后排版**确实跟源** —— fontSize 14 → 20、fontName Regular → Bold、lineHeight AUTO → 32px(全部回读确认);② **但引擎同时把宽度钉成 0**(`textAutoResize` 仍是 WIDTH_AND_HEIGHT、`width=0`)⇒ 画面**完全不可见**(导出 167 字节空白 vs 同尺寸样板 4281 字节);⚠ **写入同 tick 的回显看不到这条** —— 它仍报 112 / 84 / 101 原值,**必须隔一次调用独立读**才现形(这条曾把我误导成「绑定无损」);③ **修法:`jsd_set_text({width: N, textAutoResize:"HEIGHT"})` 两个字段同批传**(你的实测:回读 240 / 32 恢复正常)。只传 `width` 不行、解绑 `textStyleId` 不行、重设 characters 也不行 —— 三种都试过,只有这一种组合有效;④ **样式不带颜色**:`TextStyle` 只有排版字段(typings `:1151-1161`,没有 `fills`),绑完节点 `fills` 保持原色 ⇒ 颜色**一律走 PAINT 样式 + `fillStyleId`**,别指望文本样式带色。⇒ 文字排版**可以用** TEXT 样式,代价是「绑一条补一次宽」;要零成本就用**样板节点当事实来源**(读它的 fontSize / fontName / lineHeight / fills,逐条写进同类文本)。',
       '- ⚠ **TEXT 宽度被钉成 0 是另一回事,不要归因到样式绑定**:2026-10-15 出现过 26 个文本节点宽度归零、画面全空(导出体积 108KB → 43KB 是这个信号),而那次现场**同一会话里先有两次 25s 超时**(挂死的 `strokeStyleId` 写)且发生在多步批次内;隔离复现三种姿势都不出现 ⇒ 归因未定,别写成「某个字段导致的」。症状的修法走已知那条链:`jsd_resize_node` 传 `width` 把宽度钉回去(要高度随内容走再同时设 `textAutoResize:"HEIGHT"`),`core/props/writers.ts` 的 `warnTinyFixedText` 会点名这种「写进去了但看不见」。⇒ 真正的规矩是:**超时之后必须复核受影响的子树**(单独 `jsd_find` 读几何 + 导图目检),别接着往下写。',

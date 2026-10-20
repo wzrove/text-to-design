@@ -30,6 +30,8 @@ export const MESSAGES_EN = {
     'Local style listing (can enumerate which styles exist)',
   'capability.host.styleEnumerationSync':
     'Style enumeration uses the sync entry (runtime *Async members are unusable)',
+  'capability.host.mainComponentSync':
+    'Main component read via the sync field (runtime getMainComponentAsync never settles)',
   'capability.host.textTruncation': 'Text truncation',
   'capability.host.componentProperties': 'Component properties',
   'capability.host.documentScopeRead':
@@ -643,7 +645,7 @@ export const MESSAGES_EN = {
   'prompt.designStrategy.title': 'Design strategy overview',
   'prompt.autoLayout.title': 'Auto layout',
   'prompt.autoLayout.description':
-    'Whether a container should use auto layout (criteria plus the containers usually missed), the two adoption paths (pass sizingMode at creation vs. enable later then resize to pin the size back), platform hard constraints, five common patterns and verification pitfalls',
+    'Whether a container should use auto layout (criteria plus easily-missed sections), self-judged direction (child flow axis, do not hardcode HORIZONTAL/VERTICAL), the two adoption paths, platform hard constraints and verification pitfalls',
   'prompt.textReplace.title': 'Bulk text replacement strategy',
   'prompt.variantSync.title': 'Bulk sync styles across sibling instances',
   'prompt.variableBinding.title': 'Bind variables and apply in bulk',

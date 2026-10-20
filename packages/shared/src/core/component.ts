@@ -20,6 +20,11 @@ import {
 import type { RuntimeContext } from './runtime';
 import { serializeNode } from './serialize';
 import { updateSelection } from './update';
+import {
+  normalizeVariantGroupProperties,
+  resolveVariantWriteKey,
+  variantValueOffered,
+} from './variant';
 import { resizeContainer } from './utils';
 
 export async function createComponentNodes(
@@ -86,15 +91,49 @@ export async function createInstances(
   const page = host.currentPage;
   const created: NodeSkeleton[] = [];
   const center = host.viewport.center;
+  const failures: { id: string; message: string }[] = [];
   for (const c of components) {
-    const inst = c.createInstance();
-    page.appendChild(inst);
-    inst.x = center.x - inst.width / 2;
-    inst.y = center.y - inst.height / 2;
-    created.push(inst);
+    // 引擎**实际能力**先于 typings:即时设计的 `createInstance()` 对**变体集成员**必抛
+    // `in createInstance: The node with id undefined does not exist`(真机 2026-10-20,
+    // 集合内成员全部复现;同为 COMPONENT 但独立于集合之外的则正常)。这是引擎缺陷,
+    // 不能靠改调用方式绕过 —— 故逐组件收集失败并以富出口点名,别让整批只回一句引擎原文。
+    try {
+      const inst = c.createInstance();
+      page.appendChild(inst);
+      inst.x = center.x - inst.width / 2;
+      inst.y = center.y - inst.height / 2;
+      created.push(inst);
+    } catch (e) {
+      failures.push({
+        id: c.id,
+        message: e instanceof Error ? e.message : String(e),
+      });
+    }
   }
-  host.viewport.scrollAndZoomIntoView(created);
-  return { created: created.map((n) => serializeNode(n)) };
+  if (created.length === 0 && failures.length > 0) {
+    const inSet = components.some((c) => c.parent?.type === 'COMPONENT_SET');
+    // i18n-exempt: 随结果上行给模型,不走面板文案
+    throw new Error(
+      [
+        `全部组件都无法生成实例:${failures.map((f) => `${f.id}(${f.message})`).join(', ')}。`,
+        inSet
+          ? '本次涉及的组件**在组件集里**:本引擎对变体集成员调用 createInstance 会抛 node with id undefined does not exist(真机实测,与组件内容无关)。可执行出口:① 变体实例请在画布上手工拖出 / 复制;② 用 jsd_clone_node 复制画布上**已存在的实例**(克隆实例是合法路径);③ 需要脚本可铺的实例,先让主件独立于组件集。'
+          : '本引擎的 createInstance 未成功。可执行出口:jsd_clone_node 复制一个画布上已存在的实例,或在该平台客户端手工拖出实例。',
+      ].join(''),
+    );
+  }
+  if (created.length > 0) host.viewport.scrollAndZoomIntoView(created);
+  return {
+    created: created.map((n) => serializeNode(n)),
+    ...(failures.length > 0
+      ? {
+          warnings: [
+            // i18n-exempt: 随结果上行给模型,不走面板文案
+            `部分组件没能生成实例:${failures.map((f) => `${f.id}(${f.message})`).join(', ')}`,
+          ],
+        }
+      : {}),
+  };
 }
 
 export async function swapComponents(
@@ -113,10 +152,68 @@ export async function swapComponents(
   if (instances.length === 0) {
     throw new Error('没有找到要交换的实例节点');
   }
+  // 引擎**实际行为**先于 typings:`InstanceNode.swapComponent` 在即时设计运行期必抛
+  // `in swapComponent: Cannot read properties of undefined (reading 'type')`
+  // (真机 2026-10-20:独立组件之间、变体集成员之间、克隆出的实例上全部复现 ⇒ 引擎缺陷)。
+  // 逐个收错、写后回读主组件,别回一句引擎原文了事;部分成功时用 warnings 点名。
+  const swapped: NodeSkeleton[] = [];
+  const failed: { id: string; message: string }[] = [];
+  const notApplied: string[] = [];
   for (const inst of instances) {
-    inst.swapComponent(component);
+    try {
+      inst.swapComponent(component);
+    } catch (e) {
+      failed.push({
+        id: inst.id,
+        message: e instanceof Error ? e.message : String(e),
+      });
+      continue;
+    }
+    // 回读:换绑成功必须体现为 mainComponent 变了(引擎接受但没换 = 静默失效)
+    try {
+      const now = inst.mainComponent;
+      if (now != null && now.id !== component.id) {
+        notApplied.push(`${inst.id}(期望 ${component.id}、回读 ${now.id})`);
+        continue;
+      }
+    } catch {
+      // mainComponent 不可同步读:交给结果照常返回(不做判定)
+    }
+    swapped.push(inst);
   }
-  return { swapped: instances.map((n) => serializeNode(n)) };
+  if (swapped.length === 0 && failed.length > 0) {
+    const inSet = component.parent?.type === 'COMPONENT_SET';
+    // i18n-exempt: 随结果上行给模型,不走面板文案
+    throw new Error(
+      [
+        `全部实例换绑失败:${failed.map((f) => `${f.id}(${f.message})`).join(', ')}。`,
+        '本引擎运行期的 swapComponent 不可用(typings 与官方文档都声明了它,实测抛内部错误)。可执行出口:',
+        inSet
+          ? '① 变体切换:实例只能指向组件集里的某个成员,脚本没有可用入口 —— 请在画布上手工切换,或改用「每个状态一个独立 COMPONENT + 复制节点」;'
+          : '① 目标组件若是另一个独立 COMPONENT,脚本同样换不了 —— 请在画布上手工换绑;',
+        '② 需要的只是「换成另一种外观」时,jsd_detach_instance + 改样式是一条可行路径(会丢链接,但对渲染有效);',
+        '③ 在支持该入口的平台上执行同一步。',
+      ].join(''),
+    );
+  }
+  if (notApplied.length > 0) {
+    // i18n-exempt: 随结果上行给模型,不走面板文案
+    throw new Error(
+      `换绑未生效:${notApplied.join(';')}。引擎接受了调用但主组件没有变 —— 这类「回显成功、画布不动」不能当成功。`,
+    );
+  }
+  if (swapped.length > 0) host.viewport.scrollAndZoomIntoView(swapped);
+  return {
+    swapped: swapped.map((n) => serializeNode(n)),
+    ...(failed.length > 0
+      ? {
+          warnings: [
+            // i18n-exempt: 随结果上行给模型,不走面板文案
+            `部分实例没能换绑:${failed.map((f) => `${f.id}(${f.message})`).join(', ')}`,
+          ],
+        }
+      : {}),
+  };
 }
 
 /**
@@ -277,6 +374,11 @@ export function normalizeComponentPropertyKeys<T>(
   return out;
 }
 
+/** 引擎沙箱是 target=es6,不注入 ES2022 的 `Object.hasOwn`(见 tests/engine-api-compat) */
+function hasKnown(obj: object, key: string): boolean {
+  return Object.prototype.hasOwnProperty.call(obj, key);
+}
+
 /**
  * 读实例上的属性表,读不到就当没有(不归一)。
  *
@@ -340,16 +442,39 @@ export async function setInstanceProperties(
     props: Record<string, string | boolean | VariableAliasRef>;
   }> = [];
   for (const inst of instances) {
+    // 引擎**实际类型**先于声明:typings 与官方文档都有 `InstanceNode.setProperties`
+    // (`plugin-api.d.ts:1093`),即时设计运行期该成员**不是函数**(真机 2026-10-20:
+    // `in setProperties: i.setProperties is not a function`)。这是「符号在 ≠ 能调」
+    // 的又一例(见 0010 / 0043 / e1e66f0a),行为检测而不是按平台名分支。
+    if (
+      typeof (inst as { setProperties?: unknown }).setProperties !== 'function'
+    ) {
+      // i18n-exempt: 随结果上行给模型,不走面板文案
+      throw new Error(
+        `实例 ${inst.id} 的引擎对象上没有可调用的 setProperties —— 本平台运行期未实现实例属性写入(typings 声明了它,实测是 not a function)。可执行出口:① 变体取值只能在画布上手工切换;② 需要脚本可写的多状态,改用「每个状态各建一个独立 COMPONENT」;③ 在声明了组件属性的平台上(见 jsd_ping 的 capabilities 含 componentProperties)执行同一步。`,
+      );
+    }
     // dynamic-page 下 inst.mainComponent 直接抛,必须走异步入口(0011)
-    const compSet = (await resolveMainComponent(inst))?.parent;
-    const variantProps =
+    const main = await resolveMainComponent(inst, ctx);
+    const compSet = main?.parent;
+    // 变体取值有两张表:实例/成员上的 variantProperties(引擎写入口认	extbf{这套键})
+    // 与组件集上的 variantGroupProperties(维度 → 可选值)。两者**可能不是同一套键**
+    // (真机 2026-10-20:集合 `状态`、成员 `分类1`),故两边都收(见 core/variant.ts)。
+    const setDimensions =
       compSet != null && compSet.type === 'COMPONENT_SET'
-        ? compSet.variantGroupProperties
+        ? normalizeVariantGroupProperties(compSet.variantGroupProperties)
         : undefined;
+    const variantProps = setDimensions;
     if (variantProps) {
-      const validKeys = Object.keys(variantProps);
+      const validKeys = [
+        ...Object.keys(variantProps),
+        ...Object.keys(
+          (inst.variantProperties as Record<string, string> | null | undefined) ??
+            {},
+        ),
+      ];
       const invalidKeys = Object.keys(params.properties).filter(
-        (k) => !validKeys.includes(k),
+        (k) => !validKeys.includes(k) && !validKeys.includes(basePropertyName(k)),
       );
       if (invalidKeys.length > 0) {
         throw new Error(
@@ -357,13 +482,143 @@ export async function setInstanceProperties(
         );
       }
     }
-    planned.push({
-      inst,
-      props: normalizeComponentPropertyKeys(writes, knownPropertyKeys(inst)),
-    });
+    // 属性面为空的平台,写前点名拒。真机 2026-10-19(即时设计):未知属性名一路落到
+    // `setProperties` 会让插件挂满 25s 才超时,错误只回「插件响应超时」,调用方分不清
+    // 「名字写错」与「平台没有这个面」。typings 事实:jsDesign 的 `InstanceNode` **没有**
+    // `componentProperties`, `setProperties(properties: {[k]: string})` 只收 string
+    // (plugin-api.d.ts:1088-1093)⇒ 布尔 / 文本 / 换绑属性本平台根本没有入口,变体属性
+    // 也只在已存在的变体集里才有维度。能力位明确说不支持时才拦(Figma / MG 声明了 → 不介入)。
+    const known = knownPropertyKeys(inst);
+    if (hostCapabilityState(ctx, 'componentProperties') === false) {
+      const validKeys = [
+        ...Object.keys(variantProps ?? {}),
+        ...Object.keys(known ?? {}),
+        ...Object.keys(inst.variantProperties ?? {}),
+      ];
+      // i18n-exempt: 随结果上行给模型,不走面板文案
+      if (validKeys.length === 0) {
+        throw new Error(
+          `实例 ${inst.id} 没有可写的属性面:${
+            ctx.platform == null ? '当前平台' : PLATFORM_LABEL[ctx.platform]
+          } 的 InstanceNode 没有 componentProperties,setProperties 只收 string,该实例也不在变体集里 —— 写任何属性名都只会落到引擎空转(实测 25s 超时、错误不带原因)。布尔 / 文本 / 换绑属性本平台没有入口;变体属性只能改已存在变体集里的维度`,
+        );
+      }
+      const invalidKeys = Object.keys(params.properties).filter(
+        (k) =>
+          !validKeys.includes(k) && !validKeys.includes(basePropertyName(k)),
+      );
+      if (invalidKeys.length > 0) {
+        throw new Error(
+          `非法属性名:${invalidKeys.join(',')}。本实例可写:${validKeys.join(',')}`,
+        );
+      }
+    }
+    // 变体值有两套键:引擎写入口认**成员键**(inst.variantProperties),而调用方
+    // 常拿到的是**集合维度键**(组件集上的 variantGroupProperties)。真机 2026-10-20:
+    // 集合读作 `状态`、成员却是 `分类1` —— 只按集合键校验会把合法的成员键写入拒掉。
+    // 故两边都收,集合维度键按**取值唯一匹配**映射到成员键(歧义 / 无匹配点名,绝不猜)。
+    const memberValues =
+      (inst.variantProperties as Record<string, string> | null | undefined) ??
+      undefined;
+    const resolved: Record<string, string | boolean | VariableAliasRef> = {};
+    const visited = new Set<string>();
+    for (const [key, value] of Object.entries(writes)) {
+      // ① 组件属性(布尔/文本/换绑):键归一后原样下发(0041)。
+      // `known` 为 undefined 表示**读不到属性表**,不能据此把任意键当组件属性 ——
+      // 那样变体键会被错误归进这条分支,写入永远打不中。
+      if (known != null) {
+        const normalized = normalizeComponentPropertyKeys(
+          { [key]: value },
+          known,
+        );
+        const target = Object.keys(normalized)[0];
+        if (target != null && hasKnown(known, target)) {
+          resolved[target] = value;
+          visited.add(key);
+          continue;
+        }
+      }
+      // ② 变体属性:成员键直接命中,集合维度键按取值映射成成员键
+      const mapped = resolveVariantWriteKey(
+        key,
+        String(value),
+        memberValues,
+        setDimensions,
+      );
+      if (mapped != null && 'key' in mapped) {
+        if (typeof value !== 'string') {
+          throw new Error(
+            `变体属性 ${key} 的值必须是字符串(收到 ${typeof value});变体取值本身就是字符串`,
+          );
+        }
+        if (
+          !variantValueOffered(value, setDimensions?.[mapped.rewrittenFrom ?? key])
+        ) {
+          throw new Error(
+            `变体属性 ${key}=${value} 不在组件集的可选值里(可选:${(setDimensions?.[mapped.rewrittenFrom ?? key] ?? []).join('、')})`,
+          );
+        }
+        resolved[mapped.key] = value;
+        visited.add(key);
+        continue;
+      }
+      if (mapped != null && 'error' in mapped) {
+        throw new Error(mapped.error);
+      }
+      // ③ 都没命中:能力位**未注入**时保持 fail-open,原样透传(历史行为,不误报);
+      // 只有平台明确声明不支持组件属性时,才把未知键判成非法并点名。
+      if (hostCapabilityState(ctx, 'componentProperties') !== false) {
+        resolved[key] = value;
+        visited.add(key);
+        continue;
+      }
+      const validKeys = [
+        ...Object.keys(memberValues ?? {}),
+        ...Object.keys(setDimensions ?? {}),
+        ...Object.keys(known ?? {}),
+      ];
+      // i18n-exempt: 随结果上行给模型,不走面板文案
+      if (validKeys.length === 0) {
+        throw new Error(
+          `实例 ${inst.id} 没有可写的属性面:${
+            ctx.platform == null ? '当前平台' : PLATFORM_LABEL[ctx.platform]
+          } 的 InstanceNode 没有 componentProperties,setProperties 只收 string,该实例也不在变体集里 —— 写任何属性名都只会落到引擎空转(实测 25s 超时、错误不带原因)。布尔 / 文本 / 换绑属性本平台没有入口;变体属性只能改已存在变体集里的维度`,
+        );
+      }
+      throw new Error(
+        `非法属性名:${key}。本实例可写:${validKeys.join(',')}`,
+      );
+    }
+    planned.push({ inst, props: resolved });
   }
   for (const { inst, props } of planned) {
     inst.setProperties(props);
+  }
+  // 写后回读:引擎「回包成功、值没变」比报错更糟(0007)。逐实例比对变体取值,
+  // 不一致就点名 —— 本平台确实有过静默无效的同类缺陷(MG 的实例侧变体写入)。
+  const notApplied: string[] = [];
+  for (const { inst, props } of planned) {
+    let now: Record<string, string> | undefined;
+    try {
+      now =
+        (inst.variantProperties as Record<string, string> | null | undefined) ??
+        undefined;
+    } catch {
+      now = undefined;
+    }
+    if (now == null) continue;
+    for (const [k, v] of Object.entries(props)) {
+      if (typeof v !== 'string') continue;
+      if (hasKnown(now, k) && now[k] !== v) {
+        notApplied.push(`${inst.id}:${k} 期望 ${v}、回读 ${now[k]}`);
+      }
+    }
+  }
+  if (notApplied.length > 0) {
+    // i18n-exempt: 随结果上行给模型,不走面板文案
+    throw new Error(
+      `变体属性写入未生效:${notApplied.join(';')}。引擎接受了调用但取值没有变 —— 这类「回显成功、画布不动」不能当成功。请改用 jsd_swap_component 换绑到目标成分(若本平台支持),或在画布上手工切换。`,
+    );
   }
   return { updated: instances.map((n) => serializeNode(n)) };
 }
@@ -383,6 +638,35 @@ export async function importComponentNodes(
   return { created: serializeNode(component) };
 }
 
+
+/**
+ * 校验 `combineAsVariants` 的返回值**真的是 COMPONENT_SET**。
+ *
+ * 为什么必须显式验:typings 声明返回 `ComponentSetNode`
+ * (`@jsdesigndeveloper/plugin-typings@1.0.12 plugin-api.d.ts:127`),契约把它放宽成
+ * `NodeSkeleton` —— 于是「返回类型对不对」在两处都**没有编译期信号**。
+ * 真机 2026-10-20(即时设计)实测:调用**成功返回**、`name` 也能设上,但对象的
+ * `type` 是 **`BOOLEAN_OPERATION`** —— 引擎把「合并组件」路由到了布尔运算的实现。
+ *
+ * 只做「调用有没有抛」的判断会把这种假成功当成功:回包 `created` 里躺着一个布尔
+ * 节点,画布上却没有变体集 —— 正是 0007 那类「回显成功、实际没发生」。
+ * 故按**实际类型**分流,非 COMPONENT_SET 一律当失败。
+ */
+function requireComponentSet(
+  s: NodeSkeleton | null | undefined,
+): NodeSkeleton {
+  if (s == null) {
+    throw new Error('combineAsVariants 未返回节点(引擎返回了 null / undefined)');
+  }
+  const type = (s as { type?: unknown }).type;
+  if (type !== 'COMPONENT_SET') {
+    throw new Error(
+      `引擎返回的不是 COMPONENT_SET(实际 type=${String(type)})—— combineAsVariants 在运行期被路由到了别的实现,这是平台缺陷`,
+    );
+  }
+  return s;
+}
+
 export async function combineAsVariantsNodes(
   host: DesignHost,
   ctx: RuntimeContext,
@@ -394,112 +678,109 @@ export async function combineAsVariantsNodes(
   if (components.length < 2) {
     throw new Error('combine_as_variants 至少需要 2 个组件节点');
   }
-  const page = host.currentPage;
   const errText = (e: unknown): string =>
     e instanceof Error ? e.message : String(e);
 
-  // 引擎 combineAsVariants 实测存在内部崩溃(get_booleanOperation: Value is not
-  // a string),这里把三种姿势做成「按平台能力排序的尝试列表」,全部失败时汇总报错。
+  // ── 快速失败:平台未声明 inPlaceVariants ⇒ 合并路径不可用,不落引擎 ──────────
   //
-  // **平台差异(这正是两平台行为不同的根源)**:
-  // - Figma 的原生 combineAsVariants 就是**原位合并** —— 并入集合的就是实例所指的
-  //   那些 COMPONENT 本身,已有实例链接不断;克隆姿势在它上面纯属副作用(留下
-  //   「原件 + 集合内克隆」两份,实例继续指向原件,变体集与实例脱钩)。
-  // - jsDesign 上该路径**运行时必崩**(`get_booleanOperation: Value is not a
-  //   string`,三种姿势全败,与组件结构无关 ⇒ 平台缺陷,不是我们的调用问题),
-  //   只能靠克隆兜底;它的 typings 语义其实与 Figma 同形,别写成「语义不同」。
+  // 判据用**能力位**而非平台名(0032):Figma / MasterGo 声明了 inPlaceVariants,
+  // 行为不变;将来本平台若修好并声明该能力位,这一支自动失效。
   //
-  // 故声明了 inPlaceVariants 能力的平台优先走原位,其余保持历史顺序(克隆优先)。
-  let set: NodeSkeleton | undefined;
-  const errors: string[] = [];
-
-  // 原位合并:原组件被卷入组件集、不再单独存在。唯一不破坏实例链接的姿势。
-  const combineInPlace = (): NodeSkeleton | undefined => {
-    const s = host.combineAsVariants(components, components[0].parent ?? page);
-    if (params.name != null && s != null) s.name = params.name;
-    if (s != null) serializeNode(s); // 探活:任何引擎 getter 抛都归本姿势
-    return s ?? undefined;
-  };
-
-  // 克隆后合并:原组件保留。jsDesign 上 host.combineAsVariants 可能返回一个
-  // 非空 set,但任何对它的属性访问(set.name / 后续 serializeNode)都会触发引擎内部
-  // getter 崩(get_booleanOperation / get_name: Value is not a string)。该崩不在
-  // 调用内部抛出,一路冒到 plugin 外层 try,把引擎原文回给调用方,富出口文案错过。
-  // 修法:把 name 赋值 + serializeNode 都纳入同一个 try,任何姿势中间崩都重置 set
-  // 为 undefined,错误归并到 errors[];全部姿势失败时统一抛富出口文案。
-  const combineClones =
-    (appendToPage: boolean) => (): NodeSkeleton | undefined => {
-      const clones = components.map((c) => c.clone());
-      try {
-        if (appendToPage) for (const c of clones) page.appendChild(c);
-        const s = host.combineAsVariants(clones, page);
-        if (params.name != null && s != null) s.name = params.name;
-        if (s != null) serializeNode(s);
-        return s ?? undefined;
-      } catch (e) {
-        for (const c of clones) {
-          try {
-            c.remove();
-          } catch {}
-        }
-        throw e;
-      }
-    };
-
-  const inPlaceAttempt = { label: '原节点直接合并(原位)', run: combineInPlace };
-  const cloneToPageAttempt = {
-    label: '克隆并入当前页',
-    run: combineClones(true),
-  };
-  const cloneThenCombineAttempt = {
-    label: '克隆移入当前页后合并',
-    run: combineClones(false),
-  };
-  // 能力表未注入(null)时不猜平台语义,保持历史顺序(行为与绑定前一致)
-  const supportsInPlace = hostCapabilityState(ctx, 'inPlaceVariants') === true;
-  const attempts = supportsInPlace
-    ? [inPlaceAttempt, cloneToPageAttempt, cloneThenCombineAttempt]
-    : [cloneToPageAttempt, cloneThenCombineAttempt, inPlaceAttempt];
-
-  for (const attempt of attempts) {
-    try {
-      set = attempt.run();
-    } catch (e) {
-      errors.push(`${attempt.label}: ${errText(e)}`);
-      set = undefined;
-    }
-    if (set != null) break;
-  }
-
-  // name 已在各姿势的 try 内赋值并跟同姿势一起作废处理,这里无需再设。
-  if (set == null) {
-    const names = components.map((c) => `${c.name}(${c.id})`).join('、');
-    if (supportsInPlace) {
-      // 平台声明了原位合并能力却仍全败:与 jsDesign 的 不是一回事,先按调用
-      // 与节点状态排查 —— 别让调用方套用「引擎做不出来」的结论去改组件结构。
-      throw new Error(
-        [
-          'combine_as_variants 失败:本平台声明支持原位合并(inPlaceVariants),三种姿势仍全败,按调用与节点状态排查(不要套用 jsDesign 的结论)。',
-          `引擎报错:${errors.join(';')}。`,
-          `本次涉及的组件:${names}。`,
-          '排查方向:①组件是否跨页 / 跨父级;②是否已被并入别的组件集;③组件是否处于错误状态(可先 jsd_repair_nodes 清理);④组件名是否符合「属性=值」、多属性用 ", " 分隔。',
-        ].join(''),
-      );
-    }
-    // 平台缺陷:本引擎版本的 combineAsVariants 在合并路径里把节点按
-    // BOOLEAN_OPERATION 取属性(get_booleanOperation: Value is not a string),
-    // 与组件结构无关、克隆兜底路径同样必败(实测三个同尺寸同层级的合规 COMPONENT
-    // 同样必败)。所以这里不能只回一句「失败」—— 那是让人反复重试、怀疑组件
-    // 结构的信号;直接把可执行出口写在报错里。
+  // 为什么敢直接拒(2026-10-20 真机逐层取证,七条独立证据):
+  // · 裸调(取消全部前置判断、直接交 4 个真 COMPONENT)返回 type=BOOLEAN_OPERATION,
+  //   并把入参组件**搬进该布尔节点下**(原画板随即变空);读它抛 in get_name: Value
+  //   is not a string。⇒ 引擎把「合并组件」路由到了布尔运算实现。
+  // · 参数本身完全合规:探针核对入参就是原生 ComponentNode(=== jsDesign.getNodeById),
+  //   parent 是真实容器,满足 combineAsVariants(nodes: ReadonlyArray<ComponentNode>,
+  //   parent: BaseNode & ChildrenMixin) 的签名。
+  // · 同类缺陷在 flatten 上同形:flatten(RECTANGLE) 成功、flatten(COMPONENT) 抛
+  //   node with id undefined —— 与 adapter / receiver / as never 都无关(flatten
+  //   在 adapter 里根本没有覆写)。
+  // · 已排除:receiver 绑法、组件命名、带子层、先 reparent 进 FRAME、画布污染、
+  //   克隆返回 INSTANCE 的入参类型问题(单姿势隔离实验)。
+  //
+  // 既然确定做不出来,就不能再跑两条克隆姿势:克隆拿到的是 INSTANCE(不是
+  // combineAsVariants 要的 ComponentNode),必然失败,白耗 100ms+ 且每次失败都可能
+  // 留下 BOOLEAN_OPERATION 残骸、把用户组件搬走。
+  if (hostCapabilityState(ctx, 'inPlaceVariants') !== true) {
+    // i18n-exempt: 随结果上行给模型,不走面板文案
     throw new Error(
       [
-        `combine_as_variants 三种姿势均失败:本引擎版本的变体集做不出来(平台缺陷,建议附下面的报错上报)。`,
-        `引擎报错:${errors.join(';')}。`,
+        'combine_as_variants 在本平台做不出来,已在调用引擎前中止(不再重试、不留残骸)。',
+        '根因(真机 2026-10-20,已逐层排除):引擎把「合并组件」路由到了布尔运算实现 —— 裸调(取消全部前置判断、直接交 4 个真 COMPONENT)返回 type=BOOLEAN_OPERATION,并把入参组件搬进该布尔节点、原画板变空;读取它还会抛 in get_name: Value is not a string。同类缺陷在 flatten 上同形(flatten(RECTANGLE) 正常、flatten(COMPONENT) 抛 node with id undefined)。',
+        '参数本身没有问题:探针核对入参就是原生 ComponentNode 对象(=== jsDesign.getNodeById(id)),parent 是真实容器(FrameNode / PageNode),完全满足 combineAsVariants(nodes: ReadonlyArray<ComponentNode>, parent: BaseNode & ChildrenMixin) 的签名。',
+        '可执行出口:① 在画布上手动合并(引擎 UI 走另一套实现,可用;文档里已有的变体集就是这样建的);② 每个状态各建一个独立 COMPONENT,按「族名 / 状态」命名(如 登录状态 / 未登录、登录状态 / 已登录)—— 这也是本平台登记在平台事实表里的替代路径;③ 换到声明了 inPlaceVariants 的引擎(如 Figma)执行同一步。',
+        '⚠ 别为了「让合并跑通」去改组件结构 —— 结构合规与否与本缺陷无关(已用合规组件复现)。',
+      ].join(''),
+    );
+  }
+
+  /**
+   * 解析合并落点的父容器(**必须是真实的 BaseNode & ChildrenMixin**)。
+   *
+   * 为什么不能 `components[0].parent ?? page` 兜底:原生签名要的是
+   * `BaseNode & ChildrenMixin`(`plugin-api.d.ts:127`),而 `parent` 为 null 只有两种
+   * 可能,**两种都不该静默拿 page 顶**:
+   * ① 节点是页面顶层 —— 那它的父级是 **PageNode**,不是 null;读不到 parent 说明
+   *    Access 层没解析出来(或节点已失效),这时拿 page 顶等于**猜**;
+   * ② 节点已不在任何父级下(失效/孤立)—— 拿 page 顶会把它挂到别处,是**改结构**。
+   *
+   * 而且落点变了会**静默改几何**:全局坐标不变、但相对坐标基准从原容器换成页面,
+   * 集合位置看着对、子件位置全错 —— 正是 0007 那类「回显成功、实际不对」。
+   * 故这里只接受**真实容器**(有 appendChild),拿不到就点名报错。
+   */
+  const resolveCombineParent = (): ContainerSkeleton => {
+    const orphans = new Set<string>();
+    for (const c of components) {
+      const parent = c.parent;
+      if (parent == null || typeof parent.appendChild !== 'function') {
+        orphans.add(`${c.name}(${c.id})`);
+      }
+    }
+    if (orphans.size > 0) {
+      // i18n-exempt: 随结果上行给模型,不走面板文案
+      throw new Error(
+        `组件没有可用的父容器,无法确定变体集落点:${[...orphans].join('、')}。原生 combineAsVariants 要求 parent 是 BaseNode & ChildrenMixin(真实容器),不接受 null —— 用当前页兜底会静默改坐标基准。可执行出口:先用 jsd_find 确认这些组件仍在画布上(可能已被删除或处于失效状态),必要时 jsd_manage_nodes op=repair 清理后重试。`,
+      );
+    }
+    // 同父级校验:Figma 官方语义要求待合并组件在**同一父级**下;跨父级时
+    // `components[0].parent` 只代表第一个组件的落点,其余组件的相对坐标基准不同,
+    // 合并结果不可预期。这里点名,不替调用方选。
+    const first = components[0]?.parent;
+    const firstId = first?.id ?? '';
+    const strays = components.filter((c) => (c.parent?.id ?? '') !== firstId);
+    if (strays.length > 0) {
+      // i18n-exempt: 随结果上行给模型,不走面板文案
+      throw new Error(
+        `待合并的组件不在同一父级下,无法确定变体集落点:基准是 ${first?.name ?? '(未知)'}(${firstId || '无'}),但 ${strays.map((c) => `${c.name}(${c.id}) 在 ${c.parent?.name ?? '无父级'}`).join('、')}。请先用 jsd_reparent_nodes 把它们移到同一父级(parentId 显式传)再合并 —— 跨父级合并会让相对坐标基准不一致,结果不可预期。`,
+      );
+    }
+    return first as ContainerSkeleton;
+  };
+
+  const combineParent = resolveCombineParent();
+
+  // 走到这里说明平台声明了 inPlaceVariants。该能力位的语义就是「原生合并即原位
+  // 合并」:并入集合的是实例所指的 COMPONENT 本身,已有实例链接不断、页面不残留
+  // 冗余原件。故只需一种姿势,不再保留克隆兜底(那是为 jsDesign 准备的,而那条
+  // 路径已被上面的前置守卫拦掉;克隆拿到的是 INSTANCE,交过去必败)。
+  let set: NodeSkeleton | undefined;
+  try {
+    const s = host.combineAsVariants(components, combineParent);
+    if (params.name != null && s != null) s.name = params.name;
+    if (s != null) serializeNode(s); // 探活:任何引擎 getter 抛都归本姿势
+    set = requireComponentSet(s);
+  } catch (e) {
+    const names = components.map((c) => `${c.name}(${c.id})`).join('、');
+    // 平台声明了原位合并却仍失败:按调用与节点状态排查,不要套用「引擎做不出来」
+    // 的结论去改组件结构(与上面 jsDesign 的前置拒绝是两种处境)。
+    // i18n-exempt: 随结果上行给模型,不走面板文案
+    throw new Error(
+      [
+        'combine_as_variants 失败:本平台声明支持原位合并(inPlaceVariants),但本次调用失败。',
+        `引擎报错:${errText(e)}。`,
         `本次涉及的组件:${names}。`,
-        '不要在结构上找原因,也别重试(合规组件同样必败)。',
-        '可执行出口:①每个状态各做一个独立 COMPONENT,按「族名 / 状态」命名(如 Nav / Face-to-Face、Nav / Inbox、Nav / Me),调用方按名字取用;',
-        '②确需变体语义时在画布上手工合并,或换到支持该能力的引擎(如 Figma)执行。',
-        '⚠ 「一个主件 + 每屏改子节点颜色」这条捷径同样不通:实例子节点的样式 override 平台不保证渲染生效(见平台缺陷),多状态只能靠多主件。',
+        '排查方向:①组件是否跨页 / 跨父级;②是否已被并入别的组件集;③组件是否处于错误状态(可先 jsd_repair_nodes 清理);④组件名是否符合「属性=值」、多属性用 ", " 分隔。',
       ].join(''),
     );
   }
@@ -508,8 +789,11 @@ export async function combineAsVariantsNodes(
 }
 
 /** mainComponent 可安全触碰(读属性不崩)才算活着;僵尸引用会让引擎解绑时内部崩溃 */
-async function mainComponentAlive(n: NodeSkeleton): Promise<boolean> {
-  const main = await resolveMainComponent(n);
+async function mainComponentAlive(
+  n: NodeSkeleton,
+  ctx: RuntimeContext,
+): Promise<boolean> {
+  const main = await resolveMainComponent(n, ctx);
   return main != null && typeof main.id === 'string';
 }
 
@@ -560,6 +844,7 @@ function detachWithRecovery(inst: NodeSkeleton): NodeSkeleton {
 // detachWithRecovery 不需要 host:克隆先插回原父级再解绑
 export async function detachInstanceNodes(
   host: DesignHost,
+  ctx: RuntimeContext,
   ids: string[],
 ): Promise<{
   created: SerializedNode[];
@@ -574,7 +859,7 @@ export async function detachInstanceNodes(
   const detached: NodeSkeleton[] = [];
   const failed: { id: string; message: string }[] = [];
   for (const inst of instances) {
-    if (!(await mainComponentAlive(inst))) {
+    if (!(await mainComponentAlive(inst, ctx))) {
       failed.push({
         id: inst.id,
         message:
@@ -583,7 +868,21 @@ export async function detachInstanceNodes(
       continue;
     }
     try {
-      detached.push(detachWithRecovery(inst));
+      // 解绑**必须验证结果类型**:typings 的签名是 `detachInstance(): FrameNode`
+      // (`plugin-api.d.ts:1094`),而即时设计运行期它**原位返回同一个 INSTANCE**
+      // (真机 2026-10-20:调用后 type 仍是 INSTANCE、mainComponentId 照旧) —— 也就是
+      // 一个静默 no-op。回包说 created、画布上却还是实例,正是 0007 那类「回显成功、
+      // 实际没发生」,必须点名而不是把它当成功返回。
+      const result = detachWithRecovery(inst);
+      if (result.type === 'INSTANCE') {
+        failed.push({
+          id: inst.id,
+          message:
+            '引擎未真正解绑:detachInstance 返回的仍是 INSTANCE(typings 声明返回 FrameNode,运行期是 no-op,主组件链接照旧)',
+        });
+        continue;
+      }
+      detached.push(result);
     } catch (e) {
       failed.push({
         id: inst.id,
@@ -694,6 +993,7 @@ function captureVisibleProps(node: NodeSkeleton): UpdateNodeProps | undefined {
 
 async function captureOverrideSnapshot(
   host: DesignHost,
+  ctx: RuntimeContext,
   sourceId: string,
   includeVisibleProps: boolean,
 ): Promise<OverrideSnapshot> {
@@ -704,7 +1004,7 @@ async function captureOverrideSnapshot(
     throw new Error(`没有找到源实例: ${sourceId}`);
   }
   // dynamic-page 下 mainComponent 只能异步取(0011)
-  const main = await resolveMainComponent(source);
+  const main = await resolveMainComponent(source, ctx);
   if (main == null) {
     throw new Error(
       `源实例 ${sourceId} 的 mainComponent 已失效,无法复制覆盖。建议先 jsd_manage_nodes op=repair 清理后重试`,
@@ -877,6 +1177,7 @@ export async function syncInstanceOverrides(
 }> {
   const snapshot = await captureOverrideSnapshot(
     host,
+    ctx,
     params.sourceId,
     params.includeVisibleProps !== false,
   );
@@ -892,6 +1193,7 @@ export async function syncInstanceOverrides(
 /** 两段式第一段:复制源实例覆盖为快照,写入插件侧缓存,返回摘要 + snapshotId(=sourceId) */
 export async function copyInstanceOverrides(
   host: DesignHost,
+  ctx: RuntimeContext,
   params: { sourceId: string; includeVisibleProps?: boolean },
 ): Promise<{
   snapshotId: string;
@@ -900,6 +1202,7 @@ export async function copyInstanceOverrides(
 }> {
   const snapshot = await captureOverrideSnapshot(
     host,
+    ctx,
     params.sourceId,
     params.includeVisibleProps !== false,
   );

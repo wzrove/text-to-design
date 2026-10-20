@@ -1,7 +1,7 @@
 # 0024. 变量绑定进入读路径：boundVariables 按引擎词汇原样透传，不引入归一化层
 
 - **日期：** 2026-09-25
-- **状态：** 已采纳（代码已落地并通过类型检查/不变式测试/三平台构建；**Figma 真机复验待插件重载**）
+- **状态：** 已采纳（Figma 真机已复验，2026-09-29；见「验证」）
 - **影响范围：** `shared/src/schemas/platform.ts`、`shared/src/schemas/serialized-node.ts`、`shared/src/core/host.ts`、`shared/src/core/serialize.ts`、`ui/src/code/figma/sync-guarantee.ts`、`shared/src/__tests__/write-path.test.ts`
 - **相关记录：** 0007（不许「回显成功实则没生效」）、0010（契约新增成员异步优先 —— 本文说明为何本字段不适用）、0011（读路径收口 / 异步边界）、0021（平台差异逐项核对后不引入能力位）、0023（读形态 ≠ 写形态）
 
@@ -62,7 +62,7 @@
 - 成本：线格式多一个三态联合（zod + 两份类型声明）；每节点多一次 `in` 判断。**无新模块、无新间接层、无新增网络跳数**。
 - 退出条件：
   - 若 Figma 把 `boundVariables` 改成异步入口（或 `dynamic-page` 下开始抛），本字段须从「投影时同步读」改为经 Access 层异步取（0011 的形状，补 `*Async` 分支）。判据：typings 出现 `*Async` 变体，或真机抛 `Cannot call with documentAccess: dynamic-page`。
-  - 若三平台都提供字段级变量绑定读，本字段应从「平台特有超集」升格为通用字段，并在 `references/platform-limits.md` 注销这条差异。
+  - 若三平台都提供字段级变量绑定读，本字段应从「平台特有超集」升格为通用字段，并在平台差异登记处注销这条差异（原 `references/platform-limits.md` 已随 9039a4a 删除；现行落点是 `dicts/platform-value-domain.ts` 与三侧 `sync-guarantee.ts` 的成对断言）。
 
 ## 验证
 
@@ -90,6 +90,7 @@
 | 日期 | 需求变更 | 结论变化 |
 |---|---|---|
 | 2026-09-25 | 初次决策（由读路径盲区触发：绑定在回包中完全不可见） | 采用「原样透传 + 既有超集字段机制」，不引入归一化层 |
+| 2026-09-29 | 真机复验（Figma，插件重载后）全通 | 结论不变；状态行与索引行同步为「真机已复验」 |
 
 > 副作用（非本决策内容）：本记录入索引后 `INDEX.md` 越过 15 KB 硬上限，按
 > `.agents/skills/software-design-patterns/references/decision-log.md` 的治理动作精简了历史行的

@@ -1,7 +1,7 @@
 # 0039. get_page 收窄为顶层几何加资源清单：复用既有契约成员，变量走可选入口
 
 - **日期：** 2026-10-10
-- **状态：** 已采纳（三包类型检查通过 + 单测通过；**2026-10-10 真机（即时设计）已验并据此修订**：① 样式清单那一半由 [0043](0043-样式枚举拆出独立能力位：get_page-与-jsd-styles-按平台声明返空.md) 接走，实测 11ms 返空；② 本记录「资源清单遍历各页」那一半**在即时设计上不成立** —— 触碰非当前页必挂 25s，已按能力位 `documentScopeRead` 收口为只扫当前页（符号判据那版被真机推翻），**第三轮真机已验：`get_page` 42ms、`find scope=document` 25ms、`list_styles` 8ms**，见「验证」节。Figma / MasterGo 的变量清单与「MG 是否也读不到非当前页」仍待验）
+- **状态：** 已采纳（三包类型检查通过 + 单测通过；**2026-10-10 真机（即时设计）已验并据此修订**：① 样式清单那一半由 [0043](0043-样式枚举拆出独立能力位：get_page-与-jsd-styles-按平台声明返空.md) 接走，实测 11ms 返空；② 本记录「资源清单遍历各页」那一半**在即时设计上不成立** —— 触碰非当前页必挂 25s，已按能力位 `documentScopeRead` 收口为只扫当前页（符号判据那版被真机推翻），**第三轮真机已验：`get_page` 42ms、`find scope=document` 25ms、`list_styles` 8ms**，见「验证」节。Figma 那半 2026-10-15 已验：`assets.variables` 列得出 34 条、`pages` 列出非当前页 `copy`（18 个子节点）⇒ `documentScopeRead` 在 Figma 上成立；MasterGo 那半 2026-10-15 也已验：`assets.variables` 列得出（1 条），`jsd_find scope=document` 82ms **退回当前页并带 `note` 点名**（不挂死、不撒谎））
 - **影响范围：** `shared/`（`schemas/results.ts`、`core/{host,access,assets,nodes,index}.ts`、`dicts/platform-knowledge.ts`）、`ui/`（`code/figma/host.ts`、`code/mastergo/{host,meta,sync-guarantee}.ts`、`code/jsdesign/sync-guarantee.ts`）、`mcp-server/`（`tools/{session,resources,platform-facts}.ts`、`README.md`）、i18n（`getPage.description` 两语言 + `resources` 页描述）
 - **相关记录：** N/A（沿 0011 的页加载门控、0032 的平台事实表、0006 的目录体积取向、0010 的异步优先；drift-watch 对 `jsd_get_page` 的依赖见 0003）
 
@@ -127,7 +127,10 @@
     （返回当前页 14 个顶层 FRAME + `assets` 四键 + `pages` 一条 + 两句 `note`）；
     ✅ `jsd_find scope=document` **25ms** 带「已退回当前页」`note`；
     ✅ `list_styles` **8ms** 返空带 `note`。
-- **仍待验**：Figma / MasterGo 的变量清单；MG 是否真读不到非当前页（当前按保守默认也收口为只扫当前页）。
+- **真机（Figma，2026-10-15 已跑）**：`jsd_get_page` 回 `assets.variables: 34`、`components: 24` / `variants: 2` / `styles: 37`，`pages` 列出非当前页 `copy`（18 个子节点）⇒ **`documentScopeRead` 在 Figma 上成立**，清单确实跨页（与 jsDesign「只扫当前页」相反）；首读带 `note` 说明 `dynamic-page` 下的一次性全量加载成本（幂等）。
+- **真机（MasterGo，2026-10-15 已跑）**：① **变量清单列得出** —— `assets.variables: 1`（该平台确有变量）；② **非当前页读按声明收口** —— `jsd_find{scope:"document"}` **82ms** 回 `total=30`（= 当前页条数）并带 `note:"本平台读不到非当前页(触碰即挂死),scope=document 已退回当前页:结果只含当前页的内容"`，不挂死、不静默（对照 jsDesign 的 25s 超时，MG 这条是**声明式退回**）；当前页 `jsd_find` 47ms。
+  ⚠ 精确说：「MG 真读不到非当前页」仍是**保守假设**（我们按声明不去触碰它），已验的是**收口行为**——退回当前页 + 点名，不会挂死也不会给错答案。
+- **三家已齐**：Figma（跨页可读、34 条变量）、jsDesign（只扫当前页、样式清单可枚举）、MG（退回当前页带 note、变量清单可列）三条路径都有真机证据。
 - 边界用例：`assets` 任一类在某平台读不到时不得让整条结果判非法 —— 恒空数组；
   插件/MCP 产物错位时 `assets` 缺席同样不得判非法 —— 该字段可选，沿用 `fonts` 的
   「旧产物不发该字段不能连坐只读调用」纪律。
@@ -147,3 +150,5 @@
 | 2026-10-10 | 上一行的第一版判据（「有没有 `loadAllPagesAsync`」）**被真机推翻**：按符号收口后 `find scope=document` 照样 25008ms `forward_timeout`。原因与 0042 的样式 getter 是同一个坑 —— jsDesign 的 host 是 `Object.create(native)`，typings 里没有的符号**运行时照样透出来**，于是 `loadAllPagesAsync` 存在且**永不返回** | 判据换成**平台声明**（新增能力位 `documentScopeRead`，形制同 0043）；并连 `ensurePagesLoaded` 一起跳过 —— 它 await 的正是那个永不返回的调用。Figma 声明（真有 dynamic-page 且会返回），即时设计 / MG 不声明（MG 未真机验，按保守默认收口，验过能跨页再放开） |
 | 2026-10-10 | 用户提出「重新组织资源：做设计前得知道这页/文档有没有定义好组件、变体、样式、变量，要求复用这些重复内容」→ 资源清单改为**面向复用**的形状：加 `summary` 计数；`variants` 展开「维度 → 可选值」；样式由「仅 PAINT」改为**全量四类**并改名 `paintStyles` → `styles`（带 `type`）；并新增**复用纪律**（工具描述 / `jsd://page` 描述 / `mcp.instructions` / `design-strategy` 配方第 0 条四处同源，入口句按平台由 `reuseGuideText` 投影） | 结论不变（仍不引模式、仍复用既有通路）。变了两处的**口径**：① 键数：`paintStyles` → `styles` 是**改名**（未发布，随本批一起走），四类键恒在的约定不变；② `variants[].properties` 在平台读不到时**整个键省略**，不写空对象 —— 「空对象」会被当成「确实没有维度」，那是谎话。用户明确否掉了「每项带 page」：只要文档级清单，不要页归属 |
 | 2026-10-14 | dec 25827d0c 的 MasterGo 真机复验补了一条本记录没写的前提：清单四桶**互不相干** | 结论不变（五键形状、能力门控、文档级口径全部照旧），只在「本批做」那一段补一条 ⚠：MG 上 `styles` 与 `variables` 互为镜像、按创建路径随机可见 ⇒ 「在哪一桶」不是身份判据，id 才是 |
+| 2026-10-15 | 真机（Figma）：变量清单与跨页读 | 结论不变。`assets.variables` 列得出 34 条、`pages` 列出非当前页 ⇒ `documentScopeRead` 在 Figma 成立，Figma 那半待验项结清；MG 那半仍待验 |
+| 2026-10-15 | 真机（MG）：变量清单与非当前页读 | 结论不变。变量清单列得出；`scope=document` 82ms 退回当前页 + `note` 点名（对照 jsDesign 的 25s 超时，MG 是声明式退回）。「MG 真读不到非当前页」仍按保守假设不去触碰，验的是收口行为 |
