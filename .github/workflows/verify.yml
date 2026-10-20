@@ -29,6 +29,10 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: 格式与 lint
         run: pnpm lint
+      - name: changeset 门禁
+        # private 包(shared / website)会被 changesets 当 ignore;混进同一条 changeset 时
+        # "Mixed changesets" 只在 release 的 version 阶段炸 —— 主干已合入时 PR 门禁拦不住
+        run: pnpm chset:check
       - name: 类型检查
         run: pnpm typecheck
       - name: 不变式测试

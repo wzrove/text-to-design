@@ -16,6 +16,7 @@
     "test:watch": "vitest",
     "release": "pnpm build && node scripts/publish.mjs",
     "chset": "node scripts/new-changeset.mjs",
+    "chset:check": "node scripts/check-changesets.mjs",
     "mcp": "pnpm --filter text-to-design-mcp start:dev",
     "dev:site": "pnpm --filter text-to-design-website dev",
     "build:site": "pnpm --filter text-to-design-website build"

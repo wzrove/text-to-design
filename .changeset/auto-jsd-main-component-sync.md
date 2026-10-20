@@ -1,5 +1,5 @@
 ---
-"text-to-design-shared": patch
+"text-to-design-mcp": patch
 "text-to-design-ui": patch
 ---
 
