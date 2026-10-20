@@ -106,11 +106,19 @@ export async function listFonts(
     byFamily.set(family, styles);
   }
 
-  const needle = params.family?.trim().toLowerCase() ?? '';
+  // 过滤词支持「多选一」写法(`PingFang|MiSans`、`PingFang,MiSans`、空格分隔):
+  // 单个 family 名里不会有这些字符,而调用方一次想摸好几个族时按直觉就会这么写 ——
+  // 此前整串当一个子串匹配,结果恒空,看起来像「平台没有这些字体」。
+  const needles = (params.family ?? '')
+    .split(/[|,、\s]+/)
+    .map((s) => s.trim().toLowerCase())
+    .filter((s) => s !== '');
   const matched = [...byFamily.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
     .filter(
-      ([family]) => needle === '' || family.toLowerCase().includes(needle),
+      ([family]) =>
+        needles.length === 0 ||
+        needles.some((n) => family.toLowerCase().includes(n)),
     );
 
   // limit 缺省取默认页;显式传值超过上限时按上限截断(结果用 truncated 说明)

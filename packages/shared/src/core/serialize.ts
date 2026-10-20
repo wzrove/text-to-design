@@ -457,7 +457,9 @@ export function serializeNode(
     if ('variantProperties' in node && node.variantProperties != null) {
       // 值同样按**实际运行期形状**归一(core/variant.ts):与集合维度表共用一份实现 ——
       // 两处是同一个维度的两张表,各写一遍迟早早一起漂。
-      base.variantProperties = normalizeVariantProperties(node.variantProperties);
+      base.variantProperties = normalizeVariantProperties(
+        node.variantProperties,
+      );
     }
   } catch {
     // 引擎 getter 抛:该字段省略,其余字段照常回传

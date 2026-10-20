@@ -1,3 +1,4 @@
+import { CONTAINER_NODE_TYPES } from '../dicts/node-type';
 import type {
   FindParams,
   FindResult,
@@ -51,6 +52,32 @@ function absoluteOrigin(node: NodeSkeleton): { x: number; y: number } {
     guard += 1;
   }
   return { x, y };
+}
+
+/**
+ * 目标父级必须真的能装子节点。
+ *
+ * 现场(2026-10-20 jsDesign):给 RECTANGLE 传 parentId,引擎只在 insertChild 里抛一句
+ * `not a function` —— 既不点名是哪个参数错了,也不提示正确形状。而它恰好是搭「药丸 /
+ * 标签」最自然的一步:拿 RECTANGLE 当底再平铺 TEXT(文字永远居不中),修起来只能拆了重建。
+ * 这里在动手之前拦下并给出替代形状。
+ *
+ * 判据用**类型表**(dicts/node-type 的 CONTAINER_NODE_TYPES)而不是探测 `typeof appendChild`:
+ * 引擎给所有节点都挂了同名方法,探测法在真机上恒真,等于没有前置。页面没有 type(它本来
+ * 就是容器),直接放行。
+ */
+function assertCanParent(parent: NodeSkeleton | PageSkeleton): void {
+  const p = parent as unknown as { id?: string; type?: string };
+  if (p.type == null) return;
+  if (p.type === 'INSTANCE') {
+    throw new Error(
+      `目标父级 ${p.id ?? '?'} 是实例(INSTANCE),引擎不允许往实例里加节点 —— 先用 jsd_detach_instance 拆链接,或改用该实例的主组件作父级`,
+    );
+  }
+  if ((CONTAINER_NODE_TYPES as readonly string[]).includes(p.type)) return;
+  throw new Error(
+    `目标父级 ${p.id ?? '?'}(type=${p.type})不是容器,不能容纳子节点 —— parentId 必须指向 FRAME / GROUP / COMPONENT 这类容器或页面。药丸 / 标签这类「底色 + 居中文字」请建成 FRAME(底色 + TEXT,两轴 CENTER 对齐),不要用 RECTANGLE 当底再平铺 TEXT(文字居不中,只能拆了重建)。`,
+  );
 }
 
 /**
@@ -858,7 +885,11 @@ export async function reparentNodes(
     parentId?: string;
     index?: number;
   },
-): Promise<{ moved: SerializedNode[]; updated: SerializedNode[] }> {
+): Promise<{
+  moved: SerializedNode[];
+  updated: SerializedNode[];
+  warnings?: string[];
+}> {
   const nodes = await resolveNodes(host, params.ids);
   if (nodes.length === 0) {
     throw new Error('没有找到要移动的节点');
@@ -900,11 +931,13 @@ export async function reparentNodes(
       };传 parentId 指定目标容器,或用 jsd_select_nodes 先选中父容器;只调整层序可传 index 且选中被调整节点本身`,
     );
   }
+  assertCanParent(parent);
   const isAutoLayout = isAutoLayoutContainer(parent);
   // 目标父级的绝对原点:reparent 后用它把子节点还原回原绝对位置。
   // 父级本身不移动,故移动前取值即可。
   const parentOrigin = absoluteOrigin(parent as NodeSkeleton);
   const inserted: { node: NodeSkeleton; index: number; target: number }[] = [];
+  const layoutWarnings: string[] = [];
   for (const n of nodes) {
     const alreadyChild = parent.id === n.parent?.id;
 
@@ -922,6 +955,14 @@ export async function reparentNodes(
     // (实测同父级的一层容器会换算,嵌在 auto-layout 里的深层容器不换算,
     // 后者会让节点保留旧相对 x/y 而飞出画布)。这里自页面系记账,移动后统一还原。
     const origin = absoluteOrigin(n);
+    // 移进 auto-layout 父级时,引擎会把**被移动节点自己**的布局属性改成父级那一套:
+    // 实测(2026-10-20 jsDesign)一个 HORIZONTAL + pa=CENTER/ca=MAX 的行 FRAME 移进
+    // VERTICAL 父级后,layoutMode 变 VERTICAL、primary/counterAxisAlignItems 对调 ——
+    // 回包零告警、下一批再读才发现「行里的图标被竖着摞」。移前快照、移后压回。
+    const layoutSnap = isAutoLayout ? snapshotLayout(n) : null;
+    const layoutModeSnap = isAutoLayout
+      ? ((n as { layoutMode?: LayoutMode }).layoutMode ?? null)
+      : null;
 
     if (params.index != null) {
       // 指定插入位置:insertChildAt 在 auto-layout 父级上临时关布局再插,
@@ -947,6 +988,36 @@ export async function reparentNodes(
       if (Number.isFinite(x)) n.x = x;
       if (Number.isFinite(y)) n.y = y;
     }
+
+    // 压回被父级布局改写的属性(见上面 layoutSnap 的注释)。压回后**逐项回读**,
+    // 压不住的写进 warnings —— 这是「回显成功实则被改」的第二处现场,不许静默。
+    if (layoutSnap != null) {
+      // 顺序照 insertChildAt 的教训:方向先写(写方向会连带把 sizing/对齐翻一次),
+      // 再写其余布局属性,最后才是回读比对。
+      if (layoutModeSnap != null) ensureLayoutMode(n, layoutModeSnap);
+      restoreLayoutVerified(n, layoutSnap);
+      if (layoutModeSnap != null && !ensureLayoutMode(n, layoutModeSnap)) {
+        layoutWarnings.push(
+          `节点 ${n.id} 移入 auto-layout 父级 ${parent.id} 后,layoutMode 被引擎改成 ${
+            (n as { layoutMode?: string }).layoutMode ?? 'undefined'
+          }(移前 ${layoutModeSnap}),压回失败;请用 jsd_set_layout 重新声明`,
+        );
+      }
+      const drift: string[] = [];
+      for (const key of LAYOUT_PRESERVE_KEYS) {
+        const want = layoutSnap[key];
+        if (want == null) continue;
+        const got = (n as unknown as LayoutRecord)[key];
+        // 方向回压本身会再翻一次对齐/尺寸模式,故按压回失败后的实况比对
+        if (got !== want)
+          drift.push(`${key}(移前 ${String(want)},现 ${String(got)})`);
+      }
+      if (drift.length > 0) {
+        layoutWarnings.push(
+          `节点 ${n.id} 移入 auto-layout 父级 ${parent.id} 后,布局属性被引擎按父级重写且压不回:${drift.join('、')}。请用 jsd_set_layout 重新声明`,
+        );
+      }
+    }
   }
   for (const it of inserted) {
     if (it.index !== it.target) {
@@ -964,7 +1035,12 @@ export async function reparentNodes(
   // 就报「无法解析占位符引用」,节点其实已经移好了(状态与回显不一致,整批还会被
   // stopOnError 掐断)。这里让两个键同时出现:同一份数组,习惯用哪个都能解析。
   const moved = nodes.map((n) => serializeNode(n));
-  return { moved, updated: moved };
+  return {
+    moved,
+    updated: moved,
+    // 布局属性被父级改写且压不回时才出现(见循环内的 layoutSnap 说明)
+    ...(layoutWarnings.length > 0 ? { warnings: layoutWarnings } : {}),
+  };
 }
 
 /** 节点在父级 children 里的实际下标;读不到返回 -1 */

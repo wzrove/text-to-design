@@ -24,7 +24,10 @@ function hostWithSet(values: unknown[]): DesignHost {
 
 describe('变体维度投影:值对象归一为名字', () => {
   it('字符串值原样', async () => {
-    const r = await listDocumentAssets(hostWithSet(['ccc']), runtimeContext(['styleEnumeration', 'variables']));
+    const r = await listDocumentAssets(
+      hostWithSet(['ccc']),
+      runtimeContext(['styleEnumeration', 'variables']),
+    );
     expect(r.assets.variants?.[0]?.properties).toEqual({ 状态: ['ccc'] });
   });
 
@@ -33,6 +36,8 @@ describe('变体维度投影:值对象归一为名字', () => {
       hostWithSet([{ name: '默认' }, { name: '禁用' }]),
       runtimeContext(['styleEnumeration', 'variables']),
     );
-    expect(r.assets.variants?.[0]?.properties).toEqual({ 状态: ['默认', '禁用'] });
+    expect(r.assets.variants?.[0]?.properties).toEqual({
+      状态: ['默认', '禁用'],
+    });
   });
 });

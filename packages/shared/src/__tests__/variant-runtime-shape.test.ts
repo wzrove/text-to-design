@@ -68,9 +68,9 @@ describe('变体维度表:values 元素归一(typings 说 string[],运行时给�
   });
 
   it('单节点 variantProperties 同样归一(与集合表共用口径)', () => {
-    expect(normalizeVariantProperties({ 分类1: '默认', X: { name: 'Y' } })).toEqual(
-      { 分类1: '默认', X: 'Y' },
-    );
+    expect(
+      normalizeVariantProperties({ 分类1: '默认', X: { name: 'Y' } }),
+    ).toEqual({ 分类1: '默认', X: 'Y' });
     expect(normalizeVariantProperties({})).toBeUndefined();
     const inst = makeInstance('5:1', 'inst');
     (inst as unknown as Record<string, unknown>).variantProperties = {

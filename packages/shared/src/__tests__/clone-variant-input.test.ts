@@ -20,7 +20,10 @@ import { makeFrame, makeHost } from './fixtures';
  * 现在锁的是:未声明能力位时**一次引擎调用都不发生**。
  */
 function component(id: string, parent: NodeSkeleton): NodeSkeleton {
-  const n = { ...makeFrame(id, id), type: 'COMPONENT' } as unknown as NodeSkeleton;
+  const n = {
+    ...makeFrame(id, id),
+    type: 'COMPONENT',
+  } as unknown as NodeSkeleton;
   n.parent = parent;
   return n;
 }
@@ -33,12 +36,18 @@ describe('变体合并:未声明 inPlaceVariants 时快速失败,不落引擎', 
   it('jsDesign(不声明 inPlaceVariants)→ 引擎一次都不被调用', async () => {
     const parent = container('2:parent');
     const seen: unknown[] = [];
-    const host = makeHost([component('1:1', parent), component('1:2', parent)]) as unknown as DesignHost & {
+    const host = makeHost([
+      component('1:1', parent),
+      component('1:2', parent),
+    ]) as unknown as DesignHost & {
       combineAsVariants: (...a: unknown[]) => NodeSkeleton;
     };
     host.combineAsVariants = (...a) => {
       seen.push(a);
-      return { ...makeFrame('9:1', 'x'), type: 'COMPONENT_SET' } as unknown as NodeSkeleton;
+      return {
+        ...makeFrame('9:1', 'x'),
+        type: 'COMPONENT_SET',
+      } as unknown as NodeSkeleton;
     };
     await expect(
       combineAsVariantsNodes(host, runtimeContext([], 'jsdesign'), {
@@ -51,10 +60,17 @@ describe('变体合并:未声明 inPlaceVariants 时快速失败,不落引擎', 
 
   it('报错要带根因与可执行出口(不允许只说「失败」)', async () => {
     const parent = container('2:parent');
-    const host = makeHost([component('1:1', parent), component('1:2', parent)]) as unknown as DesignHost;
-    const err = await combineAsVariantsNodes(host, runtimeContext([], 'jsdesign'), {
-      ids: ['1:1', '1:2'],
-    }).catch((e: Error) => e.message);
+    const host = makeHost([
+      component('1:1', parent),
+      component('1:2', parent),
+    ]) as unknown as DesignHost;
+    const err = await combineAsVariantsNodes(
+      host,
+      runtimeContext([], 'jsdesign'),
+      {
+        ids: ['1:1', '1:2'],
+      },
+    ).catch((e: Error) => e.message);
     expect(err).toContain('BOOLEAN_OPERATION');
     expect(err).toContain('画布上手动合并');
     expect(err).toContain('独立 COMPONENT');
@@ -63,12 +79,21 @@ describe('变体合并:未声明 inPlaceVariants 时快速失败,不落引擎', 
   it('声明了 inPlaceVariants(Figma / MasterGo)→ 正常走原生合并', async () => {
     const parent = container('2:parent');
     const seen: unknown[] = [];
-    const host = makeHost([component('1:1', parent), component('1:2', parent)]) as unknown as DesignHost & {
-      combineAsVariants: (n: readonly NodeSkeleton[], p: unknown) => NodeSkeleton;
+    const host = makeHost([
+      component('1:1', parent),
+      component('1:2', parent),
+    ]) as unknown as DesignHost & {
+      combineAsVariants: (
+        n: readonly NodeSkeleton[],
+        p: unknown,
+      ) => NodeSkeleton;
     };
     host.combineAsVariants = (n, p) => {
       seen.push({ count: n.length, parent: p });
-      return { ...makeFrame('9:1', 'set'), type: 'COMPONENT_SET' } as unknown as NodeSkeleton;
+      return {
+        ...makeFrame('9:1', 'set'),
+        type: 'COMPONENT_SET',
+      } as unknown as NodeSkeleton;
     };
     const r = await combineAsVariantsNodes(
       host,

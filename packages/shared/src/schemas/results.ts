@@ -72,6 +72,13 @@ export const manageNodesResultSchema = z.object({
   created: z
     .union([serializedNodeSchema, z.array(serializedNodeSchema)])
     .optional(),
+  /**
+   * 移父时**被移节点自己**的布局属性被引擎按父级改写、且压回失败 —— 实测
+   * (2026-10-20 jsDesign)一个 HORIZONTAL 行 FRAME 移进 VERTICAL 父级后方向被翻、
+   * 两轴对齐对调,回包零告警,等下一批读到才发现「行里的图标被竖着摞」。
+   * 压回成功则一条都不报。
+   */
+  warnings: z.array(z.string()).optional(),
 });
 /** 实例覆盖摘要(只回传键名,不回传大体积值) */
 export const overrideSummarySchema = z.object({

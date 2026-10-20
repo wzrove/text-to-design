@@ -133,6 +133,8 @@ async function buildNode(
     src: spec as unknown as Readonly<Record<string, unknown>>,
     outcome: emptyOutcome(),
     create: true,
+    // 直挂页面 = 屏根:只有这一层把高度钉死,内层容器一律优先自动高度
+    outermost: parent === host.currentPage,
   };
 
   // ---- 属性写入:与修改路径共用同一批 writer(见 core/props/writers) ----

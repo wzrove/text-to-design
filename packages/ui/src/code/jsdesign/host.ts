@@ -73,8 +73,10 @@ export const host: DesignHost = Object.create(native, {
    * 保留这层显式绑定:它才是 `jsDesign.combineAsVariants(...)` 的正确形状,别退回原型链。
    */
   combineAsVariants: {
-    value: (nodes: readonly NodeSkeleton[], parent: NodeSkeleton): NodeSkeleton =>
-      native.combineAsVariants(nodes, parent as never),
+    value: (
+      nodes: readonly NodeSkeleton[],
+      parent: NodeSkeleton,
+    ): NodeSkeleton => native.combineAsVariants(nodes, parent as never),
     enumerable: true,
   },
   /**

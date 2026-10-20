@@ -1,9 +1,9 @@
-import { z } from 'zod';
 import {
   normalizeVariantGroupProperties,
   normalizeVariantProperties,
   type PlatformOp,
 } from 'text-to-design-shared';
+import { z } from 'zod';
 
 /**
  * 即时设计的**只读组件面**:按官方文档 + typings 1.0.12 的字段逐项回读。
@@ -32,12 +32,16 @@ const factsSchema = z.object({
   withPublishStatus: z
     .boolean()
     .optional()
-    .describe('是否调 getPublishStatusAsync(默认 false —— 本平台有 async 成员永不 settle 的先例,这条未验)'),
+    .describe(
+      '是否调 getPublishStatusAsync(默认 false —— 本平台有 async 成员永不 settle 的先例,这条未验)',
+    ),
   description: z
     .string()
     .max(2000)
     .optional()
-    .describe('可选:写回可发布节点(COMPONENT / COMPONENT_SET)的 description 并回读校验'),
+    .describe(
+      '可选:写回可发布节点(COMPONENT / COMPONENT_SET)的 description 并回读校验',
+    ),
 });
 
 interface PublishableNode {
@@ -76,9 +80,13 @@ async function publishStatusOf(
   p: PublishableNode,
   withPublishStatus: boolean | undefined,
 ): Promise<Record<string, unknown>> {
-  if (!withPublishStatus || typeof p.getPublishStatusAsync !== 'function') return {};
+  if (!withPublishStatus || typeof p.getPublishStatusAsync !== 'function')
+    return {};
   const raw = await p.getPublishStatusAsync();
-  if (typeof raw === 'string' && (PUBLISH_STATUSES as readonly string[]).includes(raw)) {
+  if (
+    typeof raw === 'string' &&
+    (PUBLISH_STATUSES as readonly string[]).includes(raw)
+  ) {
     return { publishStatus: raw };
   }
   return { publishStatusError: typeof raw === 'string' ? raw : String(raw) };
@@ -88,7 +96,11 @@ async function componentFacts(
   node: BaseNode,
   params: FactsParams,
 ): Promise<Record<string, unknown>> {
-  const base: Record<string, unknown> = { id: node.id, name: node.name, type: node.type };
+  const base: Record<string, unknown> = {
+    id: node.id,
+    name: node.name,
+    type: node.type,
+  };
   if (
     params.description != null &&
     (node.type === 'COMPONENT' || node.type === 'COMPONENT_SET')
@@ -140,14 +152,19 @@ async function componentFacts(
     });
     // 归一与投影共用 core 的实现:集合维度与成员取值是同一个维度的两张表,
     // 各写一遍迟早早一起漂(真机 2026-10-20:values 元素是 {name} 对象)
-    const dimensions = normalizeVariantGroupProperties(n.variantGroupProperties);
+    const dimensions = normalizeVariantGroupProperties(
+      n.variantGroupProperties,
+    );
     const setKeys = Object.keys(dimensions ?? {});
     const memberKeys = [
-      ...new Set(members.flatMap((m) => Object.keys(m.variantProperties ?? {}))),
+      ...new Set(
+        members.flatMap((m) => Object.keys(m.variantProperties ?? {})),
+      ),
     ];
     const setOnlyKeys = setKeys.filter((k) => !memberKeys.includes(k));
     const memberOnlyKeys = memberKeys.filter((k) => !setKeys.includes(k));
-    const dimensionMismatch = setOnlyKeys.length > 0 || memberOnlyKeys.length > 0;
+    const dimensionMismatch =
+      setOnlyKeys.length > 0 || memberOnlyKeys.length > 0;
     return {
       ...base,
       ...publishableFacts(pub),
@@ -194,7 +211,10 @@ async function componentFacts(
       childCount: n.children.length,
     };
   }
-  return { ...base, note: '不是 COMPONENT / COMPONENT_SET / INSTANCE,只回基础字段' };
+  return {
+    ...base,
+    note: '不是 COMPONENT / COMPONENT_SET / INSTANCE,只回基础字段',
+  };
 }
 
 const factsOp: PlatformOp = {

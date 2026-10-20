@@ -16,7 +16,7 @@ import {
   nodeLabel,
   unappliedWarning,
 } from './props/outcome';
-import { pinFixedAxisDrift } from './props/writers';
+import { inferSizingModes, pinFixedAxisDrift } from './props/writers';
 import type { RuntimeContext } from './runtime';
 import { serializeNode } from './serialize';
 import { fontNotResolved } from './utils';
@@ -63,8 +63,10 @@ function reconcileCreatedLayout(
   spec: Readonly<Record<string, unknown>>,
   node: SerializedNode,
   notes: CreateNotes,
+  outermost: boolean,
 ): void {
   const label = nodeLabel(node);
+  const inferred = inferSizingModes(spec, outermost);
   const wantMode = spec.layoutMode;
   const modeLanded = wantMode != null && wantMode === node.layoutMode;
   if (wantMode != null && !modeLanded) {
@@ -82,7 +84,9 @@ function reconcileCreatedLayout(
       'primaryAxisSizingMode',
       'counterAxisSizingMode',
     ] as const) {
-      const want = spec[key];
+      // 调用方没声明时,期望值来自**同一份推断**(内层容器高度 AUTO / 屏根 FIXED),
+      // 否则会把「按意图 hug」误报成没生效(2026-10-20)
+      const want = spec[key] ?? inferred[key];
       if (want == null) continue;
       const got = node[key];
       if (got === want) continue;
@@ -129,8 +133,14 @@ function reconcileCreatedLayout(
         : dim === 'height'
           ? node.primaryAxisSizingMode
           : node.counterAxisSizingMode;
-      // AUTO 轴按内容撑开属预期,不是没生效
-      if (axisMode === 'AUTO') continue;
+      // AUTO 轴按内容撑开属预期,不是没生效。但**请求的高度确实变了**,得说清楚并
+      // 给出出口,否则调用方按回显以为写进去的数值生效了(dec 0007 的口径)。
+      if (axisMode === 'AUTO') {
+        notes.messages.push(
+          `${label} 的 ${dim} 按内容撑开成 ${got}(请求 ${want})——内层容器高度默认自动(不随内容裁切),只有最外层节点容器钉死;要固定就显式传该轴 sizingMode=FIXED 再用 jsd_resize_node 传 height`,
+        );
+        continue;
+      }
       notes.messages.push(
         [
           `${label} 的 ${dim} 未落地:请求 ${want},回读 ${got}(该轴 sizingMode 回读为 ${axisMode ?? '读不到'})。`,
@@ -174,7 +184,7 @@ function reconcileCreatedLayout(
     const queue = pending.get(kid.name);
     const specKid = queue?.shift();
     if (specKid == null) continue;
-    reconcileCreatedLayout(specKid, kid, notes);
+    reconcileCreatedLayout(specKid, kid, notes, false);
   }
 }
 
@@ -256,6 +266,7 @@ export async function executeOps(
       specs[i] as unknown as Readonly<Record<string, unknown>>,
       serialized[i],
       notes,
+      true,
     );
   }
   // 声明了 FIXED 的轴被引擎按内容重算 → 按请求值钉回(判据与修改路径同一份)

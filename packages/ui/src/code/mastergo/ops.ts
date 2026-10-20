@@ -1576,8 +1576,7 @@ async function removeVariables(
   for (const id of variableIds) {
     try {
       const before = mg.variables.getVariableById(id);
-      if (before == null && !listed(id))
-        throw new Error(`没有找到变量: ${id}`);
+      if (before == null && !listed(id)) throw new Error(`没有找到变量: ${id}`);
       if (before != null && isCompositeStyleType(before.type))
         throw new Error(
           `复合样式变量(${before.type})不走这条:deleteVariable 对它是 no-op(真机 2026-10-19),请走 jsd_delete_style({ ids: [${id}] })`,

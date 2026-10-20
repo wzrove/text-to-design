@@ -151,7 +151,9 @@ describe('技能与决策索引的文档预算', () => {
     for (const [rel, baseline] of Object.entries(STATUS_RATCHET)) {
       const bad = indexRowViolations(rel);
       if (bad.length > baseline)
-        over.push(`${rel}: ${bad.length} 行不合规 > 基线 ${baseline}\n${bad.join('\n')}`);
+        over.push(
+          `${rel}: ${bad.length} 行不合规 > 基线 ${baseline}\n${bad.join('\n')}`,
+        );
     }
     expect(
       over,

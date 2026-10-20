@@ -82,6 +82,21 @@ describe('listFonts 分页与过滤', () => {
     expect(result.truncated).toBe(true);
   });
 
+  it('family 支持多选一写法(| / , / 空格),不再整串当子串', async () => {
+    const host = hostWith([
+      ['PingFang SC', ['Regular']],
+      ['MiSans', ['Regular']],
+      ['SourceHanSansCN', ['Regular']],
+    ]);
+    // 按直觉写 `PingFang|MiSans` 曾恒回空,被误读成「平台没有这些字体」
+    const byPipe = await listFonts(host, { family: 'PingFang|MiSans' });
+    expect(byPipe.families).toEqual(['MiSans', 'PingFang SC']);
+    expect(byPipe.total).toBe(2);
+
+    const byComma = await listFonts(host, { family: 'MiSans,SourceHan' });
+    expect(byComma.families).toEqual(['MiSans', 'SourceHanSansCN']);
+  });
+
   it('同一族多个 style 只算一个 family', async () => {
     const host = hostWith([
       ['Inter', ['Inter-Bold']],

@@ -70,6 +70,23 @@ export const CREATABLE_NODE_TYPES = [
 export type CreatableNodeType = (typeof CREATABLE_NODE_TYPES)[number];
 
 /**
+ * 能容纳子节点的类型(容器)。
+ *
+ * 用于「目标父级是不是容器」的前置拦截:引擎对非容器调 `insertChild` 只抛一句
+ * `not a function`,既不点名参数也不给正确形状(2026-10-20 jsDesign)。
+ * PAGE 不在此列 —— 它由调用方以「不传 parentId」表达,不走这条判据。
+ */
+export const CONTAINER_NODE_TYPES = [
+  'FRAME',
+  'GROUP',
+  'COMPONENT',
+  'COMPONENT_SET',
+  'BOOLEAN_OPERATION',
+] as const satisfies readonly NodeTypeKey[];
+
+export type ContainerNodeType = (typeof CONTAINER_NODE_TYPES)[number];
+
+/**
  * Figma 运行时独有、本仓**写路径未建模**的节点类型(20 类)。
  *
  * 背景:@figma/plugin-typings 的 SceneNode 是 34 类,而我们的 NODE_TYPES 只覆盖

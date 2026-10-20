@@ -101,7 +101,13 @@ function applySize(ctx: WriteCtx): void {
   if (!('resize' in node)) return;
   if (src.width == null && src.height == null) return;
   const w = typeof src.width === 'number' ? src.width : node.width;
-  const h = typeof src.height === 'number' ? src.height : node.height;
+  // 推断成自动高度的轴不再按请求值钉:那正是「高度由内容决定」的意图,再 resize
+  // 一次就又把它写死了(settle 那次 resize 发生在子节点已插入之后,会把 hug 结果覆盖)。
+  const h = isInferredAuto(node, 'height')
+    ? node.height
+    : typeof src.height === 'number'
+      ? src.height
+      : node.height;
   if (node.type === 'LINE') {
     node.resize(Math.max(w, MIN_RESIZE_SIZE), Math.max(h, MIN_RESIZE_SIZE));
     return;
@@ -776,6 +782,15 @@ export function pinFixedAxisDrift(
       pin[dim] = { target, got };
       continue;
     }
+    // 这个 AUTO 是**我们推断出来的**(内层容器优先自动高度,见 applySizingInference):
+    // 撑开是意图,不是「请求没生效」—— 但请求的高度确实没落地,得说清楚并给出出口,
+    // 否则调用方按回显以为 100 生效了、实际是 80(dec 0007 的口径)。
+    if (isInferredAuto(node, dim)) {
+      out.push(
+        `${label} 的 ${dim} 按内容撑开成 ${got}(请求 ${target})——内层容器高度默认自动(不随内容裁切),只有最外层节点容器钉死;要固定就显式传该轴 sizingMode=FIXED 再用 jsd_resize_node 传 height`,
+      );
+      continue;
+    }
     out.push(
       [
         `${label} 的 ${dim} 被 auto-layout 按内容重算成 ${got}(开布局前 / 请求 ${target};该轴 sizingMode 回读为 ${mode ?? '读不到'})。`,
@@ -846,31 +861,90 @@ export function layoutDriftNotices(
   return out;
 }
 
+/** 推断成 AUTO 的轴(供 pinFixedAxisDrift 免掉「这是 hug 语义」的空告警) */
+const inferredAutoAxes = new WeakMap<NodeSkeleton, Set<'width' | 'height'>>();
+
+function markInferredAuto(node: NodeSkeleton, dim: 'width' | 'height'): void {
+  const set = inferredAutoAxes.get(node) ?? new Set<'width' | 'height'>();
+  set.add(dim);
+  inferredAutoAxes.set(node, set);
+}
+
+/** 该轴是不是调用方没声明、由我们推断成 AUTO 的 */
+export function isInferredAuto(
+  node: NodeSkeleton,
+  dim: 'width' | 'height',
+): boolean {
+  return inferredAutoAxes.get(node)?.has(dim) === true;
+}
+
 /**
- * 显式给了尺寸、却没声明该轴的 sizingMode → 该轴钉成 FIXED。
- * 引擎开启 auto-layout 时默认按内容撑开(AUTO),会把调用方给的尺寸悄悄吃掉
- * (实测传 width:690,height:210 带嵌套 children,返回 630×160)。
+ * 显式给了尺寸、却没声明该轴的 sizingMode → 推断一个。
+ *
+ * **高度轴优先自动高度**(2026-10-20):内层容器的高度由内容决定,写死高度会让
+ * 中文换行 / 内容增删时直接裁切;只有**最外层节点容器**(屏根)才把高度钉成 FIXED
+ * —— 它承载画板尺寸,按内容 hug 会塌成内容高度。
+ * 宽度轴(横向流)保持 FIXED:行 / 卡片要撑满父宽,按内容 hug 会缩成内容宽。
+ *
+ * 为什么必须显式写出来:引擎开启 auto-layout 时**默认按内容撑开**,调用方给的尺寸
+ * 会被悄悄吃掉(实测传 width:690,height:210 带嵌套 children,返回 630×160)。
+ * 不声明就会「字段与意图打架」—— 想固定的被 hug、想 hug 的被对账当成漂移。
  * 调用方显式声明过的一律尊重,不抢。
  */
 function applySizingInference(ctx: WriteCtx): void {
   const { node, src } = ctx;
-  const mode = src.layoutMode;
-  const widthIsPrimary = mode === 'HORIZONTAL';
-  const pairs: [string, boolean][] = [
-    [
-      'primaryAxisSizingMode',
-      widthIsPrimary ? src.width != null : src.height != null,
-    ],
-    [
-      'counterAxisSizingMode',
-      widthIsPrimary ? src.height != null : src.width != null,
-    ],
-  ];
-  for (const [key, sizeGiven] of pairs) {
-    if (!sizeGiven) continue;
+  if (src.layoutMode == null) return;
+  const inferred = inferSizingModes(
+    src as unknown as Readonly<Record<string, unknown>>,
+    ctx.outermost,
+  );
+  const widthIsPrimary = src.layoutMode === 'HORIZONTAL';
+  for (const key of [
+    'primaryAxisSizingMode',
+    'counterAxisSizingMode',
+  ] as const) {
+    const value = inferred[key];
+    if (value == null) continue;
+    // 调用方显式声明过的一律尊重,不抢
     if (src[key] != null) continue;
-    if (key in node) setField(node, key, 'FIXED');
+    if (!(key in node)) continue;
+    setField(node, key, value);
+    if (value === 'AUTO') {
+      const isPrimary = key === 'primaryAxisSizingMode';
+      markInferredAuto(node, isPrimary === widthIsPrimary ? 'width' : 'height');
+    }
   }
+}
+
+/**
+ * 推断某轴该 AUTO 还是 FIXED(唯一判据源:创建写入、子节点对账、结果回显共用)。
+ *
+ * - **高度轴**:内层容器 AUTO(内容增删 / 中文换行不裁切),**最外层节点容器 FIXED**
+ *   —— 屏根承载画板尺寸,按内容 hug 会塌成内容高度。
+ * - **宽度轴**:一律 FIXED —— 行 / 卡片要撑满父宽,按内容 hug 会缩成内容宽。
+ * - 没给该轴尺寸就什么都不推断(不替调用方声明他没要的约束)。
+ */
+export function inferSizingModes(
+  spec: Readonly<Record<string, unknown>>,
+  outermost: boolean,
+): Partial<
+  Record<'primaryAxisSizingMode' | 'counterAxisSizingMode', 'AUTO' | 'FIXED'>
+> {
+  const mode = spec.layoutMode;
+  if (mode !== 'HORIZONTAL' && mode !== 'VERTICAL') return {};
+  const widthIsPrimary = mode === 'HORIZONTAL';
+  const decide = (dim: 'width' | 'height'): 'AUTO' | 'FIXED' =>
+    dim === 'height' && !outermost ? 'AUTO' : 'FIXED';
+  const out: Partial<
+    Record<'primaryAxisSizingMode' | 'counterAxisSizingMode', 'AUTO' | 'FIXED'>
+  > = {};
+  if (widthIsPrimary ? spec.width != null : spec.height != null) {
+    out.primaryAxisSizingMode = decide(widthIsPrimary ? 'width' : 'height');
+  }
+  if (widthIsPrimary ? spec.height != null : spec.width != null) {
+    out.counterAxisSizingMode = decide(widthIsPrimary ? 'height' : 'width');
+  }
+  return out;
 }
 
 /**

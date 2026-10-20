@@ -517,8 +517,19 @@ ${indentLines(relations, '     ')}
    - 深入(总纲只给判据,细节在各自的配方):**造变体集** \`jsd://recipes/variant-set\`;**组件属性(布尔 / 文本 / 换绑)的定义与设值** \`jsd://recipes/component-property\`;**变量绑定与批量套用** \`jsd://recipes/variable-binding\`。
 1) 再摸底:jsd_get_selection(depth=2) 看现状(名称/类型/尺寸/填充/子结构),已有节点用 jsd_find 精确定位,不要重复创建同名元素。
 2) 结构分层,调用分批:**成品该多深就多深** —— 屏 → 语义分区 → 卡片 → 卡内图元,四层都要建出来,别只做到「屏 + 分区」就收手。受限的只是**单次调用的传参方式**:children 只用于「容器 + 其直属子节点」这类小结构,别在一次 create 里塞整棵树(易整批失败);分层分批用 jsd_batch 编排多个 per-type create 步骤,每批建完即用 jsd_reparent_nodes 归到父容器。
+   - **慢的主因是往返数,不是单次调用慢**。整屏几十次串行调用里,一半是「建一个 → 挂一个 → 回读一次」这种能被合并的账。按**「骨架批 → 内容批 → 图标批 → 验收」四批收口**:
+     - 建与挂**同批**:父级 id 用同批占位符 \`{{建屏步骤.created[0].id}}\` 传给下游 reparent —— 占位符只在本批次内有效,分两批就只能硬编码上批回显的 id。
+     - \`jsd_batch\` 单批 **50 步上限**;图标每颗要「建 + 改色 + 归位」三步,一屏十几个图标很快撞线,按 40~48 切批。
+     - **探测也成批**:要摸色板就一次 batch 建 N 个样板矩形、再一次 \`jsd_find\` 回读 \`fills\`(\`fillStyleId\` 回读里带实际 color);别一色一次往返。
+     - **验收只做一次**:整屏一次 \`jsd_export\` 目检 + 一次 \`jsd_find depth:8\` 扫「TEXT width 过小 / characters 为空」,别每步导图。
+     - **首屏尺寸先估再建**:按 812(或目标高度)把分区高度加一遍,超了就先压缩再落笔 —— 溢出后整套拆掉重建是这类任务最大的单笔浪费。
 3) 命名语义化:用「登录页 / Logo 容器 / 邮箱输入 / 主按钮」这类说明用途的名字,不用「矩形 1」「Frame 2」;同一批元素命名风格保持一致。
-4) 归组后再布局:**元素不许直挂屏根** —— 屏内每个语义分区(侧栏 / 顶栏 / 筛选条 / KPI 行 / 每张卡片)各自是一个容器,卡片内部的图元再按语义编组(GROUP:坐标轴 / 网格 / 数据系列 / 图例各一组)。一层不套、几十个元素平铺是后续最难改的形态,别走这个极端。做法:先建容器与元素,再用 jsd_reparent_nodes 逐层归入(**parentId 显式传目标容器 id**,别依赖「当前选中第一个」的缺省值;跨父级移动会保持节点绝对位置,不用手动摆回 x/y,移入 auto-layout 容器时位置交给布局);auto-layout(layoutMode/itemSpacing/padding*/primaryAxisAlignItems 等)最后用 jsd_set_layout 单独设,别在建节点时混着传;**但 sizingMode 是例外** —— 开布局那一刻引擎会按内容重算容器尺寸,**写路径随后按「该轴 sizingMode 的回读值」把声明了 \`FIXED\` 的轴自动钉回**开布局前的尺寸(并在 warnings 里点名「已按声明钉回」、回显尺寸同步为真值):即时设计两轴都回读 FIXED → 两轴都钉回;Figma 主轴回读 AUTO → **保留它的 hug**,不钉回。⇒ **要固定就在建容器时或 \`jsd_set_layout\` 里显式声明该轴 \`FIXED\`,不必再手工补 \`jsd_resize_node\`**;**要 hug 就别声明(或显式传 \`AUTO\`)**。(逐平台实测见第 5 条。)
+4) 归组后再布局:**元素不许直挂屏根** —— 屏内每个语义分区(侧栏 / 顶栏 / 筛选条 / KPI 行 / 每张卡片)各自是一个容器,卡片内部的图元再按语义编组(GROUP:坐标轴 / 网格 / 数据系列 / 图例各一组)。一层不套、几十个元素平铺是后续最难改的形态,别走这个极端。做法:先建容器与元素,再用 jsd_reparent_nodes 逐层归入(**parentId 显式传目标容器 id**,别依赖「当前选中第一个」的缺省值;跨父级移动会保持节点绝对位置,不用手动摆回 x/y,移入 auto-layout 容器时位置交给布局);auto-layout(layoutMode/itemSpacing/padding*/primaryAxisAlignItems 等)最后用 jsd_set_layout 单独设,别在建节点时混着传;**但 sizingMode 是例外** —— 开布局那一刻引擎会按内容重算容器尺寸,**写路径随后按「该轴 sizingMode 的回读值」把声明了 \`FIXED\` 的轴自动钉回**开布局前的尺寸(并在 warnings 里点名「已按声明钉回」、回显尺寸同步为真值);回读 AUTO 的轴**保留 hug**,不钉回。
+   - **高度:除非是最外层节点容器,一律走自动高度**(这是写路径的默认推断,2026-10-20 起):内层分区只声明 \`width\`,**不传 height** —— 传了也会被推断成 \`counterAxisSizingMode=AUTO\`(纵向容器)按内容撑开,warnings 会点名「高度默认自动」。理由:分区高度写死,中文换行 / 文案增删都会直接裁切,而且整屏高度很容易加成超 812 —— 溢出后只能整套拆掉重建。
+   - **只有屏根(直挂页面的那个容器)把两轴都钉 FIXED**:它承载画板尺寸,按内容 hug 会塌成内容高度。
+   - **宽度一律 FIXED**(行 / 卡片要撑满父宽,按内容 hug 会缩成内容宽)。
+   - 确实要固定某个内层容器的高度:显式传该轴 \`sizingMode:"FIXED"\` + \`height\`,再说一次 \`jsd_resize_node\` 钉回去。
+   - ⇒ 一句话:**内层只给宽度、高度交给内容;屏根才写死高度。**(逐平台实测见第 5 条。)
    - **auto-layout 不是可选项,是屏内分区的默认解**(完整机制见配方 \`jsd://recipes/auto-layout\`)。判据:同类子项 + 沿一条轴 + 间距一致 → 一律上布局。屏内这几处**最容易漏**,而它们恰好是间距唯一靠手调坐标凑的地方:标签栏 / 分段控件(等分,每项 \`layoutGrow:1\`)、胶囊组 / 参数行 / 筛选条(\`itemSpacing\`)、卡片头(左标题 + 右操作,\`SPACE_BETWEEN\`)、列表行 / 表单行(**每行一个独立行 FRAME**)、整屏分区(内容区 \`layoutGrow:1\` 吃满剩余高度)。
    - **方向每个容器自判**: \`layoutMode\` = 直属子项流动轴(X→HORIZONTAL, Y→VERTICAL),配方不写死哪张形态用哪个值(见 \`jsd://recipes/auto-layout\`)。禁止把父级方向抄到子级;垂直居中走交叉轴对齐,不是 VERTICAL。
    - **行内图元先归组,再进布局** —— 行内「图标 + 标题 + 值 + 箭头」若平铺进外层,开布局会按**外层那条轴**把它们排成一串。要成一行一项,先给每行建一层行 FRAME。
@@ -593,8 +604,9 @@ export function autoLayoutRecipe(
 ## 1) 两条落地路径,别混着走
 
 **路径 A —— 建容器那一次就带布局(推荐)**
-\`jsd_create_frame\` 同一次入参里给全:\`layoutMode\` + \`primaryAxisSizingMode:"FIXED"\` + \`counterAxisSizingMode:"FIXED"\` + \`itemSpacing\` + \`padding*\` + \`primary|counterAxisAlignItems\`。
-⇒ 尺寸按传入宽高**原样保住**。子节点的 x/y 交给布局,**建子节点时不必写 x/y**(写了也被覆盖)。
+\`jsd_create_frame\` 同一次入参里给全:\`layoutMode\` + \`itemSpacing\` + \`padding*\` + \`primary|counterAxisAlignItems\`,尺寸只给**宽度**。
+⇒ **高度交给自动高度**:内层容器不传 height 时会被推断成该轴 \`sizingMode=AUTO\`(按内容撑开),这是默认意图 —— 分区里文案换行、增删内容都不会裁切。只有**最外层节点容器(屏根)**要同时给 width/height(两轴 FIXED,画板尺寸不能塌)。
+⇒ 真要固定某个内层容器的高度:显式传该轴 \`sizingMode:"FIXED"\` + \`height\`。**别在 children 里给每个分区都写 height** —— 整屏高度极易加成超 812,超了只能整套拆掉重建。子节点的 x/y 交给布局,**建子节点时不必写 x/y**(写了也被覆盖)。
 
 **路径 B —— 事后给已有容器开布局**
 \`jsd_set_layout\` → **立刻** \`jsd_resize_node\` 钉回原尺寸 → **不要再重发** \`jsd_set_layout\`(重发会再吃掉一次)。
@@ -617,7 +629,7 @@ ${layoutHintText(platform)}
 
 ## 4) 验收判据(四条,缺一条就是没落上)
 
-- 容器尺寸 = 设计稿标称值,**不是** hug 后的内容尺寸;
+- **屏根**尺寸 = 设计稿标称值(375×812 之类),**不是** hug 后的内容尺寸;
 - 子项间距 = itemSpacing 的递推值,**不是**原来手摆的坐标;
 - warnings 里**没有**「尺寸被 auto-layout 改成 X(开布局前 Y)」;
 - 导图目检:纯加布局语义时应当**零视觉变化** —— 一旦有位移/裁切,说明原坐标与布局参数不等价(常见:padding 与手摆的边距对不上、交叉轴对齐方向反了)。
@@ -630,6 +642,7 @@ ${layoutHintText(platform)}
 - **\`layoutGrids\` 与 auto-layout 互斥**:引擎只在**非自动布局**的容器上收网格。
 - **\`jsd_set_layout\` 不改尺寸**:它只管布局语义;改宽高走 \`jsd_resize_node\`。
 - **\`layoutMode\` 不是容器外形,也不是对齐**:侧栏/整屏「看起来是竖的」不等于每个子容器都 VERTICAL;「垂直居中」走 \`counterAxisAlignItems:"CENTER"\`。写错方向的典型画面:行里的图标/标题/时间被竖着摞、挤出行高。
+- **移父会改写被移节点自己的布局属性(代码已压回)**:引擎把节点插进 auto-layout 父级时,会把子节点方向改成父级那套、两轴对齐对调。\`jsd_reparent_nodes\` 现在移前快照、移后压回,压不住才在 warnings 点名 —— **别自己再补一次 set_layout**:它是整体语义,分两次发第二次会把第一次的丢掉。parentId 指向非容器(如 RECTANGLE)现在动手前就报错并给出替代形状,不用等引擎那句 \`not a function\`。
 
 ## 6) 加固后的复核清单
 

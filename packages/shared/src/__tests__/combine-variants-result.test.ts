@@ -20,8 +20,14 @@ function container(id: string): NodeSkeleton {
   return makeFrame(id, id);
 }
 
-function makeComponent(id: string, parent: NodeSkeleton = container('2:parent')): NodeSkeleton {
-  const n = { ...makeFrame(id, id), type: 'COMPONENT' } as unknown as NodeSkeleton;
+function makeComponent(
+  id: string,
+  parent: NodeSkeleton = container('2:parent'),
+): NodeSkeleton {
+  const n = {
+    ...makeFrame(id, id),
+    type: 'COMPONENT',
+  } as unknown as NodeSkeleton;
   n.parent = parent;
   return n;
 }
@@ -43,18 +49,26 @@ describe('combineAsVariants:按**实际返回类型**校验,不只判「调用�
   it('返回 BOOLEAN_OPERATION(真机形态)→ 不算成功,报平台缺陷', async () => {
     const host = hostReturning('BOOLEAN_OPERATION');
     await expect(
-      combineAsVariantsNodes(host, runtimeContext(['inPlaceVariants'], 'figma'), {
-        ids: ['1:1', '1:2'],
-      }),
+      combineAsVariantsNodes(
+        host,
+        runtimeContext(['inPlaceVariants'], 'figma'),
+        {
+          ids: ['1:1', '1:2'],
+        },
+      ),
     ).rejects.toThrow(/不是 COMPONENT_SET/);
   });
 
   it('返回 FRAME 同样不算(任何非 COMPONENT_SET 都拒)', async () => {
     const host = hostReturning('FRAME');
     await expect(
-      combineAsVariantsNodes(host, runtimeContext(['inPlaceVariants'], 'figma'), {
-        ids: ['1:1', '1:2'],
-      }),
+      combineAsVariantsNodes(
+        host,
+        runtimeContext(['inPlaceVariants'], 'figma'),
+        {
+          ids: ['1:1', '1:2'],
+        },
+      ),
     ).rejects.toThrow(/不是 COMPONENT_SET/);
   });
 
@@ -84,9 +98,7 @@ describe('combineAsVariants:按**实际返回类型**校验,不只判「调用�
     const originals = new Set([a, b]);
     const passedOriginals: string[] = [];
     const host = makeHost([a, b]) as unknown as DesignHost & {
-      combineAsVariants: (
-        nodes: readonly NodeSkeleton[],
-      ) => NodeSkeleton;
+      combineAsVariants: (nodes: readonly NodeSkeleton[]) => NodeSkeleton;
     };
     host.combineAsVariants = (nodes) => {
       for (const n of nodes) {

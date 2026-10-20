@@ -17,7 +17,10 @@ import { makeFrame, makeHost } from './fixtures';
  * `components[0].parent` 只代表第一个组件的落点,其余组件坐标基准不同。
  */
 function component(id: string, parent: NodeSkeleton | null): NodeSkeleton {
-  const n = { ...makeFrame(id, id), type: 'COMPONENT' } as unknown as NodeSkeleton;
+  const n = {
+    ...makeFrame(id, id),
+    type: 'COMPONENT',
+  } as unknown as NodeSkeleton;
   n.parent = parent;
   return n;
 }
@@ -28,7 +31,10 @@ function hostOf(nodes: NodeSkeleton[], seen: unknown[]): DesignHost {
   };
   host.combineAsVariants = (n, p) => {
     seen.push({ count: n.length, parent: p });
-    return { ...makeFrame('9:set', 'set'), type: 'COMPONENT_SET' } as unknown as NodeSkeleton;
+    return {
+      ...makeFrame('9:set', 'set'),
+      type: 'COMPONENT_SET',
+    } as unknown as NodeSkeleton;
   };
   return host;
 }
@@ -42,9 +48,13 @@ describe('合并落点:必须是真容器,不能用 page 兜底', () => {
     const seen: unknown[] = [];
     const host = hostOf([component('1:1', null), component('1:2', null)], seen);
     await expect(
-      combineAsVariantsNodes(host, runtimeContext(['inPlaceVariants'], 'figma'), {
-        ids: ['1:1', '1:2'],
-      }),
+      combineAsVariantsNodes(
+        host,
+        runtimeContext(['inPlaceVariants'], 'figma'),
+        {
+          ids: ['1:1', '1:2'],
+        },
+      ),
     ).rejects.toThrow(/没有可用的父容器/);
     // 关键:引擎一次都不该被调用(不能先猜完再报错)
     expect(seen).toEqual([]);
@@ -53,12 +63,23 @@ describe('合并落点:必须是真容器,不能用 page 兜底', () => {
   it('父级不是容器(没有 appendChild)→ 同样拒', async () => {
     const seen: unknown[] = [];
     // makeRect 没有 appendChild(叶子节点),用它冒充父级
-    const fakeParent = { id: '9:x', name: 'x', type: 'RECTANGLE' } as unknown as NodeSkeleton;
-    const host = hostOf([component('1:1', fakeParent), component('1:2', fakeParent)], seen);
+    const fakeParent = {
+      id: '9:x',
+      name: 'x',
+      type: 'RECTANGLE',
+    } as unknown as NodeSkeleton;
+    const host = hostOf(
+      [component('1:1', fakeParent), component('1:2', fakeParent)],
+      seen,
+    );
     await expect(
-      combineAsVariantsNodes(host, runtimeContext(['inPlaceVariants'], 'figma'), {
-        ids: ['1:1', '1:2'],
-      }),
+      combineAsVariantsNodes(
+        host,
+        runtimeContext(['inPlaceVariants'], 'figma'),
+        {
+          ids: ['1:1', '1:2'],
+        },
+      ),
     ).rejects.toThrow(/没有可用的父容器/);
     expect(seen).toEqual([]);
   });
@@ -69,9 +90,13 @@ describe('合并落点:必须是真容器,不能用 page 兜底', () => {
     const p2 = container('2:2');
     const host = hostOf([component('1:1', p1), component('1:2', p2)], seen);
     await expect(
-      combineAsVariantsNodes(host, runtimeContext(['inPlaceVariants'], 'figma'), {
-        ids: ['1:1', '1:2'],
-      }),
+      combineAsVariantsNodes(
+        host,
+        runtimeContext(['inPlaceVariants'], 'figma'),
+        {
+          ids: ['1:1', '1:2'],
+        },
+      ),
     ).rejects.toThrow(/不在同一父级/);
     expect(seen).toEqual([]);
   });

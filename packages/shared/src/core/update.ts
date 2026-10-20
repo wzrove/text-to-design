@@ -43,6 +43,10 @@ async function applyProps(
       create: false,
       src: props as Readonly<Record<string, unknown>>,
       outcome,
+      // 修改路径只用于对账口径(内层容器高度被 hug 不算漂移);
+      // 父级没有 type 字段 = 页面(PageSkeleton 与 NodeSkeleton 类型上不重叠,不能直接比)
+      outermost:
+        node.parent != null && (node.parent as { type?: string }).type == null,
     },
     UPDATE_WRITERS,
   );

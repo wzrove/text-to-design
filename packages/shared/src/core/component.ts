@@ -20,12 +20,12 @@ import {
 import type { RuntimeContext } from './runtime';
 import { serializeNode } from './serialize';
 import { updateSelection } from './update';
+import { resizeContainer } from './utils';
 import {
   normalizeVariantGroupProperties,
   resolveVariantWriteKey,
   variantValueOffered,
 } from './variant';
-import { resizeContainer } from './utils';
 
 export async function createComponentNodes(
   host: DesignHost,
@@ -469,12 +469,15 @@ export async function setInstanceProperties(
       const validKeys = [
         ...Object.keys(variantProps),
         ...Object.keys(
-          (inst.variantProperties as Record<string, string> | null | undefined) ??
-            {},
+          (inst.variantProperties as
+            | Record<string, string>
+            | null
+            | undefined) ?? {},
         ),
       ];
       const invalidKeys = Object.keys(params.properties).filter(
-        (k) => !validKeys.includes(k) && !validKeys.includes(basePropertyName(k)),
+        (k) =>
+          !validKeys.includes(k) && !validKeys.includes(basePropertyName(k)),
       );
       if (invalidKeys.length > 0) {
         throw new Error(
@@ -552,7 +555,10 @@ export async function setInstanceProperties(
           );
         }
         if (
-          !variantValueOffered(value, setDimensions?.[mapped.rewrittenFrom ?? key])
+          !variantValueOffered(
+            value,
+            setDimensions?.[mapped.rewrittenFrom ?? key],
+          )
         ) {
           throw new Error(
             `变体属性 ${key}=${value} 不在组件集的可选值里(可选:${(setDimensions?.[mapped.rewrittenFrom ?? key] ?? []).join('、')})`,
@@ -585,9 +591,7 @@ export async function setInstanceProperties(
           } 的 InstanceNode 没有 componentProperties,setProperties 只收 string,该实例也不在变体集里 —— 写任何属性名都只会落到引擎空转(实测 25s 超时、错误不带原因)。布尔 / 文本 / 换绑属性本平台没有入口;变体属性只能改已存在变体集里的维度`,
         );
       }
-      throw new Error(
-        `非法属性名:${key}。本实例可写:${validKeys.join(',')}`,
-      );
+      throw new Error(`非法属性名:${key}。本实例可写:${validKeys.join(',')}`);
     }
     planned.push({ inst, props: resolved });
   }
@@ -638,7 +642,6 @@ export async function importComponentNodes(
   return { created: serializeNode(component) };
 }
 
-
 /**
  * 校验 `combineAsVariants` 的返回值**真的是 COMPONENT_SET**。
  *
@@ -652,11 +655,11 @@ export async function importComponentNodes(
  * 节点,画布上却没有变体集 —— 正是 0007 那类「回显成功、实际没发生」。
  * 故按**实际类型**分流,非 COMPONENT_SET 一律当失败。
  */
-function requireComponentSet(
-  s: NodeSkeleton | null | undefined,
-): NodeSkeleton {
+function requireComponentSet(s: NodeSkeleton | null | undefined): NodeSkeleton {
   if (s == null) {
-    throw new Error('combineAsVariants 未返回节点(引擎返回了 null / undefined)');
+    throw new Error(
+      'combineAsVariants 未返回节点(引擎返回了 null / undefined)',
+    );
   }
   const type = (s as { type?: unknown }).type;
   if (type !== 'COMPONENT_SET') {

@@ -315,6 +315,15 @@ export function bridgeTool(
         // ② 结果上的 warnings 字段 —— jsd_batch 逐步骤收集后汇总,否则编排里
         // 只看 structuredContent,这些告警会被静默丢掉。
         const warnings: string[] = [];
+        // 插件/core 自己在结果里带的 warnings(创建路径的字段未生效、reparent 的
+        // 布局属性被父级重写等)也要进这条通道:jsd_batch 只汇总 tools 结果顶层的
+        // warnings,埋在 data 里的话编排批次里会被静默丢掉(2026-10-20 补)。
+        const dataWarnings = (data as { warnings?: unknown } | null)?.warnings;
+        if (Array.isArray(dataWarnings)) {
+          for (const line of dataWarnings) {
+            if (typeof line === 'string' && line !== '') warnings.push(line);
+          }
+        }
         if (hook?.after != null) {
           try {
             const lines = (await hook.after(args, data)) ?? [];

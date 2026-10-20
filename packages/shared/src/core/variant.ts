@@ -80,7 +80,9 @@ export function normalizeVariantGroupProperties(
     const out: Record<string, string[]> = {};
     for (const [dimension, entry] of Object.entries(raw)) {
       const values = entry?.values;
-      out[dimension] = Array.isArray(values) ? values.map(variantValueName) : [];
+      out[dimension] = Array.isArray(values)
+        ? values.map(variantValueName)
+        : [];
     }
     return out;
   } catch {

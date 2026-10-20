@@ -38,6 +38,13 @@ export interface WriteCtx {
   outcome: WriteOutcome;
   /** true = 创建路径:允许默认值与推断;false = 修改路径:纯增量覆盖 */
   create: boolean;
+  /**
+   * 该节点是不是**最外层节点容器**(屏根 / 画板)。
+   *
+   * 必须由调用方显式给:创建期节点还没挂到父级(`parent` 恒为 null),靠父链探不出来。
+   * 唯一用途是 sizingMode 推断 —— 屏根高度钉 FIXED,内层容器高度优先 AUTO。
+   */
+  outermost: boolean;
 }
 
 /**
