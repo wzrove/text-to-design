@@ -1,7 +1,17 @@
 import type { Accessor, ParentProps } from 'solid-js';
-import { createContext, createSignal, onMount, useContext } from 'solid-js';
-import type { PluginPlatform } from 'text-to-design-shared';
-import { UI_CHROME_DEFAULT, WS_PORT } from 'text-to-design-shared';
+import {
+  createContext,
+  createSignal,
+  onCleanup,
+  onMount,
+  useContext,
+} from 'solid-js';
+import type { ActivityPhase, PluginPlatform } from 'text-to-design-shared';
+import {
+  ACTIVITY_SETTLE_MS,
+  UI_CHROME_DEFAULT,
+  WS_PORT,
+} from 'text-to-design-shared';
 import { applyStoredChoice, t } from '../i18n/useLocale';
 import type { BridgeStatus } from './BridgeSocket';
 import { BridgeSocket } from './BridgeSocket';
@@ -35,12 +45,22 @@ export interface BridgeStore {
    */
   chromeHeight: Accessor<number>;
   /**
+   * 宿主报来的最小化模式(见 shared/panel.ts)。`undefined` = 旧 code 产物没带这个
+   * 字段,消费方按视口宽度自己猜。
+   */
+  envMinimized: Accessor<boolean | undefined>;
+  /**
    * npm 上两个包的最新版本(daemon 代查后推来,见 0038)。
    * 任一项为 `null` = 没查到,面板据此**不**提示升级。
    */
   latest: Accessor<{ ui: string | null; mcp: string | null }>;
   /** daemon 自报版本(status 帧);空串 = 尚未连上,无从比对 */
   daemonVersion: Accessor<string>;
+  /**
+   * 工具活动相位(见 shared/activity-channel.ts):最小化态的宠物按它切换动作。
+   * `idle` 不是帧,是**没有在跑的工具**且结果相位的沉降期已过。
+   */
+  activity: Accessor<ActivityPhase | 'idle'>;
   connect: () => void;
   disconnect: () => void;
   rescan: () => void;
@@ -74,11 +94,55 @@ export function BridgeProvider(props: ParentProps) {
    * 平台的行为因此与 0028 之前完全一致。
    */
   const [chromeHeight, setChromeHeight] = createSignal(UI_CHROME_DEFAULT);
+  /** `undefined` = code 产物没带 minimized 字段(跨版本),消费方退回按视口猜 */
+  const [envMinimized, setEnvMinimized] = createSignal<boolean | undefined>(
+    undefined,
+  );
   const [latest, setLatest] = createSignal<{
     ui: string | null;
     mcp: string | null;
   }>({ ui: null, mcp: null });
   const [daemonVersion, setDaemonVersion] = createSignal('');
+
+  /**
+   * 活动相位(见 shared/activity-channel.ts)。
+   *
+   * 按**在跑计数**判,不按「最后一帧」:jsd_batch 的内层调用也各推一帧,批量里
+   * 一个内层的 success 会紧跟在另一个仍在跑的调用后面 —— 只看最后一帧就会在还
+   * 没干完时显示成已完成。running 与 success/error 天然配平(每次调用一进一出)。
+   */
+  const [activity, setActivity] = createSignal<ActivityPhase | 'idle'>('idle');
+  let runningTools = 0;
+  let settleTimer: number | undefined;
+
+  const clearSettle = (): void => {
+    if (settleTimer == null) return;
+    window.clearTimeout(settleTimer);
+    settleTimer = undefined;
+  };
+
+  const applyActivity = (phase: ActivityPhase): void => {
+    clearSettle();
+    if (phase === 'running') {
+      runningTools += 1;
+      setActivity('running');
+      return;
+    }
+    runningTools = Math.max(0, runningTools - 1);
+    setActivity(phase);
+    // 结果相位保留沉降期:一次几毫秒的成功调用不保留就等于没画
+    settleTimer = window.setTimeout(() => {
+      settleTimer = undefined;
+      setActivity(runningTools > 0 ? 'running' : 'idle');
+    }, ACTIVITY_SETTLE_MS);
+  };
+
+  /** 通道断了就归零:相位是「daemon 在推」这件事的投影,没通道就没有事实 */
+  const resetActivity = (): void => {
+    clearSettle();
+    runningTools = 0;
+    setActivity('idle');
+  };
 
   let bridge: BridgeSocket | undefined;
   let subscribed = false;
@@ -149,6 +213,7 @@ export function BridgeProvider(props: ParentProps) {
           // 版本结论同样随通道失效:daemon 都不在了,「有新版」无从谈起
           setDaemonVersion(() => '');
           setLatest(() => ({ ui: null, mcp: null }));
+          resetActivity();
         } else {
           setDaemonVersion(() => b.daemonVersion);
         }
@@ -161,8 +226,11 @@ export function BridgeProvider(props: ParentProps) {
       else if (e.type === 'ui_env') {
         setCanResize(() => e.canResize);
         setChromeHeight(() => e.chromeHeight);
+        setEnvMinimized(() => e.minimized);
       } else if (e.type === 'locale_state') applyStoredChoice(e.stored);
+      else if (e.type === 'activity') applyActivity(e.phase);
     });
+    onCleanup(clearSettle);
   });
 
   const store: BridgeStore = {
@@ -174,8 +242,10 @@ export function BridgeProvider(props: ParentProps) {
     capability,
     canResize,
     chromeHeight,
+    envMinimized,
     latest,
     daemonVersion,
+    activity,
     connect: () => getBridge().connect(),
     disconnect: () => getBridge().disconnect(),
     rescan: () => getBridge().rescan(),

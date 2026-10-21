@@ -1,10 +1,13 @@
 import type { z } from 'zod';
+import type { ActivityPushFrame } from './activity-channel';
 import type { ServerStatusFrame } from './connection';
 import type { PluginError } from './dicts/error-code';
 import type { LogLevel } from './dicts/log';
 import type * as s from './schemas';
 import type { VersionPushFrame } from './version-channel';
 
+/* 工具活动提醒(daemon 在 tools/call 前后推相位 → 面板最小化态) */
+export * from './activity-channel';
 /* 相机锁定(UI 发意图,code 侧在 viewport 契约层拦截) */
 export * from './camera-lock';
 /* 连接层协议(端口/握手帧/重连节奏):daemon 与插件 UI 的唯一真源 */
@@ -251,7 +254,8 @@ export type PluginResponse<D = unknown> = {
 export type ServerPush =
   | { type: 'log'; level: LogLevel; line: string }
   | ServerStatusFrame
-  | VersionPushFrame;
+  | VersionPushFrame
+  | ActivityPushFrame;
 export function makeResponse<D>(
   id: string,
   ok: boolean,

@@ -1,4 +1,6 @@
 import type {
+  ActivityPhase,
+  ActivityPushFrame,
   LogLevel,
   ServerPush,
   VersionPushFrame,
@@ -113,6 +115,27 @@ export class Bridge {
       this.transport.sendPush(JSON.stringify(frame));
     } catch (e) {
       warn(`版本推送失败: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+
+  /**
+   * 把一次 tools/call 的相位推给面板(最小化态的宠物靠它动)。
+   *
+   * 离线**直接丢弃**,不进 `logRing`:回放一条几十秒前的「正在跑」会让面板显示一个
+   * 早已结束的动作,比不推更糟(同 pushVersion 的理由)。
+   *
+   * 推送失败只留 warning:它连的是「给人看的装饰」,不能让工具调用因为一个动画挂掉。
+   */
+  notifyActivity(phase: ActivityPhase, tool?: string): void {
+    if (!this.transport.isConnected) return;
+    const frame: ActivityPushFrame =
+      tool == null
+        ? { type: 'activity', phase }
+        : { type: 'activity', phase, tool };
+    try {
+      this.transport.sendPush(JSON.stringify(frame));
+    } catch (e) {
+      warn(`活动推送失败: ${e instanceof Error ? e.message : String(e)}`);
     }
   }
 

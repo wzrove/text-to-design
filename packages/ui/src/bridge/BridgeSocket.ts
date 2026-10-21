@@ -41,9 +41,18 @@ export class BridgeSocket {
         // 缺字段是跨版本常态(新 UI 配旧 code 产物):收口在 shared 的归一函数,
         // 不在消费点各判一次 —— 缺字段与「值不可信」在这里是同一个结果(0)
         chromeHeight: normalizeChromeHeight(env.chromeHeight),
+        // 脏值当缺省:模式只有布尔可信,其余一律交回「按视口宽度猜」那条老路
+        minimized:
+          typeof env.minimized === 'boolean' ? env.minimized : undefined,
       });
     this.router.onLocale = (stored) =>
       this.events.emit({ type: 'locale_state', stored });
+    this.router.onActivity = (frame) =>
+      this.events.emit({
+        type: 'activity',
+        phase: frame.phase,
+        tool: frame.tool,
+      });
     this.router.onServerStatus = (frame) => {
       if (frame.state === 'superseded') {
         this.connection.markSuperseded();

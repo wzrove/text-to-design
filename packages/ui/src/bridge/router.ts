@@ -1,4 +1,5 @@
 import type {
+  ActivityPushFrame,
   LocaleChoice,
   LocaleStateMessage,
   PluginError,
@@ -11,6 +12,7 @@ import type {
   VersionPushFrame,
 } from 'text-to-design-shared';
 import {
+  isActivityPushFrame,
   isVersionPushFrame,
   toStoredChoice,
   UI_FORWARD_TIMEOUT_MS,
@@ -52,6 +54,9 @@ export class Router {
 
   /** daemon 代查到的 npm 最新版本(见 0038);查不到时两项为 null */
   onVersion: ((frame: VersionPushFrame) => void) | null = null;
+
+  /** 某次 tools/call 的相位(见 shared/activity-channel.ts) */
+  onActivity: ((frame: ActivityPushFrame) => void) | null = null;
 
   constructor(conn: Conn, log: (level: LogLevel, line: string) => void) {
     this.conn = conn;
@@ -96,6 +101,10 @@ export class Router {
     }
     if (isVersionPushFrame(msg)) {
       this.onVersion?.(msg);
+      return;
+    }
+    if (isActivityPushFrame(msg)) {
+      this.onActivity?.(msg);
       return;
     }
     if (

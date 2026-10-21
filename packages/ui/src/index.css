@@ -329,6 +329,295 @@ body {
       transform: rotate(360deg);
     }
   }
+
+  /* ── 最小化态宠物(笔宠物)三态动画 ──────────────────────────────
+     相位来自 daemon 的 activity 推送帧(shared/activity-channel.ts):没有帧就是
+     .state-idle。形状与节奏取自设计稿 ai-pet.html,位移写的是 SVG 用户单位 ——
+     viewBox 高 111,而面板里只有 50px,按 px 写死会让幅度随缩放失真(SVG 子元素的
+     CSS px 就是用户单位,两者一致)。
+
+     `.pet-inner` 承担漂浮/弹跳/抖动,笔的运笔轨迹由 PetLogo 的 rAF 驱动,两条
+     互不改写对方的 transform。 */
+  .pet,
+  .pet svg {
+    display: block;
+    height: 100%;
+    width: 100%;
+  }
+
+  .pet svg {
+    overflow: visible;
+  }
+
+  .pet #green-line,
+  .pet #check-line,
+  .pet #error-line {
+    transition: opacity 120ms linear;
+  }
+
+  /* 三态共用的初始隐藏:成功/失败各自把对应那道笔画亮起来 */
+  .pet #check-line,
+  .pet #error-line,
+  .pet #x-eyes,
+  .pet #mouth-happy,
+  .pet #mouth-sad {
+    opacity: 0;
+  }
+
+  .pet #normal-eyes,
+  .pet #x-eyes,
+  .pet #mouth,
+  .pet #mouth-happy,
+  .pet #mouth-sad {
+    transition: opacity 140ms ease;
+  }
+
+  /* 缩放/旋转的锚点必须声明,而且要用 fill-box 而不是写坐标:SVG 子元素的
+     `transform-origin` 数值是相对 viewBox 原点(这里是 11,4)算的,照图形坐标
+     直接写会整体偏一截。fill-box + 50% 对「自己包围盒的中心」生效,与挪动
+     viewBox 无关。 */
+  .pet #shadow,
+  .pet #normal-eyes {
+    transform-box: fill-box;
+    transform-origin: 50% 50%;
+  }
+
+  /* 被抚摸(hover):眯眼 + 腮红 + 冒爱心。
+     这几层只在 hover 时显形,所以先声明隐藏与过渡,状态块再按需压回去 ——
+     它们与状态块同特异度,谁生效只看先后,写在状态块**前面**是有意的。 */
+  .pet #blush,
+  .pet #eyes-happy,
+  .pet #hearts {
+    opacity: 0;
+    transition: opacity 160ms ease;
+  }
+
+  .pet .heart {
+    animation: petHeart 1.9s ease-in infinite;
+  }
+
+  .pet:hover #blush,
+  .pet:hover #eyes-happy,
+  .pet:hover #hearts {
+    opacity: 1;
+  }
+
+  .pet:hover #normal-eyes,
+  .pet:hover #mouth {
+    opacity: 0;
+  }
+
+  .pet:hover #mouth-happy {
+    opacity: 1;
+  }
+
+  /* 待机:只呼吸与眨眼,不做任何与「AI 在干活」有关的动作 */
+  .pet.state-idle .pet-inner {
+    animation: petFloat 2.8s infinite ease-in-out alternate;
+  }
+
+  .pet.state-idle #normal-eyes {
+    animation: petBlink 4.4s infinite;
+  }
+
+  .pet.state-running .pet-inner {
+    animation: petFloat 2.4s infinite ease-in-out alternate;
+  }
+
+  .pet.state-running #shadow {
+    animation: petShadow 2.4s infinite ease-in-out alternate;
+  }
+
+  .pet.state-running #normal-eyes {
+    animation: petBlink 3.6s infinite;
+  }
+
+  .pet.state-running .paw {
+    animation: petPaw 1.2s infinite ease-in-out alternate;
+  }
+
+  .pet.state-running .paw.r {
+    animation-delay: 350ms;
+  }
+
+  .pet.state-success .pet-inner {
+    animation: petBounce 550ms infinite alternate ease-in-out;
+  }
+
+  .pet.state-success #check-line,
+  .pet.state-success #mouth-happy {
+    opacity: 1;
+  }
+
+  .pet.state-success #mouth {
+    opacity: 0;
+  }
+
+  .pet.state-error .pet-inner {
+    animation: petShake 260ms infinite;
+  }
+
+  .pet.state-error #error-line,
+  .pet.state-error #x-eyes,
+  .pet.state-error #mouth-sad {
+    opacity: 1;
+  }
+
+  .pet.state-error #normal-eyes,
+  .pet.state-error #mouth,
+  .pet.state-error #mouth-happy,
+  .pet.state-error #eyes-happy,
+  .pet.state-error #blush,
+  .pet.state-error #hearts {
+    opacity: 0;
+  }
+
+  /* 被抚摸时的整套身体反馈:挤压回弹 + 爪子交替轻抬 + 阴影同步收缩。
+     只在待机/运行两态接管 —— 成功与失败各有自己的弹跳/抖动,被摸一下就把
+     「刚失败了」压掉是不对的。
+
+     锚点取脚底(fill-box 50% 100%):压下去才是「被手按住头顶往下按」,
+     取中心会变成整体缩小。三个动画共用 760ms 周期,阴影与身体同拍,
+     否则会看着像影子自己在动。 */
+  .pet.state-idle:hover .pet-inner,
+  .pet.state-running:hover .pet-inner {
+    animation: petSquish 760ms infinite ease-in-out;
+    transform-box: fill-box;
+    transform-origin: 50% 100%;
+  }
+
+  .pet.state-idle:hover .paw,
+  .pet.state-running:hover .paw {
+    animation: petPawLift 900ms infinite ease-in-out alternate;
+  }
+
+  /* 后半拍:左右错开半个周期才叫「交替」,同相位只是两只一起抬 */
+  .pet.state-idle:hover .paw.r,
+  .pet.state-running:hover .paw.r {
+    animation-delay: 450ms;
+  }
+
+  .pet.state-idle:hover #shadow,
+  .pet.state-running:hover #shadow {
+    animation: petShadowSquish 760ms infinite ease-in-out;
+  }
+
+  @keyframes petFloat {
+    from {
+      transform: translateY(0);
+    }
+    to {
+      transform: translateY(-8px);
+    }
+  }
+
+  @keyframes petShadow {
+    from {
+      opacity: 0.55;
+      transform: scale(1);
+    }
+    to {
+      opacity: 0.35;
+      transform: scale(0.86);
+    }
+  }
+
+  @keyframes petBlink {
+    0%,
+    95%,
+    100% {
+      transform: scaleY(1);
+    }
+    97% {
+      transform: scaleY(0.12);
+    }
+  }
+
+  @keyframes petBounce {
+    from {
+      transform: translateY(0);
+    }
+    to {
+      transform: translateY(-14px);
+    }
+  }
+
+  @keyframes petShake {
+    0%,
+    100% {
+      transform: translate(0, 0) rotate(0);
+    }
+    25% {
+      transform: translate(-3px, 0) rotate(-1.2deg);
+    }
+    75% {
+      transform: translate(3px, 0) rotate(1.2deg);
+    }
+  }
+
+  @keyframes petPaw {
+    from {
+      transform: translateY(0);
+    }
+    to {
+      transform: translateY(-1.6px);
+    }
+  }
+
+  /* 被抚摸:按住头顶往下压 → 松开回弹。宽高反向挤压(1.045 / .955)才像软体,
+     等比缩小只是「变远」。±0.6° 的微转让回弹不像机械往复。 */
+  @keyframes petSquish {
+    0% {
+      transform: scale(1, 1) rotate(0deg);
+    }
+    40% {
+      transform: scale(1.045, 0.955) rotate(-0.6deg);
+    }
+    60% {
+      transform: scale(1.04, 0.96) rotate(0.6deg);
+    }
+    100% {
+      transform: scale(1, 1) rotate(0deg);
+    }
+  }
+
+  /* 爪子交替轻抬:幅度比运行时那只 paw 略大,才看得出是在回应抚摸 */
+  @keyframes petPawLift {
+    from {
+      transform: translateY(0);
+    }
+    to {
+      transform: translateY(-2.6px);
+    }
+  }
+
+  /* 影子跟着身体缩:身体压下去时离地面更近,影子该更小更淡 */
+  @keyframes petShadowSquish {
+    0%,
+    100% {
+      opacity: 0.5;
+      transform: scale(1);
+    }
+    45% {
+      opacity: 0.32;
+      transform: scale(0.84);
+    }
+  }
+
+  /* 爱心:从头顶升起,边走边放大再淡出 */
+  @keyframes petHeart {
+    0% {
+      opacity: 0;
+      transform: translateY(6px) scale(0.6);
+    }
+    25% {
+      opacity: 1;
+    }
+    100% {
+      opacity: 0;
+      transform: translateY(-18px) scale(1);
+    }
+  }
 }
 
 /* 动效可达性:系统开启「减少动态效果」时压缩所有过渡/动画 */

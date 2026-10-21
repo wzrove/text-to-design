@@ -178,6 +178,18 @@ export interface UiEnvMessage {
   canResize: boolean;
   /** 宿主标题栏等装饰占的高度;**0 = 不补偿**(见 `UI_CHROME_DEFAULT`) */
   chromeHeight?: number;
+  /**
+   * 当前是否最小化(模式,不是尺寸)。
+   *
+   * 为什么必须随这条走:最小化要靠 `showUI` 清标题,而再次 `showUI` 会重建 iframe
+   * (Figma typings 已证实),重建后的 UI 只剩「自己量视口」这一条线索。而 Figma 的
+   * 窗口**最小宽度是 70**(`ShowUIOptions.width` / `UIAPI.resize` 都写明),请求 50
+   * 只会被夹到 70 —— 「宽度 ≤ 50+容差」这条判据在 Figma 上永远不成立,重建后的面板
+   * 会以展开态渲染进 70×50 的窗口,最小化看起来根本没发生。
+   *
+   * 缺字段(新 UI 配旧 code 产物)时按视口宽度猜,与历史行为一致。
+   */
+  minimized?: boolean;
 }
 
 export function isUiResizeMessage(value: unknown): value is UiResizeMessage {

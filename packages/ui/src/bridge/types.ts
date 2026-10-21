@@ -1,5 +1,6 @@
 // 日志级别唯一真源在 shared,这里再导出维持既有导入路径
 import type {
+  ActivityPhase,
   CoreCapability,
   HostCapability,
   LocaleChoice,
@@ -41,14 +42,22 @@ export type BridgeEvent =
   | { type: 'selection'; data: unknown }
   | { type: 'platform'; platform: PluginPlatform }
   /** `chromeHeight` 已过 readChromeHeight 收口(缺省 → 兜底值,见 shared/panel.ts) */
-  | { type: 'ui_env'; canResize: boolean; chromeHeight: number }
+  | {
+      type: 'ui_env';
+      canResize: boolean;
+      chromeHeight: number;
+      /** 宿主侧的最小化模式;缺省 = 旧 code 产物,由视口宽度猜(见 shared/panel.ts) */
+      minimized?: boolean;
+    }
   /** 宿主里存着的语言选择(code 侧启动时推一次;见 shared/locale-channel.ts) */
   | { type: 'locale_state'; stored: LocaleChoice | null }
   /** npm 上两个包的最新版本(daemon 代查后推来,见 0038;任一项可为 null) */
   | {
       type: 'version';
       latest: { ui: string | null; mcp: string | null };
-    };
+    }
+  /** 某次 tools/call 的相位(daemon 推,见 shared/activity-channel.ts) */
+  | { type: 'activity'; phase: ActivityPhase; tool?: string };
 
 export type Conn = {
   port: number;

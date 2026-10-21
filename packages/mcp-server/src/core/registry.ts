@@ -1,5 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/server';
 import type {
+  ActivityPhase,
   MessageKey,
   PluginMethod,
   PluginPlatform,
@@ -245,6 +246,21 @@ export function bridgeTool(
       fu == null || fu.type !== 'tool' || fu.description == null
         ? fu
         : { ...fu, description: i18n.t(fu.description as MessageKey) };
+    /**
+     * 面板侧的活动提醒(最小化态的宠物)是**旁路**:它连的是给人看的动画,
+     * 推送失败(甚至对端根本没这个方法)不许把工具调用带塌 —— 与 hook 同一条纪律。
+     * 失败只留一行 warning,不静默(0007)。
+     */
+    const notifyActivity = (phase: ActivityPhase, tool: string): void => {
+      try {
+        bridge.notifyActivity(phase, tool);
+      } catch (e) {
+        warn(
+          `活动提醒推送失败(已忽略): ${e instanceof Error ? e.message : String(e)}`,
+        );
+      }
+    };
+
     // 可编程执行体:MCP 回调与 jsd_batch 编排共用(统一兜底/超时/取消传播)
     const executeTool: ToolExecutor = async (args, signal, opts) => {
       try {
@@ -286,6 +302,9 @@ export function bridgeTool(
         // 钩子只做尽力而为的复核,抛错一律降级为 warning,不能让工具失败。
         // checkDrift=false 之类的「本次不复核」是**按调用**生效的:钩子工厂本身
         // 仍在 def 上,只是这一次不实例化 —— 不是把开关塞进全局。
+        // 面板侧的活动提醒(最小化态的宠物):此处是**所有**工具执行体的唯一收口
+        // (MCP 回调与 jsd_batch 内层都走 executeTool),故只需要在这里埋一次
+        notifyActivity('running', def.name);
         const hook = opts?.skipHooks === true ? undefined : def.hook?.();
         if (hook?.before != null) {
           try {
@@ -343,6 +362,7 @@ export function bridgeTool(
           extra.length > 0 ? extra : undefined,
           projectFollowUp(def.followUp),
         );
+        notifyActivity('success', def.name);
         return warnings.length > 0 ? { ...result, warnings } : result;
       } catch (e) {
         // 可观测性:插件执行期错误(如引擎校验失败)落日志,便于排查。
@@ -351,6 +371,7 @@ export function bridgeTool(
         // isError 文本中
         const msg = e instanceof Error ? e.message : String(e);
         error(`工具 ${def.name} 执行失败: ${msg.slice(0, 200)}`);
+        notifyActivity('error', def.name);
         return err(e, def.outputSchema, projectFollowUp(def.followUp));
       }
     };

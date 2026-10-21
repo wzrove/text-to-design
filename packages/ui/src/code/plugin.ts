@@ -111,7 +111,14 @@ export function registerPlugin(
 
   // __html__ 由构建期注入,缺失给空串;判定只此一处,启动与最小化往返必须拿到同一份 html
   function panelHtml(): string {
-    return typeof __html__ === 'string' ? __html__ : '';
+    console.log('[plugin] __html__', typeof __html__, __html__);
+    if (typeof __html__ !== 'string') {
+      return __html__;
+    }
+    if (__html__) {
+      return __html__;
+    }
+    return '';
   }
 
   /**
@@ -240,6 +247,9 @@ export function registerPlugin(
         // 装饰高只有 MG 有真源,另两平台的适配器不实现本方法 → 下发 0(不补偿)。
         // 收口走 normalizeChromeHeight:适配器给什么都不该让荒唐值冲进请求
         chromeHeight: normalizeChromeHeight(host.ui.chromeHeight?.()),
+        // 模式随环境一起下发:`showUI` 重建 iframe 后,新 UI 只有这一条能知道
+        // 「现在是缩着的」—— Figma 最小宽度 70,按视口猜宽度会一直猜成展开态
+        minimized,
       });
     } catch (e) {
       console.error('[plugin] 推送面板环境失败', e);

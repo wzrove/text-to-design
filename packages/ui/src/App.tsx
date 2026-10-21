@@ -19,7 +19,7 @@ import ConnectionHint from './components/ConnectionHint';
 import LocaleSwitch from './components/LocaleSwitch';
 import LogDrawer from './components/LogDrawer';
 import LogTrigger from './components/LogTrigger';
-import MinimizedLogo from './components/MinimizedLogo';
+import MinimizedPet from './components/MinimizedPet';
 import MinimizeToggle from './components/MinimizeToggle';
 import PanelHeightSync from './components/PanelHeightSync';
 import SelectionCard from './components/SelectionCard';
@@ -41,6 +41,7 @@ function Shell() {
     clearLog,
     canResize,
     chromeHeight,
+    envMinimized,
     latest,
     daemonVersion,
   } = useBridge();
@@ -56,24 +57,27 @@ function Shell() {
    *
    * **初值按视口宽度认,不写死 false**(重载兜底):最小化还要改宿主标题栏文字,而
    * 标题只能靠 showUI 的 options —— 再次 showUI 会重建 iframe(Figma 的 typings 已写明,
-   * 见 plugin-api.d.ts:365),面板会以「整棵面板树 + 50px 窗口」重启:logo 不在、
+   * 见 plugin-api.d.ts:365),面板会以「整棵面板树 + 50px 窗口」重启:宠物不在、
    * 双击无从谈起,面板就此锁死。
    *
-   * 为什么宽度能认:宽度只有最小化态才不是 360(常态宽度由宿主定,最小化态是正方形),
-   * 「≤ PANEL_MINIMIZED_SIZE + 容差」这一侧因此只可能是最小化。容差是**借** PANEL_RESIZE_STEP
-   * 的值,不是它的语义:PANEL_RESIZE_STEP 是改高度的发送阈值(防抖/吸附),测量余量另有
-   * PANEL_HEIGHT_SLACK。这里只是要一个量级 —— 给宿主内容区与请求尺寸之间的取整差留口子,
-   * 差几像素仍须认成最小化,否则面板照样锁死。
+   * 宽度只是**旧 code 产物**的兜底:`ui_env` 现在带 `minimized`(见 shared/panel.ts),
+   * 那才是真相。宽度判据单独用会漏 —— Figma 窗口最小宽度 70(`ShowUIOptions.width`
+   * 与 `UIAPI.resize` 都写明),请求 50 被夹到 70,「≤ 58」永远不成立,重建后的面板
+   * 会以展开态渲染进 70×50 的窗口(症状:最小化后看不到宠物,面板挤成一条)。
    *
-   * 为什么补推兜不住这一态(dec 28008c70):补推到达前那几帧已按展开态渲染,而 50px
-   * 窗口里没有任何可点的入口 —— 那几帧就是锁死本身,所以初值必须自己认得出来,不能等。
-   * code 侧在 showUI 之后确实会补推启动帧,但那是给 iframe 重建后的其余状态用的
-   * (canResize / 能力表 / 语言 / 选中),最小化模式不在其中:code 侧的 minimized 本来就是
-   * true、窗口也已经是对的,补推只是把同一件事再说一遍,故这里也不发消息。
+   * 容差是**借** PANEL_RESIZE_STEP 的值,不是它的语义:它是改高度的发送阈值(防抖/吸附),
+   * 测量余量另有 PANEL_HEIGHT_SLACK。这里只要一个量级 —— 给宿主内容区与请求尺寸之间
+   * 的取整差留口子。
    */
   const [minimized, setMinimized] = createSignal(
     window.innerWidth <= PANEL_MINIMIZED_SIZE + PANEL_RESIZE_STEP,
   );
+
+  /** 宿主报来的模式压过视口猜测;没有该字段(旧 code 产物)就维持初值 */
+  createEffect(() => {
+    const fromHost = envMinimized();
+    if (fromHost !== undefined) setMinimized(fromHost);
+  });
   const setMinimize = (next: boolean): void => {
     setMinimized(next);
     const message: UiMinimizeMessage = { type: 'ui_minimize', minimized: next };
@@ -188,7 +192,7 @@ function Shell() {
     会把手改回内容高 —— 那个窗口里量出来的内容高是自相矛盾的。
   */
   return (
-    <Show when={!minimized()} fallback={<MinimizedLogo onRestore={restore} />}>
+    <Show when={!minimized()} fallback={<MinimizedPet onRestore={restore} />}>
       <div
         ref={(el) => {
           rootEl = el;
