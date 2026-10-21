@@ -367,8 +367,18 @@ export interface DesignHost {
   loadFontAsync(font: shared.FontName): Promise<void>;
   listAvailableFontsAsync(): Promise<{ fontName: shared.FontName }[]>;
 
-  /** 插件外壳:UI 生命周期 / 事件订阅 / 消息收发(两平台同构) */
-  showUI(html: string, options: { width?: number; height?: number }): void;
+  /**
+   * 插件外壳:UI 生命周期 / 事件订阅 / 消息收发(两平台同构)。
+   *
+   * `title` 只有 Figma / jsDesign 认(原生 `ShowUIOptions.title`);MG 的
+   * `ShowUIOptions` 无此字段,该平台标题栏文字清不掉。再次 `showUI` **会重建 iframe**
+   * (Figma typings `plugin-api.d.ts:365`:旧 UI 先关闭再显示新的;另两家未写,按最坏情况
+   * 处理),故 UI 侧按视口宽度兜底最小化态、code 侧在 showUI 之后补推启动帧(dec 28008c70)。
+   */
+  showUI(
+    html: string,
+    options: { width?: number; height?: number; title?: string },
+  ): void;
   /**
    * 本地样式枚举:同步 getter 为两平台 PluginAPI 原生符号,`*Async` 为
    * dynamic-page 下的替代入口(Figma 有、jsDesign 无,登记为缺口)。
@@ -458,7 +468,7 @@ export interface DesignHost {
      * 同签名同语义),外框里含着宿主自绘的标题栏,而只有 MasterGo 在 typings 里
      * 暴露了它(`ui.viewport.headerHeight`,`@mastergo/plugin-typings@2.19.2:1761`);
      * **Figma 与 jsDesign 无此符号**。所以契约是「取得到就取、取不到兜底」,
-     * 兜底值在 `panel.ts`(`UI_CHROME_FALLBACK`)。
+     * 兜底值在 `panel.ts`(`UI_CHROME_DEFAULT`)。
      *
      * 返回 `unknown`:适配器负责把宿主值过一遍可信性判定,不可信时回该兜底 ——
      * core 不碰宿主符号,也不替平台猜数值。

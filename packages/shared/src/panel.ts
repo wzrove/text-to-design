@@ -14,6 +14,24 @@
 export const PANEL_WIDTH = 360;
 
 /**
+ * 宿主窗口标题栏的文字(dec 28008c70)。
+ *
+ * 为什么收在这里:最小化要清空它、恢复要写回来,而标题**只有** `showUI` 的 options
+ * 有口(`UIAPI` 没有 title 成员,Figma / jsDesign 的 `ShowUIOptions.title` 是唯一入口;
+ * MasterGo 的 ShowUIOptions 里根本没有这个字段)。首次 `showUI` 也显式传它 —— 标题栏
+ * 文字从此由这里决定,manifest 的 `name` 只管平台注册名。
+ */
+export const PANEL_TITLE = 'text-to-design';
+
+/**
+ * 最小化时的窗口**内容区**边长(宽 = 高):只放得下 logo(dec 28008c70)。
+ *
+ * 高度是内容区口径,外框还要加上宿主标题栏(与 `UI_CHROME_DEFAULT` 同一条纪律):
+ * 差这一截的症状同样是内容被裁且不报错。
+ */
+export const PANEL_MINIMIZED_SIZE = 50;
+
+/**
  * `showUI` 的初始高度。自适应生效时它只是个起点(首帧后即收敛到内容高);
  * 宿主不支持 `ui.resize` 时它就是最终高度,故与历史值保持一致。
  */
@@ -165,4 +183,26 @@ export interface UiEnvMessage {
 export function isUiResizeMessage(value: unknown): value is UiResizeMessage {
   const m = value as Partial<UiResizeMessage> | null | undefined;
   return m != null && m.type === 'ui_resize' && typeof m.height === 'number';
+}
+
+/**
+ * UI → code:面板进入 / 退出最小化(旁路消息,理由同 `UiResizeMessage`,dec 28008c70)。
+ *
+ * 为什么不复用 `ui_resize` 的 height:最小化比 `PANEL_HEIGHT_MIN` 还矮,而那条下限是
+ * 「内容可用的最小高度」—— 尺寸口径不同,混在一条里就得在夹取处按消息内容开旁路。
+ * 这条消息带的是**模式**,不是测量值;尺寸由 code 侧按模式算(50 / 内容高 + 装饰)。
+ */
+export interface UiMinimizeMessage {
+  type: 'ui_minimize';
+  minimized: boolean;
+}
+
+/** 脏值不当模式:非布尔一律忽略,面板维持当前形态 */
+export function isUiMinimizeMessage(
+  value: unknown,
+): value is UiMinimizeMessage {
+  const m = value as Partial<UiMinimizeMessage> | null | undefined;
+  return (
+    m != null && m.type === 'ui_minimize' && typeof m.minimized === 'boolean'
+  );
 }

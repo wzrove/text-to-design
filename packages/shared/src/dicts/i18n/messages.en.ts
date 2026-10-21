@@ -74,6 +74,10 @@ export const MESSAGES_EN = {
     'Camera locked: canvas operations do not move your viewport (click to follow)',
   'header.cameraLock.title.unlocked':
     'Camera follows: canvas operations scroll and zoom to the result (click to lock)',
+  'header.minimize': 'Minimize',
+  'header.minimize.title':
+    'Minimize the panel to just the logo; double-click the logo to restore',
+  'header.restore.title': 'Double-click the logo to restore the panel',
 
   'upgrade.title': 'A newer version is available (click for upgrade steps)',
   'upgrade.modal.title': 'Upgrade to the latest version',

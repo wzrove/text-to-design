@@ -137,8 +137,13 @@ export const host: DesignHost = {
     return fonts.map((f) => ({ fontName: f.fontName }));
   },
 
-  showUI: (html: string, options: { width?: number; height?: number }) => {
-    mg.showUI(html, options);
+  showUI: (
+    html: string,
+    options: { width?: number; height?: number; title?: string },
+  ) => {
+    // MG 的 ShowUIOptions 没有 title(dec 28008c70):该平台标题栏文字清不掉,
+    // 如实只转尺寸,别把契约层的字段漏给原生
+    mg.showUI(html, { width: options.width, height: options.height });
   },
   getLocalPaintStyles: () => mg.getLocalPaintStyles().map(summarizeStyle),
   getLocalTextStyles: () => mg.getLocalTextStyles().map(summarizeStyle),

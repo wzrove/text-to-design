@@ -33,6 +33,7 @@ import {
   importComponentNodes,
   isCameraLockSetMessage,
   isLocaleSetMessage,
+  isUiMinimizeMessage,
   isUiResizeMessage,
   LOCALE_CHOICE_STORAGE_KEY,
   type LocaleChoice,
@@ -42,6 +43,8 @@ import {
   normalizeChromeHeight,
   outlineStrokeNodes,
   PANEL_HEIGHT_DEFAULT,
+  PANEL_MINIMIZED_SIZE,
+  PANEL_TITLE,
   PANEL_WIDTH,
   PROP_METHOD_FIELDS,
   removeNodes,
@@ -59,7 +62,11 @@ import {
   withCameraLock,
 } from 'text-to-design-shared';
 
-const UI_OPTIONS = { width: PANEL_WIDTH, height: PANEL_HEIGHT_DEFAULT };
+const UI_OPTIONS = {
+  width: PANEL_WIDTH,
+  height: PANEL_HEIGHT_DEFAULT,
+  title: PANEL_TITLE,
+};
 
 /**
  * 属性引擎方法判定:方法名是否存在于字段表。
@@ -91,6 +98,8 @@ export function registerPlugin(
   // 画布时不移动相机。拦截收口在 host.viewport 契约层(见 shared/camera-lock.ts),
   // core 的各 scrollAndZoomIntoView 调用点不感知锁的存在。
   let cameraLocked = CAMERA_LOCK_DEFAULT;
+  // 面板最小化态:旁路消息,见 shared/panel.ts
+  let minimized = false;
   const host = withCameraLock(rawHost, () => cameraLocked);
 
   // 一次运行的显式上下文:core 的「字段是否生效」判定与 ping 上报的能力表同源,
@@ -99,16 +108,58 @@ export function registerPlugin(
   // `platform` 一并注入:值域/适用性的**分平台收窄**要按平台 id 反查声明表
   // (`dicts/platform-value-domain.ts`),能力位表达不了(见 0022)。
   const ctx = runtimeContext(meta.capabilities, platform);
-  try {
-    if (__html__ || (typeof __html__ === 'string' && __html__.trim() !== '')) {
-      host.showUI(__html__, UI_OPTIONS);
-    } else {
-      console.warn('[plugin] __html__ 未注入,UI 面板为空');
-      host.showUI('', UI_OPTIONS);
+
+  // __html__ 由构建期注入,缺失给空串;判定只此一处,启动与最小化往返必须拿到同一份 html
+  function panelHtml(): string {
+    return typeof __html__ === 'string' ? __html__ : '';
+  }
+
+  /**
+   * 面板外框尺寸只有这一处来源:showUI 与 resize 必须同值,否则宿主窗口与 iframe
+   * 视口会各说各话。标题只能靠 showUI(UIAPI 没有 title 口),尺寸两条都发 ——
+   * 谁被宿主认下都不落空。
+   */
+  function applyPanelFrame(): void {
+    const width = minimized ? PANEL_MINIMIZED_SIZE : PANEL_WIDTH;
+    // 装饰高单独 try:适配器读宿主 getter 有抛的可能,抛出去会越过 async onmessage 且无日志
+    let chrome = 0;
+    if (minimized) {
+      try {
+        chrome = normalizeChromeHeight(host.ui.chromeHeight?.());
+      } catch (e) {
+        console.error('[plugin] 读取装饰高失败(按 0 处理)', e);
+      }
     }
+    const height = minimized
+      ? PANEL_MINIMIZED_SIZE + chrome
+      : PANEL_HEIGHT_DEFAULT;
+    try {
+      host.showUI(panelHtml(), {
+        width,
+        height,
+        title: minimized ? '' : PANEL_TITLE,
+      });
+    } catch (e) {
+      console.error('[plugin] 面板标题切换失败', e);
+    }
+    try {
+      host.ui.resize?.(width, height);
+    } catch (e) {
+      console.error('[plugin] 面板改尺寸失败', e);
+    }
+    // showUI 若重载了 iframe,新 UI 得重收一遍启动帧(幂等,见 scheduleBootPushes)
+    scheduleBootPushes();
+  }
+
+  try {
+    const html = panelHtml();
+    if (!html) console.warn('[plugin] __html__ 未注入,UI 面板为空');
+    host.showUI(html, UI_OPTIONS);
   } catch (e) {
     console.error('[plugin] showUI 失败', e);
   }
+  // 启动帧(见 scheduleBootPushes)
+  scheduleBootPushes();
 
   function send(
     id: string,
@@ -161,7 +212,6 @@ export function registerPlugin(
   }
 
   host.on('selectionchange', pushSelection);
-  setTimeout(pushSelection, 300);
 
   function pushPlatform(): void {
     try {
@@ -170,8 +220,6 @@ export function registerPlugin(
       console.error('[plugin] 推送平台失败', e);
     }
   }
-  // 补发一次:showUI 后 UI iframe 加载是异步的,立即推可能丢消息
-  setTimeout(pushPlatform, 200);
 
   /**
    * 上报宿主有没有 `ui.resize`、以及窗口外框里的装饰高(0028),UI 据此决定
@@ -197,8 +245,6 @@ export function registerPlugin(
       console.error('[plugin] 推送面板环境失败', e);
     }
   }
-  // 与 pushPlatform 同因补发:showUI 后 UI iframe 加载是异步的,立即推可能丢消息
-  setTimeout(pushUiEnv, 200);
 
   /**
    * 宿主存储:语言选择的保管员(0016)。两边都是**可选**能力 ——
@@ -245,14 +291,40 @@ export function registerPlugin(
       }
     });
   }
-  // 同 pushPlatform:UI iframe 异步加载,立即推可能丢
-  setTimeout(pushLocaleState, 200);
+
+  /**
+   * 启动帧(含选中):showUI 后 UI iframe 加载是异步的,立即推可能丢消息,故统一延后补发。
+   *
+   * 选中沿用原来的 300ms(状态三条 200ms):它要跑一次 getSelection 读节点数据,
+   * 是四条里最重的,留的余量更大。
+   *
+   * 重复调用幂等,所以 applyPanelFrame() 之后可以无条件补推 —— 再次 showUI 会关掉旧 UI
+   * 再显示新的(plugin-api.d.ts:365),每次最小化/恢复都重建 iframe(dec 28008c70):
+   * ui_env 只是覆写 canResize / chromeHeight;platform 只是再触发一次 refreshCapabilities;
+   * locale_state 在用户手动选过时被 applyStoredChoice 挡掉;selection 只是覆写选中卡片。
+   */
+  function scheduleBootPushes(): void {
+    setTimeout(pushPlatform, 200);
+    setTimeout(pushUiEnv, 200);
+    setTimeout(pushLocaleState, 200);
+    setTimeout(pushSelection, 300);
+  }
 
   host.ui.onmessage = async (raw: unknown) => {
+    // 面板最小化:旁路消息(见 shared/panel.ts),必须先于 ui_resize 拦掉(dec 28008c70)——
+    // 它没有 method,落到下面的 switch 会回一个「未知 method」错误包,而 UI 侧并不等这个回包。
+    if (isUiMinimizeMessage(raw)) {
+      minimized = raw.minimized;
+      applyPanelFrame();
+      return;
+    }
     // 面板自改高度:旁路消息,不在 PluginRequest 契约内(理由见 shared/panel.ts)。
     // 必须在取 msg.method 之前拦掉 —— 它没有 method,落到下面会回一个「未知 method」
     // 错误包,而 UI 侧根本没在等这个回包,等于凭空多一条错误日志。
     if (isUiResizeMessage(raw)) {
+      // 最小化期间高度请求无意义(窗口是模式尺寸,不是内容尺寸),而 clampPanelHeight 的下限是
+      // 「内容可用的最小高度」,放过去会把 50px 抬成 300 的细条(dec 28008c70)
+      if (minimized) return;
       try {
         // 再夹一次:UI 已夹过,但契约的两端都该能独立站住(0013 的分层边界同样思路)。
         // 夹取上限是 `PANEL_HEIGHT_CEILING`(防荒唐值的硬边界),**不是**内容高度的

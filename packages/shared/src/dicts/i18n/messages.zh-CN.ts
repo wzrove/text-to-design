@@ -68,6 +68,10 @@ export const MESSAGES_ZH_CN = {
     '相机已锁定:操作画布时不移动你的视口(点击改为跟随)',
   'header.cameraLock.title.unlocked':
     '相机跟随:操作画布后视口滚动缩放到结果(点击锁定)',
+  // 最小化:窗口缩到 50×50,只剩 logo;双击 logo 恢复(dec 28008c70)
+  'header.minimize': '最小化',
+  'header.minimize.title': '最小化面板,只留 logo;双击 logo 恢复',
+  'header.restore.title': '双击 logo 恢复面板',
 
   // ── 版本升级提示(0038) ──
   // 只在「确有新版本」时出现:daemon 代查 npm latest,查不到就不挂这颗钮。
