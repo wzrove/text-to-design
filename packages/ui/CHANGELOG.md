@@ -1,5 +1,11 @@
 # text-to-design-ui
 
+## 0.12.1
+
+### Patch Changes
+
+- [`69d92bd`](https://github.com/wzrove/text-to-design/commit/69d92bd0990e465fa62aca542017ccf86f3881f4) Thanks [@wzrove](https://github.com/wzrove)! - feat: add minimized pet component and activity phase handling
+
 ## 0.12.0
 
 ### Minor Changes
