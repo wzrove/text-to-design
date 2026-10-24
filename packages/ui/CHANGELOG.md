@@ -1,5 +1,11 @@
 # text-to-design-ui
 
+## 0.12.2
+
+### Patch Changes
+
+- 增加遥测功能
+
 ## 0.12.1
 
 ### Patch Changes
