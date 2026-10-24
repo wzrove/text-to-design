@@ -3,7 +3,7 @@
   "main": "dist/index.js",
   "compatibility_date": "2026-10-24",
   "compatibility_flags": ["nodejs_compat"],
-  "observability": { "enabled": true },
+  "observability": { "enabled": true }
   // 上线前置(详见 README):npx wrangler hyperdrive create 后填 id 并取消注释
   // "hyperdrive": [{ "binding": "DB", "id": "<hyperdrive-id>" }]
 }
