@@ -54,3 +54,20 @@ export function isVersionPushFrame(value: unknown): value is VersionPushFrame {
   // 两项都允许 null,但键必须在 —— 缺键意味着对端版本更老,按「无事实」处理
   return 'ui' in latest && 'mcp' in latest;
 }
+
+/**
+ * UI → daemon:面板自报插件版本(每次连上发一次)。
+ *
+ * 插件版本唯一真源是 UI 构建期注入的 `__APP_VERSION__`,code 侧与 daemon 都
+ * 拿不到;而面板本来就握着到 daemon 的 WS,顺这条旁路带回(daemon 侧存进
+ * platform-state,遥测 flush 时填 client_version)。
+ */
+export interface UiVersionFrame {
+  type: 'ui_version';
+  version: string;
+}
+
+export function isUiVersionFrame(value: unknown): value is UiVersionFrame {
+  const m = value as Partial<UiVersionFrame> | null | undefined;
+  return m != null && m.type === 'ui_version' && typeof m.version === 'string';
+}

@@ -6,12 +6,12 @@ import type {
   ServerPush,
   VersionPushFrame,
 } from 'text-to-design-shared';
-import { isConsentSetFrame } from 'text-to-design-shared';
+import { isConsentSetFrame, isUiVersionFrame } from 'text-to-design-shared';
 import { BridgeError } from './core/bridge-error';
 import { log, warn } from './logger';
 import type { PluginMethod, RequestOptions } from './pending';
 import { PendingManager } from './pending';
-import { currentClient } from './platform-state';
+import { currentClient, setUiVersion } from './platform-state';
 import { Transport } from './transport';
 
 /** 离线日志环形缓冲容量:插件不在线期间先入队,上线按入队顺序回放一次 */
@@ -52,12 +52,16 @@ export class Bridge {
         this.pending.onBinary(raw);
         return;
       }
-      // consent_set 在请求/响应协议之外,先于 pending 分流;其余文本帧原样交
-      // pending.onText(会再解析一次 —— 消息频率是工具调用级,不值得为此改协议层)
+      // consent_set / ui_version 在请求/响应协议之外,先于 pending 分流;其余文本帧
+      // 原样交 pending.onText(会再解析一次 —— 消息频率是工具调用级,不值得改协议层)
       try {
         const parsed: unknown = JSON.parse(raw.toString());
         if (isConsentSetFrame(parsed)) {
           this.onConsentSet?.(parsed.granted);
+          return;
+        }
+        if (isUiVersionFrame(parsed)) {
+          setUiVersion(parsed.version);
           return;
         }
       } catch {

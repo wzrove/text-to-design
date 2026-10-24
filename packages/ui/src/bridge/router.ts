@@ -101,6 +101,14 @@ export class Router {
     }
   }
 
+  /** 面板自报插件版本给 daemon(见 shared/version-channel.ts);离线丢弃,重连会再发 */
+  sendUiVersion(version: string): void {
+    const ws = this.conn.ws;
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: 'ui_version', version }));
+    }
+  }
+
   onWsText(conn: Conn, text: string): void {
     let msg: PluginRequest | PluginResponse | ServerPush;
     try {

@@ -13,6 +13,7 @@ import {
   WS_PORT,
 } from 'text-to-design-shared';
 import { applyStoredChoice, t } from '../i18n/useLocale';
+import { APP_VERSION } from '../utils/version';
 import type { BridgeStatus } from './BridgeSocket';
 import { BridgeSocket } from './BridgeSocket';
 import type { CapabilitySnapshot, LogLevel } from './types';
@@ -240,6 +241,8 @@ export function BridgeProvider(props: ParentProps) {
           resetActivity();
         } else {
           setDaemonVersion(() => b.daemonVersion);
+          // 连上就自报插件版本:daemon 侧遥测的 client_version 靠它(见 shared/version-channel.ts)
+          b.sendUiVersion(APP_VERSION);
           // 掉线期间的选择补发一次,与 daemon 侧状态收敛(幂等,同值重发无害)
           if (consentChoice != null) b.setConsent(consentChoice);
         }

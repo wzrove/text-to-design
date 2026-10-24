@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { SERVER_VERSION } from './config';
 import { getConsent } from './consent';
 import { debug } from './logger';
-import { getPlatformState } from './platform-state';
+import { getPlatformState, getUiVersion } from './platform-state';
 
 /**
  * 错误上报器:采集 daemon 侧错误,批量推给 telemetry worker(见 packages/telemetry)。
@@ -23,7 +23,7 @@ import { getPlatformState } from './platform-state';
  * 部署 worker 后把两项 DEFAULT 填成真值;env 覆盖用于轮换期新旧并行。
  */
 const DEFAULT_ENDPOINT =
-  'https://text-to-design-telemetry.wzrove.workers.dev/v1/errors';
+  'https://telemetry.text-to-design.wzrove.com/v1/errors';
 const DEFAULT_API_KEY = 'dev-insecure-key';
 
 const ENDPOINT = process.env.TEXT_TO_DESIGN_TELEMETRY_URL ?? DEFAULT_ENDPOINT;
@@ -119,7 +119,11 @@ export async function flushTelemetry(timeoutMs = 5_000): Promise<void> {
         'content-type': 'application/json',
       },
       body: JSON.stringify({
-        user: { fingerprint, mcpVersion: SERVER_VERSION },
+        user: {
+          fingerprint,
+          mcpVersion: SERVER_VERSION,
+          clientVersion: getUiVersion() ?? undefined,
+        },
         errors: batch,
       }),
       signal: AbortSignal.timeout(timeoutMs),

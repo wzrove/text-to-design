@@ -41,11 +41,22 @@ export interface PlatformScopedDef {
 }
 
 let state: PlatformState | null = null;
+/** 面板自报的插件版本(ui_version 帧,见 shared/version-channel.ts);null = 未连面板 */
+let uiVersion: string | null = null;
 /** single-flight:并发触发(连接事件 + 调用方主动 ping)只发一次探测 */
 let inflight: Promise<void> | null = null;
 
 export function getPlatformState(): PlatformState | null {
   return state;
+}
+
+/** 面板连上时自报;遥测 flush 据此填 client_version */
+export function setUiVersion(version: string): void {
+  uiVersion = version;
+}
+
+export function getUiVersion(): string | null {
+  return uiVersion;
 }
 
 /**
@@ -62,8 +73,9 @@ export function currentClient(): { label: string; runtime: string } {
 }
 
 export function clearPlatformState(reason: string): void {
-  if (state == null) return;
+  if (state == null && uiVersion == null) return;
   state = null;
+  uiVersion = null;
   debug(`平台状态已清空(${reason})`);
 }
 

@@ -158,4 +158,9 @@ export class BridgeSocket {
   setConsent(granted: boolean): void {
     this.router.sendConsent(granted);
   }
+
+  /** 面板自报插件版本(见 shared/version-channel.ts) */
+  sendUiVersion(version: string): void {
+    this.router.sendUiVersion(version);
+  }
 }
