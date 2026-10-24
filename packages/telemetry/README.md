@@ -40,10 +40,10 @@ pnpm dev                 # tsx watch + node --env-file,默认 :8787
 控制台建 Worker `text-to-design-telemetry` → Settings → Builds → Connect,连本仓库:
 
 - Root directory:`packages/telemetry`
-- Build command:`pnpm install && pnpm build`
-- Deploy command:`npx wrangler deploy`(读 wrangler.jsonc 的 `main: dist/index.js`,CF 构建机自带 wrangler)
+- Build command:`pnpm install`
+- Deploy command:`npx wrangler deploy`
 
-之后 push 到仓库即自动部署。一次性准备(控制台或 `npx wrangler` 均可):
+CF 路线由 wrangler 在构建机上从 `src/index.ts` 直接打包(esbuild);vite 的 `dist/` 产物只服务 Node/Bun 自托管,**不要**把 `main` 指到它(vite 的 CJS 兼容层过不了 CF 上传校验)。之后 push 到仓库即自动部署。一次性准备(控制台或 `npx wrangler` 均可):
 
 ```bash
 # 1. Hyperdrive(Workers 出网到 Postgres 必须走它;用 Supabase 直连串,不走 pooler)

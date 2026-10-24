@@ -1,6 +1,10 @@
 {
   "name": "text-to-design-telemetry",
-  "main": "dist/index.js",
+  // CF 路线:wrangler 在构建机上从 src 直接打包(esbuild)。
+  // 不指向 dist/index.js —— vite 产物内含 createRequire(import.meta.url) 兼容层,
+  // CF 上传校验沙箱里 import.meta.url 为 undefined,必炸(实测 10021)。
+  // dist/* 只服务 Node/Bun 自托管。
+  "main": "src/index.ts",
   "compatibility_date": "2026-10-24",
   "compatibility_flags": ["nodejs_compat"],
   "observability": { "enabled": true }
