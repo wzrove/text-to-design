@@ -732,4 +732,21 @@ export const MESSAGES_EN = {
     'Modify text (TEXT nodes only): **content and typography** characters/fontSize/fontName, alignment/auto-resize/case/decoration/line-height/letter-spacing, **colour** fills/fillStyleId/blendMode, **size** width/height (pair with textAutoResize), plus Figma truncation and max lines; position x/y is not here — use jsd_move_node / jsd_resize_node. Resolve fonts with jsd_list_fonts first: family verbatim from fonts[].family, style the full name from the same entry (e.g. SourceHanSansCN-Bold, not the short "Bold") — a wrong value fails silently and falls back to the default face, and the result warnings name it. For wrapping pass width + textAutoResize:"HEIGHT" (the default WIDTH_AND_HEIGHT grows with content; width alone gets forced to NONE and the height stops tracking content — for such text, setting characters again reflows it (measured: a fixed-width-200 text whose height read back 15 re-read 82). {warn}; characters overrides work normally inside instances too',
   'ping.description':
     'Check whether the plugin is online (you must first run it inside {client} — Instant Design or Figma — and keep it running). Returns three capability tables: coreCapabilities (create/modify/structure/component/export/image, identical on both platforms); capabilities lists only the platform-difference superset (e.g. variables/componentProperties/textTruncation) — Instant Design usually has only styles while Figma also has variables/componentProperties; platformOps lists platform-specific ops available now (name/title/parameter description) — read it before calling jsd_platform_op. The reply is cached by the daemon, so you can read jsd://platform/state afterwards instead of pinging again',
+  'header.more': 'More settings',
+  'menu.telemetry': 'Error reporting',
+  'menu.cameraLock': 'Camera lock',
+  'menu.theme': 'Theme',
+  'menu.locale': 'Language',
+  'telemetry.title': 'Error reporting',
+  'telemetry.body':
+    'To keep improving the product, enabling this records plugin and service errors.',
+  'telemetry.item.error': 'Error messages and stacks',
+  'telemetry.item.identity':
+    'Anonymous install ID (no document content or personal data)',
+  'telemetry.item.version': 'Plugin and service versions',
+  'telemetry.state.on': 'On',
+  'telemetry.state.off': 'Off',
+  'telemetry.enable': 'Enable reporting',
+  'telemetry.decline': 'Not now',
+  'telemetry.disable': 'Disable reporting',
 } as const satisfies Record<keyof typeof MESSAGES_ZH_CN, string | null>;

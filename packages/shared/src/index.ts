@@ -1,6 +1,7 @@
 import type { z } from 'zod';
 import type { ActivityPushFrame } from './activity-channel';
 import type { ServerStatusFrame } from './connection';
+import type { ConsentPushFrame } from './consent-channel';
 import type { PluginError } from './dicts/error-code';
 import type { LogLevel } from './dicts/log';
 import type * as s from './schemas';
@@ -12,6 +13,8 @@ export * from './activity-channel';
 export * from './camera-lock';
 /* 连接层协议(端口/握手帧/重连节奏):daemon 与插件 UI 的唯一真源 */
 export * from './connection';
+/* 错误上报同意的跨侧契约(UI 遥控 daemon 门控,旁路帧不过 MCP) */
+export * from './consent-channel';
 /* 平台无关核心逻辑(DesignHost 接口 + 序列化/建节点/组件/更新,无平台 typings 依赖) */
 export * from './core';
 /* 跨侧字典数据(节点类型/平台/日志级别/布尔运算的取值与文案真源) */
@@ -255,7 +258,8 @@ export type ServerPush =
   | { type: 'log'; level: LogLevel; line: string }
   | ServerStatusFrame
   | VersionPushFrame
-  | ActivityPushFrame;
+  | ActivityPushFrame
+  | ConsentPushFrame;
 export function makeResponse<D>(
   id: string,
   ok: boolean,

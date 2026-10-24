@@ -1,0 +1,20 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1792860072475,
+      "tag": "0000_many_slayback",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1792864912588,
+      "tag": "0001_hard_havok",
+      "breakpoints": true
+    }
+  ]
+}

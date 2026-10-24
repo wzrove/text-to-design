@@ -61,12 +61,24 @@ export interface BridgeStore {
    * `idle` 不是帧,是**没有在跑的工具**且结果相位的沉降期已过。
    */
   activity: Accessor<ActivityPhase | 'idle'>;
+  /**
+   * 错误上报同意(daemon 保管,见 shared/consent-channel.ts)。
+   * 默认 false = 未同意不上报;连上 daemon 后由回推校准。
+   */
+  consentGranted: Accessor<boolean>;
+  /**
+   * 首问框是否已问过一次(daemon 保管)。`undefined` = 旧 daemon 没报,
+   * 按已问过处理,不主动弹。
+   */
+  consentAsked: Accessor<boolean | undefined>;
   connect: () => void;
   disconnect: () => void;
   rescan: () => void;
   ping: () => void;
   refreshCapabilities: () => void;
   clearLog: () => void;
+  /** 记下用户的同意选择并尽力发给 daemon;离线时的选择在重连后补发 */
+  setConsent: (granted: boolean) => void;
 }
 
 const BridgeContext = createContext<BridgeStore>();
@@ -103,6 +115,18 @@ export function BridgeProvider(props: ParentProps) {
     mcp: string | null;
   }>({ ui: null, mcp: null });
   const [daemonVersion, setDaemonVersion] = createSignal('');
+
+  /** 上报同意(见 shared/consent-channel.ts):默认未同意,daemon 连上后回推校准 */
+  const [consentGranted, setConsentGranted] = createSignal(false);
+  const [consentAsked, setConsentAsked] = createSignal<boolean | undefined>(
+    undefined,
+  );
+  /**
+   * 用户最后一次的选择(daemon 回推也同步它)。
+   * 用途只有一个:掉线期间做的选择,重连后补发一次 —— 不存的话
+   * 「离线点了同意、daemon 永远不知道」就静默发生了。
+   */
+  let consentChoice: boolean | null = null;
 
   /**
    * 活动相位(见 shared/activity-channel.ts)。
@@ -216,6 +240,8 @@ export function BridgeProvider(props: ParentProps) {
           resetActivity();
         } else {
           setDaemonVersion(() => b.daemonVersion);
+          // 掉线期间的选择补发一次,与 daemon 侧状态收敛(幂等,同值重发无害)
+          if (consentChoice != null) b.setConsent(consentChoice);
         }
       } else if (e.type === 'selection') setSelection(() => e.data);
       else if (e.type === 'version') setLatest(() => e.latest);
@@ -229,6 +255,11 @@ export function BridgeProvider(props: ParentProps) {
         setEnvMinimized(() => e.minimized);
       } else if (e.type === 'locale_state') applyStoredChoice(e.stored);
       else if (e.type === 'activity') applyActivity(e.phase);
+      else if (e.type === 'consent') {
+        consentChoice = e.granted;
+        setConsentGranted(e.granted);
+        setConsentAsked(e.asked ?? true);
+      }
     });
     onCleanup(clearSettle);
   });
@@ -246,11 +277,18 @@ export function BridgeProvider(props: ParentProps) {
     latest,
     daemonVersion,
     activity,
+    consentGranted,
+    consentAsked,
     connect: () => getBridge().connect(),
     disconnect: () => getBridge().disconnect(),
     rescan: () => getBridge().rescan(),
     refreshCapabilities: () => void refreshCapabilities(),
     clearLog: () => setLog([]),
+    setConsent: (granted: boolean) => {
+      consentChoice = granted;
+      setConsentGranted(granted);
+      getBridge().setConsent(granted);
+    },
     ping: async () => {
       getBridge().connect();
       try {

@@ -19,7 +19,8 @@
     "chset:check": "node scripts/check-changesets.mjs",
     "mcp": "pnpm --filter text-to-design-mcp start:dev",
     "dev:site": "pnpm --filter text-to-design-website dev",
-    "build:site": "pnpm --filter text-to-design-website build"
+    "build:site": "pnpm --filter text-to-design-website build",
+    "dev:telemetry": "pnpm --filter text-to-design-telemetry dev"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.11",
