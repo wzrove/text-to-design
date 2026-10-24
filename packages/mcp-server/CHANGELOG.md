@@ -1,5 +1,11 @@
 # text-to-design-mcp
 
+## 0.13.5
+
+### Patch Changes
+
+- 增加遥测功能
+
 ## 0.13.4
 
 ### Patch Changes
