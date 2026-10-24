@@ -17,8 +17,17 @@ import { getPlatformState } from './platform-state';
  * 的 sink 组合处接)与进程级异常(run.ts)。上报失败只留 debug 并保留队列重试
  * —— 遥测自身的任何异常都不允许影响 daemon。
  */
-const ENDPOINT = process.env.TEXT_TO_DESIGN_TELEMETRY_URL ?? '';
-const API_KEY = process.env.TEXT_TO_DESIGN_TELEMETRY_KEY ?? '';
+/**
+ * 上报目标与密钥:随 npm 包分发(终端用户不会配 env)。key 走 npm 公开分发,
+ * 解包即得 —— 它只是挡扫描器的口令,不是真秘密;真防护靠后端限流与轮换。
+ * 部署 worker 后把两项 DEFAULT 填成真值;env 覆盖用于轮换期新旧并行。
+ */
+const DEFAULT_ENDPOINT =
+  'https://text-to-design-telemetry.wzrove.workers.dev/v1/errors';
+const DEFAULT_API_KEY = 'dev-insecure-key';
+
+const ENDPOINT = process.env.TEXT_TO_DESIGN_TELEMETRY_URL ?? DEFAULT_ENDPOINT;
+const API_KEY = process.env.TEXT_TO_DESIGN_TELEMETRY_KEY ?? DEFAULT_API_KEY;
 
 const DATA_DIR = join(homedir(), '.text-to-design');
 const INSTALL_ID_PATH = join(DATA_DIR, 'install-id');
