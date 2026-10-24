@@ -1,0 +1,32 @@
+{
+  "name": "text-to-design-telemetry",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "遥测/错误收集后端:Hono + Drizzle,打包产物可跑在 Cloudflare Workers / Node / Bun / Deno Deploy",
+  "scripts": {
+    "build": "vite build",
+    "dev": "node --import tsx --env-file=.env --watch src/serve.ts",
+    "start": "node --env-file-if-exists=.env dist/serve.js",
+    "typecheck": "tsc --noEmit",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:studio": "drizzle-kit studio"
+  },
+  "dependencies": {
+    "@hono/node-server": "^2.1.5",
+    "drizzle-orm": "^0.45.4",
+    "hono": "^4.13.13",
+    "pg": "^8.23.1",
+    "text-to-design-shared": "workspace:*",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "@types/pg": "^8.23.1",
+    "drizzle-kit": "^0.31.11",
+    "tsx": "^4.23.15",
+    "typescript": "catalog:",
+    "vite": "catalog:"
+  }
+}

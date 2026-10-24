@@ -16,8 +16,10 @@ import {
   SERVER_VERSION,
   STARTED_AT,
 } from '../config';
+import { getConsent, initConsent, isAsked, writeConsent } from '../consent';
 import { debug, error, log } from '../logger';
 import { buildServer } from '../server';
+import { captureError, flushTelemetry, startTelemetryLoop } from '../telemetry';
 import { latestVersions } from '../version-check';
 import {
   delay,
@@ -74,8 +76,10 @@ export async function runDaemon(bridge: Bridge): Promise<void> {
     await warnIfDaemonStale();
     return;
   }
+  await initConsent();
   await bridge.start(PORT);
   log(`daemon: 插件 WS ws://localhost:${bridge.port}`);
+  const stopTelemetry = startTelemetryLoop();
 
   /**
    * 装配**一次**,整个 daemon 复用同一个 McpServer(0030)。
@@ -123,20 +127,60 @@ export async function runDaemon(bridge: Bridge): Promise<void> {
       log(`版本同步: ${brief} (已推送面板)`);
     });
   };
-  bridge.onPluginConnect = syncLatest;
+  // 同意状态先于版本推:面板要拿它渲染二级菜单里的当前档;没问过时面板
+  // 还要靠 asked 自动弹一次首问框
+  bridge.onPluginConnect = () => {
+    bridge.pushConsent({
+      type: 'consent',
+      granted: getConsent(),
+      asked: isAsked(),
+    });
+    syncLatest();
+  };
+
+  /**
+   * 面板改了同意:持久化 + 回执。回执必发(包括离线前最后一次)——
+   * 面板按回执校准菜单显示,不靠发送方自觉。
+   */
+  bridge.onConsentSet = (granted) => {
+    void writeConsent(granted);
+    log(`错误上报同意: ${granted ? '开启' : '关闭'}`);
+    bridge.pushConsent({ type: 'consent', granted, asked: true });
+  };
+
+  /**
+   * 进程级异常:采一条 fatal、尽力冲一次上报,然后按 Node 默认语义退出。
+   * 不吞异常 —— 遥测不允许改变「崩就是崩」的行为。
+   */
+  process.on('uncaughtException', (err) => {
+    captureError('fatal', err.message, err.stack);
+    void flushTelemetry(3_000).finally(() => process.exit(1));
+  });
+  process.on('unhandledRejection', (reason) => {
+    captureError(
+      'fatal',
+      reason instanceof Error ? reason.message : String(reason),
+      reason instanceof Error ? reason.stack : undefined,
+    );
+    void flushTelemetry(3_000).finally(() => process.exit(1));
+  });
 
   const shutdown = (reason: string): void => {
     log(`daemon 退出: ${reason}`);
     if (versionTimer != null) clearInterval(versionTimer);
-    // 关闭是尽力而为:失败也必须退出,但不能静默(见决策 0007/0013)
-    void handler.close().catch((e) => {
-      debug(
-        `关闭 MCP handler 失败(忽略): ${e instanceof Error ? e.message : String(e)}`,
-      );
+    stopTelemetry?.();
+    // 退出前尽力冲一次遥测(短预算,失败随进程消失);关闭是尽力而为:
+    // 失败也必须退出,但不能静默(见决策 0007/0013)
+    void flushTelemetry(1_500).finally(() => {
+      void handler.close().catch((e) => {
+        debug(
+          `关闭 MCP handler 失败(忽略): ${e instanceof Error ? e.message : String(e)}`,
+        );
+      });
+      bridge.stop();
+      httpServer?.close();
+      process.exit(0);
     });
-    bridge.stop();
-    httpServer?.close();
-    process.exit(0);
   };
 
   await new Promise<void>((resolve, reject) => {

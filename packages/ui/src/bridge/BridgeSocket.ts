@@ -53,6 +53,12 @@ export class BridgeSocket {
         phase: frame.phase,
         tool: frame.tool,
       });
+    this.router.onConsent = (frame) =>
+      this.events.emit({
+        type: 'consent',
+        granted: frame.granted,
+        asked: frame.asked,
+      });
     this.router.onServerStatus = (frame) => {
       if (frame.state === 'superseded') {
         this.connection.markSuperseded();
@@ -146,5 +152,10 @@ export class BridgeSocket {
 
   probeServer(): void {
     this.router.probeServer();
+  }
+
+  /** 把上报同意选择发给 daemon(见 shared/consent-channel.ts);离线时由 store 补发兜底 */
+  setConsent(granted: boolean): void {
+    this.router.sendConsent(granted);
   }
 }

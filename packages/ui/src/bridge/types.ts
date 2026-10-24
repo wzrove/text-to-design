@@ -57,7 +57,9 @@ export type BridgeEvent =
       latest: { ui: string | null; mcp: string | null };
     }
   /** 某次 tools/call 的相位(daemon 推,见 shared/activity-channel.ts) */
-  | { type: 'activity'; phase: ActivityPhase; tool?: string };
+  | { type: 'activity'; phase: ActivityPhase; tool?: string }
+  /** daemon 回推的上报同意状态(连接时 / 用户改定回执;见 shared/consent-channel.ts) */
+  | { type: 'consent'; granted: boolean; asked?: boolean };
 
 export type Conn = {
   port: number;

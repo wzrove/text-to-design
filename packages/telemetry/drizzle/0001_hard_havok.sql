@@ -1,0 +1,1 @@
+ALTER TABLE "error_reports" ADD COLUMN "count" integer DEFAULT 1 NOT NULL;

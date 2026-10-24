@@ -1,10 +1,12 @@
 import type {
   ActivityPhase,
   ActivityPushFrame,
+  ConsentPushFrame,
   LogLevel,
   ServerPush,
   VersionPushFrame,
 } from 'text-to-design-shared';
+import { isConsentSetFrame } from 'text-to-design-shared';
 import { BridgeError } from './core/bridge-error';
 import { log, warn } from './logger';
 import type { PluginMethod, RequestOptions } from './pending';
@@ -34,14 +36,34 @@ export class Bridge {
    */
   onPluginConnect: (() => void) | null = null;
 
+  /**
+   * 面板送来的上报同意选择(旁路帧,见 shared/consent-channel.ts)。
+   * 持久化与回推由装配层(run.ts)接,桥只管分流。
+   */
+  onConsentSet: ((granted: boolean) => void) | null = null;
+
   constructor() {
     this.pending = new PendingManager((text, binary) => {
       this.transport.send(text);
       if (binary) this.transport.send(binary);
     });
     this.transport.onMessage = (raw, isBinary) => {
-      if (isBinary) this.pending.onBinary(raw);
-      else this.pending.onText(raw);
+      if (isBinary) {
+        this.pending.onBinary(raw);
+        return;
+      }
+      // consent_set 在请求/响应协议之外,先于 pending 分流;其余文本帧原样交
+      // pending.onText(会再解析一次 —— 消息频率是工具调用级,不值得为此改协议层)
+      try {
+        const parsed: unknown = JSON.parse(raw.toString());
+        if (isConsentSetFrame(parsed)) {
+          this.onConsentSet?.(parsed.granted);
+          return;
+        }
+      } catch {
+        // 解析失败交 pending.onText 统一告警,这里不重复报
+      }
+      this.pending.onText(raw);
     };
     this.transport.onConnect = () => {
       // 先回放离线日志,再广播连接状态变化:随后的「连接状态变化: 插件上线」
@@ -136,6 +158,19 @@ export class Bridge {
       this.transport.sendPush(JSON.stringify(frame));
     } catch (e) {
       warn(`活动推送失败: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+
+  /**
+   * 把上报同意状态推给面板(面板连上时 + 用户改定后的回执)。
+   * 离线直接丢弃:重连时 onPluginConnect 会再推一次。
+   */
+  pushConsent(frame: ConsentPushFrame): void {
+    if (!this.transport.isConnected) return;
+    try {
+      this.transport.sendPush(JSON.stringify(frame));
+    } catch (e) {
+      warn(`同意状态推送失败: ${e instanceof Error ? e.message : String(e)}`);
     }
   }
 

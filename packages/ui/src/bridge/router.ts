@@ -1,5 +1,7 @@
 import type {
   ActivityPushFrame,
+  ConsentPushFrame,
+  ConsentSetFrame,
   LocaleChoice,
   LocaleStateMessage,
   PluginError,
@@ -13,6 +15,7 @@ import type {
 } from 'text-to-design-shared';
 import {
   isActivityPushFrame,
+  isConsentPushFrame,
   isVersionPushFrame,
   toStoredChoice,
   UI_FORWARD_TIMEOUT_MS,
@@ -58,6 +61,9 @@ export class Router {
   /** 某次 tools/call 的相位(见 shared/activity-channel.ts) */
   onActivity: ((frame: ActivityPushFrame) => void) | null = null;
 
+  /** daemon 回推的上报同意状态(见 shared/consent-channel.ts) */
+  onConsent: ((frame: ConsentPushFrame) => void) | null = null;
+
   constructor(conn: Conn, log: (level: LogLevel, line: string) => void) {
     this.conn = conn;
     this.log = log;
@@ -83,6 +89,18 @@ export class Router {
     }
   }
 
+  /**
+   * 把用户的上报同意选择发给 daemon(见 shared/consent-channel.ts)。
+   * 不在线则静默丢弃:用户的选择已留本地,重连时补发一次即可收敛。
+   */
+  sendConsent(granted: boolean): void {
+    const ws = this.conn.ws;
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      const frame: ConsentSetFrame = { type: 'consent_set', granted };
+      ws.send(JSON.stringify(frame));
+    }
+  }
+
   onWsText(conn: Conn, text: string): void {
     let msg: PluginRequest | PluginResponse | ServerPush;
     try {
@@ -105,6 +123,10 @@ export class Router {
     }
     if (isActivityPushFrame(msg)) {
       this.onActivity?.(msg);
+      return;
+    }
+    if (isConsentPushFrame(msg)) {
+      this.onConsent?.(msg);
       return;
     }
     if (

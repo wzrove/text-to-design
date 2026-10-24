@@ -34,3 +34,6 @@ dist-ssr
 # 所以新克隆的仓库不需要它也能正常工作。
 docs/mcp-errors/
 
+# telemetry 本地密钥(node --env-file 与 drizzle-kit 共用)
+/packages/telemetry/.env
+

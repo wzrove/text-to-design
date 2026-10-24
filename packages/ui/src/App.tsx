@@ -13,18 +13,17 @@ import {
 } from 'text-to-design-shared';
 import { postToCode } from './bridge/codeChannel';
 import { BridgeProvider, useBridge } from './bridge/useBridge';
-import CameraLockToggle from './components/CameraLockToggle';
 import CapabilityCard from './components/CapabilityCard';
 import ConnectionHint from './components/ConnectionHint';
-import LocaleSwitch from './components/LocaleSwitch';
+import ConsentDialog from './components/ConsentDialog';
 import LogDrawer from './components/LogDrawer';
 import LogTrigger from './components/LogTrigger';
 import MinimizedPet from './components/MinimizedPet';
 import MinimizeToggle from './components/MinimizeToggle';
+import OverflowMenu from './components/OverflowMenu';
 import PanelHeightSync from './components/PanelHeightSync';
 import SelectionCard from './components/SelectionCard';
 import StatusBadge from './components/StatusBadge';
-import ThemeToggle from './components/ThemeToggle';
 import ToastHost from './components/Toast';
 import Tooltip from './components/Tooltip';
 import UpgradeButton from './components/UpgradeButton';
@@ -44,10 +43,14 @@ function Shell() {
     envMinimized,
     latest,
     daemonVersion,
+    consentGranted,
+    consentAsked,
+    setConsent,
   } = useBridge();
 
   const [logOpen, setLogOpen] = createSignal(false);
   const [upgradeOpen, setUpgradeOpen] = createSignal(false);
+  const [consentOpen, setConsentOpen] = createSignal(false);
 
   /**
    * 最小化模式:UI 只切模式,尺寸由 code 侧按模式算(见 shared/panel.ts)。
@@ -102,6 +105,50 @@ function Shell() {
   };
 
   let upgradeEl: HTMLButtonElement | undefined;
+  let overflowEl: HTMLButtonElement | undefined;
+
+  const closeConsent = (): void => {
+    // 无选择的关闭(Esc/遮罩/暂不)也回发一次**当前值**:daemon 侧据此记
+    // 「问过了」,而 granted 不被误改 —— 已开启态里点取消不会把上报关掉
+    setConsent(consentGranted());
+    setConsentOpen(false);
+    overflowEl?.focus();
+  };
+
+  /**
+   * 首问:daemon 报「还没问过」时自动弹一次同意框。任何出口(同意/拒绝/
+   * 直接关掉)都会回发一次选择,daemon 记为已问,之后只能从 ⋯ 菜单再进。
+   *
+   * 一次性闩锁:回执在途时(关了弹窗、asked 还是 false)不能重开 ——
+   * 否则用户会看见弹窗关了又自己弹回来。
+   */
+  let consentPrompted = false;
+  createEffect(() => {
+    if (consentPrompted) return;
+    if (
+      consentAsked() === false &&
+      !minimized() &&
+      !consentOpen() &&
+      !logOpen() &&
+      !upgradeOpen()
+    ) {
+      consentPrompted = true;
+      setConsentOpen(true);
+    }
+  });
+
+  /**
+   * 同意弹窗的 Esc 收口:与日志抽屉 / 升级弹窗同一条纪律(焦点归还的端点分处
+   * 两个组件,只有 App 同时握着两端)。
+   */
+  createEffect(() => {
+    if (!consentOpen()) return;
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') closeConsent();
+    };
+    document.addEventListener('keydown', onKey);
+    onCleanup(() => document.removeEventListener('keydown', onKey));
+  });
 
   /**
    * 未读水位按「错误条数累计」记,而不是最大 id:同一行日志会被 pushLog 合并成
@@ -202,12 +249,13 @@ function Shell() {
         }`}
       >
         {/*
-          页头只承载「状态 / 工具」两类,不再重复宿主的身份信息:标题栏已给出插件名
+          页头只承载「状态 / 高频动作」,不再重复宿主的身份信息:标题栏已给出插件名
           与图标;平台与端口曾是排查上下文,但常态下是噪声,已移除(端口仍可在
           日志抽屉的连接行里看到)。
 
           读序即优先级(左 → 右):状态徽章(全页唯一色块)→ 它的挽救动作(仅
-          「没连上」时出现)→ 弹性留白 → 相机锁 → 主题 → 语言 → 日志入口 →
+          「没连上」时出现)→ 弹性留白 → 升级(仅过期时出现)→ 日志(未读错误
+          需要常驻可见)→ 二级菜单(错误上报/相机锁/主题/语言等低频开关)→
           最小化(最右,仅宿主支持改尺寸时挂 —— 缩不下去的钮是死键)。
         */}
         <header class="flex shrink-0 items-center gap-2">
@@ -251,9 +299,6 @@ function Shell() {
                 onClick={() => setUpgradeOpen(true)}
               />
             </Show>
-            <CameraLockToggle />
-            <ThemeToggle />
-            <LocaleSwitch />
             <LogTrigger
               ref={(el) => {
                 triggerEl = el;
@@ -261,6 +306,13 @@ function Shell() {
               unread={unread()}
               open={logOpen()}
               onClick={openLog}
+            />
+            <OverflowMenu
+              consentGranted={consentGranted()}
+              onOpenConsent={() => setConsentOpen(true)}
+              ref={(el) => {
+                overflowEl = el;
+              }}
             />
             {/* 宿主没有 ui.resize 时窗口缩不下去,不挂一颗按不动的钮 */}
             <Show when={canResize()}>
@@ -291,6 +343,21 @@ function Shell() {
           current={{ ui: APP_VERSION, mcp: daemonVersion() }}
           latest={latest()}
           onClose={closeUpgrade}
+        />
+
+        {/* 错误上报同意:浮层,不进流(0014);默认不上报,同意由 daemon 侧门控 */}
+        <ConsentDialog
+          open={consentOpen()}
+          granted={consentGranted()}
+          onEnable={() => {
+            setConsent(true);
+            setConsentOpen(false);
+          }}
+          onDisable={() => {
+            setConsent(false);
+            setConsentOpen(false);
+          }}
+          onClose={closeConsent}
         />
 
         {/*
