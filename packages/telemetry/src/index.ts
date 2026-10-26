@@ -14,6 +14,8 @@ const userInput = z.object({
 });
 
 const errorInput = z.object({
+  /** 发送端条目级 id;老客户端不传 → 存 NULL,唯一索引对 NULL 不去重(dec 1a135e6a) */
+  id: z.string().min(1).max(100).optional(),
   level: z.enum(['fatal', 'error', 'warn']).default('error'),
   message: z.string().min(1).max(8000),
   stack: z.string().max(20000).optional(),
@@ -82,16 +84,24 @@ app.post('/v1/errors', async (c) => {
     if (!row) {
       throw new Error('user upsert returned no row');
     }
-    await tx.insert(errorReports).values(
-      errors.map((e) => ({
-        userId: row.id,
-        level: e.level,
-        message: e.message,
-        stack: e.stack ?? null,
-        context: e.context ?? null,
-        count: e.count,
-      })),
-    );
+    await tx
+      .insert(errorReports)
+      .values(
+        errors.map((e) => ({
+          errorId: e.id ?? null,
+          userId: row.id,
+          level: e.level,
+          message: e.message,
+          stack: e.stack ?? null,
+          context: e.context ?? null,
+          count: e.count,
+        })),
+      )
+      // 重发同一批(客户端没收到 2xx)不得插重复行;count 只许抬不许降(dec 1a135e6a)
+      .onConflictDoUpdate({
+        target: errorReports.errorId,
+        set: { count: sql`greatest(${errorReports.count}, excluded.count)` },
+      });
     return row.id;
   });
 

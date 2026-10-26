@@ -15,6 +15,13 @@
       "when": 1792864912588,
       "tag": "0001_hard_havok",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1792977277407,
+      "tag": "0002_strange_beyonder",
+      "breakpoints": true
     }
   ]
 }

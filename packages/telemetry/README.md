@@ -56,18 +56,23 @@ npx wrangler hyperdrive create text-to-design-telemetry --connection-string "<su
 
 ## 发送端(mcp-server daemon)
 
-daemon 侧上报器见 `packages/mcp-server/src/telemetry.ts`,默认**未配置即关闭**。上线后在发送端配置(环境变量或改该文件常量):
+daemon 侧上报器见 `packages/mcp-server/src/telemetry.ts`。**冲刷是事件驱动的**(dec 1a135e6a),无常驻定时器:
+
+- 空队列 = 零 timer;首条错误入队才挂一个 10s 聚合窗口,窗口内不重置,持续错误流也按期成批
+- 队列达 50 条立即冲;成功后归零退避,队列还有剩就接着排空
+- 失败按指数退避 + jitter 重挂,封顶 5 分钟
+- `uncaughtException` / `unhandledRejection` 冲 3s 后按 Node 默认语义退出;shutdown 冲 1.5s
+
+门控顺序:endpoint/key 配置 → 用户同意(面板 `⋯` 菜单,默认关)→ 才采集/上报;匿名安装标识存 `~/.text-to-design/install-id`。`DEFAULT_ENDPOINT` / `DEFAULT_API_KEY` 已填真值,env 覆盖用于轮换期新旧并行:
 
 ```bash
 TEXT_TO_DESIGN_TELEMETRY_URL=https://<worker>.workers.dev/v1/errors
 TEXT_TO_DESIGN_TELEMETRY_KEY=<与 Workers secret 同值>
 ```
 
-门控顺序:endpoint/key 配置 → 用户同意(面板 `⋯` 菜单,默认关)→ 才采集/上报;匿名安装标识存 `~/.text-to-design/install-id`。
-
 ## 表
 
-- `telemetry_users`:fingerprint(唯一,浏览器指纹) / client_version / mcp_version / created_at(首见) / updated_at(最近活跃)。同指纹重复上报走 upsert,未带的版本不覆盖旧值
-- `error_reports`:user_id → telemetry_users(id) / level / message / stack / context(jsonb) / **count(同一错误聚合次数,发送端去重累加,默认 1)** / created_at
+- `telemetry_users`:fingerprint(唯一,= `~/.text-to-design/install-id` 的随机 UUID,非浏览器指纹) / client_version / mcp_version / created_at(首见) / updated_at(最近活跃)。同指纹重复上报走 upsert,未带的版本不覆盖旧值
+- `error_reports`:user_id → telemetry_users(id) / **error_id(发送端条目级 id,唯一;重试重发同一批靠它幂等)** / level / message / stack / context(jsonb) / **count(同一错误聚合次数,发送端去重累加,默认 1)** / created_at
 
-一次上报 = 一个事务:upsert 用户,再挂错记录。不存通用遥测事件。
+一次上报 = 一个事务:upsert 用户,再挂错记录(同 `error_id` 冲突只抬 count,不插重复行)。不存通用遥测事件。

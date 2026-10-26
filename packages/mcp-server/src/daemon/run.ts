@@ -19,7 +19,7 @@ import {
 import { getConsent, initConsent, isAsked, writeConsent } from '../consent';
 import { debug, error, log } from '../logger';
 import { buildServer } from '../server';
-import { captureError, flushTelemetry, startTelemetryLoop } from '../telemetry';
+import { captureError, flushTelemetry, stopTelemetry } from '../telemetry';
 import { latestVersions } from '../version-check';
 import {
   delay,
@@ -79,7 +79,6 @@ export async function runDaemon(bridge: Bridge): Promise<void> {
   await initConsent();
   await bridge.start(PORT);
   log(`daemon: 插件 WS ws://localhost:${bridge.port}`);
-  const stopTelemetry = startTelemetryLoop();
 
   /**
    * 装配**一次**,整个 daemon 复用同一个 McpServer(0030)。
@@ -168,7 +167,7 @@ export async function runDaemon(bridge: Bridge): Promise<void> {
   const shutdown = (reason: string): void => {
     log(`daemon 退出: ${reason}`);
     if (versionTimer != null) clearInterval(versionTimer);
-    stopTelemetry?.();
+    stopTelemetry();
     // 退出前尽力冲一次遥测(短预算,失败随进程消失);关闭是尽力而为:
     // 失败也必须退出,但不能静默(见决策 0007/0013)
     void flushTelemetry(1_500).finally(() => {
