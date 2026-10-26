@@ -7,9 +7,12 @@ import Tooltip from './Tooltip';
  * 最小化入口。挂不挂由调用方定:宿主没有 ui.resize 时窗口缩不下去,
  * 一颗按不动的钮比没有更糟(见 App.tsx)。
  *
- * 图标常态是 Minimize2,悬停换成 logo.svg 的猫(20px 渲染 + 定位裁掉文件
- * 自带的 ~15% 留白,只收紧视觉边距、不动文件),交叉淡入 + 缩放过渡 ——
- * 「点下去会变成宠物」的预告。
+ * 图标常态是 Minimize2,悬停换成 logo.svg 的猫:20px 渲染、以 (-2, -2) 摆在
+ * 16px 窗口里居中,四周各裁 2px —— 正好削掉文件自带的 ~15% 留白,只收紧视觉
+ * 边距、不动文件。交叉淡入 + 缩放过渡 ——「点下去会变成宠物」的预告。
+ *
+ * `max-w-none` 不是装饰:预置样式给 img 的 `max-width:100%` 会把 20px 宽的图
+ * 压成 16px(高仍 20px),横向变形、视觉重心左移。
  */
 export default function MinimizeToggle(props: { onClick: () => void }) {
   return (
@@ -30,7 +33,7 @@ export default function MinimizeToggle(props: { onClick: () => void }) {
               src={logoUrl}
               alt=""
               draggable={false}
-              class="absolute left-[-2.5px] top-[-1.9px] h-5 w-5"
+              class="absolute left-[-2px] top-[-2px] h-5 w-5 max-w-none"
             />
           </span>
         </span>
