@@ -1,5 +1,11 @@
 # text-to-design-mcp
 
+## 0.13.6
+
+### Patch Changes
+
+- [`b287034`](https://github.com/wzrove/text-to-design/commit/b2870348698b1bb13bd7b06d5bcc30acd35b0275) - feat: 改进遥测上报机制为事件驱动，添加条目级幂等性和退避重试逻辑
+
 ## 0.13.5
 
 ### Patch Changes
