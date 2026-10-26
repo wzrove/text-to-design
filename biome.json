@@ -28,6 +28,9 @@
       "preset": "recommended",
       "suspicious": {
         "noPrototypeBuiltins": "off"
+      },
+      "a11y": {
+        "useSemanticElements": "off"
       }
     }
   },

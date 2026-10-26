@@ -46,7 +46,7 @@ function run(args: string[]): string {
  * 旧注释不追认(247 处里混着行号与年份,一次性改写既改不动旧记录正文、又淹死 diff),
  * 但新增引用必须走 `dec <标识>` —— 数值只许变小。降下来之后请把这里一起改小。
  */
-const BARE_REF_BASELINE = 435;
+const BARE_REF_BASELINE = 434;
 
 describe('决策记录引用', () => {
   const report = JSON.parse(run(['check', '--json'])) as CheckReport;

@@ -39,14 +39,11 @@ export const MESSAGES_EN = {
   'capability.host.variables': 'Variables',
   'capability.host.inPlaceVariants': 'In-place variants',
 
-  'locale.system': 'System',
   'locale.zh-CN': '中文',
   'locale.en': 'English',
   'locale.abbr.zh-CN': '中',
   'locale.abbr.en': 'EN',
   'locale.menu': 'Language',
-  'locale.title.followSystem': 'Language: follow system (currently {locale})',
-  'locale.title.fixed': 'Language: {locale}',
 
   'status.connected.label': 'Connected',
   'status.connected.title':

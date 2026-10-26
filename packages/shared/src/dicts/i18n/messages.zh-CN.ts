@@ -34,16 +34,14 @@ export const MESSAGES_ZH_CN = {
   'capability.host.inPlaceVariants': '原位合并变体',
 
   // ── 语言选择器 ──
-  'locale.system': '跟随系统',
+  // 两档直切(中 / EN),默认跟系统:没有「跟随系统」这一档,没选过本身就是它
+  // (见 dec 0016;面板形状在 2026-10-26 由三档下拉改为两档直切)
   'locale.zh-CN': '中文',
   'locale.en': 'English',
-  // 触发器上的缩写:面板 360 宽,页头一行要塞状态/动作/端口/语言/日志,
-  // 只放得下 1–2 个字符(全名留给下拉项)
+  // 档位上的缩写:二级菜单一行,只放得下 1–2 个字符(全名进 aria-label)
   'locale.abbr.zh-CN': '中',
   'locale.abbr.en': 'EN',
   'locale.menu': '界面语言',
-  'locale.title.followSystem': '界面语言:跟随系统(当前 {locale})',
-  'locale.title.fixed': '界面语言:{locale}',
 
   // ── 状态徽章 ──
   'status.connected.label': '已连接',

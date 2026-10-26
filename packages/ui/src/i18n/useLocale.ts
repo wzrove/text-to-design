@@ -3,7 +3,6 @@ import {
   createT,
   type Locale,
   type LocaleChoice,
-  normalizeLocale,
   resolveUiLocale,
   SYSTEM_CHOICE,
   type T,
@@ -61,10 +60,6 @@ function translator(locale: Locale): T {
 /** 当前语言:① 用户选择 → ② 系统语言归一化 → ③ 兜底 */
 export const locale: Accessor<Locale> = () =>
   resolveUiLocale({ stored: choice(), navigatorLanguage: systemLanguage() });
-
-/** 系统语言的归一化结果(认不出来时 undefined);切换器用它标「跟随系统」的实际落点 */
-export const systemLocale: Accessor<Locale | undefined> = () =>
-  normalizeLocale(systemLanguage());
 
 /** 当前语言的 `t`:函数体里读信号,所以在 JSX 中调用即自动跟随切换 */
 export const t: T = (key, params) => translator(locale())(key, params);
