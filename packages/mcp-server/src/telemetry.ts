@@ -2,6 +2,11 @@ import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
+import {
+  errorGroupKey,
+  isErrorReportLevel,
+  type LogRecord,
+} from 'text-to-design-shared';
 import { SERVER_VERSION } from './config';
 import { getConsent } from './consent';
 import { debug } from './logger';
@@ -21,13 +26,24 @@ import { getPlatformState, getUiVersion } from './platform-state';
  * 首条错误入队才挂一个延迟窗口,队列满则立即冲,失败按指数退避重挂。
  */
 /**
- * 上报目标与密钥:随 npm 包分发(终端用户不会配 env)。key 走 npm 公开分发,
- * 解包即得 —— 它只是挡扫描器的口令,不是真秘密;真防护靠后端限流与轮换。
- * 部署 worker 后把两项 DEFAULT 填成真值;env 覆盖用于轮换期新旧并行。
+ * 上报目标与密钥:**构建期**从仓库根 `.env.local` 烤进产物(见 vite.config.ts),运行时 env 可
+ * 覆盖(轮换期新旧并行)。注入空串 = 本次构建没配 → 整条链路 no-op(三重门第一道)。
+ *
+ * 为什么烤进产物:终端用户不会配 env,而 key 随 npm 包公开分发、解包即得 —— 它不是
+ * 真秘密(挡扫描器的口令,真防护靠后端限流与轮换),所以「不进 git、只进 dist」
+ * 是这里能拿到的最好状态(与 UI 的 `__APP_VERSION__` 同一套,见 dec 0016)。
  */
+declare const __TELEMETRY_DEFAULT_URL__: string;
+declare const __TELEMETRY_DEFAULT_KEY__: string;
+
 const DEFAULT_ENDPOINT =
-  'https://telemetry.text-to-design.wzrove.com/v1/errors';
-const DEFAULT_API_KEY = 'dev-insecure-key';
+  typeof __TELEMETRY_DEFAULT_URL__ === 'string'
+    ? __TELEMETRY_DEFAULT_URL__
+    : '';
+const DEFAULT_API_KEY =
+  typeof __TELEMETRY_DEFAULT_KEY__ === 'string'
+    ? __TELEMETRY_DEFAULT_KEY__
+    : '';
 
 const ENDPOINT = process.env.TEXT_TO_DESIGN_TELEMETRY_URL ?? DEFAULT_ENDPOINT;
 const API_KEY = process.env.TEXT_TO_DESIGN_TELEMETRY_KEY ?? DEFAULT_API_KEY;
@@ -44,13 +60,12 @@ const FLUSH_DELAY_MS = 10_000;
 const RETRY_BASE_MS = 10_000;
 const RETRY_MAX_MS = 300_000;
 
-interface QueuedError {
+/** 一条待上报错误 = 结构化日志 + 投递/聚合元数据(形状与落盘、UI 推送一致) */
+interface QueuedError extends LogRecord {
   /** 条目级稳定 id:重试重发同一批时 worker 靠它去重(dec 1a135e6a) */
   id: string;
-  level: 'error' | 'fatal' | 'warn';
-  message: string;
-  stack?: string;
-  context?: Record<string, unknown>;
+  /** 分组键(scope|code|subject|归一化 message,见 shared/dicts/error-report) */
+  fingerprint: string;
   /** 同一错误的聚合次数(后端真列,默认 1) */
   count?: number;
   /** 已进请求体:count 已定格,去重与溢出裁剪都必须跳过它(dec 1a135e6a) */
@@ -129,19 +144,21 @@ function trimQueue(): void {
   }
 }
 
-export function captureError(
-  level: QueuedError['level'],
-  message: string,
-  stack?: string,
-  context?: Record<string, unknown>,
-): void {
+/**
+ * 采一条错误进上报队列。入参就是 `LogRecord`(与落盘、UI 推送同一形状,见
+ * shared/dicts/log);非上报级别(debug/info)直接丢弃。
+ */
+export function captureError(record: LogRecord): void {
+  if (!isErrorReportLevel(record.level)) return;
   if (ENDPOINT === '' || API_KEY === '' || !getConsent()) return;
-  // 去重按整个队列聚合同名错误:重复出现只累加 count,不占新位。
+  const { message, scope, code, subject } = record;
+  // 去重按整个队列聚合同**形状**错误(见 errorGroupKey):重复出现只累加 count,不占新位。
   // 在途条目跳过:它的 count 已随请求体定格,再加也到不了服务端(dec 1a135e6a)
+  const fingerprint = errorGroupKey({ scope, code, subject, message });
   for (let i = queue.length - 1; i >= 0; i--) {
     const e = queue[i];
     if (e.inflight === true) continue;
-    if (e.message === message) {
+    if (e.fingerprint === fingerprint) {
       e.count = (e.count ?? 1) + 1;
       // 兜住「队列有货但没有 timer」的路径(如同意关闭期间滞留后重开)
       scheduleFlush(FLUSH_DELAY_MS);
@@ -150,11 +167,15 @@ export function captureError(
   }
   const platform = getPlatformState()?.platform;
   queue.push({
+    ...record,
     id: randomUUID(),
-    level,
+    fingerprint,
     message: message.slice(0, 8000),
-    stack: stack?.slice(0, 20000),
-    context: platform != null ? { ...(context ?? {}), platform } : context,
+    stack: record.stack?.slice(0, 20000),
+    context:
+      platform != null
+        ? { ...(record.context ?? {}), platform }
+        : record.context,
   });
   trimQueue();
   if (queue.length >= BATCH_MAX) {
@@ -163,6 +184,21 @@ export function captureError(
     return;
   }
   scheduleFlush(FLUSH_DELAY_MS);
+}
+
+/** 显式投影:inflight / fingerprint 是本地调度状态,不上线 */
+function toWire(e: QueuedError): Record<string, unknown> {
+  return {
+    id: e.id,
+    level: e.level,
+    message: e.message,
+    stack: e.stack,
+    context: e.context,
+    count: e.count,
+    scope: e.scope,
+    code: e.code,
+    subject: e.subject,
+  };
 }
 
 export async function flushTelemetry(timeoutMs = 5_000): Promise<void> {
@@ -193,15 +229,7 @@ export async function flushTelemetry(timeoutMs = 5_000): Promise<void> {
           mcpVersion: SERVER_VERSION,
           clientVersion: getUiVersion() ?? undefined,
         },
-        // 显式投影:inflight 是本地调度状态,不上线
-        errors: batch.map(({ id, level, message, stack, context, count }) => ({
-          id,
-          level,
-          message,
-          stack,
-          context,
-          count,
-        })),
+        errors: batch.map(toWire),
       }),
       signal: AbortSignal.timeout(timeoutMs),
     });

@@ -24,9 +24,9 @@ bridge.onConnectionChange = (connected) => {
 // 日志触发 → 实时推送插件 UI。daemon 持有 WS:在线直推,离线进环形缓冲待上线回放;
 // shim 无 WS 通道,只攒缓冲不回放(其日志靠 TEXT_TO_DESIGN_MCP_LOG 文件排查)。
 // error 级同时采进遥测:logger 是 daemon 全部错误的汇聚点(见 telemetry.ts)
-setLogSink((level, line) => {
-  if (level === 'error') captureError('error', line);
-  bridge.notifyLog(level, line);
+setLogSink((record) => {
+  if (record.level === 'error') captureError(record);
+  bridge.notifyLog(record);
 });
 
 const IS_DAEMON =
@@ -52,10 +52,12 @@ const EXEC_CMD = ARGV[0] === 'exec' && !IS_DAEMON;
 if (SERVICE_CMD) {
   // CLI 子命令的前台可见性:默认日志只落盘,终端用户会看见「什么都没发生」。
   // 复用既有 sink 机制把同一批日志外发到终端(logger 保持零本地依赖)
-  setLogSink((level, line) => {
+  setLogSink((record) => {
     const stream =
-      level === 'error' || level === 'warn' ? process.stderr : process.stdout;
-    stream.write(`[text-to-design-mcp] ${line}\n`);
+      record.level === 'error' || record.level === 'warn'
+        ? process.stderr
+        : process.stdout;
+    stream.write(`[text-to-design-mcp] ${record.message}\n`);
   });
   const opts: ServiceOptions = {
     dryRun: ARGV.includes('--dry-run'),
@@ -66,8 +68,8 @@ if (SERVICE_CMD) {
 } else if (EXEC_CMD) {
   // exec 的 stdout 是**数据通道**(--json 时给管道消费),所以日志一律走 stderr ——
   // 否则一行 log 就把 JSON 流弄脏了
-  setLogSink((_level, line) => {
-    process.stderr.write(`[text-to-design-mcp] ${line}\n`);
+  setLogSink((record) => {
+    process.stderr.write(`[text-to-design-mcp] ${record.message}\n`);
   });
   void runExecCli(ARGV.slice(1));
 } else if (IS_DAEMON) {

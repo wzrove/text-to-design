@@ -152,15 +152,21 @@ export async function runDaemon(bridge: Bridge): Promise<void> {
    * 不吞异常 —— 遥测不允许改变「崩就是崩」的行为。
    */
   process.on('uncaughtException', (err) => {
-    captureError('fatal', err.message, err.stack);
+    captureError({
+      level: 'fatal',
+      message: err.message,
+      stack: err.stack,
+      scope: 'daemon',
+    });
     void flushTelemetry(3_000).finally(() => process.exit(1));
   });
   process.on('unhandledRejection', (reason) => {
-    captureError(
-      'fatal',
-      reason instanceof Error ? reason.message : String(reason),
-      reason instanceof Error ? reason.stack : undefined,
-    );
+    captureError({
+      level: 'fatal',
+      message: reason instanceof Error ? reason.message : String(reason),
+      stack: reason instanceof Error ? reason.stack : undefined,
+      scope: 'daemon',
+    });
     void flushTelemetry(3_000).finally(() => process.exit(1));
   });
 

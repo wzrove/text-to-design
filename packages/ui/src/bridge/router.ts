@@ -4,6 +4,7 @@ import type {
   ConsentSetFrame,
   LocaleChoice,
   LocaleStateMessage,
+  LogRecord,
   PluginError,
   PluginPlatform,
   PluginRequest,
@@ -30,7 +31,7 @@ export class Router {
   private localPending = new Map<string, Pending>();
   private globalSeq = 0;
   private conn: Conn;
-  private log: (level: LogLevel, line: string) => void;
+  private emit: (record: LogRecord) => void;
 
   /** 插件主动推送的选中状态(selectionchange) */
   onSelection: ((data: unknown) => void) | null = null;
@@ -64,9 +65,14 @@ export class Router {
   /** daemon 回推的上报同意状态(见 shared/consent-channel.ts) */
   onConsent: ((frame: ConsentPushFrame) => void) | null = null;
 
-  constructor(conn: Conn, log: (level: LogLevel, line: string) => void) {
+  constructor(conn: Conn, log: (record: LogRecord) => void) {
     this.conn = conn;
-    this.log = log;
+    this.emit = log;
+  }
+
+  /** router 自己产的日志没有分类,统一按 bridge 档;daemon 来的记录直接走 emit */
+  private log(level: LogLevel, message: string): void {
+    this.emit({ level, scope: 'bridge', message });
   }
 
   pingPlugin(): Promise<unknown> {
@@ -121,8 +127,11 @@ export class Router {
       return;
     }
     if (msg.type === 'log') {
-      // daemon 侧日志实时推送:直接进面板(级别过滤/去重由 LogDrawer 承接)
-      this.log(msg.level, msg.line);
+      // daemon 侧日志实时推送:直接进面板(级别过滤/去重由 LogDrawer 承接)。
+      // record 缺席 = 旧 daemon,按 level+line 造一条,scope 只能给兜底值
+      this.emit(
+        msg.record ?? { level: msg.level, scope: 'daemon', message: msg.line },
+      );
       return;
     }
     if (isVersionPushFrame(msg)) {

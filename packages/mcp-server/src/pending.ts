@@ -193,7 +193,12 @@ export class PendingManager {
     const doneLine = `响应: ${pending.id} ${pending.method} ok=${msg.ok} 耗时=${Date.now() - pending.startedAt}ms${msg.ok ? '' : ` error=${msg.error?.code ?? ''}`}`;
     // 失败响应升为 error 级:文件日志与 UI 推送面板同步显红
     if (msg.ok) log(doneLine);
-    else error(doneLine);
+    else
+      error(doneLine, {
+        scope: 'bridge',
+        subject: pending.method,
+        code: msg.error?.code ?? 'plugin_error',
+      });
     if (msg.ok) pending.resolve(msg.data);
     else
       pending.reject(

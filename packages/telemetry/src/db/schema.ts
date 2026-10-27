@@ -32,7 +32,10 @@ export const errorReports = pgTable(
   'error_reports',
   {
     id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
-    /** 发送端条目级 id:重试重发同一批时靠它幂等(dec 1a135e6a)。老客户端不传 → NULL,Postgres 唯一索引对 NULL 不去重 */
+    /**
+     * 发送端条目级 id:重发同一批时它**没变** → 该批的 count 已计过,不重复累加
+     * (rollup 的幂等水位,见 src/index.ts 的 ON CONFLICT)。老客户端不传 → NULL。
+     */
     errorId: text('error_id'),
     userId: uuid('user_id')
       .notNull()
@@ -43,6 +46,21 @@ export const errorReports = pgTable(
     context: jsonb('context').$type<Record<string, unknown>>(),
     /** 同一错误的聚合次数(发送端去重累加,默认 1) */
     count: integer('count').notNull().default(1),
+    /**
+     * 分组键 `scope|code|subject|归一化 message`(shared/dicts/error-report,两侧同一份实现)。
+     * 跨窗口 rollup 靠它 —— 客户端窗口内去重、服务端跨窗口去重,同一错误最终只有一行。
+     */
+    fingerprint: text('fingerprint'),
+    /** 错误类别(ERROR_CODES);老客户端不传 → NULL */
+    code: text('code'),
+    /** 来源档位(bridge/tool/daemon);老客户端不传 → NULL */
+    scope: text('scope'),
+    /** 工具名 / 插件方法名 */
+    subject: text('subject'),
+    /** 该分组最近一次出现;created_at 是首见 */
+    lastSeen: timestamp('last_seen', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -50,6 +68,10 @@ export const errorReports = pgTable(
   (t) => [
     index('error_reports_created_at_idx').on(t.createdAt),
     index('error_reports_user_id_idx').on(t.userId),
-    uniqueIndex('error_reports_error_id_key').on(t.errorId),
+    // 一行 = 一个 (安装, 错误形状):冲突只抬 count / last_seen,不再插新行
+    uniqueIndex('error_reports_user_fingerprint_key').on(
+      t.userId,
+      t.fingerprint,
+    ),
   ],
 );

@@ -123,14 +123,28 @@ text-to-design 能让 AI 助手(比如 opencode、Claude)直接在你的设计�
 | --- | --- | --- |
 | `TEXT_TO_DESIGN_MCP_PORT` | `47812` | 插件桥接 WebSocket 端口(固定,被占即启动失败) |
 | `TEXT_TO_DESIGN_MCP_HTTP_PORT` | `47820` | MCP HTTP 端点(shim 连 daemon 用) |
-| `TEXT_TO_DESIGN_MCP_LOG` | `/tmp/text-to-design-mcp.log` | 常驻服务日志文件路径 |
+| `TEXT_TO_DESIGN_MCP_LOG` | `/tmp/text-to-design-mcp.log` | 常驻服务日志文件路径(JSONL,与遥测上报同一形状) |
 
 ### 调试
 
 ```bash
-tail -f /tmp/text-to-design-mcp.log   # 服务日志:请求/响应耗时、HTTP 状态、插件连接
+tail -f /tmp/text-to-design-mcp.log   # 服务日志(JSONL:time/level/scope/code/subject/message)
+jq 'select(.scope == "tool")' /tmp/text-to-design-mcp.log   # 按来源/类别过滤,不必对文本做正则
 TEXT_TO_DESIGN_MCP_LOG_LEVEL=debug    # 更细落盘:WS 帧级收发(只影响日志文件,不影响面板)
 ```
+
+### 本地跑遥测链路
+
+```bash
+cp .env.local.example .env.local        # 本地配置集中放仓库根(插件 id / worker / mcp 构建)
+docker compose up -d --build            # 同一镜像内启动 PG(:5433) + 遥测(:8787),自动迁移
+pnpm --filter text-to-design-mcp build         # 把根 .env.local 的 URL/KEY 烤进 dist
+node packages/mcp-server/dist/index.js daemon  # 起 daemon
+```
+
+`.env.local` 被 `*.local` 忽略、不进仓库;各子包按需读同一份 —— ui 构建读插件 id、telemetry 运行时读库、mcp **构建期**读遥测 URL/KEY。真实环境变量始终优先。
+错误上报默认**关**,要先在面板 `⋯` 菜单开(或手写 `~/.text-to-design/consent.json` 的 `{"granted":true}`)。
+细节见 [packages/telemetry/README.md](packages/telemetry/README.md#本地开发)。
 
 插件面板自带状态与日志:服务端日志实时推送(档位切到「全部」可见 debug 帧级明细),
 插件离线期间的日志先缓冲、上线时按顺序回放;另有可折叠的「能力」区块,列出核心能力、

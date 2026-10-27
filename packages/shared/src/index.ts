@@ -3,7 +3,7 @@ import type { ActivityPushFrame } from './activity-channel';
 import type { ServerStatusFrame } from './connection';
 import type { ConsentPushFrame } from './consent-channel';
 import type { PluginError } from './dicts/error-code';
-import type { LogLevel } from './dicts/log';
+import type { LogLevel, LogRecord } from './dicts/log';
 import type * as s from './schemas';
 import type { VersionPushFrame } from './version-channel';
 
@@ -255,7 +255,14 @@ export type PluginResponse<D = unknown> = {
 
 /** 服务器主动下发的推送帧(daemon → 插件 UI,单向通知,无需回包) */
 export type ServerPush =
-  | { type: 'log'; level: LogLevel; line: string }
+  | {
+      type: 'log';
+      /** 结构化日志:与遥测上报同一形状(见 shared/dicts/log 的 LogRecord) */
+      record?: LogRecord;
+      /** 兼容旧 UI:record 缺席时按这两项渲染(新 daemon 两样都给) */
+      level: LogLevel;
+      line: string;
+    }
   | ServerStatusFrame
   | VersionPushFrame
   | ActivityPushFrame

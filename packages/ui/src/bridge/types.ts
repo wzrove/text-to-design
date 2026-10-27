@@ -5,6 +5,7 @@ import type {
   HostCapability,
   LocaleChoice,
   LogLevel,
+  LogRecord,
   PlatformOpInfo,
   PluginPlatform,
   PluginRequest,
@@ -38,7 +39,7 @@ export type BridgeStatus =
 
 export type BridgeEvent =
   | { type: 'status'; status: BridgeStatus }
-  | { type: 'log'; level: LogLevel; line: string }
+  | { type: 'log'; record: LogRecord }
   | { type: 'selection'; data: unknown }
   | { type: 'platform'; platform: PluginPlatform }
   /** `chromeHeight` 已过 readChromeHeight 收口(缺省 → 兜底值,见 shared/panel.ts) */

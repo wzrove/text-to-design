@@ -2,7 +2,7 @@ import type {
   ActivityPhase,
   ActivityPushFrame,
   ConsentPushFrame,
-  LogLevel,
+  LogRecord,
   ServerPush,
   VersionPushFrame,
 } from 'text-to-design-shared';
@@ -118,8 +118,14 @@ export class Bridge {
   }
 
   /** 把一条 daemon 日志发给插件 UI:在线直推,离线进环形缓冲待上线回放 */
-  notifyLog(level: LogLevel, line: string): void {
-    const push: ServerPush = { type: 'log', level, line };
+  notifyLog(record: LogRecord): void {
+    // level/line 是给旧 UI 的兼容投影;record 是新 UI 的权威形状(与上报同一份)
+    const push: ServerPush = {
+      type: 'log',
+      level: record.level,
+      line: record.message,
+      record,
+    };
     if (!this.transport.isConnected) {
       if (this.logRing.length >= OFFLINE_LOG_RING) this.logRing.shift();
       this.logRing.push(push);

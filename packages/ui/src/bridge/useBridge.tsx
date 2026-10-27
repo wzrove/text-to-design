@@ -6,9 +6,14 @@ import {
   onMount,
   useContext,
 } from 'solid-js';
-import type { ActivityPhase, PluginPlatform } from 'text-to-design-shared';
+import type {
+  ActivityPhase,
+  LogRecord,
+  PluginPlatform,
+} from 'text-to-design-shared';
 import {
   ACTIVITY_SETTLE_MS,
+  errorGroupKey,
   UI_CHROME_DEFAULT,
   WS_PORT,
 } from 'text-to-design-shared';
@@ -16,14 +21,17 @@ import { applyStoredChoice, t } from '../i18n/useLocale';
 import { APP_VERSION } from '../utils/version';
 import type { BridgeStatus } from './BridgeSocket';
 import { BridgeSocket } from './BridgeSocket';
-import type { CapabilitySnapshot, LogLevel } from './types';
+import type { CapabilitySnapshot } from './types';
 
-export interface LogEntry {
-  /** 日志级别(默认 info) */
-  level?: LogLevel;
+/**
+ * 抽屉里的一条日志 = 结构化记录(与落盘、遥测上报同一形状)+ 展示元数据。
+ * `level` 在记录里是必填的,这里不再给可选默认。
+ */
+export interface LogEntry extends LogRecord {
   id: number;
+  /** 收件时刻(本地时钟,无日期);文件侧是 daemon 的 ISO 时间 */
   time: string;
-  line: string;
+  /** 紧邻同形状日志的合并次数 */
   count?: number;
 }
 
@@ -175,11 +183,12 @@ export function BridgeProvider(props: ParentProps) {
 
   const now = (): string => new Date().toLocaleTimeString();
 
-  const pushLog = (line: string, level: LogLevel = 'info'): void => {
-    const entry: LogEntry = { id: ++seq, time: now(), line, level };
+  const pushLog = (record: LogRecord): void => {
+    const entry: LogEntry = { ...record, id: ++seq, time: now() };
     setLog((l) => {
       const last = l[l.length - 1];
-      if (last && last.line === line) {
+      // 合并键与遥测去重同一份(抹掉请求号/耗时这类每次必变片段),别只比原始文本
+      if (last && errorGroupKey(last) === errorGroupKey(record)) {
         return [...l.slice(0, -1), { ...last, count: (last.count ?? 1) + 1 }];
       }
       return [...l.slice(-99), entry];
@@ -212,14 +221,20 @@ export function BridgeProvider(props: ParentProps) {
     try {
       const snap = toSnapshot(await getBridge().pingPlugin());
       setCapability(() => snap);
-      if (snap == null) pushLog(t('bridge.log.capabilityMissing'), 'debug');
+      if (snap == null)
+        pushLog({
+          level: 'debug',
+          scope: 'bridge',
+          message: t('bridge.log.capabilityMissing'),
+        });
     } catch (e) {
-      pushLog(
-        t('bridge.log.capabilityFailed', {
+      pushLog({
+        level: 'debug',
+        scope: 'bridge',
+        message: t('bridge.log.capabilityFailed', {
           message: e instanceof Error ? e.message : String(e),
         }),
-        'debug',
-      );
+      });
     }
   };
 
@@ -251,7 +266,7 @@ export function BridgeProvider(props: ParentProps) {
       else if (e.type === 'platform') {
         setPlatform(() => e.platform);
         void refreshCapabilities();
-      } else if (e.type === 'log') pushLog(e.line, e.level);
+      } else if (e.type === 'log') pushLog(e.record);
       else if (e.type === 'ui_env') {
         setCanResize(() => e.canResize);
         setChromeHeight(() => e.chromeHeight);
@@ -297,17 +312,19 @@ export function BridgeProvider(props: ParentProps) {
       try {
         const data = await getBridge().pingPlugin();
         setCapability(() => toSnapshot(data));
-        pushLog(
-          t('bridge.log.pingOk', { data: JSON.stringify(data) }),
-          'debug',
-        );
+        pushLog({
+          level: 'debug',
+          scope: 'bridge',
+          message: t('bridge.log.pingOk', { data: JSON.stringify(data) }),
+        });
       } catch (e) {
-        pushLog(
-          t('bridge.log.pingFailed', {
+        pushLog({
+          level: 'error',
+          scope: 'bridge',
+          message: t('bridge.log.pingFailed', {
             message: e instanceof Error ? e.message : String(e),
           }),
-          'error',
-        );
+        });
       }
     },
   };

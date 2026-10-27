@@ -201,12 +201,16 @@ Figma 用户不会再读到 jsDesign 的兜底细节;平台未探测时给「先
 | --- | --- | --- |
 | `TEXT_TO_DESIGN_MCP_PORT` | `47812` | 与插件通信的端口(被占用会启动失败) |
 | `TEXT_TO_DESIGN_MCP_HTTP_PORT` | `47820` | 内部服务端口(一般不用动) |
-| `TEXT_TO_DESIGN_MCP_LOG` | `/tmp/text-to-design-mcp.log` | 日志文件路径 |
-| `TEXT_TO_DESIGN_MCP_LOG_LEVEL` | `info` | 落盘级别:`debug`/`info`/`warn`/`error`;只约束日志文件,面板推送全量下发 |
+| `TEXT_TO_DESIGN_MCP_LOG` | `/tmp/text-to-design-mcp.log` | 日志文件路径(JSONL,与遥测上报同一形状) |
+| `TEXT_TO_DESIGN_MCP_LOG_LEVEL` | `info` | 落盘级别:`debug`/`info`/`warn`/`error`/`fatal`;只约束日志文件,面板推送全量下发 |
+| `TEXT_TO_DESIGN_TELEMETRY_URL` | 构建期注入 | 错误上报端点;**构建期**从**仓库根** `.env.local` 读取(见 `vite.config.ts`),运行时 env 可覆盖 |
+| `TEXT_TO_DESIGN_TELEMETRY_KEY` | 构建期注入 | 上报密钥,要与 worker 的 `TELEMETRY_API_KEY` 一致 |
+
+本地开发:根 `.env.local`(模板根 `.env.local.example`)填好后 `pnpm build` —— URL/KEY 被烤进 `dist`。优先序:**真实环境变量(CI secret)> `.env.local`**;两者都没有 = 上报整体关闭(不再用 `dev-insecure-key` 去撞生产)。
 
 ### 日志排查
 
-- 看日志:`tail -f /tmp/text-to-design-mcp.log`(请求/响应耗时、HTTP 状态码、插件连接、二进制组装都会记)
+- 看日志:`tail -f /tmp/text-to-design-mcp.log` —— 每行是 JSONL:`{time, level, scope, code?, subject?, message}`(scope 取 `bridge`/`tool`/`daemon`),与遥测上报同一形状;按类别过滤用 `jq 'select(.code == "engine_error")'`,不必对文本做正则
 - 要更细的连接日志,启动时设 `TEXT_TO_DESIGN_MCP_LOG_LEVEL=debug`(默认 info);该开关只减落盘量,面板推送不受限制
 - 插件面板自带连接状态和日志:服务端日志实时推送,档位默认隐藏 debug,切「全部」可见帧级明细;插件离线期间的日志会先缓冲,上线后按顺序回放
 - 面板还有可折叠的「能力」区块:核心能力、当前平台可用的差异能力、平台特有 op 名单 —— 数据与 MCP 侧 `capabilities` / `platformOps` 同源

@@ -27,8 +27,8 @@ export class BridgeSocket {
 
   constructor(port = WS_PORT) {
     this.conn = { port, ws: null, binaryIn: null };
-    this.router = new Router(this.conn, (level, line) =>
-      this.events.emit({ type: 'log', level, line }),
+    this.router = new Router(this.conn, (record) =>
+      this.events.emit({ type: 'log', record }),
     );
     this.router.onSelection = (data) =>
       this.events.emit({ type: 'selection', data });
@@ -73,8 +73,11 @@ export class BridgeSocket {
       if (!alreadyConnected) {
         this.events.emit({
           type: 'log',
-          level: 'info',
-          line: t('bridge.log.confirmed', { version: frame.version }),
+          record: {
+            level: 'info',
+            scope: 'bridge',
+            message: t('bridge.log.confirmed', { version: frame.version }),
+          },
         });
       }
     };
@@ -82,11 +85,14 @@ export class BridgeSocket {
     this.router.onVersion = (frame) => {
       this.events.emit({
         type: 'log',
-        level: 'info',
-        line: t('bridge.log.versionPush', {
-          ui: frame.latest.ui ?? t('bridge.log.versionUnknown'),
-          mcp: frame.latest.mcp ?? t('bridge.log.versionUnknown'),
-        }),
+        record: {
+          level: 'info',
+          scope: 'bridge',
+          message: t('bridge.log.versionPush', {
+            ui: frame.latest.ui ?? t('bridge.log.versionUnknown'),
+            mcp: frame.latest.mcp ?? t('bridge.log.versionUnknown'),
+          }),
+        },
       });
       this.events.emit({
         type: 'version',

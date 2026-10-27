@@ -11,7 +11,7 @@ import type { McpI18n } from '../i18n';
 import { error, warn } from '../logger';
 import type { RequestOptions } from '../pending';
 import { describePlatformGate } from '../platform-state';
-import { BridgeError } from './bridge-error';
+import { BridgeError, errorCodeOf } from './bridge-error';
 import { localizeSchema } from './localize-schema';
 import { err, structured } from './response';
 
@@ -268,7 +268,11 @@ export function bridgeTool(
         // 不向插件发起往返 —— 插件侧同样会拒绝,但报错更晚也更含糊。平台未知放行。
         const gate = describePlatformGate(def);
         if (gate != null) {
-          error(`工具 ${def.name} 在当前平台不可用,已拦截`);
+          error(`工具 ${def.name} 在当前平台不可用,已拦截`, {
+            scope: 'tool',
+            subject: def.name,
+            code: 'platform_unsupported',
+          });
           return err(
             new BridgeError('platform_unsupported', gate),
             def.outputSchema,
@@ -370,7 +374,11 @@ export function bridgeTool(
         // 不经过本回调,无法在此记录 —— 该类错误只体现在返回给客户端的
         // isError 文本中
         const msg = e instanceof Error ? e.message : String(e);
-        error(`工具 ${def.name} 执行失败: ${msg.slice(0, 200)}`);
+        error(`工具 ${def.name} 执行失败: ${msg.slice(0, 200)}`, {
+          scope: 'tool',
+          subject: def.name,
+          code: errorCodeOf(e),
+        });
         notifyActivity('error', def.name);
         return err(e, def.outputSchema, projectFollowUp(def.followUp));
       }

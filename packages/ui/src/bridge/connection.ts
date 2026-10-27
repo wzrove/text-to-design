@@ -265,11 +265,21 @@ export class ConnectionManager {
   }
 
   private emit(type: 'status', status: BridgeStatus): void;
-  private emit(type: 'log', line: string): void;
+  private emit(type: 'log', message: string): void;
   private emit(type: 'status' | 'log', value: BridgeStatus | string): void {
-    const event = (
-      type === 'status' ? { type, status: value } : { type, line: value }
-    ) as BridgeEvent;
+    // 不整块 `as BridgeEvent`:那会把「log 事件少带 record」这类形状错误盖掉 ——
+    // 消费端读到 undefined.record,渲染时才炸(见 useBridge 的 pushLog)。
+    const event: BridgeEvent =
+      type === 'status'
+        ? { type, status: value as BridgeStatus }
+        : {
+            type: 'log',
+            record: {
+              level: 'info',
+              scope: 'bridge',
+              message: value as string,
+            },
+          };
     this.events.emit(event);
   }
 }

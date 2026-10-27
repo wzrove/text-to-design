@@ -7,6 +7,7 @@
 export * from './boolean-operation';
 export * from './capability';
 export * from './error-code';
+export * from './error-report';
 export * from './font';
 export * from './i18n';
 export * from './log';

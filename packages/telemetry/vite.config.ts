@@ -9,7 +9,11 @@ export default defineConfig({
     outDir: 'dist',
     minify: false,
     rollupOptions: {
-      input: { index: 'src/index.ts', serve: 'src/serve.ts' },
+      input: {
+        index: 'src/index.ts',
+        serve: 'src/serve.ts',
+        migrate: 'src/migrate.ts',
+      },
       external: [/^node:/],
       output: {
         format: 'es',

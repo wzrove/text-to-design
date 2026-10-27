@@ -1,5 +1,9 @@
 import { createEffect, createSignal, For, onCleanup, Show } from 'solid-js';
-import { LOG_LEVEL_ORDER, type MessageKey } from 'text-to-design-shared';
+import {
+  LOG_LEVEL_ORDER,
+  type LogScope,
+  type MessageKey,
+} from 'text-to-design-shared';
 import type { LogLevel } from '../bridge/types';
 import type { LogEntry } from '../bridge/useBridge';
 import { t } from '../i18n/useLocale';
@@ -19,6 +23,8 @@ const RANK: Record<FilterKey, number> = {
   info: LOG_LEVEL_ORDER.info + 1,
   warn: LOG_LEVEL_ORDER.warn + 1,
   error: LOG_LEVEL_ORDER.error + 1,
+  // fatal 只在进程级异常出现;权重压在 error 之上,「错误」档就把它一起收了
+  fatal: LOG_LEVEL_ORDER.fatal + 1,
 };
 
 // 级别文字用主题语义色(warning/error,见 src/index.css 的主题变量);
@@ -29,6 +35,7 @@ const LEVEL_CLASS: Record<LogLevel, string> = {
   info: 'text-base-content',
   warn: 'text-warning',
   error: 'text-error',
+  fatal: 'text-error',
 };
 
 /** 级别视觉锚点:warn/error 左侧色条(error 另加淡红底),扫读更快 */
@@ -37,12 +44,14 @@ const LEVEL_ACCENT: Record<LogLevel, string> = {
   info: '',
   warn: 'border-l-2 border-warning',
   error: 'border-l-2 border-error bg-error/6',
+  fatal: 'border-l-2 border-error bg-error/6',
 };
 
 /** 行首字形标记:颜色之外的第二重区分(色弱/主题漂移都兜得住) */
 const LEVEL_MARK: Partial<Record<LogLevel, string>> = {
   warn: '⚠ ',
   error: '✕ ',
+  fatal: '✕ ',
 };
 
 const FILTERS: { key: FilterKey; label: MessageKey }[] = [
@@ -61,16 +70,34 @@ const DEFAULT_FILTER: FilterKey = 'warn';
 /** 超过该字符数的日志默认收起为单行省略号,点击行内容展开/收起 */
 const LONG_LINE_CHARS = 120;
 
+/**
+ * scope → 徽标配色:三档一眼可辨(bridge=连接、tool=工具执行、daemon=daemon 自身)。
+ * 都走 soft 变体 —— 行文字已经带级别语义色(warning/error),徽标再上饱和底会抢。
+ */
+const SCOPE_CLASS: Record<LogScope, string> = {
+  bridge: 'badge-info',
+  tool: 'badge-primary',
+  daemon: 'badge-neutral',
+};
+
 function LogEntryItem(props: { entry: LogEntry }) {
   const level = props.entry.level ?? 'info';
   const [expanded, setExpanded] = createSignal(false);
-  const isLong = () => props.entry.line.length > LONG_LINE_CHARS;
+  const isLong = () => props.entry.message.length > LONG_LINE_CHARS;
 
-  /** 行正文 + 级别标记 + 去重计数徽标(折叠/展开两分支共用) */
+  /** 行正文:scope 徽标 + 级别标记 + 正文 + 去重计数(折叠/展开两分支共用) */
   const content = () => (
     <>
+      {/* scope 是语言无关的枚举(bridge/tool/daemon),token 原样上屏不翻译 ——
+          给每行一个分类锚点,扫读时不用读完整句才知道是哪一侧的事。
+          用 daisyUI 的 badge(与行尾的 ×N 计数同一套),按 scope 上色(见 SCOPE_CLASS) */}
+      <span
+        class={`badge badge-sm badge-soft mr-1 ${SCOPE_CLASS[props.entry.scope]}`}
+      >
+        {props.entry.scope}
+      </span>
       {LEVEL_MARK[level]}
-      {props.entry.line}
+      {props.entry.message}
       {props.entry.count ? (
         <span class="badge badge-sm badge-ghost ml-1 border-base-300">
           ×{props.entry.count}
@@ -87,7 +114,7 @@ function LogEntryItem(props: { entry: LogEntry }) {
   };
 
   const onCopy = (): void => {
-    copyWithToast(props.entry.line);
+    copyWithToast(props.entry.message);
   };
 
   return (
@@ -109,7 +136,7 @@ function LogEntryItem(props: { entry: LogEntry }) {
           type="button"
           class={`flex min-w-0 flex-1 cursor-pointer items-start gap-1 text-left ${LEVEL_CLASS[level]}`}
           onClick={toggle}
-          title={expanded() ? undefined : props.entry.line}
+          title={expanded() ? undefined : props.entry.message}
         >
           <span
             class={`min-w-0 flex-1 ${

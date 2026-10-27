@@ -1,7 +1,11 @@
 import { appendFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { LOG_LEVEL_ORDER, type LogLevel } from 'text-to-design-shared';
+import {
+  LOG_LEVEL_ORDER,
+  type LogLevel,
+  type LogRecord,
+} from 'text-to-design-shared';
 
 /**
  * 落盘路径:走 `os.tmpdir()` 而不是写死 `/tmp` —— Node 在 Windows 上会把
@@ -21,25 +25,36 @@ const LEVEL_ORDER = LOG_LEVEL_ORDER;
 const LEVEL =
   (process.env.TEXT_TO_DESIGN_MCP_LOG_LEVEL as Level | undefined) ?? 'info';
 
-/** 日志外发钩子:write 触发时同步回调(daemon 借此把日志实时推送插件 UI) */
-export type LogSink = (level: Level, line: string) => void;
+/** error / warn 的结构化标签(message 走第一个参数) */
+export type LogTag = Pick<LogRecord, 'scope' | 'code' | 'subject'>;
+
+/**
+ * 日志外发钩子:write 触发时同步回调。daemon 借它把日志实时推送插件 UI + 采遥测;
+ * 收到的是**结构化记录**,与落盘文件、遥测上报同一形状(见 shared/dicts/log)。
+ *
+ * 不变式:sink 实现内部不得再调用 log*(否则形成递归)。当前唯一实现走
+ * Bridge.notifyLog → Transport.sendPush(无日志发送通道),满足该约束。
+ */
+export type LogSink = (record: LogRecord) => void;
 
 let sink: LogSink | null = null;
 
-/** 注册/卸载日志发射钩子(传 null 卸载);logger 保持零本地依赖,由入口组装。
- *  不变式:sink 实现内部不得再调用 log*(否则形成递归)。当前唯一实现走
- *  Bridge.notifyLog → Transport.sendPush(无日志发送通道),满足该约束 */
 export function setLogSink(fn: LogSink | null): void {
   sink = fn;
 }
 
-/** 落盘 + 外发(daemon detached + stdio ignored,stderr 不可见,必须落盘) */
-function write(level: Level, line: string): void {
-  if (LEVEL_ORDER[level] >= LEVEL_ORDER[LEVEL]) {
+/**
+ * 落盘(JSONL)+ 外发(daemon detached + stdio ignored,stderr 不可见,必须落盘)。
+ *
+ * 文件行 = `{time, ...LogRecord}`:与上报同一形状,结构化可解析 ——
+ * `jq 'select(.scope=="bridge" and .code=="engine_error")'` 直接可用。
+ */
+function write(record: LogRecord): void {
+  if (LEVEL_ORDER[record.level] >= LEVEL_ORDER[LEVEL]) {
     try {
       appendFileSync(
         FILE,
-        `${new Date().toISOString()} [${level.toUpperCase()}] [text-to-design-mcp] ${line}\n`,
+        `${JSON.stringify({ time: new Date().toISOString(), ...record })}\n`,
       );
     } catch {
       // 日志失败不影响主流程
@@ -47,24 +62,24 @@ function write(level: Level, line: string): void {
   }
   // 推送不受 LEVEL 门槛约束:级别只决定落盘量,面板自带档位过滤,避免 UI 侧 debug 盲区
   try {
-    sink?.(level, line);
+    sink?.(record);
   } catch {
     // 推送失败不影响主流程
   }
 }
 
-export function log(line: string): void {
-  write('info', line);
+export function log(message: string): void {
+  write({ level: 'info', scope: 'daemon', message });
 }
 
-export function debug(line: string): void {
-  write('debug', line);
+export function debug(message: string): void {
+  write({ level: 'debug', scope: 'daemon', message });
 }
 
-export function warn(line: string): void {
-  write('warn', line);
+export function warn(message: string, tag?: LogTag): void {
+  write({ level: 'warn', scope: 'daemon', message, ...tag });
 }
 
-export function error(line: string): void {
-  write('error', line);
+export function error(message: string, tag?: LogTag): void {
+  write({ level: 'error', scope: 'daemon', message, ...tag });
 }

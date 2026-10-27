@@ -3,7 +3,7 @@ import { resolve } from 'node:path';
 import type { PluginPlatform } from 'text-to-design-shared';
 
 /**
- * 插件 id 一律来自本地 `.env.local`(vite.config.ts 里 loadEnv 注入),仓库不再存:
+ * 插件 id 一律来自**仓库根**的 `.env.local`(vite.config.ts 里 loadEnv 注入),仓库不再存:
  * 那串值是各平台开发者后台按「谁的插件」发的,别人的机器上不该是同一个。
  * 读不到就统一占位 `000`,且**流水线故意不注入** —— npm / Releases 上那份产物的 id
  * 恒为该占位,对应「未注册的本地插件」,导入即用;真要发布,是在平台侧的发布流程里带

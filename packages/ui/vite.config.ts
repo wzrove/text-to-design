@@ -54,9 +54,9 @@ export default defineConfig(({ mode }): UserConfig => {
     // jsDesign 的 Proxy scoped evaluator 影子化(决策 0012,仅 jsdesign);
     // ② `BigInt` 全局三平台都缺,而 zod 顶层 `BIGINT_FORMAT_RANGES` 直接
     // 裸调 `BigInt(...)`(决策 0027)。②是三平台共有,所以三个分支统一挂载。
-    // 插件 id 等本机才有的值从 .env.local 读(仓库只有 *.local 之外的东西),
+    // 插件 id 等本机才有的值从**仓库根** `.env.local` 读(集中放,见根 .env.local.example),
     // 读不到时 manifestPlugin 落成占位 id(见 scripts/vite-plugin-manifest.ts)
-    const env = loadEnv(mode, import.meta.dirname, '');
+    const env = loadEnv(mode, resolve(import.meta.dirname, '../..'), '');
     const platformPlugins: Plugin[] = [manifestPlugin(platform, env)];
     platformPlugins.push(zodSandboxFix());
     return {

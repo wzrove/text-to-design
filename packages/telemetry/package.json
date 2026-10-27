@@ -6,8 +6,8 @@
   "description": "遥测/错误收集后端:Hono + Drizzle,打包产物可跑在 Cloudflare Workers / Node / Bun / Deno Deploy",
   "scripts": {
     "build": "vite build",
-    "dev": "node --import tsx --env-file=.env --watch src/serve.ts",
-    "start": "node --env-file-if-exists=.env dist/serve.js",
+    "dev": "node --import tsx --env-file-if-exists=../../.env.local --watch src/serve.ts",
+    "start": "node --env-file-if-exists=../../.env.local dist/serve.js",
     "typecheck": "tsc --noEmit",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
