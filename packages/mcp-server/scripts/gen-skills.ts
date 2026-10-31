@@ -1,52 +1,82 @@
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import {
+  assertSkillGroupsCoverRecipes,
+  SKILL_GROUPS,
+} from '../src/skills/entries';
 import { RECIPES } from '../src/tools/recipe-catalog';
 
 /**
- * 把 11 条配方渲染成 Skills over MCP(SEP-2640)要求的 `dist/skills/<id>/SKILL.md`。
+ * 把配方渲染成 Skills over MCP(SEP-2640)的目录结构:
  *
- * ## 为什么是构建期生成,而不是运行期现写
+ * ```
+ * dist/skills/
+ *   design/SKILL.md + references/{design-strategy,auto-layout,html-to-design,icon-grid}.md
+ *   charts/SKILL.md + references/chart-by-code.md
+ *   components/SKILL.md + references/{component-property,variant-set,variant-sync,variable-binding}.md
+ *   bulk-ops/SKILL.md + references/{script-ops,text-replace-strategy}.md
+ * ```
  *
- * 配方正文的单一真源在 `tools/prompts.ts` 的 render 函数(resource 路由与 prompts
- * 都调同一批函数)。运行期从 render 再写一遍文件会引入「磁盘上一份、内存里一份」
- * 的分裂;构建期生成则只多一个产物目录,正文仍然只有一处。
+ * **入口少量手写、正文一条不复制**:`src/skills/entries.ts` 写入口(何时用 + 分流 +
+ * 硬纪律),`references/<id>.md` 直接取该配方 `render()` 的正文 —— 与
+ * `jsd://recipes/<id>` 是同一次渲染,不存在"两处正文"。
  *
- * ## 为什么 frontmatter 的 description 用 JSON.stringify
- *
- * `whenToUse` 里有中文顿号、反引号与 `**`;YAML 的双引号标量接受 JSON 转义,
- * 用 JSON.stringify 一次搞定引号与转义,不必自己拼 `"` 或转义 `\`。
- *
- * 用法:build 末尾自动执行;`tsx scripts/gen-skills.ts` 可单独重跑。
+ * 分组映射的完整性由 `assertSkillGroupsCoverRecipes()` 卡在写盘之前:漏覆盖、重复覆盖、
+ * 引用不存在的配方都会让 build 直接失败,而不是产出一个坏目录等人发现。
  */
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = join(ROOT, 'dist', 'skills');
 
+/** frontmatter 的 description 用 JSON.stringify:中文、反引号、`**` 一次转义到位 */
+function frontmatter(name: string, description: string): string {
+  const oneLine = description.replace(/\s+/g, ' ').trim();
+  return [
+    '---',
+    `name: ${name}`,
+    `description: ${JSON.stringify(oneLine)}`,
+    '---',
+    '',
+  ].join('\n');
+}
+
 function main(): void {
-  // 全量重建:删掉上一次的产物,避免配方改名后残留孤儿技能
+  assertSkillGroupsCoverRecipes();
+
+  // 全量重建:配方改名后不许留下孤儿技能
   rmSync(OUT, { recursive: true, force: true });
   mkdirSync(OUT, { recursive: true });
 
-  let written = 0;
-  for (const recipe of RECIPES) {
-    const body = recipe.render();
-    if (body.trim() === '') {
-      throw new Error(`配方 ${recipe.id} 渲染为空,拒绝写出空技能`);
+  const byId = new Map(RECIPES.map((r) => [r.id, r]));
+  let refs = 0;
+
+  for (const group of SKILL_GROUPS) {
+    const dir = join(OUT, group.name);
+    mkdirSync(join(dir, 'references'), { recursive: true });
+    writeFileSync(
+      join(dir, 'SKILL.md'),
+      frontmatter(group.name, group.description) + group.body,
+      'utf8',
+    );
+    for (const id of group.references) {
+      const recipe = byId.get(id);
+      // 已被 assertSkillGroupsCoverRecipes 保证存在;这里的判空只为类型收窄
+      if (recipe == null) throw new Error(`配方不存在:${id}`);
+      const body = recipe.render();
+      if (body.trim() === '')
+        throw new Error(`配方 ${id} 渲染为空,拒绝写出空附录`);
+      writeFileSync(
+        join(dir, 'references', `${id}.md`),
+        `<!-- 由 src/tools/prompts.ts 的 ${id} 配方生成,勿手改;改正文请改 render 函数 -->\n\n${body}`,
+        'utf8',
+      );
+      refs += 1;
     }
-    const description = recipe.whenToUse.replace(/\s+/g, ' ').trim();
-    const frontmatter = [
-      '---',
-      `name: ${recipe.id}`,
-      `description: ${JSON.stringify(description)}`,
-      '---',
-      '',
-    ].join('\n');
-    const dir = join(OUT, recipe.id);
-    mkdirSync(dir, { recursive: true });
-    writeFileSync(join(dir, 'SKILL.md'), frontmatter + body, 'utf8');
-    written += 1;
   }
-  console.log(`skills: ${written} 条 → ${OUT}`);
+
+  console.log(
+    `skills: ${SKILL_GROUPS.length} 个入口 / ${refs} 篇附录 → ${OUT}`,
+  );
 }
 
 main();
