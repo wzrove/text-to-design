@@ -1,6 +1,6 @@
 {
   "name": "text-to-design-mcp",
-  "version": "0.13.6",
+  "version": "0.13.7",
   "description": "MCP server bridging AI clients to the jsDesign (即时设计) desktop plugin via a local WebSocket",
   "repository": {
     "type": "git",

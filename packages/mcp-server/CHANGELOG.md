@@ -1,5 +1,13 @@
 # text-to-design-mcp
 
+## 0.13.7
+
+### Patch Changes
+
+- [`453facd`](https://github.com/wzrove/text-to-design/commit/453facdb645175841384d8f00fb2b117cf967e1c) - 遥测上报的 endpoint/key 改为构建期从包内 .env 注入(vite loadEnv + define):真值不进 git、只进 dist;未注入则上报整体关闭;运行时 env 仍可覆盖
+
+- [`453facd`](https://github.com/wzrove/text-to-design/commit/453facdb645175841384d8f00fb2b117cf967e1c) - 错误与日志统一结构化:LogRecord(level/scope/message/code?/subject?)成为落盘、面板推送与遥测上报共用的形状;遥测按 (user_id, fingerprint) 跨窗口 rollup,message 降为 detail;落盘日志改 JSONL
+
 ## 0.13.6
 
 ### Patch Changes

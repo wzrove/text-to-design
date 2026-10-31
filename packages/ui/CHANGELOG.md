@@ -1,5 +1,11 @@
 # text-to-design-ui
 
+## 0.12.3
+
+### Patch Changes
+
+- [`453facd`](https://github.com/wzrove/text-to-design/commit/453facdb645175841384d8f00fb2b117cf967e1c) - 错误与日志统一结构化:LogRecord(level/scope/message/code?/subject?)成为落盘、面板推送与遥测上报共用的形状;遥测按 (user_id, fingerprint) 跨窗口 rollup,message 降为 detail;落盘日志改 JSONL
+
 ## 0.12.2
 
 ### Patch Changes
