@@ -19,16 +19,16 @@
   },
   "license": "MIT",
   "scripts": {
-    "build": "tsx scripts/gen-aliases.ts && vite build",
+    "build": "tsx scripts/gen-aliases.ts && vite build && tsx scripts/gen-skills.ts",
     "prepublishOnly": "pnpm build",
     "start": "node dist/index.js",
     "start:dev": "tsx src/index.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@modelcontextprotocol/client": "^2.0.0",
-    "@modelcontextprotocol/node": "^2.0.0",
-    "@modelcontextprotocol/server": "^2.0.0",
+    "@modelcontextprotocol/client": "^2.4.0",
+    "@modelcontextprotocol/node": "^2.1.2",
+    "@modelcontextprotocol/server": "^2.4.0",
     "domhandler": "^5.0.3",
     "fuse.js": "^7.5.0",
     "htmlparser2": "^10.0.0",

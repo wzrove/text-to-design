@@ -4,7 +4,7 @@ import {
   localhostOriginValidation,
   toNodeHandler,
 } from '@modelcontextprotocol/node';
-import { createMcpHandler, type McpServer } from '@modelcontextprotocol/server';
+import { createMcpHandler } from '@modelcontextprotocol/server';
 import { HEARTBEAT_MS } from 'text-to-design-shared';
 import type { Bridge } from '../bridge';
 import {
@@ -17,7 +17,7 @@ import {
   STARTED_AT,
 } from '../config';
 import { getConsent, initConsent, isAsked, writeConsent } from '../consent';
-import { debug, error, log } from '../logger';
+import { debug, error, log, warn } from '../logger';
 import { buildServer } from '../server';
 import { captureError, flushTelemetry, stopTelemetry } from '../telemetry';
 import { latestVersions } from '../version-check';
@@ -28,6 +28,8 @@ import {
   warnIfDaemonStale,
 } from './probe';
 import { serveProxy } from './proxy';
+import { createServerPool } from './server-pool';
+import { loadSkillsCatalog } from './skills';
 import { spawnDaemon } from './spawn';
 
 export { spawnDaemon };
@@ -81,12 +83,13 @@ export async function runDaemon(bridge: Bridge): Promise<void> {
   log(`daemon: 插件 WS ws://localhost:${bridge.port}`);
 
   /**
-   * 装配**一次**,整个 daemon 复用同一个 McpServer(0030)。
+   * 装配**有限几个**实例,由连接池按并发槽位分发(dec 0030 的复述 + 2026-11 的修正)。
    *
-   * 为什么不是 `() => buildServer(bridge)`:2026-07-28 的 `createMcpHandler` 按
-   * **每个 HTTP 请求**调这个工厂,而装配一次要 51.7 ms(53 个工具的 schema + i18n
-   * 投影全量重建)。实测把工厂写成 per-request 时,一次 tools/call 是 50.6 ms、
-   * 一次 tools/list 是 86.8 ms;只装一次后两者都落到数毫秒级。
+   * 历史:2.3.0 之前这份代码是 `() => (assembled ??= buildServer(bridge))`,
+   * 即「全 daemon 一个实例」。2.3.0 收紧连接模型后,**一个 McpServer 同时只服务一个
+   * 连接** —— 重叠请求会拿到 `500 / -32603`,两个 shim 会话同时 initialize 则
+   * `ALREADY_CONNECTED`。所以改成池:装配成本仍只付「池里有几个」那么多次
+   * (装配 51.7 ms 的实测见 server.ts),重叠请求落到不同实例。
    *
    * `legacy: 'reject'` 是**实例复用不变式的一部分**:一个实例只能服务一个 era,
    * 2025 的 initialize 握手会把实例的 negotiated version 改掉,与在途的 modern
@@ -94,8 +97,27 @@ export async function runDaemon(bridge: Bridge): Promise<void> {
    * mode='auto'` 先探 `server/discover`(见 daemon/probe.ts)→ 必是 modern 路径;
    * 真来了 2025 客户端,明确拒收比静默串味强。
    */
-  let assembled: McpServer | null = null;
-  const handler = createMcpHandler(() => (assembled ??= buildServer(bridge)), {
+  const skills = await loadSkillsCatalog();
+  const pool = createServerPool(() => {
+    const server = buildServer(bridge);
+    // 每个实例各挂一次:一个 server 只能有一个 skills 扩展,重复 attach 会抛
+    if (skills != null) {
+      try {
+        skills.attach(server);
+      } catch (e) {
+        warn(
+          `skills 挂载失败(该实例继续提供工具): ${e instanceof Error ? e.message : String(e)}`,
+        );
+      }
+    }
+    return server;
+  });
+  /**
+   * 在途请求计数:连接池按它选槽位。`res.on('close')` 而不是 `finish` —— 客户端
+   * 中途断开时 finish 不触发,槽位会永久泄漏,池子被迫扩容。
+   */
+  let inflight = 0;
+  const handler = createMcpHandler(() => pool.acquire(inflight - 1), {
     legacy: 'reject',
   });
   const nodeHandler = toNodeHandler(handler);
@@ -218,6 +240,11 @@ export async function runDaemon(bridge: Bridge): Promise<void> {
         setTimeout(() => shutdown('收到 /shutdown 请求'), 100);
         return;
       }
+      // 槽位来源:工厂里读 inflight 时本请求已经计数,故 acquire 传 inflight-1
+      inflight += 1;
+      res.once('close', () => {
+        inflight = Math.max(0, inflight - 1);
+      });
       void nodeHandler(req, res);
     });
     httpServer.once('error', reject);
