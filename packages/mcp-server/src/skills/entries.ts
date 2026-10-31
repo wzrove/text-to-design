@@ -74,6 +74,19 @@ export const SKILL_GROUPS: readonly SkillGroup[] = [
 - **同级节点不进父画板导出**。\`jsd_create_svg\` 落在页面层的东西,必须先
   \`jsd_reparent_nodes\` 进目标容器,否则导出的屏里看不见它。
 
+## 尺寸模式:只有屏根才写死两轴
+
+开布局的容器要给 \`primary|counterAxisSizingMode\`。选错不报错,只会留下死白或被裁的内容:
+
+| 容器 | 该选的模式 |
+| --- | --- |
+| 弹窗 / 卡片 / 标签 / 按钮 | 内容方向 \`AUTO\`(hug)—— 高度由内容定,改文案不用重算 |
+| 屏根 / 侧栏 / 固定栅格 / 表格 | 两轴 \`FIXED\` —— 有外部约束,撑开就破版 |
+
+\`AUTO\` 只在**另一个轴**给了 \`FIXED\` 时才稳(例:宽 420 FIXED + 高 AUTO)。
+回读 \`sizingMode\` 是 AUTO、高度被重算成内容高度,是引擎的 **hug 语义,不是失败**;
+反过来固定高填不满内容就剩死白 —— 实测 220 的弹窗开 hug 变 184,少掉的 36px 就是那块空白。
+
 ## 细节按需读
 
 - \`references/design-strategy.md\` — 完整纪律:复用件选型、样式落地与 \`*StyleId\` 记账、

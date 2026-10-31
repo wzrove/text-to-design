@@ -532,7 +532,7 @@ export const MESSAGES_ZH_CN = {
   'syncOverrides.description': '复核同步后的实例',
   'createFrame.title': '创建 Frame 容器',
   'createFrame.description':
-    '创建单个 FRAME 容器节点,入参只含 FRAME 字段:width/height 尺寸、layoutMode 自动布局(itemSpacing/padding*/主轴交叉轴尺寸对齐)与填充描边等视觉字段。本工具只建一个根 FRAME;children 只用于「容器 + 其直属子节点」这类小结构(子节点 x/y 相对父节点),**别把整屏的整棵树塞进一次 children**(易整批失败)—— 分层分批用 jsd_batch 编排,再用 jsd_reparent_nodes 逐层归组。auto-layout 前必须设 layoutMode=HORIZONTAL 或 VERTICAL(否则布局字段被忽略)。**同轴等距的兄弟元素一律用 auto-layout 建,不要手算坐标**(标签栏 / 胶囊组 / KPI 行 / 卡片头 / 列表行 / 整屏纵向分区都在此列;判据与两条落地路径见 jsd://recipes/auto-layout)。未显式传 fills 时引擎默认白底,透明容器传 fills:[{type:"SOLID",color:{r:0,g:0,b:0},opacity:0}]。**name 必传且语义化**(如「侧栏」「KPI-设备综合效率」),不传会落成引擎默认名 node。建多个根节点/复杂树用 jsd_batch 编排',
+    '创建单个 FRAME 容器节点,入参只含 FRAME 字段:width/height 尺寸、layoutMode 自动布局(itemSpacing/padding*/主轴交叉轴尺寸对齐)与填充描边等视觉字段。本工具只建一个根 FRAME;children 只用于「容器 + 其直属子节点」这类小结构(子节点 x/y 相对父节点),**别把整屏的整棵树塞进一次 children**(易整批失败)—— 分层分批用 jsd_batch 编排,再用 jsd_reparent_nodes 逐层归组。auto-layout 前必须设 layoutMode=HORIZONTAL 或 VERTICAL(否则布局字段被忽略)。**同轴等距的兄弟元素一律用 auto-layout 建,不要手算坐标**(标签栏 / 胶囊组 / KPI 行 / 卡片头 / 列表行 / 整屏纵向分区都在此列;判据与两条落地路径见 jsd://recipes/auto-layout)。**尺寸模式别写反**:开布局只给宽度、高度交给 AUTO 撑开,弹窗/卡片这类内容自适应的容器尤甚;只有屏根才两轴 FIXED(写死高度会留死白,写死高度不够会裁内容)。未显式传 fills 时引擎默认白底,透明容器传 fills:[{type:"SOLID",color:{r:0,g:0,b:0},opacity:0}]。**name 必传且语义化**(如「侧栏」「KPI-设备综合效率」),不传会落成引擎默认名 node。建多个根节点/复杂树用 jsd_batch 编排',
   'layoutHint.uniform':
     '检测到 {count} 个子节点沿 {mode} 方向等距排列(间距 {gap}px),但本容器没声明 layoutMode。这正是 auto-layout 的判据:设 layoutMode:{mode} + itemSpacing:{gap} 之后位置由布局接管,改文案或加一项都不必重算坐标(本条只是提示,创建已成功;判据与两条落地路径见 jsd://recipes/auto-layout)',
   'createRectangle.title': '创建矩形',
