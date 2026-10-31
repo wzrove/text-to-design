@@ -22,6 +22,7 @@ import {
 import { z } from 'zod';
 import type { Bridge } from '../bridge';
 import { LONG_IO_TIMEOUT_MS, MAX_SVG_SOURCE_BYTES } from '../config';
+import { detectUniformLayout } from '../core/layout-hint';
 import {
   type BridgeToolDef,
   bridgeTool,
@@ -69,7 +70,13 @@ export function nodeCreateInputSchema(type: CreatableNodeType): z.ZodType {
 
 type CreateNodeDef = Pick<
   BridgeToolDef,
-  'name' | 'title' | 'description' | 'followUp' | 'platforms' | 'platformNote'
+  | 'name'
+  | 'title'
+  | 'description'
+  | 'followUp'
+  | 'platforms'
+  | 'platformNote'
+  | 'extraContent'
 >;
 
 /**
@@ -123,11 +130,27 @@ export function registerCreateTools(
   bridge: Bridge,
   i18n: McpI18n,
 ): ToolHandle[] {
+  /**
+   * 「看着像该上 auto-layout」的提示(判据见 core/layout-hint.ts)。
+   *
+   * 挂在 jsd_create_frame 上而不是批量层:一屏里手摆坐标的容器有限,逐个建卡片的
+   * 场景下这条提示正好落在发生处;批量层汇总反而会把「哪一步该改」冲淡。
+   */
+  const layoutHint: NonNullable<BridgeToolDef['extraContent']> = (
+    _data,
+    args,
+  ) => {
+    const hit = detectUniformLayout(args);
+    if (hit == null) return [];
+    return [{ type: 'text', text: i18n.t('layoutHint.uniform', hit) }];
+  };
+
   const createNodeTools: BridgeToolDef[] = [
     createNodeTool('FRAME', {
       name: 'jsd_create_frame',
       title: 'createFrame.title',
       description: 'createFrame.description',
+      extraContent: layoutHint,
       followUp: CREATE_BATCH_FOLLOWUP,
     }),
     createNodeTool('RECTANGLE', {
