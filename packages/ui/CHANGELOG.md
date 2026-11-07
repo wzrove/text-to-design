@@ -1,5 +1,11 @@
 # text-to-design-ui
 
+## 0.12.4
+
+### Patch Changes
+
+- [`06b5c0b`](https://github.com/wzrove/text-to-design/commit/06b5c0b58e490bf0703bfb4565437c1df67bd8b5) Thanks [@wzrove](https://github.com/wzrove)! - feat: add MCP tools and enhance platform knowledge
+
 ## 0.12.3
 
 ### Patch Changes
