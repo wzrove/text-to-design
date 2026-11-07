@@ -45,7 +45,9 @@ export class BridgeSocket {
         minimized:
           typeof env.minimized === 'boolean' ? env.minimized : undefined,
         transitioning:
-          typeof env.transitioning === 'boolean' ? env.transitioning : undefined,
+          typeof env.transitioning === 'boolean'
+            ? env.transitioning
+            : undefined,
       });
     this.router.onLocale = (stored) =>
       this.events.emit({ type: 'locale_state', stored });

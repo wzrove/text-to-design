@@ -121,7 +121,9 @@ export function BridgeProvider(props: ParentProps) {
   const [envMinimized, setEnvMinimized] = createSignal<boolean | undefined>(
     undefined,
   );
-  const [envTransitioning, setEnvTransitioning] = createSignal<boolean | undefined>();
+  const [envTransitioning, setEnvTransitioning] = createSignal<
+    boolean | undefined
+  >();
   const [latest, setLatest] = createSignal<{
     ui: string | null;
     mcp: string | null;

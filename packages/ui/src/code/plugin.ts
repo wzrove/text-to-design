@@ -154,11 +154,22 @@ export function registerPlugin(
     if (panelTimer !== undefined) clearTimeout(panelTimer);
     const previousMode = minimized;
     if (!panelTransitioning) {
-      if (typeof message.width === 'number' && Number.isFinite(message.width) && message.width > 0) {
+      if (
+        typeof message.width === 'number' &&
+        Number.isFinite(message.width) &&
+        message.width > 0
+      ) {
         panelWidth = Math.max(1, Math.min(PANEL_WIDTH, message.width));
       }
-      if (typeof message.height === 'number' && Number.isFinite(message.height) && message.height > 0) {
-        panelHeight = Math.max(1, Math.min(PANEL_HEIGHT_CEILING, message.height));
+      if (
+        typeof message.height === 'number' &&
+        Number.isFinite(message.height) &&
+        message.height > 0
+      ) {
+        panelHeight = Math.max(
+          1,
+          Math.min(PANEL_HEIGHT_CEILING, message.height),
+        );
       }
       if (!minimized) expandedHeight = clampPanelHeight(panelHeight);
     }
@@ -168,14 +179,16 @@ export function registerPlugin(
     const toWidth = message.minimized
       ? Math.max(PANEL_MINIMIZED_SIZE, platform === 'figma' ? 70 : 0)
       : PANEL_WIDTH;
-    const toHeight = message.minimized ? PANEL_MINIMIZED_SIZE + chrome : expandedHeight;
+    const toHeight = message.minimized
+      ? PANEL_MINIMIZED_SIZE + chrome
+      : expandedHeight;
     const duration = message.animate === false || !animatePanel ? 0 : 180;
     minimized = message.minimized;
     panelTransitioning = true;
     pushUiEnv();
     const started = Date.now();
     const resize = (width: number, height: number): void => {
-      host.ui.resize!(width, height);
+      host.ui.resize?.(width, height);
       panelWidth = width;
       panelHeight = height;
     };
@@ -198,7 +211,8 @@ export function registerPlugin(
       pushUiEnv();
     };
     const tick = (): void => {
-      const progress = duration === 0 ? 1 : Math.min(1, (Date.now() - started) / duration);
+      const progress =
+        duration === 0 ? 1 : Math.min(1, (Date.now() - started) / duration);
       const eased = 1 - (1 - progress) ** 3;
       try {
         resize(

@@ -59,7 +59,9 @@ function Shell() {
       ? document.documentElement.dataset.panelMinimized === 'true'
       : window.innerWidth <= PANEL_MINIMIZED_SIZE + PANEL_RESIZE_STEP,
   );
-  const [panelPhase, setPanelPhase] = createSignal<'idle' | 'fading' | 'resizing'>('idle');
+  const [panelPhase, setPanelPhase] = createSignal<
+    'idle' | 'fading' | 'resizing'
+  >('idle');
   let pendingMode: boolean | undefined;
   let sawHostTransition = false;
   let panelTimer: number | undefined;
@@ -77,7 +79,13 @@ function Shell() {
       return;
     }
     if (fromHost === undefined || panelPhase() === 'fading') return;
-    if (pendingMode !== undefined && fromHost !== pendingMode && !sawHostTransition && canResize()) return;
+    if (
+      pendingMode !== undefined &&
+      fromHost !== pendingMode &&
+      !sawHostTransition &&
+      canResize()
+    )
+      return;
     clearPanelTimer();
     pendingMode = undefined;
     batch(() => {
@@ -88,7 +96,9 @@ function Shell() {
 
   const setMinimize = (next: boolean): void => {
     if (panelPhase() !== 'idle' || minimized() === next) return;
-    const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    const reducedMotion = window.matchMedia?.(
+      '(prefers-reduced-motion: reduce)',
+    ).matches;
     pendingMode = next;
     sawHostTransition = false;
     setPanelPhase('fading');
@@ -271,16 +281,16 @@ function Shell() {
       inert={panelPhase() !== 'idle'}
       style={{ opacity: panelPhase() === 'idle' ? 1 : 0 }}
     >
-    <Show when={!minimized()} fallback={<MinimizedPet onRestore={restore} />}>
-      <div
-        ref={(el) => {
-          rootEl = el;
-        }}
-        class={`flex flex-col gap-3 overflow-x-hidden overflow-y-auto bg-base-200 p-4 ${
-          canResize() ? '' : 'h-screen'
-        }`}
-      >
-        {/*
+      <Show when={!minimized()} fallback={<MinimizedPet onRestore={restore} />}>
+        <div
+          ref={(el) => {
+            rootEl = el;
+          }}
+          class={`flex flex-col gap-3 overflow-x-hidden overflow-y-auto bg-base-200 p-4 ${
+            canResize() ? '' : 'h-screen'
+          }`}
+        >
+          {/*
           页头只承载「状态 / 高频动作」,不再重复宿主的身份信息:标题栏已给出插件名
           与图标;平台与端口曾是排查上下文,但常态下是噪声,已移除(端口仍可在
           日志抽屉的连接行里看到)。
@@ -290,121 +300,123 @@ function Shell() {
           需要常驻可见)→ 二级菜单(错误上报/相机锁/主题/语言等低频开关)→
           最小化(最右,仅宿主支持改尺寸时挂 —— 缩不下去的钮是死键)。
         */}
-        <header class="flex shrink-0 items-center gap-2">
-          <StatusBadge />
+          <header class="flex shrink-0 items-center gap-2">
+            <StatusBadge />
 
-          {/*
+            {/*
             重连动作紧贴状态徽章:状态与它的出路读成一件事。
             连上后整颗隐藏而非置灰 —— 常态面板里一颗永远不可用的按钮只是噪声;
             隐藏也不会挤动右侧工具簇(它左侧是 ml-auto 的弹性留白)。
 
             提示气泡的对齐由 Tooltip 量边界决定(见 Tooltip)。
           */}
-          <Show when={status() !== 'connected'}>
-            <Tooltip
-              class="shrink-0"
-              tip={
-                status() === 'superseded'
-                  ? t('header.reclaim.title')
-                  : t('header.retry.title')
-              }
-            >
-              <button
-                type="button"
-                class="btn btn-ghost btn-xs shrink-0 px-1.5 text-base-content/70 hover:text-base-content"
-                onClick={() => rescan()}
+            <Show when={status() !== 'connected'}>
+              <Tooltip
+                class="shrink-0"
+                tip={
+                  status() === 'superseded'
+                    ? t('header.reclaim.title')
+                    : t('header.retry.title')
+                }
               >
-                {status() === 'superseded'
-                  ? t('header.reclaim')
-                  : t('header.retry')}
-              </button>
-            </Tooltip>
-          </Show>
+                <button
+                  type="button"
+                  class="btn btn-ghost btn-xs shrink-0 px-1.5 text-base-content/70 hover:text-base-content"
+                  onClick={() => rescan()}
+                >
+                  {status() === 'superseded'
+                    ? t('header.reclaim')
+                    : t('header.retry')}
+                </button>
+              </Tooltip>
+            </Show>
 
-          <div class="ml-auto flex shrink-0 items-center gap-0.5">
-            {/* 有新版本才挂:常态不占页头宽度(见 0038) */}
-            <Show when={hasUpgrade()}>
-              <UpgradeButton
+            <div class="ml-auto flex shrink-0 items-center gap-0.5">
+              {/* 有新版本才挂:常态不占页头宽度(见 0038) */}
+              <Show when={hasUpgrade()}>
+                <UpgradeButton
+                  ref={(el) => {
+                    upgradeEl = el;
+                  }}
+                  onClick={() => setUpgradeOpen(true)}
+                />
+              </Show>
+              <LogTrigger
                 ref={(el) => {
-                  upgradeEl = el;
+                  triggerEl = el;
                 }}
-                onClick={() => setUpgradeOpen(true)}
+                unread={unread()}
+                open={logOpen()}
+                onClick={openLog}
               />
-            </Show>
-            <LogTrigger
-              ref={(el) => {
-                triggerEl = el;
-              }}
-              unread={unread()}
-              open={logOpen()}
-              onClick={openLog}
-            />
-            <OverflowMenu
-              consentGranted={consentGranted()}
-              onOpenConsent={() => setConsentOpen(true)}
-              ref={(el) => {
-                overflowEl = el;
-              }}
-            />
-            {/* 宿主没有 ui.resize 时窗口缩不下去,不挂一颗按不动的钮 */}
-            <Show when={canResize()}>
-              <MinimizeToggle onClick={minimize} />
-            </Show>
-          </div>
-        </header>
+              <OverflowMenu
+                consentGranted={consentGranted()}
+                onOpenConsent={() => setConsentOpen(true)}
+                ref={(el) => {
+                  overflowEl = el;
+                }}
+              />
+              {/* 宿主没有 ui.resize 时窗口缩不下去,不挂一颗按不动的钮 */}
+              <Show when={canResize()}>
+                <MinimizeToggle onClick={minimize} />
+              </Show>
+            </div>
+          </header>
 
-        <ConnectionHint />
+          <ConnectionHint />
 
-        <SelectionCard data={selection()} fill={!canResize()} />
+          <SelectionCard data={selection()} fill={!canResize()} />
 
-        <CapabilityCard />
+          <CapabilityCard />
 
-        <LogDrawer
-          open={logOpen()}
-          entries={log()}
-          onClose={closeLog}
-          onClear={clearLog}
-        />
+          <LogDrawer
+            open={logOpen()}
+            entries={log()}
+            onClose={closeLog}
+            onClear={clearLog}
+          />
 
-        {/* 操作结果的提示:浮层,不进流,面板高度不受影响(0014) */}
-        <ToastHost />
+          {/* 操作结果的提示:浮层,不进流,面板高度不受影响(0014) */}
+          <ToastHost />
 
-        {/* 升级步骤:浮层,不进流,面板高度不受影响(0014) */}
-        <UpgradeModal
-          open={upgradeOpen()}
-          current={{ ui: APP_VERSION, mcp: daemonVersion() }}
-          latest={latest()}
-          onClose={closeUpgrade}
-        />
+          {/* 升级步骤:浮层,不进流,面板高度不受影响(0014) */}
+          <UpgradeModal
+            open={upgradeOpen()}
+            current={{ ui: APP_VERSION, mcp: daemonVersion() }}
+            latest={latest()}
+            onClose={closeUpgrade}
+          />
 
-        {/* 错误上报同意:浮层,不进流(0014);默认不上报,同意由 daemon 侧门控 */}
-        <ConsentDialog
-          open={consentOpen()}
-          granted={consentGranted()}
-          onEnable={() => {
-            setConsent(true);
-            setConsentOpen(false);
-          }}
-          onDisable={() => {
-            setConsent(false);
-            setConsentOpen(false);
-          }}
-          onClose={closeConsent}
-        />
+          {/* 错误上报同意:浮层,不进流(0014);默认不上报,同意由 daemon 侧门控 */}
+          <ConsentDialog
+            open={consentOpen()}
+            granted={consentGranted()}
+            onEnable={() => {
+              setConsent(true);
+              setConsentOpen(false);
+            }}
+            onDisable={() => {
+              setConsent(false);
+              setConsentOpen(false);
+            }}
+            onClose={closeConsent}
+          />
 
-        {/*
+          {/*
           高度只由内容决定,浮层不进流 —— 所以它打开时窗口不会自己变高,
           得由 floor 显式抬下限(见 0015)。浮层取窗口的 85%,面板内容短到下限 300 时
           就只剩 255px,几乎看不了几行日志。
         */}
-        <PanelHeightSync
-          active={canResize() && panelPhase() === 'idle' && !envTransitioning()}
-          target={() => rootEl}
-          floor={() => (logOpen() ? PANEL_HEIGHT_OVERLAY : 0)}
-          chromeHeight={chromeHeight}
-        />
-      </div>
-    </Show>
+          <PanelHeightSync
+            active={
+              canResize() && panelPhase() === 'idle' && !envTransitioning()
+            }
+            target={() => rootEl}
+            floor={() => (logOpen() ? PANEL_HEIGHT_OVERLAY : 0)}
+            chromeHeight={chromeHeight}
+          />
+        </div>
+      </Show>
     </div>
   );
 }

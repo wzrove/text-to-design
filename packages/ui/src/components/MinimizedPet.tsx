@@ -33,7 +33,10 @@ export default function MinimizedPet(props: { onRestore: () => void }) {
     >
       <span
         class="absolute top-0 left-0 flex shrink-0 items-center justify-center"
-        style={{ width: `${PANEL_MINIMIZED_SIZE}px`, height: `${PANEL_MINIMIZED_SIZE}px` }}
+        style={{
+          width: `${PANEL_MINIMIZED_SIZE}px`,
+          height: `${PANEL_MINIMIZED_SIZE}px`,
+        }}
       >
         <PetLogo phase={activity()} />
       </span>
