@@ -1,5 +1,12 @@
 # text-to-design-ui
 
+## 0.12.5
+
+### Patch Changes
+
+- [`28c9bd7`](https://github.com/wzrove/text-to-design/commit/28c9bd7cdde634e5b030942ae30f74ecc8a9ea6e) Thanks [@wzrove](https://github.com/wzrove)! - style: format code for better readability and consistency
+  feat: enhance panel minimize functionality and transition effects
+
 ## 0.12.4
 
 ### Patch Changes
