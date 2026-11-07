@@ -49,6 +49,7 @@ export type BridgeEvent =
       chromeHeight: number;
       /** 宿主侧的最小化模式;缺省 = 旧 code 产物,由视口宽度猜(见 shared/panel.ts) */
       minimized?: boolean;
+      transitioning?: boolean;
     }
   /** 宿主里存着的语言选择(code 侧启动时推一次;见 shared/locale-channel.ts) */
   | { type: 'locale_state'; stored: LocaleChoice | null }

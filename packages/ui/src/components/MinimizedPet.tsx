@@ -1,3 +1,4 @@
+import { PANEL_MINIMIZED_SIZE } from 'text-to-design-shared';
 import { useBridge } from '../bridge/useBridge';
 import { t } from '../i18n/useLocale';
 import PetLogo from './PetLogo';
@@ -19,7 +20,7 @@ export default function MinimizedPet(props: { onRestore: () => void }) {
   return (
     <button
       type="button"
-      class="btn btn-ghost h-screen w-screen overflow-hidden rounded-none p-0 hover:bg-transparent"
+      class="btn btn-ghost relative h-screen w-screen overflow-hidden rounded-none p-0 hover:bg-transparent"
       onDblClick={props.onRestore}
       title={t('header.restore.title')}
       aria-label={t('header.restore.title')}
@@ -30,7 +31,12 @@ export default function MinimizedPet(props: { onRestore: () => void }) {
         }
       }}
     >
-      <PetLogo phase={activity()} />
+      <span
+        class="absolute top-0 left-0 flex shrink-0 items-center justify-center"
+        style={{ width: `${PANEL_MINIMIZED_SIZE}px`, height: `${PANEL_MINIMIZED_SIZE}px` }}
+      >
+        <PetLogo phase={activity()} />
+      </span>
     </button>
   );
 }

@@ -8,6 +8,7 @@ import type {
   PluginRequest,
   PropMethod,
   SerializedNode,
+  UiMinimizeMessage,
 } from 'text-to-design-shared';
 import {
   applyCachedOverrides,
@@ -42,8 +43,10 @@ import {
   makeResponse,
   normalizeChromeHeight,
   outlineStrokeNodes,
+  PANEL_HEIGHT_CEILING,
   PANEL_HEIGHT_DEFAULT,
   PANEL_MINIMIZED_SIZE,
+  PANEL_MINIMIZED_TITLE,
   PANEL_TITLE,
   PANEL_WIDTH,
   PROP_METHOD_FIELDS,
@@ -100,6 +103,12 @@ export function registerPlugin(
   let cameraLocked = CAMERA_LOCK_DEFAULT;
   // 面板最小化态:旁路消息,见 shared/panel.ts
   let minimized = false;
+  let panelTransitioning = false;
+  let panelTimer: ReturnType<typeof setTimeout> | undefined;
+  let panelWidth = PANEL_WIDTH;
+  let panelHeight = PANEL_HEIGHT_DEFAULT;
+  let expandedHeight = PANEL_HEIGHT_DEFAULT;
+  let animatePanel = true;
   const host = withCameraLock(rawHost, () => cameraLocked);
 
   // 一次运行的显式上下文:core 的「字段是否生效」判定与 ping 上报的能力表同源,
@@ -116,46 +125,102 @@ export function registerPlugin(
       return __html__;
     }
     if (__html__) {
-      return __html__;
+      return __html__.replace(
+        '<html ',
+        `<html data-panel-minimized="${minimized}" `,
+      );
     }
     return '';
   }
 
-  /**
-   * 面板外框尺寸只有这一处来源:showUI 与 resize 必须同值,否则宿主窗口与 iframe
-   * 视口会各说各话。标题只能靠 showUI(UIAPI 没有 title 口),尺寸两条都发 ——
-   * 谁被宿主认下都不落空。
-   */
-  function applyPanelFrame(): void {
-    const width = minimized ? PANEL_MINIMIZED_SIZE : PANEL_WIDTH;
-    // 装饰高单独 try:适配器读宿主 getter 有抛的可能,抛出去会越过 async onmessage 且无日志
-    let chrome = 0;
-    if (minimized) {
-      try {
-        chrome = normalizeChromeHeight(host.ui.chromeHeight?.());
-      } catch (e) {
-        console.error('[plugin] 读取装饰高失败(按 0 处理)', e);
+  function readPanelChromeHeight(): number {
+    try {
+      return normalizeChromeHeight(host.ui.chromeHeight?.());
+    } catch (e) {
+      console.error('[plugin] 读取装饰高失败(按 0 处理)', e);
+      return 0;
+    }
+  }
+
+  function applyPanelFrame(message: UiMinimizeMessage): void {
+    if (typeof host.ui.resize !== 'function') {
+      pushUiEnv();
+      return;
+    }
+    if (message.minimized === minimized && !panelTransitioning) {
+      pushUiEnv();
+      return;
+    }
+    if (panelTimer !== undefined) clearTimeout(panelTimer);
+    const previousMode = minimized;
+    if (!panelTransitioning) {
+      if (typeof message.width === 'number' && Number.isFinite(message.width) && message.width > 0) {
+        panelWidth = Math.max(1, Math.min(PANEL_WIDTH, message.width));
       }
+      if (typeof message.height === 'number' && Number.isFinite(message.height) && message.height > 0) {
+        panelHeight = Math.max(1, Math.min(PANEL_HEIGHT_CEILING, message.height));
+      }
+      if (!minimized) expandedHeight = clampPanelHeight(panelHeight);
     }
-    const height = minimized
-      ? PANEL_MINIMIZED_SIZE + chrome
-      : PANEL_HEIGHT_DEFAULT;
-    try {
-      host.showUI(panelHtml(), {
-        width,
-        height,
-        title: minimized ? '' : PANEL_TITLE,
-      });
-    } catch (e) {
-      console.error('[plugin] 面板标题切换失败', e);
-    }
-    try {
-      host.ui.resize?.(width, height);
-    } catch (e) {
-      console.error('[plugin] 面板改尺寸失败', e);
-    }
-    // showUI 若重载了 iframe,新 UI 得重收一遍启动帧(幂等,见 scheduleBootPushes)
-    scheduleBootPushes();
+    const chrome = readPanelChromeHeight();
+    const fromWidth = panelWidth;
+    const fromHeight = panelHeight;
+    const toWidth = message.minimized
+      ? Math.max(PANEL_MINIMIZED_SIZE, platform === 'figma' ? 70 : 0)
+      : PANEL_WIDTH;
+    const toHeight = message.minimized ? PANEL_MINIMIZED_SIZE + chrome : expandedHeight;
+    const duration = message.animate === false || !animatePanel ? 0 : 180;
+    minimized = message.minimized;
+    panelTransitioning = true;
+    pushUiEnv();
+    const started = Date.now();
+    const resize = (width: number, height: number): void => {
+      host.ui.resize!(width, height);
+      panelWidth = width;
+      panelHeight = height;
+    };
+    const finish = (): void => {
+      panelTimer = undefined;
+      panelTransitioning = false;
+      if (minimized !== previousMode && platform !== 'mastergo') {
+        try {
+          host.showUI(panelHtml(), {
+            width: panelWidth,
+            height: panelHeight,
+            title: minimized ? PANEL_MINIMIZED_TITLE : PANEL_TITLE,
+          });
+          scheduleBootPushes();
+          host.ui.resize?.(panelWidth, panelHeight);
+        } catch (e) {
+          console.error('[plugin] 面板标题切换失败', e);
+        }
+      }
+      pushUiEnv();
+    };
+    const tick = (): void => {
+      const progress = duration === 0 ? 1 : Math.min(1, (Date.now() - started) / duration);
+      const eased = 1 - (1 - progress) ** 3;
+      try {
+        resize(
+          Math.round(fromWidth + (toWidth - fromWidth) * eased),
+          Math.round(fromHeight + (toHeight - fromHeight) * eased),
+        );
+      } catch (e) {
+        animatePanel = false;
+        console.error('[plugin] 面板尺寸过渡失败,降级为直接切换', e);
+        try {
+          resize(toWidth, toHeight);
+        } catch (error) {
+          minimized = previousMode;
+          console.error('[plugin] 面板改尺寸失败', error);
+        }
+        finish();
+        return;
+      }
+      if (progress < 1) panelTimer = setTimeout(tick, 16);
+      else finish();
+    };
+    tick();
   }
 
   try {
@@ -246,10 +311,9 @@ export function registerPlugin(
         canResize: typeof ui?.resize === 'function',
         // 装饰高只有 MG 有真源,另两平台的适配器不实现本方法 → 下发 0(不补偿)。
         // 收口走 normalizeChromeHeight:适配器给什么都不该让荒唐值冲进请求
-        chromeHeight: normalizeChromeHeight(host.ui.chromeHeight?.()),
-        // 模式随环境一起下发:`showUI` 重建 iframe 后,新 UI 只有这一条能知道
-        // 「现在是缩着的」—— Figma 最小宽度 70,按视口猜宽度会一直猜成展开态
+        chromeHeight: readPanelChromeHeight(),
         minimized,
+        transitioning: panelTransitioning,
       });
     } catch (e) {
       console.error('[plugin] 推送面板环境失败', e);
@@ -302,17 +366,7 @@ export function registerPlugin(
     });
   }
 
-  /**
-   * 启动帧(含选中):showUI 后 UI iframe 加载是异步的,立即推可能丢消息,故统一延后补发。
-   *
-   * 选中沿用原来的 300ms(状态三条 200ms):它要跑一次 getSelection 读节点数据,
-   * 是四条里最重的,留的余量更大。
-   *
-   * 重复调用幂等,所以 applyPanelFrame() 之后可以无条件补推 —— 再次 showUI 会关掉旧 UI
-   * 再显示新的(plugin-api.d.ts:365),每次最小化/恢复都重建 iframe(dec 28008c70):
-   * ui_env 只是覆写 canResize / chromeHeight;platform 只是再触发一次 refreshCapabilities;
-   * locale_state 在用户手动选过时被 applyStoredChoice 挡掉;selection 只是覆写选中卡片。
-   */
+  /** showUI 可能重建 iframe,启动帧延后补发。 */
   function scheduleBootPushes(): void {
     setTimeout(pushPlatform, 200);
     setTimeout(pushUiEnv, 200);
@@ -324,8 +378,7 @@ export function registerPlugin(
     // 面板最小化:旁路消息(见 shared/panel.ts),必须先于 ui_resize 拦掉(dec 28008c70)——
     // 它没有 method,落到下面的 switch 会回一个「未知 method」错误包,而 UI 侧并不等这个回包。
     if (isUiMinimizeMessage(raw)) {
-      minimized = raw.minimized;
-      applyPanelFrame();
+      applyPanelFrame(raw);
       return;
     }
     // 面板自改高度:旁路消息,不在 PluginRequest 契约内(理由见 shared/panel.ts)。
@@ -334,12 +387,16 @@ export function registerPlugin(
     if (isUiResizeMessage(raw)) {
       // 最小化期间高度请求无意义(窗口是模式尺寸,不是内容尺寸),而 clampPanelHeight 的下限是
       // 「内容可用的最小高度」,放过去会把 50px 抬成 300 的细条(dec 28008c70)
-      if (minimized) return;
+      if (minimized || panelTransitioning) return;
       try {
         // 再夹一次:UI 已夹过,但契约的两端都该能独立站住(0013 的分层边界同样思路)。
         // 夹取上限是 `PANEL_HEIGHT_CEILING`(防荒唐值的硬边界),**不是**内容高度的
         // 截断点 —— 拿后者当上限会让超出部分被宿主裁掉且没有滚动条可救(0014 修订)
-        host.ui.resize?.(PANEL_WIDTH, clampPanelHeight(raw.height));
+        const height = clampPanelHeight(raw.height);
+        host.ui.resize?.(PANEL_WIDTH, height);
+        panelWidth = PANEL_WIDTH;
+        panelHeight = height;
+        expandedHeight = height;
       } catch (e) {
         console.error('[plugin] 面板改尺寸失败', e);
       }

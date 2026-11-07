@@ -8,7 +8,7 @@ import {
 /**
  * 最小化旁路消息的不变量(dec 28008c70)。
  *
- * 为什么守:`minimized` 是**模式**不是尺寸。脏值被当成真时窗口缩到 50px,而 UI 侧
+ * 为什么守:`minimized` 是**模式**不是尺寸。脏值被当成真时窗口缩到最小化尺寸,而 UI 侧
  * 仍渲染整棵面板树(两侧对模式的判断分叉)—— 症状是面板变成一条、还点不到恢复;
  * 反向漏判则是双击恢复后窗口不回来。故只认布尔,别的写法一律不认。
  */
@@ -41,8 +41,8 @@ describe('ui_minimize 守卫', () => {
 
   it('最小化尺寸是内容区口径,且低于内容高度下限', () => {
     // 低于 PANEL_HEIGHT_MIN 正是它不能走 clampPanelHeight 的原因:那条下限会把
-    // 50 抬成 300 的细条(见 plugin.ts 里 ui_resize 的早退)
-    expect(PANEL_MINIMIZED_SIZE).toBe(50);
+    // 75 抬成 300 的细条(见 plugin.ts 里 ui_resize 的早退)
+    expect(PANEL_MINIMIZED_SIZE).toBe(75);
     expect(PANEL_MINIMIZED_SIZE).toBeLessThan(PANEL_HEIGHT_MIN);
   });
 });

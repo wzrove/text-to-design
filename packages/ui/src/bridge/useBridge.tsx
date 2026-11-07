@@ -1,5 +1,6 @@
 import type { Accessor, ParentProps } from 'solid-js';
 import {
+  batch,
   createContext,
   createSignal,
   onCleanup,
@@ -58,6 +59,7 @@ export interface BridgeStore {
    * 字段,消费方按视口宽度自己猜。
    */
   envMinimized: Accessor<boolean | undefined>;
+  envTransitioning: Accessor<boolean | undefined>;
   /**
    * npm 上两个包的最新版本(daemon 代查后推来,见 0038)。
    * 任一项为 `null` = 没查到,面板据此**不**提示升级。
@@ -119,6 +121,7 @@ export function BridgeProvider(props: ParentProps) {
   const [envMinimized, setEnvMinimized] = createSignal<boolean | undefined>(
     undefined,
   );
+  const [envTransitioning, setEnvTransitioning] = createSignal<boolean | undefined>();
   const [latest, setLatest] = createSignal<{
     ui: string | null;
     mcp: string | null;
@@ -268,9 +271,12 @@ export function BridgeProvider(props: ParentProps) {
         void refreshCapabilities();
       } else if (e.type === 'log') pushLog(e.record);
       else if (e.type === 'ui_env') {
-        setCanResize(() => e.canResize);
-        setChromeHeight(() => e.chromeHeight);
-        setEnvMinimized(() => e.minimized);
+        batch(() => {
+          setCanResize(() => e.canResize);
+          setChromeHeight(() => e.chromeHeight);
+          setEnvMinimized(() => e.minimized);
+          setEnvTransitioning(() => e.transitioning);
+        });
       } else if (e.type === 'locale_state') applyStoredChoice(e.stored);
       else if (e.type === 'activity') applyActivity(e.phase);
       else if (e.type === 'consent') {
@@ -292,6 +298,7 @@ export function BridgeProvider(props: ParentProps) {
     canResize,
     chromeHeight,
     envMinimized,
+    envTransitioning,
     latest,
     daemonVersion,
     activity,

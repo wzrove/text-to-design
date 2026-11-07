@@ -44,6 +44,8 @@ export class BridgeSocket {
         // 脏值当缺省:模式只有布尔可信,其余一律交回「按视口宽度猜」那条老路
         minimized:
           typeof env.minimized === 'boolean' ? env.minimized : undefined,
+        transitioning:
+          typeof env.transitioning === 'boolean' ? env.transitioning : undefined,
       });
     this.router.onLocale = (stored) =>
       this.events.emit({ type: 'locale_state', stored });

@@ -13,15 +13,9 @@
 /** 面板宽度:内容排版按它定,不参与自适应 */
 export const PANEL_WIDTH = 360;
 
-/**
- * 宿主窗口标题栏的文字(dec 28008c70)。
- *
- * 为什么收在这里:最小化要清空它、恢复要写回来,而标题**只有** `showUI` 的 options
- * 有口(`UIAPI` 没有 title 成员,Figma / jsDesign 的 `ShowUIOptions.title` 是唯一入口;
- * MasterGo 的 ShowUIOptions 里根本没有这个字段)。首次 `showUI` 也显式传它 —— 标题栏
- * 文字从此由这里决定,manifest 的 `name` 只管平台注册名。
- */
+/** 标题通过 showUI 更新,模式切换时等尺寸动画结束再设置。 */
 export const PANEL_TITLE = 'text-to-design';
+export const PANEL_MINIMIZED_TITLE = 'T2D';
 
 /**
  * 最小化时的窗口**内容区**边长(宽 = 高):只放得下 logo(dec 28008c70)。
@@ -29,7 +23,7 @@ export const PANEL_TITLE = 'text-to-design';
  * 高度是内容区口径,外框还要加上宿主标题栏(与 `UI_CHROME_DEFAULT` 同一条纪律):
  * 差这一截的症状同样是内容被裁且不报错。
  */
-export const PANEL_MINIMIZED_SIZE = 50;
+export const PANEL_MINIMIZED_SIZE = 75;
 
 /**
  * `showUI` 的初始高度。自适应生效时它只是个起点(首帧后即收敛到内容高);
@@ -178,18 +172,9 @@ export interface UiEnvMessage {
   canResize: boolean;
   /** 宿主标题栏等装饰占的高度;**0 = 不补偿**(见 `UI_CHROME_DEFAULT`) */
   chromeHeight?: number;
-  /**
-   * 当前是否最小化(模式,不是尺寸)。
-   *
-   * 为什么必须随这条走:最小化要靠 `showUI` 清标题,而再次 `showUI` 会重建 iframe
-   * (Figma typings 已证实),重建后的 UI 只剩「自己量视口」这一条线索。而 Figma 的
-   * 窗口**最小宽度是 70**(`ShowUIOptions.width` / `UIAPI.resize` 都写明),请求 50
-   * 只会被夹到 70 —— 「宽度 ≤ 50+容差」这条判据在 Figma 上永远不成立,重建后的面板
-   * 会以展开态渲染进 70×50 的窗口,最小化看起来根本没发生。
-   *
-   * 缺字段(新 UI 配旧 code 产物)时按视口宽度猜,与历史行为一致。
-   */
+  /** 宿主目标模式;缺省时兼容旧产物的视口判断。 */
   minimized?: boolean;
+  transitioning?: boolean;
 }
 
 export function isUiResizeMessage(value: unknown): value is UiResizeMessage {
@@ -207,6 +192,10 @@ export function isUiResizeMessage(value: unknown): value is UiResizeMessage {
 export interface UiMinimizeMessage {
   type: 'ui_minimize';
   minimized: boolean;
+  animate?: boolean;
+  /** UI 当前视口加装饰高,供宿主从实际尺寸起步。 */
+  width?: number;
+  height?: number;
 }
 
 /** 脏值不当模式:非布尔一律忽略,面板维持当前形态 */

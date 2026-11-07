@@ -620,6 +620,12 @@ body {
   }
 }
 
+@layer utilities {
+  .panel-view {
+    transition: opacity 60ms ease-out;
+  }
+}
+
 /* 动效可达性:系统开启「减少动态效果」时压缩所有过渡/动画 */
 @media (prefers-reduced-motion: reduce) {
   *,

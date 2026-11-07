@@ -1,4 +1,5 @@
 import {
+  batch,
   createEffect,
   createMemo,
   createSignal,
@@ -41,6 +42,7 @@ function Shell() {
     canResize,
     chromeHeight,
     envMinimized,
+    envTransitioning,
     latest,
     daemonVersion,
     consentGranted,
@@ -52,39 +54,64 @@ function Shell() {
   const [upgradeOpen, setUpgradeOpen] = createSignal(false);
   const [consentOpen, setConsentOpen] = createSignal(false);
 
-  /**
-   * 最小化模式:UI 只切模式,尺寸由 code 侧按模式算(见 shared/panel.ts)。
-   *
-   * 切 signal 与发消息收在同一处 —— 只在按钮里发消息则本地渲染树不换,只切 signal
-   * 则窗口不缩,两个半态都是可见的错误形态。
-   *
-   * **初值按视口宽度认,不写死 false**(重载兜底):最小化还要改宿主标题栏文字,而
-   * 标题只能靠 showUI 的 options —— 再次 showUI 会重建 iframe(Figma 的 typings 已写明,
-   * 见 plugin-api.d.ts:365),面板会以「整棵面板树 + 50px 窗口」重启:宠物不在、
-   * 双击无从谈起,面板就此锁死。
-   *
-   * 宽度只是**旧 code 产物**的兜底:`ui_env` 现在带 `minimized`(见 shared/panel.ts),
-   * 那才是真相。宽度判据单独用会漏 —— Figma 窗口最小宽度 70(`ShowUIOptions.width`
-   * 与 `UIAPI.resize` 都写明),请求 50 被夹到 70,「≤ 58」永远不成立,重建后的面板
-   * 会以展开态渲染进 70×50 的窗口(症状:最小化后看不到宠物,面板挤成一条)。
-   *
-   * 容差是**借** PANEL_RESIZE_STEP 的值,不是它的语义:它是改高度的发送阈值(防抖/吸附),
-   * 测量余量另有 PANEL_HEIGHT_SLACK。这里只要一个量级 —— 给宿主内容区与请求尺寸之间
-   * 的取整差留口子。
-   */
   const [minimized, setMinimized] = createSignal(
-    window.innerWidth <= PANEL_MINIMIZED_SIZE + PANEL_RESIZE_STEP,
+    document.documentElement.dataset.panelMinimized !== undefined
+      ? document.documentElement.dataset.panelMinimized === 'true'
+      : window.innerWidth <= PANEL_MINIMIZED_SIZE + PANEL_RESIZE_STEP,
   );
+  const [panelPhase, setPanelPhase] = createSignal<'idle' | 'fading' | 'resizing'>('idle');
+  let pendingMode: boolean | undefined;
+  let sawHostTransition = false;
+  let panelTimer: number | undefined;
+  const clearPanelTimer = (): void => {
+    if (panelTimer !== undefined) window.clearTimeout(panelTimer);
+    panelTimer = undefined;
+  };
+  onCleanup(clearPanelTimer);
 
-  /** 宿主报来的模式压过视口猜测;没有该字段(旧 code 产物)就维持初值 */
   createEffect(() => {
     const fromHost = envMinimized();
-    if (fromHost !== undefined) setMinimized(fromHost);
+    const resizing = envTransitioning();
+    if (resizing) {
+      sawHostTransition = true;
+      return;
+    }
+    if (fromHost === undefined || panelPhase() === 'fading') return;
+    if (pendingMode !== undefined && fromHost !== pendingMode && !sawHostTransition && canResize()) return;
+    clearPanelTimer();
+    pendingMode = undefined;
+    batch(() => {
+      setMinimized(fromHost);
+      setPanelPhase('idle');
+    });
   });
+
   const setMinimize = (next: boolean): void => {
-    setMinimized(next);
-    const message: UiMinimizeMessage = { type: 'ui_minimize', minimized: next };
-    postToCode(message);
+    if (panelPhase() !== 'idle' || minimized() === next) return;
+    const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    pendingMode = next;
+    sawHostTransition = false;
+    setPanelPhase('fading');
+    const send = (): void => {
+      setPanelPhase('resizing');
+      panelTimer = window.setTimeout(() => {
+        pendingMode = undefined;
+        batch(() => {
+          setMinimized(next);
+          setPanelPhase('idle');
+        });
+      }, 1000);
+      const message: UiMinimizeMessage = {
+        type: 'ui_minimize',
+        minimized: next,
+        animate: !reducedMotion,
+        width: window.innerWidth,
+        height: window.innerHeight + chromeHeight(),
+      };
+      postToCode(message);
+    };
+    if (reducedMotion) send();
+    else panelTimer = window.setTimeout(send, 60);
   };
   const minimize = (): void => setMinimize(true);
   const restore = (): void => setMinimize(false);
@@ -239,6 +266,11 @@ function Shell() {
     会把手改回内容高 —— 那个窗口里量出来的内容高是自相矛盾的。
   */
   return (
+    <div
+      class="panel-view"
+      inert={panelPhase() !== 'idle'}
+      style={{ opacity: panelPhase() === 'idle' ? 1 : 0 }}
+    >
     <Show when={!minimized()} fallback={<MinimizedPet onRestore={restore} />}>
       <div
         ref={(el) => {
@@ -366,13 +398,14 @@ function Shell() {
           就只剩 255px,几乎看不了几行日志。
         */}
         <PanelHeightSync
-          active={canResize()}
+          active={canResize() && panelPhase() === 'idle' && !envTransitioning()}
           target={() => rootEl}
           floor={() => (logOpen() ? PANEL_HEIGHT_OVERLAY : 0)}
           chromeHeight={chromeHeight}
         />
       </div>
     </Show>
+    </div>
   );
 }
 
