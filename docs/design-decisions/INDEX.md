@@ -41,6 +41,9 @@
 | [1a135e6a](1a135e6a-遥测上报改事件驱动冲刷-去定时器、条目级幂等、退避重试.md) | 遥测上报改事件驱动冲刷:去定时器、条目级幂等、退避重试 | 已采纳 | `mcp-server/telemetry`、`telemetry`(worker + DB) | 2026-10-26 |
 | [c229422a](c229422a-面板语言切换改两档直切：默认仍跟系统，撤掉「跟随系统」档与下拉.md) | 面板语言切换改两档直切：默认仍跟系统，撤掉「跟随系统」档与下拉 | 已采纳 | `ui/components`、`shared/dicts`、`tests` | 2026-10-26 |
 | [a7f8846b](a7f8846b-遥测错误结构化：scope-code-subject-分类-+-fingerprint-跨窗口-rollup，message-降为-detail.md) | 遥测错误结构化：scope/code/subject 分类 + fingerprint 跨窗口 rollup，message 降为 detail | 已采纳 | `shared/dicts`、`mcp-server`（logger/telemetry）、`telemetry` | 2026-10-26 |
+| [9c4b0406](9c4b0406-MCP代理保留协议元数据与补全：目录同步和进程生命周期分离.md) | MCP代理保留协议元数据与补全：目录同步和进程生命周期分离 | 已采纳 | mcp-server/daemon | 2026-11-01 |
+| [4d4e2570](4d4e2570-MCP注册面评审：保留协议适配并收窄重复入口.md) | MCP注册面评审：保留协议适配并收窄重复入口 | 提议 | mcp-server | 2026-11-01 |
+| [3f364c28](3f364c28-MCP目录精简档提议：核心工具常驻与低频能力按需发现.md) | MCP目录精简档提议：核心工具常驻与低频能力按需发现 | 已采纳 | mcp-server | 2026-11-01 |
 
 ## 依赖关系
 

@@ -1,4 +1,6 @@
-import { statSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, rmSync, statSync } from 'node:fs';
+import { homedir, tmpdir } from 'node:os';
+import { join } from 'node:path';
 import {
   Client,
   StreamableHTTPClientTransport,
@@ -45,6 +47,46 @@ export async function fetchDaemonHealth(): Promise<{
 let staleWarned = false;
 
 /**
+ * 「请退役」标记文件。**内容只有时间戳,没有授权**:谁写谁读,读的一方仍是
+ * daemon 自己 —— 本机任何进程都能写它,但写它不会让谁获得杀 daemon 的权力,
+ * 只是把一个「我已换新构建」的事实摆在与 daemon 共享的介质上。
+ *
+ * 为什么用文件而不是 HTTP 口:HTTP 口一旦存在就是对全网卡可达的 kill 开关
+ * (localhost 之外也有各种 localhost 代理),而这里要的只是**退出依据**,
+ * 所以依据本身不该带执行能力。
+ */
+export function selfExitMarkerPath(): string {
+  const override = process.env.TEXT_TO_DESIGN_SELF_EXIT_MARKER;
+  if (override != null && override.trim() !== '') return override;
+  const stateDir =
+    process.env.XDG_STATE_HOME ?? join(homedir(), '.local', 'state');
+  try {
+    const dir = join(stateDir, 'text-to-design');
+    mkdirSync(dir, { recursive: true });
+    return join(dir, 'daemon-self-exit');
+  } catch {
+    return join(tmpdir(), 'text-to-design-daemon-self-exit');
+  }
+}
+
+/** daemon 启动时先抹掉:上一次退出留下的请求不能算在本次头上 */
+export function clearSelfExitMarker(): void {
+  try {
+    rmSync(selfExitMarkerPath(), { force: true });
+  } catch {
+    // 删不掉就让它留着 —— 只影响下一次换新,不影响本次启动
+  }
+}
+
+/** 标记里那个时刻(shim 请求退役发起时的时间戳);没有标记 → null */
+export function selfExitMarkerAt(): number | null {
+  const path = selfExitMarkerPath();
+  if (!existsSync(path)) return null;
+  const stamp = Number(readFileSync(path, 'utf8').trim());
+  return Number.isFinite(stamp) ? stamp : null;
+}
+
+/**
  * 构建陈旧告警(每次进程只报一次,且只告警不自动替换)。
  *
  * 为什么需要:版本自检比的是 `version`,而开发期反复 `pnpm build` 不改版本号,
@@ -52,8 +94,9 @@ let staleWarned = false;
  * 同版本的旧 daemon,直接当上游用。这里用「daemon 启动时刻 < 本地产物 mtime」
  * 把盲区变成一条明确告警。
  *
- * 为什么不自动替换:不同来源的两个同版本构建(仓库 dist 与 npx 缓存)会互相
- * 判定对方陈旧,替换成环。替换只由用户显式动作触发。
+ * 为什么不在这里自动替换:不同来源的两个同版本构建(仓库 dist 与 npx 缓存)会
+ * 互相判定对方陈旧,替换成环。真正的轮换由 shim 启动写标记、daemon 监听后自退,
+ * 这条只负责把「为什么改动没生效」说清楚。
  */
 export async function warnIfDaemonStale(): Promise<void> {
   if (staleWarned) return;
@@ -70,7 +113,7 @@ export async function warnIfDaemonStale(): Promise<void> {
   if (health?.startedAt == null || health.startedAt >= mtime) return;
   warn(
     `常驻 daemon 跑在旧构建上(daemon 启动 ${new Date(health.startedAt).toISOString()} < 产物 ${new Date(mtime).toISOString()}),本次代码改动未生效。` +
-      `收掉它:curl -X POST http://127.0.0.1:${HTTP_PORT}/shutdown,再重新拉起`,
+      `shim 启动会请它轮换;它自己不退时:curl -X POST http://127.0.0.1:${HTTP_PORT}/shutdown`,
   );
 }
 

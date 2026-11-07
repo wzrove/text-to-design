@@ -1,3 +1,4 @@
+import type { McpServer } from '@modelcontextprotocol/server';
 import type { ToolHook, ToolHookFactory } from '../core/registry';
 import { lookupExecutor } from '../core/registry';
 
@@ -34,12 +35,6 @@ export const STRUCTURAL_NODE_OPS = new Set([
   'flatten',
   'repair',
 ]);
-
-/** 该次调用的 op 是否属于结构变更(聚合入口按入参判断) */
-function isStructuralArgs(args: Record<string, unknown>): boolean {
-  const op = args.op;
-  return typeof op === 'string' && STRUCTURAL_NODE_OPS.has(op);
-}
 
 /** reparent 需要额外盯住目标父级(它多了个孩子,原有兄弟同样可能被重算) */
 function isReparentArgs(args: Record<string, unknown>): boolean {
@@ -91,10 +86,11 @@ function toGeo(raw: unknown): Geo | null {
 
 /** 内部直调另一个已注册工具的执行体(绕开 MCP 往返);失败/离线一律返回 null */
 async function callExecutor(
+  server: McpServer,
   name: string,
   args: Record<string, unknown>,
 ): Promise<Record<string, unknown> | null> {
-  const exec = lookupExecutor(name);
+  const exec = lookupExecutor(name, server);
   if (exec == null) return null;
   const res = (await exec(args, undefined)) as {
     isError?: boolean;
@@ -108,10 +104,13 @@ async function callExecutor(
 }
 
 /** 读一层的子节点几何;读不到(层被删/失效/离线)返回 null */
-async function readLayer(layer: string): Promise<Map<string, Geo> | null> {
+async function readLayer(
+  server: McpServer,
+  layer: string,
+): Promise<Map<string, Geo> | null> {
   const out = new Map<string, Geo>();
   if (layer === PAGE_KEY) {
-    const data = await callExecutor('jsd_get_page', {});
+    const data = await callExecutor(server, 'jsd_get_page', {});
     if (data == null) return null;
     for (const n of asArray(data.nodes).slice(0, MAX_CHILDREN)) {
       const g = toGeo(n);
@@ -119,7 +118,10 @@ async function readLayer(layer: string): Promise<Map<string, Geo> | null> {
     }
     return out;
   }
-  const data = await callExecutor('jsd_find', { ids: [layer], depth: 1 });
+  const data = await callExecutor(server, 'jsd_find', {
+    ids: [layer],
+    depth: 1,
+  });
   if (data == null) return null;
   const node = asArray(data.nodes)[0];
   if (node == null) return null;
@@ -145,6 +147,13 @@ async function readLayer(layer: string): Promise<Map<string, Geo> | null> {
  * 任何一步读失败只意味着「这次不查」,绝不影响批次成败。
  */
 export class DriftWatch implements ToolHook {
+  private readonly server: McpServer;
+  private readonly operation?: string;
+
+  constructor(server: McpServer, operation?: string) {
+    this.server = server;
+    this.operation = operation;
+  }
   private readonly snapshots = new Map<string, Map<string, Geo>>();
   private readonly dead = new Set<string>();
   /** 本次调用是否真的做了快照;非结构变更的调用不该产生任何复核动作 */
@@ -154,14 +163,14 @@ export class DriftWatch implements ToolHook {
   async before(args: Record<string, unknown>): Promise<void> {
     // 钩子同时挂在固定 op 小工具(注册时按 tag 挂)与聚合入口 jsd_manage_nodes 上:
     // 后者 op 由入参给出,这里按 STRUCTURAL_NODE_OPS 判断本次要不要查
-    const op = args.op;
-    if (op !== undefined && !isStructuralArgs(args)) return;
+    const op = this.operation ?? args.op;
+    if (op !== undefined && !STRUCTURAL_NODE_OPS.has(String(op))) return;
     this.engaged = true;
     try {
       const ids = new Set<string>();
       collectArgIds(args, ids);
       if (ids.size === 0) return;
-      const data = await callExecutor('jsd_find', {
+      const data = await callExecutor(this.server, 'jsd_find', {
         ids: [...ids],
         depth: 0,
       });
@@ -173,7 +182,10 @@ export class DriftWatch implements ToolHook {
         else layers.add(pid);
       }
       // reparent 的目标父级也要看:它多了个孩子,原有兄弟同样可能被重算
-      if (isReparentArgs(args) && typeof args.parentId === 'string') {
+      if (
+        (this.operation === 'reparent' || isReparentArgs(args)) &&
+        typeof args.parentId === 'string'
+      ) {
         layers.add(args.parentId);
       }
       if (pageLevel) layers.add(PAGE_KEY);
@@ -183,7 +195,7 @@ export class DriftWatch implements ToolHook {
           this.dead.add(layer);
           continue;
         }
-        const snap = await readLayer(layer);
+        const snap = await readLayer(this.server, layer);
         if (snap == null) {
           this.dead.add(layer);
           continue;
@@ -201,7 +213,7 @@ export class DriftWatch implements ToolHook {
     const warnings: string[] = [];
     for (const [layer, snapshot] of this.snapshots) {
       try {
-        const after = await readLayer(layer);
+        const after = await readLayer(this.server, layer);
         if (after == null) continue;
         const drifted: { from: Geo; to: Geo }[] = [];
         for (const [id, b] of snapshot) {
@@ -240,4 +252,9 @@ export class DriftWatch implements ToolHook {
  * 直接调 `jsd_delete_node` 却没有 —— 那是覆盖面漏洞,不是编排细节。
  * 现在任何调用路径(单工具 / 编排)都会经过 `bridgeTool` 的钩子槽。
  */
-export const driftWatch: ToolHookFactory = () => new DriftWatch();
+export const driftWatch: ToolHookFactory = (server) => new DriftWatch(server);
+
+export const driftWatchFor =
+  (operation: string): ToolHookFactory =>
+  (server) =>
+    new DriftWatch(server, operation);

@@ -5,6 +5,7 @@ import type { McpI18n } from '../i18n';
 import { registerBatchTools } from './batch';
 import { registerComponentTools } from './components';
 import { registerCreateTools } from './create';
+import { registerDiscoveryTools } from './discovery';
 import { registerManageTools } from './manage';
 import { registerModifyTools } from './modify';
 import { registerNodeOpTools } from './nodes';
@@ -45,4 +46,5 @@ export const toolRegistrars: RegisterTools[] = [
   registerRecipeResources,
   // 配方 prompt 不依赖插件连接,恒可用
   (server, _bridge, i18n) => registerPrompts(server, i18n),
+  registerDiscoveryTools,
 ];

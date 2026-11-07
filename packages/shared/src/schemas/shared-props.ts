@@ -100,11 +100,11 @@ export const strokePropsSchema = z.object({
   strokeCap: z
     .enum(['NONE', 'ROUND', 'SQUARE', 'ARROW_LINES', 'ARROW_EQUILATERAL'])
     .optional()
-    .describe('schema.sharedProps.strokeCap'),
+    .describe('schemaValue.strokeCap'),
   strokeJoin: z
     .enum(['MITER', 'BEVEL', 'ROUND'])
     .optional()
-    .describe('schema.sharedProps.strokeJoin'),
+    .describe('schemaValue.strokeJoin'),
   dashPattern: z
     .array(z.number())
     .optional()
@@ -119,25 +119,11 @@ export const cornerPropsSchema = z.object({
   cornerRadius: z
     .number()
     .optional()
-    .describe(
-      '圆角半径(px),四角统一;仅 FRAME/RECTANGLE/ELLIPSE/POLYGON/STAR/VECTOR/BOOLEAN_OPERATION 生效(LINE/TEXT 无圆角)',
-    ),
-  topLeftRadius: z
-    .number()
-    .optional()
-    .describe('schema.sharedProps.topLeftRadius'),
-  topRightRadius: z
-    .number()
-    .optional()
-    .describe('schema.sharedProps.topRightRadius'),
-  bottomLeftRadius: z
-    .number()
-    .optional()
-    .describe('schema.sharedProps.bottomLeftRadius'),
-  bottomRightRadius: z
-    .number()
-    .optional()
-    .describe('schema.sharedProps.bottomRightRadius'),
+    .describe('schema.sharedProps.cornerRadius'),
+  topLeftRadius: z.number().optional(),
+  topRightRadius: z.number().optional(),
+  bottomLeftRadius: z.number().optional(),
+  bottomRightRadius: z.number().optional(),
 });
 
 export const textPropsSchema = z.object({
@@ -165,11 +151,11 @@ export const textPropsSchema = z.object({
   textCase: z
     .enum(['ORIGINAL', 'UPPER', 'LOWER', 'TITLE'])
     .optional()
-    .describe('schema.sharedProps.textCase'),
+    .describe('schemaValue.textCase'),
   textDecoration: z
     .enum(['NONE', 'UNDERLINE', 'STRIKETHROUGH'])
     .optional()
-    .describe('schema.sharedProps.textDecoration'),
+    .describe('schemaValue.textDecoration'),
   lineHeight: lineHeightSchema
     .optional()
     .describe('schema.sharedProps.lineHeight'),
@@ -233,12 +219,7 @@ export const autoLayoutPropsSchema = z.object({
 });
 
 export const visualPropsSchema = z.object({
-  fills: z
-    .array(paintSchema)
-    .optional()
-    .describe(
-      '填充列表(Paint 数组;整体替换,非合并,需保留的现有填充项要一并传入)',
-    ),
+  fills: z.array(paintSchema).optional().describe('schema.sharedProps.fills'),
   fillStyleId: z.string().optional().describe('schema.sharedProps.fillStyleId'),
   blendMode: blendModeSchema.optional(),
   effectStyleId: z

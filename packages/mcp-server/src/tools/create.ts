@@ -29,6 +29,7 @@ import {
   type FollowUp,
   type ToolHandle,
 } from '../core/registry';
+import { countSemanticGroups } from '../core/structure-hint';
 import { htmlToSvg } from '../htmlToDesign';
 import type { McpI18n } from '../i18n';
 import { findIcon, iconToSvg, suggestIcons } from '../icons';
@@ -226,12 +227,45 @@ export function registerCreateTools(
    * 内容为空时**明确报错**:引擎拿到空串只会抛一句难懂的解析错(实测报
    * "Cannot read properties of null"),报错点离真正原因很远。
    */
+  /**
+   * 「SVG 里没按语义切 <g id>」的提示(判据见 core/structure-hint.ts)。
+   *
+   * 挂在 jsd_create_svg 上:这是全流程唯一拿得到 SVG 源码的地方。实测失败形态是
+   * 整张图一次 <g> 都不套 —— 导入后成一个不可拆的矢量,想调某一层只能回源重导。
+   */
+  const svgGroupHint: NonNullable<BridgeToolDef['extraContent']> = (
+    _data,
+    args,
+  ) => {
+    const { svg, svgPath } = args as { svg?: string; svgPath?: string };
+    let source = svg ?? '';
+    // svgPath 形态读盘会重复一遍 IO;文案只依赖「有/没有 <g id>」,读不到就不提示,
+    // 不拿一次读盘失败去干扰一条纯建议性的提示
+    if (source.trim() === '' && svgPath != null && svgPath.trim() !== '') {
+      try {
+        source = readFileSync(svgPath, 'utf8');
+      } catch {
+        return [];
+      }
+    }
+    if (source.trim() === '') return [];
+    const groupCount = countSemanticGroups(source);
+    if (groupCount > 0) return [];
+    return [
+      {
+        type: 'text',
+        text: i18n.t('structureHint.svgNoGroups', { groupCount }),
+      },
+    ];
+  };
+
   const createSvg = bridgeTool({
     name: 'jsd_create_svg',
     title: 'createSvg.title',
     description: 'createSvg.description',
     inputSchema: createSvgInputSchema,
     outputSchema: createdResultSchema,
+    extraContent: svgGroupHint,
     annotations: {
       readOnlyHint: false,
       destructiveHint: false,

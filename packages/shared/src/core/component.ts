@@ -743,7 +743,7 @@ export async function combineAsVariantsNodes(
     if (orphans.size > 0) {
       // i18n-exempt: 随结果上行给模型,不走面板文案
       throw new Error(
-        `组件没有可用的父容器,无法确定变体集落点:${[...orphans].join('、')}。原生 combineAsVariants 要求 parent 是 BaseNode & ChildrenMixin(真实容器),不接受 null —— 用当前页兜底会静默改坐标基准。可执行出口:先用 jsd_find 确认这些组件仍在画布上(可能已被删除或处于失效状态),必要时 jsd_manage_nodes op=repair 清理后重试。`,
+        `组件没有可用的父容器,无法确定变体集落点:${[...orphans].join('、')}。原生 combineAsVariants 要求 parent 是 BaseNode & ChildrenMixin(真实容器),不接受 null —— 用当前页兜底会静默改坐标基准。可执行出口:先用 jsd_find 确认这些组件仍在画布上(可能已被删除或处于失效状态),必要时 jsd_repair_nodes 清理后重试。`,
       );
     }
     // 同父级校验:Figma 官方语义要求待合并组件在**同一父级**下;跨父级时
@@ -1010,7 +1010,7 @@ async function captureOverrideSnapshot(
   const main = await resolveMainComponent(source, ctx);
   if (main == null) {
     throw new Error(
-      `源实例 ${sourceId} 的 mainComponent 已失效,无法复制覆盖。建议先 jsd_manage_nodes op=repair 清理后重试`,
+      `源实例 ${sourceId} 的 mainComponent 已失效,无法复制覆盖。建议先 jsd_repair_nodes 清理后重试`,
     );
   }
   const snapshot: OverrideSnapshot = {
@@ -1231,7 +1231,7 @@ export async function applyCachedOverrides(
   const snapshot = overrideCache.get(params.sourceId);
   if (!snapshot) {
     throw new Error(
-      `缓存中没有 ${params.sourceId} 的覆盖快照,请先调用 jsd_manage_components op=copy_overrides`,
+      `缓存中没有 ${params.sourceId} 的覆盖快照,请先调用 jsd_copy_overrides`,
     );
   }
   return applyOverrideSnapshot(

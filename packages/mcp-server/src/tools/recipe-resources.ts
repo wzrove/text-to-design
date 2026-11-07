@@ -1,10 +1,14 @@
 import { type McpServer, ResourceTemplate } from '@modelcontextprotocol/server';
+import { completeRecipeIds } from '../core/completions';
 import type { ToolHandle } from '../core/registry';
+import { promptIcon } from '../core/tool-icons';
+import type { McpI18n } from '../i18n';
 import {
   findRecipe,
   RECIPE_INDEX_URI,
   RECIPE_URI_TEMPLATE,
   RECIPES,
+  readRecipeBody,
   renderRecipeIndex,
 } from './recipe-catalog';
 
@@ -28,15 +32,23 @@ function markdownContents(
  *
  * 与 prompt 的分工:prompt 是**用户**触发的斜杠命令,resource 是**模型**能自己摘的
  * 上下文。两者正文同源(见 `./recipe-catalog.ts` 的说明)。
+ *
+ * 标题必须译出来(见 `resources.ts` 的 resourceTitle):本文件曾经写死
+ * `title: 'resources.title7'`,SDK 原样转发,模型在资源清单里读到的是键名。
  */
-export function registerRecipeResources(server: McpServer): ToolHandle[] {
+export function registerRecipeResources(
+  server: McpServer,
+  _bridge: unknown,
+  i18n: McpI18n,
+): ToolHandle[] {
   const recipeIds = RECIPES.map((r) => r.id).join(' / ');
 
   const index = server.registerResource(
     'recipes',
     RECIPE_INDEX_URI,
     {
-      title: 'resources.title7',
+      title: i18n.t('resources.title7'),
+      icons: promptIcon(),
       // 这段会出现在 ListMcpResources 里 —— 它是路由表本身,不是目录摘要:
       // 宿主不注入 mcp.instructions 时,模型判断「该不该读配方」只能靠这里。
       description:
@@ -50,9 +62,16 @@ export function registerRecipeResources(server: McpServer): ToolHandle[] {
 
   const body = server.registerResource(
     'recipe',
-    new ResourceTemplate(RECIPE_URI_TEMPLATE, { list: undefined }),
+    new ResourceTemplate(RECIPE_URI_TEMPLATE, {
+      list: undefined,
+      // 模板变量补全:填 `jsd://recipes/<这里>` 时客户端直接给 11 个 id
+      complete: {
+        id: (value: string) => completeRecipeIds(value),
+      },
+    }),
     {
-      title: 'resources.title8',
+      title: i18n.t('resources.title8'),
+      icons: promptIcon(),
       description: `按 id 读取配方正文(markdown),如 ${RECIPE_URI_TEMPLATE.replace('{id}', 'chart-by-code')}。可用 id:${recipeIds};索引与「何时用」见 ${RECIPE_INDEX_URI}`,
       mimeType: 'text/markdown',
     },
@@ -64,7 +83,8 @@ export function registerRecipeResources(server: McpServer): ToolHandle[] {
         // 报错里带上可用清单:模型打错 id 时一次就能自我纠正,不用再读一遍索引
         throw new Error(`未知配方:${uri.href}(可用 id:${recipeIds})`);
       }
-      return markdownContents(uri, entry.render());
+      // 正文来自技能目录里的同名 markdown(唯一来源),此处不再渲染
+      return markdownContents(uri, readRecipeBody(entry.id));
     },
   );
 

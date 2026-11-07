@@ -89,8 +89,8 @@ describe('单类型 create 工具的 type 口径(0034)', () => {
         return { created: [] };
       },
     } as unknown as Bridge;
-    buildServer(bridge);
-    const exec = lookupExecutor('jsd_create_frame');
+    const server = buildServer(bridge);
+    const exec = lookupExecutor('jsd_create_frame', server);
     await exec?.({ width: 10, height: 20, fillStyleId: 'S:1' }, undefined);
     const sent = captured as unknown as { ops: Array<Record<string, unknown>> };
     expect(sent.ops[0].fillStyleId).toBe('S:1');
@@ -129,8 +129,8 @@ describe('单类型 create 工具的 type 口径(0034)', () => {
         return { created: [] };
       },
     } as unknown as Bridge;
-    buildServer(bridge);
-    const exec = lookupExecutor('jsd_create_frame');
+    const server = buildServer(bridge);
+    const exec = lookupExecutor('jsd_create_frame', server);
     expect(exec).toBeDefined();
     await exec?.({ type: 'FRAME', width: 10, height: 20 }, undefined);
     // TS 的控制流分析看不到回调里的赋值,故断言而不是可选链(captured 在回调外被收窄成 null)
@@ -151,8 +151,8 @@ describe('单类型 create 工具的 type 口径(0034)', () => {
         return { created: [] };
       },
     } as unknown as Bridge;
-    buildServer(bridge);
-    const exec = lookupExecutor('jsd_create_frame');
+    const server = buildServer(bridge);
+    const exec = lookupExecutor('jsd_create_frame', server);
     const out = (await exec?.({ type: 'TEXT', width: 10 }, undefined)) as {
       isError?: boolean;
       content?: Array<{ text?: string }>;

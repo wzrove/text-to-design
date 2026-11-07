@@ -41,6 +41,23 @@ export const pingResultSchema = z.object({
     .describe(
       '当前平台可用的特有操作名单(名/标题/参数说明)。调用 jsd_platform_op 前先看这里,不要猜 op 名',
     ),
+  /**
+   * 服务端配方技能(Skills over MCP,SEP-2640)的发布状态。
+   *
+   * 用途:区分「服务端根本没发出来」与「发了但宿主没注入」—— 两者在模型眼里
+   * 都表现为技能目录里没有 design / charts / components / bulk-ops,但处置方式
+   * 完全不同:前者是故障(报告 error),后者要改走 \`jsd://recipes\` 资源读配方。
+   */
+  skills: z
+    .object({
+      published: z.boolean(),
+      count: z.number(),
+      error: z.string().optional(),
+    })
+    .optional()
+    .describe(
+      '配方技能发布状态:published=false 且带 error 表示服务端未发布;published=true 而你的技能目录里看不到,表示宿主未实现 skills 注入,请直接读 jsd://recipes 资源',
+    ),
   error: z.string().optional(),
 });
 export const getSelectionResultSchema = z.object({

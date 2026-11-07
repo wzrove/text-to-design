@@ -516,9 +516,11 @@ export function registerBatchTools(
           fail(`步骤 id "${id}" 重复`);
           break;
         }
-        const executor = lookupExecutor(call.tool);
+        const executor = lookupExecutor(call.tool, server);
         if (executor == null) {
-          fail(`未知工具 ${call.tool},可用: ${executorNames().join(', ')}`);
+          fail(
+            `未知工具 ${call.tool},可用: ${executorNames(server).join(', ')}`,
+          );
           break;
         }
         let resolvedArgs: Record<string, unknown>;

@@ -47,8 +47,8 @@ async function callCreateSvg(args: Record<string, unknown>): Promise<{
   sent: { method: string; params: Record<string, unknown> }[];
 }> {
   const { bridge, sent } = stubBridge();
-  buildServer(bridge);
-  const exec = lookupExecutor('jsd_create_svg');
+  const server = buildServer(bridge);
+  const exec = lookupExecutor('jsd_create_svg', server);
   const out = (await exec?.(args, undefined)) as {
     isError?: boolean;
     content?: { text?: string }[];

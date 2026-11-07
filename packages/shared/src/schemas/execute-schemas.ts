@@ -62,113 +62,115 @@ const baseNodeFields = {
   opacity: z.number().optional().describe('schema.executeSchemas.opacity'),
   visible: z.boolean().optional(),
   locked: z.boolean().optional(),
-  isMask: z.boolean().optional(),
+  isMask: z.boolean().optional().describe('schema.executeSchemas.isMask'),
   children: z
     .array(childNodeSchema)
     .max(100)
     .optional()
-    .describe(
-      '子节点数组(递归嵌套,最多 100 个直接子节点;更大的结构建议分批创建后用 jsd_manage_nodes op=reparent 归组)。子节点可使用的字段与顶层 create 入参一致(fills/strokes/cornerRadius/effects 等均可用);x/y 相对父节点,未传 x/y 会叠放在父节点原点(0,0)——非 auto-layout 容器需为每个子节点指定相对坐标',
-    ),
+    .describe('schema.executeSchemas.childrenOf'),
 };
 
-// 视觉字段(填充/描边/效果等,所有节点共享)
-const visualFields = {
-  fills: z
-    .array(paintSchema)
-    .optional()
-    .describe(
-      '填充列表(Paint 数组)。缺省时的引擎默认:FRAME 为白底;非 FRAME 图形若同时传了 strokes,则填充置空(纯描边,不再被引擎塞 #CCCCCC 灰底)——需要底色请显式传 fills',
-    ),
-  strokes: z
-    .array(paintSchema)
-    .optional()
-    .describe('schema.executeSchemas.strokes'),
-  strokeWeight: z
-    .number()
-    .optional()
-    .describe('schema.executeSchemas.strokeWeight'),
-  strokeTopWeight: z
-    .number()
-    .optional()
-    .describe('schema.executeSchemas.strokeTopWeight'),
-  strokeBottomWeight: z
-    .number()
-    .optional()
-    .describe('schema.executeSchemas.strokeBottomWeight'),
-  strokeLeftWeight: z
-    .number()
-    .optional()
-    .describe('schema.executeSchemas.strokeLeftWeight'),
-  strokeRightWeight: z
-    .number()
-    .optional()
-    .describe('schema.executeSchemas.strokeRightWeight'),
-  strokeAlign: z
-    .enum(['CENTER', 'INSIDE', 'OUTSIDE'])
-    .optional()
-    .describe('schema.executeSchemas.strokeAlign'),
-  strokeCap: z
-    .enum(['NONE', 'ROUND', 'SQUARE', 'ARROW_LINES', 'ARROW_EQUILATERAL'])
-    .optional()
-    .describe('schema.executeSchemas.strokeCap'),
-  strokeJoin: z
-    .enum(['MITER', 'BEVEL', 'ROUND'])
-    .optional()
-    .describe('schema.executeSchemas.strokeJoin'),
-  dashPattern: z
-    .array(z.number())
-    .optional()
-    .describe('schema.executeSchemas.dashPattern'),
-  blendMode: blendModeSchema.optional(),
-  effects: z
-    .array(effectSchema)
-    .optional()
-    .describe('schema.executeSchemas.effects'),
-  constraints: z
-    .object({
-      horizontal: constraintTypeSchema.describe(
-        '水平约束:MIN|MAX|STRETCH|CENTER|SCALE',
-      ),
-      vertical: constraintTypeSchema.describe(
-        '垂直约束:MIN|MAX|STRETCH|CENTER|SCALE',
-      ),
-    })
-    .optional()
-    .describe('schema.executeSchemas.vertical'),
-  clipsContent: z
-    .boolean()
-    .optional()
-    .describe('schema.executeSchemas.clipsContent'),
-  cornerSmoothing: z
-    .number()
-    .optional()
-    .describe('schema.executeSchemas.cornerSmoothing'),
-  layoutGrids: z
-    .array(layoutGridSchema)
-    .optional()
-    .describe('schema.executeSchemas.layoutGrids'),
-  // ---- 样式引用(四个 `*StyleId`)----
-  //
-  // 为什么必须在这个字段组里:运行时本来就支持(`core/props/writers.ts` 的
-  // `supersetWriter` 第一件事就是写这四个键,平台不具备时由能力门控点名跳过),
-  // 但创建入参此前只在**修改类**工具上放行(`split-ops.ts` 的 `setFillColorProps` 等)。
-  // 于是同一个字段出现两种结果:写进 `children`(该 schema 是 `.catchall` 放行)生效、
-  // 写在顶层被 strict 拒掉并报 `Unrecognized key` —— 调用方只能绕道「建完再绑」,
-  // 白多一轮往返。平台能力面见 `dicts/platform-knowledge.ts`(jsDesign 只有 styles
-  // 这一面)。⚠ 绑了 fill style 的节点回读会带引擎私货 `blendMode:"NOTTHROUGH"`,
-  // 读侧已在 `core/serialize.ts` 收口(见 0044)。
-  fillStyleId: z.string().optional().describe('schema.sharedProps.fillStyleId'),
-  strokeStyleId: z
-    .string()
-    .optional()
-    .describe('schema.sharedProps.strokeStyleId'),
-  textStyleId: z.string().optional().describe('schema.sharedProps.textStyleId'),
-  effectStyleId: z
-    .string()
-    .optional()
-    .describe('schema.sharedProps.effectStyleId'),
-};
+/** 视觉字段(填充/描边/效果等,所有节点共享)。
+ *  函数而非常量:各类型 schema 在模块顶层就展开它,而 baseNodeFields 之后才轮到
+ *  cornerFields 的 const 初始化 —— 常量形态会撞 TDZ。 */
+function visualFields() {
+  return {
+    fills: z
+      .array(paintSchema)
+      .optional()
+      .describe('schema.executeSchemas.fills'),
+    strokes: z
+      .array(paintSchema)
+      .optional()
+      .describe('schema.executeSchemas.strokes'),
+    strokeWeight: z
+      .number()
+      .optional()
+      .describe('schema.executeSchemas.strokeWeight'),
+    strokeTopWeight: z
+      .number()
+      .optional()
+      .describe('schema.executeSchemas.strokeTopWeight'),
+    strokeBottomWeight: z
+      .number()
+      .optional()
+      .describe('schema.executeSchemas.strokeBottomWeight'),
+    strokeLeftWeight: z
+      .number()
+      .optional()
+      .describe('schema.executeSchemas.strokeLeftWeight'),
+    strokeRightWeight: z
+      .number()
+      .optional()
+      .describe('schema.executeSchemas.strokeRightWeight'),
+    strokeAlign: z
+      .enum(['CENTER', 'INSIDE', 'OUTSIDE'])
+      .optional()
+      .describe('schema.executeSchemas.strokeAlign'),
+    strokeCap: z
+      .enum(['NONE', 'ROUND', 'SQUARE', 'ARROW_LINES', 'ARROW_EQUILATERAL'])
+      .optional()
+      .describe('schemaValue.strokeCap'),
+    strokeJoin: z
+      .enum(['MITER', 'BEVEL', 'ROUND'])
+      .optional()
+      .describe('schemaValue.strokeJoin'),
+    dashPattern: z
+      .array(z.number())
+      .optional()
+      .describe('schema.executeSchemas.dashPattern'),
+    blendMode: blendModeSchema.optional(),
+    effects: z
+      .array(effectSchema)
+      .optional()
+      .describe('schema.executeSchemas.effects'),
+    constraints: z
+      .object({
+        horizontal: constraintTypeSchema,
+        vertical: constraintTypeSchema,
+      })
+      .optional()
+      .describe('schema.executeSchemas.vertical'),
+    clipsContent: z
+      .boolean()
+      .optional()
+      .describe('schema.executeSchemas.clipsContent'),
+    cornerSmoothing: z
+      .number()
+      .optional()
+      .describe('schema.executeSchemas.cornerSmoothing'),
+    layoutGrids: z
+      .array(layoutGridSchema)
+      .optional()
+      .describe('schema.executeSchemas.layoutGrids'),
+    // ---- 样式引用(四个 `*StyleId`)----
+    //
+    // 为什么必须在这个字段组里:运行时本来就支持(`core/props/writers.ts` 的
+    // `supersetWriter` 第一件事就是写这四个键,平台不具备时由能力门控点名跳过),
+    // 但创建入参此前只在**修改类**工具上放行(`split-ops.ts` 的 `setFillColorProps` 等)。
+    // 于是同一个字段出现两种结果:写进 `children`(该 schema 是 `.catchall` 放行)生效、
+    // 写在顶层被 strict 拒掉并报 `Unrecognized key` —— 调用方只能绕道「建完再绑」,
+    // 白多一轮往返。平台能力面见 `dicts/platform-knowledge.ts`(jsDesign 只有 styles
+    // 这一面)。⚠ 绑了 fill style 的节点回读会带引擎私货 `blendMode:"NOTTHROUGH"`,
+    // 读侧已在 `core/serialize.ts` 收口(见 0044)。
+    fillStyleId: z
+      .string()
+      .optional()
+      .describe('schema.sharedProps.fillStyleId'),
+    strokeStyleId: z
+      .string()
+      .optional()
+      .describe('schema.sharedProps.strokeStyleId'),
+    textStyleId: z
+      .string()
+      .optional()
+      .describe('schema.sharedProps.textStyleId'),
+    effectStyleId: z
+      .string()
+      .optional()
+      .describe('schema.sharedProps.effectStyleId'),
+  };
+}
 
 /**
  * 圆角字段(FRAME/RECTANGLE/ELLIPSE/POLYGON/STAR/VECTOR 等共用)。
@@ -201,22 +203,17 @@ const cornerFields = {
     .describe('schema.executeSchemas.bottomRightRadius'),
 };
 
-const frameNodeSchema = z
-  .object({
-    type: z.literal('FRAME'),
-    ...baseNodeFields,
+/** auto-layout 字段(FRAME / GROUP 共用;由 declareAutoLayoutFields 逐类型声明) */
+function autoLayoutFields() {
+  return {
     layoutMode: z
       .enum(['NONE', 'HORIZONTAL', 'VERTICAL'])
       .optional()
-      .describe(
-        '自动布局方向:NONE=无布局,HORIZONTAL=水平排列,VERTICAL=垂直排列。传 itemSpacing/padding*/primaryAxis* 等布局属性前必须先设为 HORIZONTAL 或 VERTICAL',
-      ),
+      .describe('schema.executeSchemas.layoutMode'),
     itemSpacing: z
       .number()
       .optional()
-      .describe(
-        '自动布局项间距(px),需先设 layoutMode;primaryAxisAlignItems=SPACE_BETWEEN 时该项被忽略(子项均匀分布)',
-      ),
+      .describe('schema.executeSchemas.itemSpacing'),
     paddingTop: z
       .number()
       .optional()
@@ -244,9 +241,7 @@ const frameNodeSchema = z
     primaryAxisAlignItems: z
       .enum(['MIN', 'MAX', 'CENTER', 'SPACE_BETWEEN'])
       .optional()
-      .describe(
-        '主轴对齐:MIN|MAX|CENTER|SPACE_BETWEEN;设为 SPACE_BETWEEN 时 itemSpacing 被忽略(子项均匀分布)',
-      ),
+      .describe('schema.executeSchemas.primaryAxisAlignItems'),
     counterAxisAlignItems: z
       .enum(['MIN', 'MAX', 'CENTER'])
       .optional()
@@ -259,45 +254,56 @@ const frameNodeSchema = z
       .enum(['MIN', 'CENTER', 'MAX', 'STRETCH', 'INHERIT'])
       .optional()
       .describe('schema.executeSchemas.layoutAlign'),
+  };
+}
+
+/** 布局字段与 layoutMode 的依赖守卫(FRAME/GROUP 同规则) */
+function checkLayoutMode(
+  val: Record<string, unknown>,
+  ctx: z.RefinementCtx,
+): void {
+  const hasLayoutFields = [
+    'itemSpacing',
+    'paddingTop',
+    'paddingRight',
+    'paddingBottom',
+    'paddingLeft',
+    'primaryAxisSizingMode',
+    'counterAxisSizingMode',
+    'primaryAxisAlignItems',
+    'counterAxisAlignItems',
+  ].some((key) => val[key] != null);
+  if (
+    hasLayoutFields &&
+    (val.layoutMode == null || val.layoutMode === 'NONE')
+  ) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message:
+        '传 itemSpacing/padding*/primaryAxis*/counterAxis* 等布局属性前,layoutMode 必须设为 HORIZONTAL 或 VERTICAL',
+      path: ['layoutMode'],
+    });
+  }
+}
+
+const frameNodeSchema = z
+  .object({
+    type: z.literal('FRAME'),
+    ...baseNodeFields,
+    ...autoLayoutFields(),
     ...cornerFields,
-    ...visualFields,
+    ...visualFields(),
   })
   .strict()
-  .superRefine((val, ctx) => {
-    // itemSpacing/padding*/primaryAxis*/counterAxis* 需要 layoutMode != NONE
-    const hasLayoutFields =
-      val.itemSpacing != null ||
-      val.paddingTop != null ||
-      val.paddingRight != null ||
-      val.paddingBottom != null ||
-      val.paddingLeft != null ||
-      val.primaryAxisSizingMode != null ||
-      val.counterAxisSizingMode != null ||
-      val.primaryAxisAlignItems != null ||
-      val.counterAxisAlignItems != null;
-    if (
-      hasLayoutFields &&
-      (val.layoutMode == null || val.layoutMode === 'NONE')
-    ) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message:
-          '传 itemSpacing/padding*/primaryAxis*/counterAxis* 等布局属性前,layoutMode 必须设为 HORIZONTAL 或 VERTICAL',
-        path: ['layoutMode'],
-      });
-    }
-  })
-  .strict()
-  .describe(
-    'FRAME=容器(可 auto-layout)。注意:未显式传 fills 时引擎默认白底,透明容器请显式传 fills:[{type:"SOLID",color:{r:0,g:0,b:0},opacity:0}]',
-  );
+  .superRefine(checkLayoutMode)
+  .describe('schema.executeSchemas.frameNote');
 
 const rectangleNodeSchema = z
   .object({
     type: z.literal('RECTANGLE'),
     ...baseNodeFields,
     ...cornerFields,
-    ...visualFields,
+    ...visualFields(),
   })
   .strict()
   .describe('schema.executeSchemas.type2');
@@ -306,10 +312,7 @@ const ellipseNodeSchema = z
   .object({
     type: z.literal('ELLIPSE'),
     ...baseNodeFields,
-    cornerRadius: z
-      .number()
-      .optional()
-      .describe('schema.executeSchemas.cornerRadius2'),
+    cornerRadius: cornerFields.cornerRadius,
     arcData: z
       .object({
         startingAngle: z
@@ -319,17 +322,17 @@ const ellipseNodeSchema = z
         innerRadius: z.number().describe('schema.executeSchemas.innerRadius'),
       })
       .optional()
-      .describe('schema.executeSchemas.innerRadius2'),
-    ...visualFields,
+      .describe('schemaValue.arcData'),
+    ...visualFields(),
   })
   .strict()
-  .describe('schema.executeSchemas.innerRadius3');
+  .describe('schema.executeSchemas.ellipseNote');
 
 const lineNodeSchema = z
   .object({
     type: z.literal('LINE'),
     ...baseNodeFields,
-    ...visualFields,
+    ...visualFields(),
   })
   .strict()
   .describe('schema.executeSchemas.type3');
@@ -339,27 +342,8 @@ const polygonNodeSchema = z
     type: z.literal('POLYGON'),
     ...baseNodeFields,
     pointCount: z.number().describe('schema.executeSchemas.pointCount'),
-    cornerRadius: z
-      .number()
-      .optional()
-      .describe('schema.executeSchemas.cornerRadius3'),
-    topLeftRadius: z
-      .number()
-      .optional()
-      .describe('schema.executeSchemas.topLeftRadius2'),
-    topRightRadius: z
-      .number()
-      .optional()
-      .describe('schema.executeSchemas.topRightRadius2'),
-    bottomLeftRadius: z
-      .number()
-      .optional()
-      .describe('schema.executeSchemas.bottomLeftRadius2'),
-    bottomRightRadius: z
-      .number()
-      .optional()
-      .describe('schema.executeSchemas.bottomRightRadius2'),
-    ...visualFields,
+    ...cornerFields,
+    ...visualFields(),
   })
   .strict()
   .describe('schema.executeSchemas.bottomRightRadius3');
@@ -370,27 +354,8 @@ const starNodeSchema = z
     ...baseNodeFields,
     pointCount: z.number().describe('schema.executeSchemas.pointCount2'),
     innerRadius: z.number().describe('schema.executeSchemas.innerRadius4'),
-    cornerRadius: z
-      .number()
-      .optional()
-      .describe('schema.executeSchemas.cornerRadius4'),
-    topLeftRadius: z
-      .number()
-      .optional()
-      .describe('schema.executeSchemas.topLeftRadius3'),
-    topRightRadius: z
-      .number()
-      .optional()
-      .describe('schema.executeSchemas.topRightRadius3'),
-    bottomLeftRadius: z
-      .number()
-      .optional()
-      .describe('schema.executeSchemas.bottomLeftRadius3'),
-    bottomRightRadius: z
-      .number()
-      .optional()
-      .describe('schema.executeSchemas.bottomRightRadius4'),
-    ...visualFields,
+    ...cornerFields,
+    ...visualFields(),
   })
   .strict()
   .describe('schema.executeSchemas.bottomRightRadius5');
@@ -402,28 +367,20 @@ const vectorNodeSchema = z
     vectorPaths: z
       .array(vectorPathSchema)
       .describe('schema.executeSchemas.vectorPaths'),
-    ...visualFields,
+    ...visualFields(),
   })
   .strict()
-  .describe(
-    'VECTOR=矢量(配合 vectorPaths 传 SVG path data)。注意:当前平台创建后 vectorPaths 偶发丢失/形变,短直线段建议改用 LINE+rotation 更稳定',
-  );
+  .describe('schema.executeSchemas.vectorNote');
 
 const textNodeSchema = z
   .object({
     type: z.literal('TEXT'),
     ...baseNodeFields,
-    characters: z
-      .string()
-      .describe(
-        '文本内容,如 "Hello World"。注意:个别 emoji 依赖客户端字体可能缺字(渲染为 ☒),上线前逐个目检',
-      ),
+    characters: z.string().describe('schema.executeSchemas.characters'),
     fontSize: z.number().optional().describe('schema.executeSchemas.fontSize'),
     fontName: fontNameSchema
       .optional()
-      .describe(
-        '字体:{family,style},如 {family:"PingFang SC",style:"Regular"};需精确匹配,建议先用 jsd_list_fonts 查可用字体(不可用时静默回退默认字体)',
-      ),
+      .describe('schema.executeSchemas.fontName'),
     textAlignHorizontal: z
       .enum(['LEFT', 'CENTER', 'RIGHT', 'JUSTIFIED'])
       .optional()
@@ -435,24 +392,22 @@ const textNodeSchema = z
     textAutoResize: z
       .enum(['NONE', 'WIDTH_AND_HEIGHT', 'HEIGHT', 'TRUNCATE'])
       .optional()
-      .describe(
-        '文本自适应:NONE=固定尺寸|WIDTH_AND_HEIGHT=按内容撑开(缺省,此时显式 width/height 会被覆盖)|HEIGHT=固定宽自适应高|TRUNCATE=截断。要固定文本框尺寸必须设为 NONE',
-      ),
+      .describe('schema.executeSchemas.textAutoResize'),
     textCase: z
       .enum(['ORIGINAL', 'UPPER', 'LOWER', 'TITLE'])
       .optional()
-      .describe('schema.executeSchemas.textCase'),
+      .describe('schemaValue.textCase'),
     textDecoration: z
       .enum(['NONE', 'UNDERLINE', 'STRIKETHROUGH'])
       .optional()
-      .describe('schema.executeSchemas.textDecoration'),
+      .describe('schemaValue.textDecoration'),
     lineHeight: lineHeightSchema
       .optional()
       .describe('schema.executeSchemas.lineHeight'),
     letterSpacing: letterSpacingSchema
       .optional()
       .describe('schema.executeSchemas.letterSpacing'),
-    ...visualFields,
+    ...visualFields(),
   })
   .strict()
   .describe('schema.executeSchemas.letterSpacing2');
@@ -467,78 +422,11 @@ const groupNodeSchema = z
       .min(2)
       .max(100)
       .describe('schema.executeSchemas.children'),
-    layoutMode: z
-      .enum(['NONE', 'HORIZONTAL', 'VERTICAL'])
-      .optional()
-      .describe(
-        '自动布局方向:NONE=纯归组,HORIZONTAL=水平,VERTICAL=垂直。传 itemSpacing/padding* 等布局属性前必须先设为 HORIZONTAL 或 VERTICAL',
-      ),
-    itemSpacing: z
-      .number()
-      .optional()
-      .describe(
-        '项间距(px),需先设 layoutMode;primaryAxisAlignItems=SPACE_BETWEEN 时该项被忽略(子项均匀分布)',
-      ),
-    paddingTop: z
-      .number()
-      .optional()
-      .describe('schema.executeSchemas.paddingTop2'),
-    paddingRight: z
-      .number()
-      .optional()
-      .describe('schema.executeSchemas.paddingRight2'),
-    paddingBottom: z
-      .number()
-      .optional()
-      .describe('schema.executeSchemas.paddingBottom2'),
-    paddingLeft: z
-      .number()
-      .optional()
-      .describe('schema.executeSchemas.paddingLeft2'),
-    primaryAxisSizingMode: z
-      .enum(['FIXED', 'AUTO'])
-      .optional()
-      .describe('schema.executeSchemas.primaryAxisSizingMode2'),
-    counterAxisSizingMode: z
-      .enum(['FIXED', 'AUTO'])
-      .optional()
-      .describe('schema.executeSchemas.counterAxisSizingMode2'),
-    primaryAxisAlignItems: z
-      .enum(['MIN', 'MAX', 'CENTER', 'SPACE_BETWEEN'])
-      .optional()
-      .describe(
-        '主轴对齐:MIN|MAX|CENTER|SPACE_BETWEEN;设为 SPACE_BETWEEN 时 itemSpacing 被忽略(子项均匀分布)',
-      ),
-    counterAxisAlignItems: z
-      .enum(['MIN', 'MAX', 'CENTER'])
-      .optional()
-      .describe('schema.executeSchemas.counterAxisAlignItems2'),
-    ...visualFields,
+    ...autoLayoutFields(),
+    ...visualFields(),
   })
   .strict()
-  .superRefine((val, ctx) => {
-    const hasLayoutFields =
-      val.itemSpacing != null ||
-      val.paddingTop != null ||
-      val.paddingRight != null ||
-      val.paddingBottom != null ||
-      val.paddingLeft != null ||
-      val.primaryAxisSizingMode != null ||
-      val.counterAxisSizingMode != null ||
-      val.primaryAxisAlignItems != null ||
-      val.counterAxisAlignItems != null;
-    if (
-      hasLayoutFields &&
-      (val.layoutMode == null || val.layoutMode === 'NONE')
-    ) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message:
-          '传 itemSpacing/padding*/primaryAxis*/counterAxis* 等布局属性前,layoutMode 必须设为 HORIZONTAL 或 VERTICAL',
-        path: ['layoutMode'],
-      });
-    }
-  })
+  .superRefine(checkLayoutMode)
   .describe('schema.executeSchemas.path');
 
 const booleanOperationNodeSchema = z
@@ -552,7 +440,7 @@ const booleanOperationNodeSchema = z
       .array(childNodeSchema)
       .min(2)
       .describe('schema.executeSchemas.children2'),
-    ...visualFields,
+    ...visualFields(),
   })
   .strict()
   .describe('schema.executeSchemas.children3');

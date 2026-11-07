@@ -7,6 +7,16 @@ export const HTTP_PORT = Number(
 export const SERVER_NAME = 'text-to-design-mcp-server';
 export const SERVER_VERSION = version;
 
+export function resolveToolProfile(
+  raw = process.env.TEXT_TO_DESIGN_TOOL_PROFILE,
+): 'full' | 'compact' {
+  if (raw == null || raw === '' || raw === 'full') return 'full';
+  if (raw === 'compact') return 'compact';
+  throw new Error(
+    `Invalid TEXT_TO_DESIGN_TOOL_PROFILE: ${raw}; expected full or compact`,
+  );
+}
+
 /**
  * 本进程启动时刻。随 /health 上报,供后来者判断「常驻实例是否跑在旧构建上」:
  * 版本自检只比版本号,而开发期反复重建不改版本号,这个盲区会让「改了代码、
@@ -34,6 +44,27 @@ export const LONG_IO_TIMEOUT_MS = 60_000;
  * 画布类资源(jsd://canvas/selection 等)不吃这个值:resources/read 恒为 0(不缓存)。
  */
 export const CATALOG_TTL_MS = 300_000;
+
+/**
+ * 单个资源(非模板)的读取结果缓存时长,覆盖 server.ts 里那条全局 `resources/read: 0`。
+ *
+ * 为什么不能一刀切:全局 0 是对的默认 —— 画布事实每秒都可能变,缓存住会读到旧值。
+ * 但有三个资源的变化频率差了两个数量级:
+ * - `jsd://fonts`:字体库只在装/卸字体时才变,单次响应可达数百 KB —— 缓存 1 小时;
+ * - `jsd://styles` / `jsd://page`:跟着文档改,但同一轮设计里会被连续读几次
+ *   (先摸底、再确认复用件),给 30 秒让这几秒内的重复读省掉往返;
+ * - 其余(选中 / 节点 / 平台态)恒 0:它们是「此刻的事实」,缓存即错误。
+ *
+ * 这是**客户端侧**的缓存声明,不是服务端缓存 —— 服务端每次仍然实时读插件。
+ * 可用环境变量 TEXT_TO_DESIGN_RESOURCE_FONTS_TTL_MS / _DOCUMENT_TTL_MS 覆盖。
+ */
+export const RESOURCE_FONTS_TTL_MS = Number(
+  process.env.TEXT_TO_DESIGN_RESOURCE_FONTS_TTL_MS ?? 60 * 60 * 1000,
+);
+
+export const RESOURCE_DOCUMENT_TTL_MS = Number(
+  process.env.TEXT_TO_DESIGN_RESOURCE_DOCUMENT_TTL_MS ?? 30 * 1000,
+);
 
 /** jsd_export 内联 base64(dataURL)的体积上限(字节)。
  *  超出该值一律不内联,改为落盘并返回路径引用。
@@ -79,6 +110,25 @@ export const MAX_BATCH_SPILL_BYTES = Number(
 export const MAX_SVG_SOURCE_BYTES = Number(
   process.env.TEXT_TO_DESIGN_MCP_MAX_SVG_BYTES ?? 4 * 1024 * 1024,
 );
+
+/**
+ * 单次 `tools/call` 的入参元素总上限(SDK 按「数组元素 + 对象成员」累加计)。
+ *
+ * 为什么要有这条:`jsd_batch` 内联 50 步、每步 args 又可以是任意大的对象/数组 ——
+ * 之前没有任何上限,一个畸形的巨型 batch(或 `jsd_create_svg` 的巨型坐标数组)
+ * 能在执行器拿到之前就把 daemon 内存吃掉。
+ *
+ * 取值依据:实测最大的合法调用是整屏批量改造,50 步 × 每步约 12 个字段再加以
+ * 少量 id 数组,总量在 3k 以内;给出 20k 对正常用法宽松,对畸形入参仍能拦。
+ * 可用环境变量 TEXT_TO_DESIGN_MCP_MAX_TOOL_INPUT_ELEMENTS 覆盖(设 `off` 关闭)。
+ */
+export const MAX_TOOL_INPUT_ELEMENTS = (() => {
+  const raw = process.env.TEXT_TO_DESIGN_MCP_MAX_TOOL_INPUT_ELEMENTS;
+  if (raw == null || raw.trim() === '') return 20_000;
+  if (raw.trim().toLowerCase() === 'off') return undefined;
+  const n = Number(raw);
+  return Number.isFinite(n) && n >= 1 ? n : 20_000;
+})();
 
 /**
  * 设计客户端:插件平台(即时设计/Figma/MasterGo)只有连上后由 ping 回包才可知,

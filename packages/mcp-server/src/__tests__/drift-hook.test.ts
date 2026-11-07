@@ -52,7 +52,7 @@ beforeEach(() => {
 
 describe('结构变更复核钩子', () => {
   it('单工具调用 jsd_delete_node 也会触发复核读数(此前只有 batch 内才有)', async () => {
-    const exec = lookupExecutor('jsd_delete_node');
+    const exec = lookupExecutor('jsd_delete_node', fakeServer);
     expect(exec, 'jsd_delete_node 未注册').toBeDefined();
     const out = (await exec?.({ ids: ['1:2'] }, undefined)) as {
       isError?: boolean;
@@ -67,7 +67,7 @@ describe('结构变更复核钩子', () => {
   });
 
   it('非结构变更工具不产生复核读数', async () => {
-    const exec = lookupExecutor('jsd_clone_node');
+    const exec = lookupExecutor('jsd_clone_node', fakeServer);
     expect(exec).toBeDefined();
     await exec?.({ ids: ['1:2'] }, undefined);
     expect(calls.every((c) => c.method === 'node_op')).toBe(true);
@@ -79,7 +79,7 @@ describe('结构变更复核钩子', () => {
    * 这一步不复核,而固定 op 小工具有复核,同一份暴露面两种待遇。
    */
   it('聚合入口的结构变更 op 同样触发复核读数', async () => {
-    const exec = lookupExecutor('jsd_manage_nodes');
+    const exec = lookupExecutor('jsd_manage_nodes', fakeServer);
     expect(exec, 'jsd_manage_nodes 未注册').toBeDefined();
     calls.length = 0;
     await exec?.({ op: 'remove', ids: ['1:2'] }, undefined);
@@ -91,7 +91,7 @@ describe('结构变更复核钩子', () => {
   });
 
   it('聚合入口的非结构变更 op 不产生复核读数', async () => {
-    const exec = lookupExecutor('jsd_manage_nodes');
+    const exec = lookupExecutor('jsd_manage_nodes', fakeServer);
     expect(exec).toBeDefined();
     calls.length = 0;
     await exec?.({ op: 'select', ids: ['1:2'] }, undefined);
@@ -99,7 +99,7 @@ describe('结构变更复核钩子', () => {
   });
 
   it('checkDrift:false 真的关掉复核 —— 公开参数不能只是个摆设', async () => {
-    const exec = lookupExecutor('jsd_batch');
+    const exec = lookupExecutor('jsd_batch', fakeServer);
     expect(exec).toBeDefined();
     calls.length = 0;
     await exec?.(
@@ -118,7 +118,7 @@ describe('结构变更复核钩子', () => {
   });
 
   it('不传 checkDrift 时默认开复核(向后兼容)', async () => {
-    const exec = lookupExecutor('jsd_batch');
+    const exec = lookupExecutor('jsd_batch', fakeServer);
     expect(exec).toBeDefined();
     calls.length = 0;
     await exec?.(
@@ -149,7 +149,7 @@ describe('结构变更复核钩子', () => {
     };
     for (const [op, tool] of Object.entries(expected)) {
       expect(STRUCTURAL_NODE_OPS.has(op), `${op} 漏登记`).toBe(true);
-      expect(lookupExecutor(tool), `${tool} 未注册`).toBeDefined();
+      expect(lookupExecutor(tool, fakeServer), `${tool} 未注册`).toBeDefined();
     }
   });
 
@@ -163,7 +163,7 @@ describe('结构变更复核钩子', () => {
    */
   it('当前页顶层复核真的发生(jsd_get_page 必须真实注册)', async () => {
     expect(
-      lookupExecutor('jsd_get_page'),
+      lookupExecutor('jsd_get_page', fakeServer),
       'jsd_get_page 未注册 —— 当前页顶层复核会静默失效',
     ).toBeDefined();
 
@@ -198,7 +198,7 @@ describe('结构变更复核钩子', () => {
       return {};
     };
 
-    const exec = lookupExecutor('jsd_delete_node');
+    const exec = lookupExecutor('jsd_delete_node', fakeServer);
     expect(exec).toBeDefined();
     calls.length = 0;
     await exec?.({ ids: ['1:2'] }, undefined);

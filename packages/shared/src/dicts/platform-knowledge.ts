@@ -220,7 +220,7 @@ export const PLATFORM_KNOWLEDGE: Readonly<
         `${JSD}:1074-1079 ComponentSetNode 自身只多 clone / defaultVariant / variantGroupProperties;但 :1074 继承 BaseFrameMixin(:851)→ 带 appendChild / insertChild(:711-712)`,
         // 读面形状事实:typings 说 string[],运行期给对象 —— 归一收在 core/variant.ts
         'packages/shared/src/core/variant.ts + core/serialize.ts + core/assets.ts —— 真机 2026-10-20:variantGroupProperties.values 元素**不保证是字符串**(单成员集合 ["ccc"],两成员集合 [{"name":"默认"},{"name":"禁用"}]),不归一会撞穿线格式 string[] 并让 get_page / jsd_find **整条失败**(不是少字段,是这次只读调用报废);variantProperties 同理。归一实现单点(两个投影点共用),serializeNode 另加一层「getter 抛也省略该字段」的保护',
-        'packages/ui/src/code/jsdesign/host.ts / core/component.ts combineAsVariants 兜底 —— 真机 2026-10-19 复核(即时设计,重载后):72ms 抛「三种姿势均失败…in get_booleanOperation: Value is not a string」**与 09-24/10-14 逐字一致**;残留形态这次是 **3 个 BOOLEAN_OPERATION(原 COMPONENT 被就地改成 BOOLEAN_OPERATION、id 保留)+ 1 个幸存 COMPONENT,没有 COMPONENT_SET**(10-14 那次是留下畸形 COMPONENT_SET),`assets.variants` 回到 0 ⇒ 残留形态不稳定,清理一律走 `jsd_manage_nodes op=repair`(实测 `cleaned: 3 个`)',
+        'packages/ui/src/code/jsdesign/host.ts / core/component.ts combineAsVariants 兜底 —— 真机 2026-10-19 复核(即时设计,重载后):72ms 抛「三种姿势均失败…in get_booleanOperation: Value is not a string」**与 09-24/10-14 逐字一致**;残留形态这次是 **3 个 BOOLEAN_OPERATION(原 COMPONENT 被就地改成 BOOLEAN_OPERATION、id 保留)+ 1 个幸存 COMPONENT,没有 COMPONENT_SET**(10-14 那次是留下畸形 COMPONENT_SET),`assets.variants` 回到 0 ⇒ 残留形态不稳定,清理一律走 `jsd_repair_nodes`(实测 `cleaned: 3 个`)',
         `${JSD}:127 combineAsVariants 是 ComponentSetNode 的唯一产出路径`,
         'packages/shared/src/core/component.ts:245-256 三种姿势全败的兜底与分流',
         // 真机 2026-10-14(即时设计):三姿势全败,引擎错 `in get_booleanOperation:

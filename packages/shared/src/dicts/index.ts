@@ -11,6 +11,7 @@ export * from './error-report';
 export * from './font';
 export * from './i18n';
 export * from './log';
+export * from './mcp-tools';
 export * from './node-type';
 export * from './platform';
 export * from './platform-knowledge';

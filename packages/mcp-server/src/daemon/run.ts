@@ -1,4 +1,8 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
+import { type FSWatcher, watch, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
+import { basename, dirname } from 'node:path';
+import type { Client } from '@modelcontextprotocol/client';
 import {
   localhostHostValidation,
   localhostOriginValidation,
@@ -9,6 +13,7 @@ import { HEARTBEAT_MS } from 'text-to-design-shared';
 import type { Bridge } from '../bridge';
 import {
   DAEMON_POLL_MS,
+  DAEMON_REPLACE_MS,
   DAEMON_WAIT_MS,
   HTTP_PORT,
   PORT,
@@ -22,13 +27,16 @@ import { buildServer } from '../server';
 import { captureError, flushTelemetry, stopTelemetry } from '../telemetry';
 import { latestVersions } from '../version-check';
 import {
+  clearSelfExitMarker,
   delay,
   fetchDaemonHealth,
   probeUpstream,
+  selfExitMarkerAt,
+  selfExitMarkerPath,
   warnIfDaemonStale,
 } from './probe';
 import { serveProxy } from './proxy';
-import { createServerPool } from './server-pool';
+import { createServerPool, type ServerLease } from './server-pool';
 import { loadSkillsCatalog } from './skills';
 import { spawnDaemon } from './spawn';
 
@@ -79,52 +87,58 @@ export async function runDaemon(bridge: Bridge): Promise<void> {
     return;
   }
   await initConsent();
-  await bridge.start(PORT);
+  bridge.start(PORT);
   log(`daemon: 插件 WS ws://localhost:${bridge.port}`);
 
-  /**
-   * 装配**有限几个**实例,由连接池按并发槽位分发(dec 0030 的复述 + 2026-11 的修正)。
-   *
-   * 历史:2.3.0 之前这份代码是 `() => (assembled ??= buildServer(bridge))`,
-   * 即「全 daemon 一个实例」。2.3.0 收紧连接模型后,**一个 McpServer 同时只服务一个
-   * 连接** —— 重叠请求会拿到 `500 / -32603`,两个 shim 会话同时 initialize 则
-   * `ALREADY_CONNECTED`。所以改成池:装配成本仍只付「池里有几个」那么多次
-   * (装配 51.7 ms 的实测见 server.ts),重叠请求落到不同实例。
-   *
-   * `legacy: 'reject'` 是**实例复用不变式的一部分**:一个实例只能服务一个 era,
-   * 2025 的 initialize 握手会把实例的 negotiated version 改掉,与在途的 modern
-   * 请求互相踩。47820 上的客户端只有本项目的 shim,而它用 `versionNegotiation:
-   * mode='auto'` 先探 `server/discover`(见 daemon/probe.ts)→ 必是 modern 路径;
-   * 真来了 2025 客户端,明确拒收比静默串味强。
-   */
+  // SDK 每次交换独占实例，租约在请求结束后释放。
   const skills = await loadSkillsCatalog();
+  // 装到这个实例上。目录跟着 dist 走(load 会 reload),所以每次挂的都是当下那份
+  const attachSkills = (
+    server: ReturnType<typeof buildServer>,
+    catalog: typeof skills,
+  ): void => {
+    // 每个实例各挂一次:一个 server 只能有一个 skills 扩展,重复 attach 会抛
+    if (catalog == null) return;
+    try {
+      catalog.attach(server);
+    } catch (e) {
+      warn(
+        `skills 挂载失败(该实例继续提供工具): ${e instanceof Error ? e.message : String(e)}`,
+      );
+    }
+  };
+  // 池是同步建例的,而技能目录要异步读 —— 先按首轮结果建,读不动就空挂,
+  // 不为此把整条建例路径改成异步(池的接口因此不必跟着变)
   const pool = createServerPool(() => {
     const server = buildServer(bridge);
-    // 每个实例各挂一次:一个 server 只能有一个 skills 扩展,重复 attach 会抛
-    if (skills != null) {
-      try {
-        skills.attach(server);
-      } catch (e) {
-        warn(
-          `skills 挂载失败(该实例继续提供工具): ${e instanceof Error ? e.message : String(e)}`,
-        );
-      }
-    }
+    attachSkills(server, skills);
     return server;
   });
-  /**
-   * 在途请求计数:连接池按它选槽位。`res.on('close')` 而不是 `finish` —— 客户端
-   * 中途断开时 finish 不触发,槽位会永久泄漏,池子被迫扩容。
-   */
-  let inflight = 0;
-  const handler = createMcpHandler(() => pool.acquire(inflight - 1), {
-    legacy: 'reject',
+  const requestLease = new AsyncLocalStorage<ServerLease>();
+  const handler = createMcpHandler(
+    () => {
+      const lease = requestLease.getStore();
+      if (lease == null) throw new Error('Missing MCP server lease');
+      return lease.server;
+    },
+    { legacy: 'reject' },
+  );
+  const nodeHandler = toNodeHandler({
+    fetch: async (request, options) => {
+      const response = await handler.fetch(request, options);
+      const lease = requestLease.getStore();
+      // 订阅流由 SDK 总线持有，不应持续占用已断开的服务实例。
+      if (lease != null && !lease.server.isConnected()) lease.release();
+      return response;
+    },
   });
-  const nodeHandler = toNodeHandler(handler);
+  // 上一次退出留下的标记不能算在本次头上,否则冷启动 2s 就自己又退了
+  clearSelfExitMarker();
   const validateHost = localhostHostValidation();
   const validateOrigin = localhostOriginValidation();
   let httpServer: ReturnType<typeof createServer> | null = null;
   let versionTimer: ReturnType<typeof setInterval> | null = null;
+  let markerWatcher: FSWatcher | null = null;
 
   /**
    * 版本提示:查一次(缓存未过期就不真查),连着就把结论推下去。
@@ -195,6 +209,7 @@ export async function runDaemon(bridge: Bridge): Promise<void> {
   const shutdown = (reason: string): void => {
     log(`daemon 退出: ${reason}`);
     if (versionTimer != null) clearInterval(versionTimer);
+    markerWatcher?.close();
     stopTelemetry();
     // 退出前尽力冲一次遥测(短预算,失败随进程消失);关闭是尽力而为:
     // 失败也必须退出,但不能静默(见决策 0007/0013)
@@ -240,25 +255,131 @@ export async function runDaemon(bridge: Bridge): Promise<void> {
         setTimeout(() => shutdown('收到 /shutdown 请求'), 100);
         return;
       }
-      // 槽位来源:工厂里读 inflight 时本请求已经计数,故 acquire 传 inflight-1
-      inflight += 1;
-      res.once('close', () => {
-        inflight = Math.max(0, inflight - 1);
+      const lease = pool.acquire();
+      if (lease == null) {
+        res.writeHead(503, {
+          'content-type': 'application/json',
+          'retry-after': '1',
+        });
+        res.end(
+          JSON.stringify({
+            jsonrpc: '2.0',
+            id: null,
+            error: { code: -32603, message: 'MCP server busy; retry later' },
+          }),
+        );
+        return;
+      }
+      void requestLease.run(lease, async () => {
+        try {
+          await nodeHandler(req, res);
+        } catch (failure) {
+          warn(`HTTP handler failed: ${String(failure)}`);
+          res.destroy();
+        } finally {
+          lease.release();
+          // 请求收尾是「退役请求因池满而暂缓」的第二个时机(第一个是标记事件本身)
+          tryRetire();
+        }
       });
-      void nodeHandler(req, res);
     });
     httpServer.once('error', reject);
     httpServer.listen(HTTP_PORT, '127.0.0.1', () => resolve());
   });
 
   log(`daemon: MCP HTTP http://127.0.0.1:${HTTP_PORT}/mcp`);
-  log('daemon 就绪,常驻运行(更新时由版本自检自动替换)');
+  log('daemon 就绪,常驻运行(shim 重启时轮换到新构建)');
 
   versionTimer = setInterval(syncLatest, HEARTBEAT_MS);
   // 先查一次把缓存预热(此刻多半还没连面板,推不出去也值得查)
   syncLatest();
 
+  /**
+   * 退役:shim 重启后写标记,这里**事件驱动**地看见就退 —— 不轮询。
+   *
+   * 为什么不能轮询:那等于给常驻进程装一个永久定时器,只为等一个可能永远不来
+   * 的标记;而标记本来就是「有人刚加载了新产物」这种一次性事件,用文件系统
+   * 通知(FSEvents/inotify)接才对得上它的发生方式。
+   *
+   * 池满时不丢请求:记 pending,等下一次租约释放再试(见 finally 里的 tryRetire)。
+   */
+  let retirePending = false;
+  const tryRetire = (): void => {
+    if (!retirePending) return;
+    const lease = pool.acquire();
+    if (lease == null) return; // 正在服务,等某个请求收尾
+    lease.release();
+    retirePending = false;
+    warn('shim 已换上当前构建,常驻 daemon 退出轮换');
+    shutdown('shim 请求轮换');
+  };
+  const onMarker = (): void => {
+    if (selfExitMarkerAt() == null) return;
+    retirePending = true;
+    tryRetire();
+  };
+  const markerPath = selfExitMarkerPath();
+  try {
+    markerWatcher = watch(dirname(markerPath), (_event, filename) => {
+      // 只认自己那个文件:状态目录里还可能有别的
+      if (filename != null && filename !== basename(markerPath)) return;
+      onMarker();
+    });
+    markerWatcher.on('error', (e) =>
+      debug(`退役标记监听失败(只剩 shim 下次启动时轮换): ${String(e)}`),
+    );
+  } catch (e) {
+    debug(`装不上退役标记监听: ${String(e)}`);
+  }
+  // 监听装好前标记可能已落地(两进程几乎同时起),补看一次
+  onMarker();
+
   process.on('SIGINT', () => shutdown('SIGINT'));
+}
+
+/**
+ * 请运行中的 daemon 退役(自检退出),并等它放掉端口。
+ *
+ * 为什么不直接 POST /shutdown:那个口子对任何本机进程开放,拿到就能杀 daemon。
+ * 「谁都能杀」本身就多余 —— 退出决策归身份,依据只**暴露**不授权:把「我已换成
+ * 新构建」写进 daemon 正在监听的那个标记文件,退不退由 daemon 自己判。
+ *
+ * 标记的生命周期由两端共同决定:daemon 启动时抹掉,下一个 shim 连上时重写。
+ * 于是标记的含义恒定 —— 「上一个 shim 请它退过」,等价于「shim 一重启就换新」。
+ * 不这么配对会在冷启动后立刻误杀:daemon 退出后留下的标记若无人抹,新 daemon
+ * 一装好监听就自己又退了,冷启动直接成环。
+ */
+async function retireDaemon(): Promise<void> {
+  try {
+    writeFileSync(selfExitMarkerPath(), String(STARTED_AT));
+  } catch {
+    debug('自检标记写不进去(只读安装?),交给产物自检兜底');
+    return;
+  }
+  const deadline = Date.now() + DAEMON_REPLACE_MS;
+  while (Date.now() < deadline) {
+    await delay(DAEMON_POLL_MS);
+    if ((await fetchDaemonHealth()) == null) return;
+  }
+  warn(`daemon 在 ${DAEMON_REPLACE_MS / 1000}s 内未退役,交给产物自检继续兜底`);
+}
+
+/**
+ * 等到 daemon 可连(或确认没人在跑)。
+ *
+ * 退役请求发出后这一小段时间里,探测到的永远是刚死那个 —— 起新实例前必须把
+ * 端口等到真正空出来,否则会撞端口。
+ */
+async function waitDaemonReady(): Promise<
+  { state: 'proxy'; client: Client } | { state: 'foreign' } | { state: 'none' }
+> {
+  const deadline = Date.now() + DAEMON_WAIT_MS;
+  while (Date.now() < deadline) {
+    const probe = await probeUpstream();
+    if (probe.state === 'proxy' || probe.state === 'foreign') return probe;
+    await delay(DAEMON_POLL_MS);
+  }
+  return { state: 'none' };
 }
 
 /** shim 模式:探测 daemon;无则拉起并等待就绪 */
@@ -266,13 +387,25 @@ export async function runShim(): Promise<void> {
   // 先看一眼常驻实例是不是跑在旧构建上:同版本号会让版本自检放行,
   // 这个盲区正是「改了代码却不生效」的来源
   await warnIfDaemonStale();
-  const probe = await probeUpstream();
+  let probe = await probeUpstream();
   if (probe.state === 'foreign') {
     error(`端口 ${HTTP_PORT} 被非 text-to-design MCP 服务占用,请先释放`);
     process.exit(1);
-  } else if (probe.state === 'proxy') {
-    await serveProxy(probe.client);
-    return;
+  }
+  if (probe.state === 'proxy') {
+    // shim 重启 = 本地产物可能已换新。请 daemon 退役,自己再起一个 ——
+    // 这正是「为什么该由 shim 触发」:只有 shim 的启动才意味着有人加载了新产物。
+    await probe.client.close().catch(() => {});
+    await retireDaemon();
+    probe = await waitDaemonReady();
+    if (probe.state === 'proxy') {
+      await serveProxy(probe.client);
+      return;
+    }
+    if (probe.state === 'foreign') {
+      error(`端口 ${HTTP_PORT} 被非 text-to-design MCP 服务占用,请先释放`);
+      process.exit(1);
+    }
   }
 
   // starting:本项目 daemon 在跑但未就绪,不必重复拉起,静候即可

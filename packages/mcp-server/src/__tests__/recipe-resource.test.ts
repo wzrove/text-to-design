@@ -8,6 +8,7 @@ import {
   RECIPE_INDEX_URI,
   RECIPE_URI_TEMPLATE,
   RECIPES,
+  readRecipeBody,
 } from '../tools/recipe-catalog';
 
 /**
@@ -161,7 +162,11 @@ describe('配方资源', () => {
         uri: 'jsd://recipes/chart-by-code',
       });
       const text = contents.map((c) => ('text' in c ? c.text : '')).join('');
-      expect(text).toContain('# 用代码画图表');
+      // 标题取正文首行,不写死 —— 配方正文会改措辞,判据是「读到了正文」
+      const firstHeading = readRecipeBody('chart-by-code')
+        .trimStart()
+        .split('\n')[0];
+      expect(text).toContain(firstHeading);
     }, offline);
   });
 
@@ -171,20 +176,59 @@ describe('配方资源', () => {
       const createSvg = tools.find((t) => t.name === 'jsd_create_svg');
       expect(createSvg).toBeTruthy();
       const description = createSvg?.description ?? '';
+      // 2026-11 统一到单一技能入口:指针从 jsd://recipes/<id> 改为 skill://canvas/*
+      // —— 4 个技能入口时模型在跨主题任务上逐个觉得「不是我的活」,一条都没读
       expect(
         description,
         'jsd_create_svg 的描述必须给出模型能自己执行的动作(读资源)',
-      ).toContain('jsd://recipes/chart-by-code');
+      ).toMatch(/skill:\/\/canvas\/(SKILL\.md|references\/chart-by-code\.md)/);
       // 关键硬约束要落在描述里:模型不读资源也不会踩静默失败
       for (const rule of ['viewBox', 'hex', '2000×2000', '<g id>']) {
         expect(description, `描述漏了引擎硬约束:${rule}`).toContain(rule);
       }
 
+      // jsd_batch 仍可指向配方索引(它描述的是配方层);模型侧的单一入口
+      // 是 skill://canvas/SKILL.md —— 两者任一出现即算指针有效
       const batch = tools.find((t) => t.name === 'jsd_batch');
+      const batchDesc = batch?.description ?? '';
       expect(
-        batch?.description ?? '',
-        'jsd_batch 是多步编排的主入口,应指向配方索引',
-      ).toContain(RECIPE_INDEX_URI);
+        batchDesc.includes('skill://canvas/SKILL.md') ||
+          batchDesc.includes(RECIPE_INDEX_URI),
+        'jsd_batch 是多步编排的主入口,应指向技能入口或配方索引',
+      ).toBe(true);
+    });
+  });
+
+  /**
+   * 资源 title 曾是 MessageKey 原文(`resources.title7`)—— SDK 原样转发,
+   * 模型在清单里读到的是键名。uri/description 都对得上,所以旧断言全绿:
+   * 失效的只是「扫一眼清单就知道该读哪条」这条唯一靠 title 的判据。
+   */
+  it('资源标题是译好的文案,不是 MessageKey', async () => {
+    await withServer(async (client) => {
+      const { resources } = await client.listResources();
+      const { resourceTemplates } = await client.listResourceTemplates();
+      const titles = [
+        ...resources.map((r) => ({ uri: r.uri, title: r.title })),
+        ...resourceTemplates.map((t) => ({
+          uri: String(t.uriTemplate),
+          title: t.title,
+        })),
+      ];
+      expect(titles.length).toBeGreaterThan(0);
+      for (const { uri, title } of titles) {
+        expect(
+          title,
+          `${uri} 没有 title —— 清单里只剩 uri 可辨认`,
+        ).toBeTruthy();
+        expect(
+          title,
+          `${uri} 的 title 原样是 i18n 键名 "${title}" —— 应为译好的文案`,
+        ).not.toMatch(/^resources\./);
+      }
+
+      const index = resources.find((r) => r.uri === RECIPE_INDEX_URI);
+      expect(index?.title).toBe('配方索引');
     });
   });
 });

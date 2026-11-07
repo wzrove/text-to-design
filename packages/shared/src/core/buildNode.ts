@@ -42,7 +42,7 @@ export function assertSpecSupported(spec: ExecuteOp): void {
   if (iconField != null) {
     // children 走 catchall 放行,未知键会被静默忽略并建出空矢量(实测 100×100 空 VECTOR)
     throw new Error(
-      `子节点不支持 icon 字段(收到 ${JSON.stringify(iconField)}):图标请用 jsd_create_icon 单独创建,再用 jsd_manage_nodes(op=reparent, 传 parentId)移入父容器`,
+      `子节点不支持 icon 字段(收到 ${JSON.stringify(iconField)}):图标请用 jsd_create_icon 单独创建,再用 jsd_reparent_nodes(传 parentId)移入父容器`,
     );
   }
   for (const child of spec.children ?? []) {

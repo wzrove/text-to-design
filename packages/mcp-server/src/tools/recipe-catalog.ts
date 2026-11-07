@@ -1,62 +1,37 @@
-import {
-  autoLayoutRecipe,
-  chartByCodeRecipe,
-  componentPropertyRecipe,
-  currentPlatform,
-  designStrategyRecipe,
-  htmlToDesignRecipe,
-  iconGridRecipe,
-  scriptRecipe,
-  textReplaceRecipe,
-  variableBindingRecipe,
-  variantSetRecipe,
-  variantSyncRecipe,
-} from './prompts';
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { SKILL_DIR } from '../skills/entries';
 
 /**
- * 配方目录:把「多步套路配方」同时暴露为 MCP prompt 与 MCP resource。
+ * MCP 的 prompt / resource 索引:**由技能目录扫描生成**,不再手写。
  *
- * ## 为什么需要 resource 这一层(而不是只留 prompt)
+ * ## 2026-11:配方目录改为扫描
  *
- * 配方原先是三条通路里最弱的一环:
- * 1. `mcp.instructions` 写了路由表(`画图表 → chart-by-code`),但**宿主普遍不注入它**。
- *    实测(claude 系 client,`app.asar.unpacked/cli/dist/*.js`)里 `instructions` 的
- *    唯一消费者是 `ChannelManager.registerChannel`,而它有硬门控
- *    —— 只认 `capabilities.experimental["claude/channel"]`,普通 server 的
- *    `instructions` 读完即弃,不进上下文。
- * 2. MCP prompt 只被转成**斜杠命令**(`available_commands_update` 推给前端 UI),
- *    要不要读由**用户**决定,模型自己够不着。
- * 3. 工具描述倒是每轮都进上下文,但那里只写了「完整配方见 prompt `chart-by-code`」
- *    —— 对模型来说是个**无法执行**的指针(prompt 不是它能调的工具)。
+ * 此前 `RECIPES` 是一个手写的 11 元素数组,每条把 `whenToUse` / `argsHint` /
+ * `titleKey` 抄在 TS 里。真正决定「有哪些配方」的是 `src/skills/canvas/references/`
+ * 下有哪些文件 —— 两处都得改,漏一处就是「有文件没注册」或「注册了没有文件」。
  *
- * 能补上闭环的只有 resource:宿主把 `ListMcpResources` / `ReadMcpResource` 当普通
- * 工具给了模型,资源本体又按需读取、不占常驻上下文。于是
- * 「工具描述里留一行可执行指针(`读 jsd://recipes/<id>`)」+「资源提供正文」构成闭环。
+ * 现在**文件名即 id**,元数据写在 markdown 的 frontmatter 里:
  *
- * ## 单一真源
+ * ```yaml
+ * ---
+ * title: "自动布局"          # prompt 的展示标题
+ * when: "**屏内分区排布一律先读这一条**……"   # 出现在 listResources 的 description
+ * args: "参数 target(……)"   # 参数提示,同样进 description
+ * role: assistant            # prompt 消息角色(user / assistant)
+ * ---
+ * ```
  *
- * 正文**只写在 `./prompts.ts` 的 render 函数里**,本文件只加「何时用 / 参数占位」这类
- * 资源层元数据,再调用同一批函数渲染 —— 不复制正文。
- * `__tests__/recipe-resource.test.ts` 守住「目录里的每个 id 都必须是一个已注册的
- * prompt 名」,防两边漂开。
+ * 新增一篇 `references/foo.md` 就自动多一条配方;删文件就自动消失。
+ * 参数 schema(zod)仍在 `tools/prompts.ts` —— 那是给客户端弹输入框用的类型契约,
+ * 不适合塞进 markdown。
+ *
+ * ## 校验
+ *
+ * frontmatter 缺 `when` 或 `title` 直接抛:一条没有「何时用」的配方在索引里等于噪音,
+ * 模型读不出该不该点开它。`assertSkillGroupsCoverRecipes()`(skills/entries.ts)
+ * 另外保证每篇都被 SKILL.md 指到。
  */
-export type RecipeEntry = {
-  /** 与 MCP prompt 同名 —— prompt 与 resource 的对齐键,测试按它比对 */
-  id: string;
-  /** 资源 URI,`jsd://recipes/<id>` */
-  uri: string;
-  /** 与 registerPrompt 传的 title 同键(标题文案不在本文件重写) */
-  titleKey: string;
-  /**
-   * 何时该读它。这段会出现在 `ListMcpResources` 的 description 里 ——
-   * 模型只看索引就能判断要不要花一次 ReadMcpResource,所以必须写「什么任务触发」,
-   * 不要写成目录摘要。
-   */
-  whenToUse: string;
-  /** 正文里用占位符渲染,读完要自己补哪些参数 */
-  argsHint?: string;
-  render: () => string;
-};
 
 /** 配方索引资源 URI */
 export const RECIPE_INDEX_URI = 'jsd://recipes';
@@ -64,110 +39,130 @@ export const RECIPE_INDEX_URI = 'jsd://recipes';
 /** 配方正文资源模板 */
 export const RECIPE_URI_TEMPLATE = 'jsd://recipes/{id}';
 
-export const RECIPES: RecipeEntry[] = [
-  {
-    id: 'design-strategy',
-    uri: 'jsd://recipes/design-strategy',
-    titleKey: 'prompt.designStrategy.title',
-    whenToUse:
-      '画布创作的通用纪律。**从零设计整页 / 界面之前先读这一条**:先查可复用件(按「要复用的是什么」选件类 —— 结构走组件、状态走变体、固定视觉走样式、语义 token 走变量,含各平台复用入口与「命中就复用 / 改源头不逐个改实例」的纪律,以及**什么时候别抽组件**:差异落在实例子节点上、平台未声明 inPlaceVariants、往返预算压不住)、**样式落地流程**(归一化 → 建样式 → 绑 `*StyleId`,含即时设计的样式 id 记账与文本宽度归零的复核纪律),再摸底、结构分层(成品该多深就多深,调用才分批)、语义化命名、归组后再布局(**auto-layout 判据 + 最容易漏掉的分区清单**,机制见 `jsd://recipes/auto-layout`)、图形区走 SVG 还是原生图元的分流、间距与字号阶梯、层序与遮挡、出错回滚,附示例结构树',
-    render: () => designStrategyRecipe(undefined, currentPlatform()),
-  },
-  {
-    id: 'auto-layout',
-    uri: 'jsd://recipes/auto-layout',
-    titleKey: 'prompt.autoLayout.title',
-    whenToUse:
-      '**屏内分区排布一律先读这一条**。容器该不该上 auto-layout(判据 + 复核清单:标签栏 / 胶囊组 / 卡片头 / 列表行 / 整屏纵向分区 —— 这些恰是间距唯一靠手调坐标凑的地方)、两条落地路径(建容器时带 sizingMode=推荐 / 事后 set_layout 再用 resize 钉回尺寸)、执行顺序、平台硬约束(layoutWrap 等 Figma 字段本平台没有)、验收四条判据与常见坑(容器被 hug、TEXT 宽度被钉成 1px、手摆坐标在布局里不显形)',
-    argsHint:
-      '参数 target(要上布局的容器 / 分区描述,如「标签栏」;留空返回通用纪律)',
-    render: () => autoLayoutRecipe(undefined, currentPlatform()),
-  },
-  {
-    id: 'chart-by-code',
-    uri: 'jsd://recipes/chart-by-code',
-    titleKey: 'prompt.chartByCode.title',
-    whenToUse:
-      '画图表 / 数据可视化(折线、柱状、饼图 / 环形、散点、雷达、面积、桑基、仪表盘、看板……)。自己写脚本算几何、落盘 SVG,再经 jsd_create_svg 的 svgPath 导入;含零依赖示例与引擎侧硬约束。不适合三类:要吃 auto-layout、要绑变量/样式、要复用成组件 —— 那些用原生节点',
-    argsHint:
-      '参数 chart(要画什么图:种类 + 数据 + 口径)、svgPath(落盘路径,缺省 /tmp/chart.svg)',
-    render: () =>
-      chartByCodeRecipe('<在此写明图表种类 + 数据 + 口径>', undefined),
-  },
-  {
-    id: 'html-to-design',
-    uri: 'jsd://recipes/html-to-design',
-    titleKey: 'prompt.htmlToDesign.title',
-    whenToUse:
-      '把 HTML 片段转成设计稿。默认走 jsd_html_to_design(SVG 保真、忽略复杂样式);要可编辑图层才改 per-type create 手工映射后 reparent 归组',
-    argsHint: '参数 html(完整 HTML 片段)、name(生成节点名,可省)',
-    render: () => htmlToDesignRecipe('<在此粘贴完整 HTML 片段>'),
-  },
-  {
-    id: 'icon-grid',
-    uri: 'jsd://recipes/icon-grid',
-    titleKey: 'prompt.iconGrid.title',
-    whenToUse: '批量插入 Lucide 图标并排成 auto-layout 网格',
-    argsHint: '参数 icons(逗号分隔的图标名)、size(默认 24)、gap(默认 16)',
-    render: () => iconGridRecipe('<图标名1,图标名2,…>'),
-  },
-  {
-    id: 'script-ops',
-    uri: 'jsd://recipes/script-ops',
-    titleKey: 'prompt.scriptOps.title',
-    whenToUse:
-      '把多步画布操作合并成一次 jsd_batch 编排或一段宿主脚本;步骤多、往返多、上下文吃紧时读它。也覆盖**整页/整档批量改造**(先摸底、确认现状形态、id 的三种来源、按块切批、清单装不下时用 callsFile 或 CLI exec、回读复核与点名类错误不重试)',
-    argsHint: '参数 task(要完成的任务,留空只返回脚本化调用纪律)',
-    render: () => scriptRecipe(undefined),
-  },
-  {
-    id: 'text-replace-strategy',
-    uri: 'jsd://recipes/text-replace-strategy',
-    titleKey: 'prompt.textReplace.title',
-    whenToUse:
-      '批量改文案:在一棵子树里定位并替换文本,含命中范围、命名与回显复核纪律',
-    argsHint: '参数 rootId(子树根节点 id,留空用当前选中)',
-    render: () => textReplaceRecipe(undefined),
-  },
-  {
-    id: 'variant-sync',
-    uri: 'jsd://recipes/variant-sync',
-    titleKey: 'prompt.variantSync.title',
-    whenToUse:
-      '同类实例的样式批量同步。改一处要影响全部实例时走它 —— 改主组件而不是逐个改实例(含实例子节点覆盖不生效的处置)',
-    argsHint: '参数 sourceId(样板节点 id)、targetType(目标节点类型)',
-    render: () => variantSyncRecipe(undefined, undefined),
-  },
-  {
-    id: 'variable-binding',
-    uri: 'jsd://recipes/variable-binding',
-    titleKey: 'prompt.variableBinding.title',
-    whenToUse: '变量绑定与批量套用(按当前平台变量面分流)',
-    argsHint: '参数 target(目标节点 id,留空用当前选中)',
-    render: () => variableBindingRecipe(undefined, currentPlatform()),
-  },
-  {
-    id: 'variant-set',
-    uri: 'jsd://recipes/variant-set',
-    titleKey: 'prompt.variantSet.title',
-    whenToUse:
-      '变体集构建:把同族组件合成 COMPONENT_SET 并设变体属性(按平台能力位分流)',
-    argsHint: '参数 family(组件族名)',
-    render: () => variantSetRecipe(undefined, currentPlatform()),
-  },
-  {
-    id: 'component-property',
-    uri: 'jsd://recipes/component-property',
-    titleKey: 'prompt.componentProperty.title',
-    whenToUse:
-      '组件属性的定义与设值(值形态 / 写入口 / 读侧 / 替代路径四件套,按平台分流)',
-    argsHint: '参数 target(组件或实例 id,留空只返回做法与分流)',
-    render: () => componentPropertyRecipe(undefined, currentPlatform()),
-  },
-];
+const REFERENCES_DIR = join(SKILL_DIR, 'references');
+
+export type RecipeEntry = {
+  /** 与技能目录 `references/<id>.md` 同名 —— prompt 与 resource 的对齐键 */
+  id: string;
+  /** 资源 URI, `jsd://recipes/<id>` */
+  uri: string;
+  /** frontmatter 的 `title`(prompt 展示名) */
+  title: string;
+  /** frontmatter 的 `when`:什么任务触发它 */
+  whenToUse: string;
+  /** frontmatter 的 `args`:参数提示 */
+  argsHint?: string;
+  /** frontmatter 的 `role`:prompt 消息角色,缺省 user */
+  role: 'user' | 'assistant';
+};
+
+type Frontmatter = Record<string, string>;
+
+/**
+ * 解析 frontmatter。只支持本目录用到的形态:顶层 `key: value`,
+ * value 是 JSON 双引号字符串、单引号字符串或裸标量。不引入 YAML 库 ——
+ * 为一个 5 键的头部加依赖不划算,而支持的形态由本仓自己的写入方保证。
+ */
+export function parseFrontmatter(source: string): {
+  meta: Frontmatter;
+  body: string;
+} {
+  if (!source.startsWith('---')) return { meta: {}, body: source };
+  const end = source.indexOf('\n---', 3);
+  if (end < 0) return { meta: {}, body: source };
+  const raw = source.slice(3, end);
+  const body = source.slice(source.indexOf('\n', end + 1) + 1);
+  const meta: Frontmatter = {};
+  for (const line of raw.split('\n')) {
+    const m = /^([A-Za-z][\w-]*):\s*(.*)$/.exec(line);
+    if (m == null) continue;
+    const [, key, value] = m;
+    const trimmed = value.trim();
+    let parsed = trimmed;
+    if (trimmed.startsWith('"') && trimmed.endsWith('"')) {
+      try {
+        parsed = JSON.parse(trimmed);
+      } catch {
+        parsed = trimmed.slice(1, -1);
+      }
+    } else if (trimmed.startsWith("'") && trimmed.endsWith("'")) {
+      parsed = trimmed.slice(1, -1).replace(/''/g, "'");
+    }
+    meta[key] = parsed;
+  }
+  return { meta, body };
+}
+
+/** 读一条配方的 markdown 正文(去掉 frontmatter;插件离线也可读 —— 纯文件操作) */
+export function readRecipeBody(id: string): string {
+  const source = readFileSync(join(REFERENCES_DIR, `${id}.md`), 'utf8');
+  return parseFrontmatter(source).body;
+}
+
+/**
+ * 把参数填进正文:有 `{{key}}` 占位符就替换,没有就把参数追加到末尾一节。
+ *
+ * 不用「一律替换」:纪律类配方没有参数,强行插值会留下空占位符;
+ * 也不用「一律追加」:HTML 片段那种长参数插在末尾会离使用处很远。
+ */
+export function renderRecipeBody(
+  id: string,
+  params: Record<string, string | undefined> = {},
+): string {
+  let body = readRecipeBody(id);
+  const unused: [string, string][] = [];
+  for (const [key, raw] of Object.entries(params)) {
+    if (raw == null) continue;
+    const token = `{{${key}}}`;
+    if (body.includes(token)) {
+      body = body.split(token).join(raw);
+    } else {
+      unused.push([key, raw]);
+    }
+  }
+  if (unused.length === 0) return body;
+  const section = unused.map(([k, v]) => `- ${k}: ${v}`).join('\n');
+  return `${body.trimEnd()}\n\n## 本次参数\n\n${section}\n`;
+}
+
+function loadRecipe(id: string): RecipeEntry {
+  const source = readFileSync(join(REFERENCES_DIR, `${id}.md`), 'utf8');
+  const { meta } = parseFrontmatter(source);
+  const whenToUse = meta.when?.trim();
+  const title = meta.title?.trim();
+  if (whenToUse == null || whenToUse === '') {
+    throw new Error(
+      `references/${id}.md 的 frontmatter 缺 when —— 索引里没有「何时用」的条目等于噪音`,
+    );
+  }
+  if (title == null || title === '') {
+    throw new Error(`references/${id}.md 的 frontmatter 缺 title`);
+  }
+  const role = meta.role === 'assistant' ? 'assistant' : 'user';
+  return {
+    id,
+    uri: `jsd://recipes/${id}`,
+    title,
+    whenToUse,
+    ...(meta.args?.trim() ? { argsHint: meta.args.trim() } : {}),
+    role,
+  };
+}
+
+/** 扫描目录得到的全部配方(按 id 排序,保证索引稳定) */
+export const RECIPES: RecipeEntry[] = readdirSync(REFERENCES_DIR)
+  .filter((f) => f.endsWith('.md'))
+  .map((f) => f.replace(/\.md$/, ''))
+  .sort()
+  .map(loadRecipe);
 
 export function findRecipe(id: string): RecipeEntry | undefined {
   return RECIPES.find((r) => r.id === id);
+}
+
+/** 全部配方 id。补全(completion)与 `jsd://recipes/{id}` 模板变量共用这一份 */
+export function recipeIds(): string[] {
+  return RECIPES.map((r) => r.id);
 }
 
 /**
@@ -184,8 +179,10 @@ export function renderRecipeIndex(): string {
     '',
     '多步套路不要临场拼工具 —— 先照配方走。用 `ReadMcpResource` 读下面任意一条的正文(按需读取,不占常驻上下文)。',
     '',
+    '正文的唯一来源是技能目录 `skill://canvas/references/<id>.md`;这里的每条与它是一个文件。',
+    '',
     ...lines,
     '',
-    '只想概览纪律、没有具体任务时,先读 `jsd://recipes/design-strategy`。',
+    '只想概览纪律、没有具体任务时,先读 `jsd://recipes/design-strategy`(与 `skill://canvas/references/design-strategy.md` 同一个文件)。',
   ].join('\n');
 }

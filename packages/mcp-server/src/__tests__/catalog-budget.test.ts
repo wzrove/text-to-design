@@ -4,7 +4,9 @@ import {
   InMemoryTransport,
 } from '@modelcontextprotocol/server';
 import { describe, expect, it } from 'vitest';
+import { z } from 'zod';
 import { Bridge } from '../bridge';
+import { toolCatalog } from '../core/tool-catalog';
 import { compactOutputSchema } from '../daemon/compact-schema';
 import { buildServer } from '../server';
 
@@ -26,13 +28,22 @@ import { buildServer } from '../server';
 type WireTool = { name: string; inputSchema?: unknown; outputSchema?: unknown };
 
 let cached: WireTool[] | null = null;
+let internalOutputBytes = 0;
 
 /** 起一个真实 McpServer(53 个工具全注册)+ in-memory 客户端,取一次目录 */
 async function listWireTools(): Promise<WireTool[]> {
   if (cached != null) return cached;
   const [clientTransport, serverTransport] =
     InMemoryTransport.createLinkedPair();
-  const server = buildServer(new Bridge());
+  const server = buildServer(new Bridge(), undefined, { toolProfile: 'full' });
+  internalOutputBytes = [...toolCatalog(server).capabilities.values()].reduce(
+    (sum, capability) =>
+      sum +
+      (capability.outputSchema == null
+        ? 0
+        : jsonBytes(z.toJSONSchema(capability.outputSchema))),
+    0,
+  );
   const client = new Client(
     { name: 'catalog-budget', version: '1' },
     { capabilities: {} },
@@ -59,7 +70,7 @@ function projectedCatalog(tools: WireTool[]) {
 }
 
 function jsonBytes(value: unknown): number {
-  return JSON.stringify(value).length;
+  return Buffer.byteLength(JSON.stringify(value), 'utf8');
 }
 
 function collectAdditionalProperties(node: unknown, out: boolean[]): void {
@@ -77,13 +88,17 @@ function collectAdditionalProperties(node: unknown, out: boolean[]): void {
 describe('工具目录体积', () => {
   it('单工具出参声明 ≤ 5 KB,合计压掉一个量级', async () => {
     const tools = await listWireTools();
-    const raw = tools.reduce((sum, t) => sum + jsonBytes(t.outputSchema), 0);
+    // 没有出参声明的工具(jsd_list_prompts / jsd_get_prompt 只回文本)按 0 计,
+    // 不要让 jsonBytes(undefined) 把整条断言打成 TypeError
+    const raw = internalOutputBytes;
     const projected = projectedCatalog(tools);
     const heaviest = projected
+      .filter((t) => t.outputSchema != null)
       .map((t) => ({ name: t.name, bytes: jsonBytes(t.outputSchema) }))
       .sort((a, b) => b.bytes - a.bytes)[0];
     const total = projected.reduce(
-      (sum, t) => sum + jsonBytes(t.outputSchema),
+      (sum, t) =>
+        t.outputSchema == null ? sum : sum + jsonBytes(t.outputSchema),
       0,
     );
 
@@ -101,7 +116,12 @@ describe('工具目录体积', () => {
   });
 
   it('投影后的目录合计 ≤ 500 KB', async () => {
-    const projected = projectedCatalog(await listWireTools());
+    const projected = (await listWireTools()).map((tool) => ({
+      ...tool,
+      ...(tool.outputSchema
+        ? { outputSchema: compactOutputSchema(tool.outputSchema) }
+        : {}),
+    }));
     const total = jsonBytes(projected);
     // 500 KB 与 daemon/proxy.ts 的 CATALOG_WARN_BYTES 同源。实测:这里(服务端
     // 直出形态)约 350 KB,经 shim 复刻下发约 460 KB —— 差值来自 SDK 序列化细节。

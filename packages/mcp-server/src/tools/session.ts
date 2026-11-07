@@ -9,6 +9,7 @@ import {
 import type { Bridge } from '../bridge';
 import { CLIENT, PING_TIMEOUT_MS } from '../config';
 import { bridgeTool, type ToolHandle } from '../core/registry';
+import { getSkillsStatus } from '../daemon/skills';
 import type { McpI18n } from '../i18n';
 
 export function registerSessionTools(
@@ -53,6 +54,7 @@ export function registerSessionTools(
           capabilities: data?.capabilities,
           coreCapabilities: data?.coreCapabilities,
           platformOps: data?.platformOps,
+          ...(getSkillsStatus() != null ? { skills: getSkillsStatus()! } : {}),
         };
       } catch (e) {
         return {

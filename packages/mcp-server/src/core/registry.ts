@@ -1,4 +1,4 @@
-import type { McpServer } from '@modelcontextprotocol/server';
+import type { Icon, McpServer } from '@modelcontextprotocol/server';
 import type {
   ActivityPhase,
   MessageKey,
@@ -14,6 +14,8 @@ import { describePlatformGate } from '../platform-state';
 import { BridgeError, errorCodeOf } from './bridge-error';
 import { localizeSchema } from './localize-schema';
 import { err, structured } from './response';
+import { isPublicTool, registerCapability, toolCatalog } from './tool-catalog';
+import { iconForTool } from './tool-icons';
 
 /** 注册函数返回的工具句柄(结构化最小类型,兼容 SDK RegisteredTool/Prompt/Resource) */
 export interface ToolHandle {
@@ -47,7 +49,7 @@ export interface ToolHook {
 }
 
 /** 钩子工厂:每次调用产出一个新实例 */
-export type ToolHookFactory = () => ToolHook;
+export type ToolHookFactory = (server: McpServer) => ToolHook;
 
 /**
  * MCP ToolAnnotations(2026-07-28)。**四个 hint 全部必填**:协议对每个 hint 都有缺省值
@@ -91,16 +93,15 @@ export type ToolExecutor = (
   opts?: ExecutorOptions,
 ) => Promise<unknown>;
 
-/** 工具名 → 执行体(daemon 单进程多会话共享;重复注册以后者为准,行为一致) */
-const executors = new Map<string, ToolExecutor>();
-
-export function lookupExecutor(name: string): ToolExecutor | undefined {
-  return executors.get(name);
+export function lookupExecutor(
+  name: string,
+  server: McpServer,
+): ToolExecutor | undefined {
+  return toolCatalog(server).executors.get(name);
 }
 
-/** 全部已注册工具名(排序;jsd_batch 报错提示用) */
-export function executorNames(): string[] {
-  return [...executors.keys()].sort();
+export function executorNames(server: McpServer): string[] {
+  return [...toolCatalog(server).executors.keys()].sort();
 }
 
 /** 越界字段点名上限(超过就只说个数,不做无限铺表) */
@@ -174,6 +175,11 @@ export interface BridgeToolDef {
   outputSchema: z.ZodType;
   /** 四个 hint 全部必填(见 ToolHints) */
   annotations: ToolHints;
+  /**
+   * 目录图标(协议 Icon[])。缺省按工具名前缀自动分类(见 core/tool-icons.ts);
+   * 只有个别工具需要脱离族图标时才在这里显式给。
+   */
+  icons?: readonly Icon[];
   /** 超时毫秒数;缺省用 PendingManager 默认(30s) */
   timeout?: number;
   /** 语义标记:该工具在插件离线时也应可用(如 jsd_ping);目录已不随连接门控 */
@@ -221,20 +227,6 @@ export function bridgeTool(
   def: BridgeToolDef,
 ): (server: McpServer, bridge: Bridge, i18n: McpI18n) => ToolHandle {
   return (server: McpServer, bridge: Bridge, i18n: McpI18n): ToolHandle => {
-    // 边界处单点转型:SDK 的泛型重载无法穿透本工厂推断 zod schema,
-    // 运行时调用形状与直接 registerTool 完全一致
-    type RegisterFn = (
-      name: string,
-      config: {
-        title?: string;
-        description?: string;
-        inputSchema?: unknown;
-        outputSchema?: unknown;
-        annotations?: unknown;
-      },
-      cb: (args: Record<string, unknown>, ctx: ToolCtx) => Promise<unknown>,
-    ) => ToolHandle;
-    const register = server.registerTool.bind(server) as unknown as RegisterFn;
     /**
      * followUp.description 与 title / description 走同一条 0016 约定:源码里存
      * MessageKey。注册期只投影了 title / description,**结果里的 followUp 曾整块
@@ -242,10 +234,21 @@ export function bridgeTool(
      * 覆盖 structured / err / 平台门控三条出口。
      * `type:'prompt'` 的 followUp 存的是成品文案(如「插件未连接」引导),不译。
      */
-    const projectFollowUp = (fu: FollowUp | undefined): FollowUp | undefined =>
-      fu == null || fu.type !== 'tool' || fu.description == null
+    const projectFollowUp = (
+      fu: FollowUp | undefined,
+    ): FollowUp | undefined => {
+      if (fu == null || fu.type !== 'tool') return fu;
+      if (!isPublicTool(server, fu.tool)) {
+        return {
+          type: 'tool',
+          tool: 'jsd_describe_tools',
+          description: fu.tool,
+        };
+      }
+      return fu.description == null
         ? fu
         : { ...fu, description: i18n.t(fu.description as MessageKey) };
+    };
     /**
      * 面板侧的活动提醒(最小化态的宠物)是**旁路**:它连的是给人看的动画,
      * 推送失败(甚至对端根本没这个方法)不许把工具调用带塌 —— 与 hook 同一条纪律。
@@ -309,7 +312,7 @@ export function bridgeTool(
         // 面板侧的活动提醒(最小化态的宠物):此处是**所有**工具执行体的唯一收口
         // (MCP 回调与 jsd_batch 内层都走 executeTool),故只需要在这里埋一次
         notifyActivity('running', def.name);
-        const hook = opts?.skipHooks === true ? undefined : def.hook?.();
+        const hook = opts?.skipHooks === true ? undefined : def.hook?.(server);
         if (hook?.before != null) {
           try {
             await hook.before(args);
@@ -383,42 +386,25 @@ export function bridgeTool(
         return err(e, def.outputSchema, projectFollowUp(def.followUp));
       }
     };
-    // daemon 单进程内同名工具重复注册以后者为准(行为一致)
-    executors.set(def.name, executeTool);
     const { t } = i18n;
-    const handle = register(
-      def.name,
+    const handle = registerCapability(
+      server,
       {
-        // title / description / platformNote 在**源码里存的是 MessageKey**(0016),
-        // 这里做唯一的投影点:注册只发生一次(不做运行期热切换,见 0016 候选表)
+        name: def.name,
         title: t(def.title as MessageKey),
-        // platformNote 静态拼进描述:注册只在 buildServer 时执行一次,不随平台变化,
-        // 具体"当前平台是否适用"由上面的执行期拦截与结果 warnings 表达。
-        // 两段**各自**译再拼,而不是拼完再译:拼出来的串不是 catalog 的键
         description:
-          def.platformNote != null
-            ? `${t(def.description as MessageKey)}${t(def.platformNote as MessageKey)}`
-            : t(def.description as MessageKey),
-        ...(def.inputSchema
-          ? { inputSchema: localizeSchema(def.inputSchema, t) }
-          : {}),
+          def.platformNote == null
+            ? t(def.description as MessageKey)
+            : t(def.description as MessageKey) +
+              t(def.platformNote as MessageKey),
+        ...(def.inputSchema == null
+          ? {}
+          : { inputSchema: localizeSchema(def.inputSchema, t) }),
         outputSchema: localizeSchema(def.outputSchema, t),
         annotations: def.annotations,
+        icons: def.icons ?? iconForTool(def.name),
       },
-      // 注意:SDK 对「无 inputSchema」的工具会以 callback(ctx) 形态调用
-      // (ctx 作为唯一入参),有 inputSchema 时才是 callback(args, ctx)。
-      // 这里统一兼容两种形态,避免 ctx 误位。
-      async (...cbArgs: unknown[]) => {
-        const hasInput = def.inputSchema != null;
-        const first = cbArgs[0] as Record<string, unknown> | undefined;
-        const second = cbArgs[1] as ToolCtx | undefined;
-        const args: Record<string, unknown> = hasInput ? (first ?? {}) : {};
-        const ctx = (hasInput ? second : first) as ToolCtx | undefined;
-        const signal =
-          ctx?.mcpReq?.signal ??
-          (ctx as unknown as { signal?: AbortSignal } | undefined)?.signal;
-        return executeTool(args, signal);
-      },
+      executeTool,
     );
     handle.alwaysEnabled = def.alwaysEnabled ?? false;
     return handle;

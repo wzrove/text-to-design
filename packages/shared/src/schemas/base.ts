@@ -59,6 +59,8 @@ const COLOR_TYPE_HINT =
 
 // 单段 as:入参类型是客户端形态 RGBInput,输出类型是归一化后的通道对象
 // (core/normalize.ts 产出),两侧语义各自成立
+// ⚠ 不能用 z.custom:zod 出 JSON Schema 时直接抛 "Custom types cannot be represented"。
+// z.unknown() 出的是空节点,paint 子 schema 只能读它挂的 description 拿到值域说明。
 const colorSchema = z.unknown().superRefine((v, ctx) => {
   if (typeof v === 'string') {
     if (parseHexColor(v) == null) {
@@ -81,23 +83,18 @@ const colorSchema = z.unknown().superRefine((v, ctx) => {
   }
 }) as z.ZodType<RGB, RGBInput>;
 
-export const rgbSchema = colorSchema.describe(
-  '颜色:{r,g,b} 对象(通道 0-1,>1 视为 0-255 自动归一化)或 hex 字符串,如 "#ff0000"(带透明度可用 8 位 hex,其 alpha 会转为 paint 级 opacity)',
-);
+export const rgbSchema = colorSchema.describe('schemaValue.color');
 
-export const rgbaSchema = colorSchema.describe(
-  'RGBA 颜色:{r,g,b,a} 对象(通道 0-1,>1 视为 0-255 自动归一化;a 缺省按 1)或 hex 字符串,如 "#ff0000"、"#ff000080"',
-);
+export const rgbaSchema = colorSchema.describe('schemaValue.rgba');
 export type RGBA = RGB;
 
+// color / position 都挂着自己的值域说明,rgbaSchema 那句在这里是重复的,去掉
 export const gradientStopSchema = z
   .object({
-    color: rgbaSchema.describe('schema.base.color'),
+    color: rgbaSchema,
     position: z.number().min(0).max(1).describe('schema.base.position'),
   })
-  .describe(
-    '渐变停止点,如 {color:{r:1,g:0,b:0,a:1}, position:0}(起点红色)和 {color:{r:0,g:0,b:1,a:1}, position:1}(终点蓝色)',
-  );
+  .describe('schemaValue.gradientStops');
 export type GradientStop = z.infer<typeof gradientStopSchema>;
 
 /**
@@ -148,9 +145,7 @@ export const paintSchema = z.discriminatedUnion('type', [
   z
     .object({
       type: z.literal('GRADIENT_LINEAR').describe('schema.base.type2'),
-      gradientStops: z
-        .array(gradientStopSchema)
-        .describe('schema.base.gradientStops'),
+      gradientStops: z.array(gradientStopSchema),
       gradientTransform: transformSchema,
     })
     .strict()
@@ -158,9 +153,7 @@ export const paintSchema = z.discriminatedUnion('type', [
   z
     .object({
       type: z.literal('GRADIENT_RADIAL').describe('schema.base.type3'),
-      gradientStops: z
-        .array(gradientStopSchema)
-        .describe('schema.base.gradientStops2'),
+      gradientStops: z.array(gradientStopSchema),
       gradientTransform: transformSchema,
     })
     .strict()
@@ -168,9 +161,7 @@ export const paintSchema = z.discriminatedUnion('type', [
   z
     .object({
       type: z.literal('GRADIENT_ANGULAR').describe('schema.base.type4'),
-      gradientStops: z
-        .array(gradientStopSchema)
-        .describe('schema.base.gradientStops3'),
+      gradientStops: z.array(gradientStopSchema),
       gradientTransform: transformSchema,
     })
     .strict()
@@ -182,7 +173,7 @@ export const paintSchema = z.discriminatedUnion('type', [
       scaleMode: z
         .enum(['FILL', 'FIT', 'CROP', 'TILE'])
         .optional()
-        .describe('schema.base.scaleMode'),
+        .describe('schemaValue.scaleMode'),
     })
     .strict()
     .describe('schema.base.scaleMode2'),
@@ -194,7 +185,7 @@ export const effectSchema = z.discriminatedUnion('type', [
   z
     .object({
       type: z.literal('DROP_SHADOW').describe('schema.base.type6'),
-      color: rgbaSchema.describe('schema.base.color2'),
+      color: rgbaSchema,
       offset: z
         .object({
           x: z.number().describe('schema.base.x'),
@@ -217,7 +208,7 @@ export const effectSchema = z.discriminatedUnion('type', [
   z
     .object({
       type: z.literal('INNER_SHADOW').describe('schema.base.type7'),
-      color: rgbaSchema.describe('schema.base.color3'),
+      color: rgbaSchema,
       offset: z
         .object({
           x: z.number().describe('schema.base.x2'),
@@ -255,9 +246,7 @@ export type Effect = z.infer<typeof effectSchema>;
 // 约束 (对齐 runtime Constraints)
 export const constraintTypeSchema = z
   .enum(['MIN', 'MAX', 'STRETCH', 'CENTER', 'SCALE'])
-  .describe(
-    '约束类型:MIN=吸附左/上 | MAX=吸附右/下 | STRETCH=拉伸 | CENTER=居中 | SCALE=等比缩放',
-  );
+  .describe('schemaValue.constraint');
 export type ConstraintType = z.infer<typeof constraintTypeSchema>;
 
 // 布局网格 (对齐 runtime LayoutGrid)

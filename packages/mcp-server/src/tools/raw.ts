@@ -63,6 +63,11 @@ export function registerRawTools(
         savePath?: string;
         includeDataUrl?: boolean;
       };
+      if (savePath && ids.length !== 1) {
+        throw new Error(
+          'savePath 仅支持单节点导出；多节点请分别指定唯一文件路径',
+        );
+      }
       const data = (await bridge_.request(
         'export',
         { ids, format, scale },

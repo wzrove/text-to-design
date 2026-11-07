@@ -193,6 +193,20 @@ export const MESSAGES_EN = {
   'bridge.log.pingFailed': 'Plugin ping failed: {message}',
   'bridge.error.useBridge': 'useBridge must be used inside <BridgeProvider>',
   // ── zod .describe 字段说明(见 0016:schema 存键,边界投影成文案) ──
+  // ── Value-shape notes (what a field's value looks like) ──
+  'schemaValue.color':
+    'Color: hex (e.g. "#ff0000"; 8-digit hex becomes paint opacity) or {r,g,b} (0-1 channels, >1 = 0-255)',
+  'schemaValue.rgba':
+    'Color: hex (e.g. "#ff000080") or {r,g,b,a} (0-1 channels, >1 = 0-255; default 1)',
+  'schemaValue.gradientStops': 'Gradient stops, at least 2',
+  'schemaValue.constraint':
+    'MIN = pin start | MAX = pin end | STRETCH = stretch | CENTER = center | SCALE = scale',
+  'schemaValue.strokeJoin': 'Join style: MITER / BEVEL / ROUND',
+  'schemaValue.strokeCap': 'Cap style; ARROW_* is Figma only',
+  'schemaValue.textDecoration': 'Decoration line (default NONE)',
+  'schemaValue.textCase': 'Case transform (default ORIGINAL)',
+  'schemaValue.scaleMode': 'Scale mode: FILL / FIT / CROP / TILE',
+  'schemaValue.arcData': 'Arc parameters, draws a ring',
   'schema.base.r':
     'Red channel, 0-1 (0=none, 1=full), e.g. 1 for pure red; values >1 are treated as 0-255 and auto-normalized',
   'schema.base.g': 'Green channel, 0-1 (or 0-255, auto-normalized)',
@@ -201,7 +215,7 @@ export const MESSAGES_EN = {
     'Opacity 0-1 (0=transparent, 1=opaque), defaults to 1; >1 treated as 0-255 and auto-normalized',
   'schema.base.color': 'Color of this stop (with alpha)',
   'schema.base.position': 'Stop position, 0-1 (0=start, 1=end)',
-  'schema.base.transformSchema': 'Transform matrix [[a,b,tx],[c,d,ty]]',
+  'schema.base.transformSchema': '2×3 affine; [[1,0,0],[0,1,0]] = identity',
   'schema.base.type': 'Fill type: solid',
   'schema.base.opacity': 'Opacity 0-1, default 1',
   'schema.base.visible': 'Whether visible, default true',
@@ -288,34 +302,61 @@ export const MESSAGES_EN = {
   'schema.batch.error': 'Failure reason (human-readable text)',
   'schema.batch.error2': 'Id of the step that failed',
   'schema.executeOp.depth': 'Serialization depth',
+  'schema.executeSchemas.isMask': 'Use as a mask (geometry unchanged)',
+  'schema.executeSchemas.childrenOf':
+    'Child nodes, max 100 direct children; x/y are relative to the parent and default to (0,0). For bigger structures build in batches then regroup with jsd_reparent_nodes',
+  'schema.executeSchemas.fills':
+    'Fills. FRAME defaults to white; other shapes with strokes drop the fill — pass fills for a background',
+  'schema.executeSchemas.layoutMode':
+    'Auto-layout direction; set HORIZONTAL or VERTICAL before itemSpacing/padding*/primaryAxis*',
+  'schema.executeSchemas.itemSpacing':
+    'Item spacing (px); needs layoutMode; ignored when primaryAxisAlignItems is SPACE_BETWEEN',
+  'schema.executeSchemas.primaryAxisAlignItems':
+    'Main axis alignment; SPACE_BETWEEN ignores itemSpacing',
+  'schema.executeSchemas.frameNote':
+    'FRAME = container (auto-layout capable). Without fills the engine paints white — pass fills:[{type:"SOLID",color:{r:0,g:0,b:0},opacity:0}] for transparent',
+  'schema.executeSchemas.vectorNote':
+    'VECTOR = vector (with vectorPaths as SVG path data). ⚠ vectorPaths is sometimes lost/distorted after creation; use LINE+rotation for short segments',
+  'schema.executeSchemas.characters':
+    'Text content. Some emoji miss glyphs in the client font (render as ☒) — eyeball each one before shipping',
+  'schema.executeSchemas.fontName':
+    'Font {family,style}, exact match; check jsd_list_fonts first (falls back silently)',
+  'schema.executeSchemas.textAutoResize':
+    'Text auto resize: default WIDTH_AND_HEIGHT grows with content (width/height ignored) | HEIGHT = fixed width, auto height | NONE = fixed box | TRUNCATE',
   'schema.executeSchemas.type': 'Child node type',
   'schema.executeSchemas.x': 'X relative to the parent (px)',
   'schema.executeSchemas.y': 'Y relative to the parent (px)',
-  'schema.executeSchemas.x2': 'X relative to the parent (px)',
-  'schema.executeSchemas.y2': 'Y relative to the parent (px)',
+  'schema.executeSchemas.x2':
+    'X (px, relative to parent; roots follow placement)',
+  'schema.executeSchemas.y2':
+    'Y (px, relative to parent; roots follow placement)',
   'schema.executeSchemas.width': 'Width (px)',
   'schema.executeSchemas.height': 'Height (px)',
   'schema.executeSchemas.rotation': 'Rotation angle (deg)',
   'schema.executeSchemas.opacity': 'Opacity 0-1',
-  'schema.executeSchemas.strokes': 'Stroke list (Paint array)',
-  'schema.executeSchemas.strokeWeight': 'Stroke weight (px)',
-  'schema.executeSchemas.strokeTopWeight': 'Top stroke weight (px)',
-  'schema.executeSchemas.strokeBottomWeight': 'Bottom stroke weight (px)',
-  'schema.executeSchemas.strokeLeftWeight': 'Left stroke weight (px)',
-  'schema.executeSchemas.strokeRightWeight': 'Right stroke weight (px)',
+  'schema.executeSchemas.strokes': 'Stroke list, replaced as a whole',
+  'schema.executeSchemas.strokeWeight':
+    'Stroke weight (px); per-side fields win',
+  'schema.executeSchemas.strokeTopWeight':
+    'Top border width (px); overrides strokeWeight',
+  'schema.executeSchemas.strokeBottomWeight':
+    'Bottom border width (px); same as above',
+  'schema.executeSchemas.strokeLeftWeight':
+    'Left border width (px); same as above',
+  'schema.executeSchemas.strokeRightWeight':
+    'Right border width (px); same as above',
   'schema.executeSchemas.strokeAlign':
     'Stroke alignment: CENTER | INSIDE | OUTSIDE',
   'schema.executeSchemas.strokeCap': 'Stroke cap: NONE | ROUND | SQUARE',
   'schema.executeSchemas.strokeJoin': 'Stroke join: MITER | BEVEL | ROUND',
-  'schema.executeSchemas.dashPattern': 'Dash segment array, e.g. [4,4]',
-  'schema.executeSchemas.effects': 'Effect list (shadow/blur, stackable)',
-  'schema.executeSchemas.vertical': 'Constraint inside auto-layout',
+  'schema.executeSchemas.dashPattern': 'Dash: segment lengths, e.g. [4,4]',
+  'schema.executeSchemas.effects': 'Effect list (shadow / blur)',
+  'schema.executeSchemas.vertical': 'Constraints when the parent resizes',
   'schema.executeSchemas.clipsContent':
     'Whether overflowing content is clipped',
   'schema.executeSchemas.cornerSmoothing': 'Corner smoothing 0-1',
   'schema.executeSchemas.layoutGrids': 'Layout grids (guides)',
-  'schema.executeSchemas.cornerRadius':
-    'Corner radius (px), same on all four corners',
+  'schema.executeSchemas.cornerRadius': 'Corner radius (px)',
   'schema.executeSchemas.topLeftRadius': 'Top-left corner radius (px)',
   'schema.executeSchemas.topRightRadius': 'Top-right corner radius (px)',
   'schema.executeSchemas.bottomLeftRadius': 'Bottom-left corner radius (px)',
@@ -328,44 +369,33 @@ export const MESSAGES_EN = {
     'Main axis sizing mode: FIXED | AUTO',
   'schema.executeSchemas.counterAxisSizingMode':
     'Cross axis sizing mode: FIXED | AUTO',
-  'schema.executeSchemas.counterAxisAlignItems':
-    'Cross axis alignment: MIN | MAX | CENTER',
-  'schema.executeSchemas.layoutGrow': 'Grow factor inside auto-layout',
+  'schema.executeSchemas.counterAxisAlignItems': 'Cross axis alignment',
+  'schema.executeSchemas.layoutGrow':
+    'Grow factor on the parent main axis (0 = no growth)',
   'schema.executeSchemas.layoutAlign':
-    'Cross-axis alignment: INHERIT | STRETCH',
+    'Self alignment on the parent cross axis',
   'schema.executeSchemas.type2': 'RECTANGLE = rectangle',
-  'schema.executeSchemas.cornerRadius2': 'Corner radius (px)',
-  'schema.executeSchemas.startingAngle': 'Starting angle (radians)',
+  'schema.executeSchemas.startingAngle': 'Starting angle (rad)',
   'schema.executeSchemas.endingAngle': 'Ending angle (radians)',
   'schema.executeSchemas.innerRadius': 'Inner radius (0-1 ratio)',
   'schema.executeSchemas.innerRadius2': 'Arc path parameters, draws a ring',
-  'schema.executeSchemas.innerRadius3':
+  'schema.executeSchemas.ellipseNote':
     'ELLIPSE = ellipse (use arcData to draw a ring)',
   'schema.executeSchemas.type3': 'LINE = line',
   'schema.executeSchemas.pointCount': 'Polygon corner count, e.g. 6 = hexagon',
-  'schema.executeSchemas.cornerRadius3': 'Corner radius (px)',
-  'schema.executeSchemas.topLeftRadius2': 'Top-left corner radius (px)',
-  'schema.executeSchemas.topRightRadius2': 'Top-right corner radius (px)',
-  'schema.executeSchemas.bottomLeftRadius2': 'Bottom-left corner radius (px)',
-  'schema.executeSchemas.bottomRightRadius2': 'Bottom-right corner radius (px)',
   'schema.executeSchemas.bottomRightRadius3':
     'POLYGON = polygon (use pointCount)',
   'schema.executeSchemas.pointCount2':
     'Star point count, e.g. 5 = five-pointed star',
   'schema.executeSchemas.innerRadius4': 'Inner radius (0-1 ratio)',
   'schema.executeSchemas.cornerRadius4': 'Corner radius (px)',
-  'schema.executeSchemas.topLeftRadius3': 'Top-left corner radius (px)',
-  'schema.executeSchemas.topRightRadius3': 'Top-right corner radius (px)',
-  'schema.executeSchemas.bottomLeftRadius3': 'Bottom-left corner radius (px)',
-  'schema.executeSchemas.bottomRightRadius4': 'Bottom-right corner radius (px)',
   'schema.executeSchemas.bottomRightRadius5':
     'STAR = star (with pointCount / innerRadius)',
   'schema.executeSchemas.vectorPaths': 'Vector path data',
   'schema.executeSchemas.fontSize': 'Font size (px), default 16',
   'schema.executeSchemas.textAlignHorizontal':
-    'Horizontal alignment: LEFT | RIGHT | CENTER | JUSTIFIED',
-  'schema.executeSchemas.textAlignVertical':
-    'Vertical alignment: TOP | CENTER | BOTTOM',
+    'Horizontal alignment (default LEFT)',
+  'schema.executeSchemas.textAlignVertical': 'Vertical alignment (default TOP)',
   'schema.executeSchemas.textCase':
     'Text case: ORIGINAL | UPPER | LOWER | TITLE',
   'schema.executeSchemas.textDecoration':
@@ -373,18 +403,8 @@ export const MESSAGES_EN = {
   'schema.executeSchemas.lineHeight': 'Line height: {value, unit}',
   'schema.executeSchemas.letterSpacing': 'Letter spacing: {value, unit}',
   'schema.executeSchemas.letterSpacing2':
-    'Letter spacing: {value, unit}, unit is PIXELS | PERCENT',
+    'TEXT = text (with characters / fontSize / fontName)',
   'schema.executeSchemas.children': 'Child node array (recursive)',
-  'schema.executeSchemas.paddingTop2': 'Top padding (px)',
-  'schema.executeSchemas.paddingRight2': 'Right padding (px)',
-  'schema.executeSchemas.paddingBottom2': 'Bottom padding (px)',
-  'schema.executeSchemas.paddingLeft2': 'Left padding (px)',
-  'schema.executeSchemas.primaryAxisSizingMode2':
-    'Main axis sizing mode: FIXED | AUTO',
-  'schema.executeSchemas.counterAxisSizingMode2':
-    'Cross axis sizing mode: FIXED | AUTO',
-  'schema.executeSchemas.counterAxisAlignItems2':
-    'Cross axis alignment: MIN | MAX | CENTER',
   'schema.executeSchemas.path':
     'GROUP = group (implemented as a frame internally)',
   'schema.executeSchemas.children2': 'Child nodes to merge (at least 2)',
@@ -454,36 +474,36 @@ export const MESSAGES_EN = {
     'Polygon/star corner count (POLYGON / STAR only)',
   'schema.sharedProps.innerRadius': 'Inner radius (0-1 ratio)',
   'schema.sharedProps.strokes': 'Stroke list (Paint array)',
-  'schema.sharedProps.strokeWeight': 'Stroke weight (px)',
-  'schema.sharedProps.strokeTopWeight': 'Top stroke weight (px)',
-  'schema.sharedProps.strokeBottomWeight': 'Bottom stroke weight (px)',
-  'schema.sharedProps.strokeLeftWeight': 'Left stroke weight (px)',
-  'schema.sharedProps.strokeRightWeight': 'Right stroke weight (px)',
-  'schema.sharedProps.strokeAlign':
-    'Stroke alignment: CENTER | INSIDE | OUTSIDE',
-  'schema.sharedProps.strokeCap': 'Stroke cap: NONE | ROUND | SQUARE',
-  'schema.sharedProps.strokeJoin': 'Stroke join: MITER | BEVEL | ROUND',
+  'schema.sharedProps.strokeWeight': 'Stroke weight (px); per-side fields win',
+  'schema.sharedProps.strokeTopWeight':
+    'Top border width (px); overrides strokeWeight',
+  'schema.sharedProps.strokeBottomWeight':
+    'Bottom border width (px); same as above',
+  'schema.sharedProps.strokeLeftWeight':
+    'Left border width (px); same as above',
+  'schema.sharedProps.strokeRightWeight':
+    'Right border width (px); same as above',
+  'schema.sharedProps.strokeAlign': 'Stroke alignment (default INSIDE)',
+  'schema.sharedProps.strokeCap': 'Stroke cap; ARROW_* is Figma only',
+  'schema.sharedProps.strokeJoin': 'Stroke join style',
   'schema.sharedProps.dashPattern': 'Dash segment array, e.g. [4,4]',
   'schema.sharedProps.strokeStyleId': 'Local stroke style id',
-  'schema.sharedProps.topLeftRadius':
-    'Top-left corner radius (px), same applicable types as cornerRadius',
-  'schema.sharedProps.topRightRadius':
-    'Top-right corner radius (px), same applicable types as cornerRadius',
-  'schema.sharedProps.bottomLeftRadius':
-    'Bottom-left corner radius (px), same applicable types as cornerRadius',
-  'schema.sharedProps.bottomRightRadius':
-    'Bottom-right corner radius (px), same applicable types as cornerRadius',
+  'schema.sharedProps.cornerRadius':
+    'Corner radius (px). LINE/TEXT have no corners; per-corner fields override it',
+  'schema.sharedProps.topLeftRadius': 'schema.sharedProps.cornerRadius',
+  'schema.sharedProps.topRightRadius': 'Top-right corner radius (px)',
+  'schema.sharedProps.bottomLeftRadius': 'Bottom-left corner radius (px)',
+  'schema.sharedProps.bottomRightRadius': 'Bottom-right corner radius (px)',
   'schema.sharedProps.characters': 'Text content (TEXT nodes only)',
   'schema.sharedProps.fontSize': 'Font size (px)',
   'schema.sharedProps.textAlignHorizontal':
-    'Horizontal alignment: LEFT | RIGHT | CENTER | JUSTIFIED',
-  'schema.sharedProps.textAlignVertical':
-    'Vertical alignment: TOP | CENTER | BOTTOM',
-  'schema.sharedProps.textCase': 'Text case: ORIGINAL | UPPER | LOWER | TITLE',
-  'schema.sharedProps.textDecoration':
-    'Text decoration: NONE | UNDERLINE | STRIKETHROUGH',
-  'schema.sharedProps.lineHeight': 'Line height: {value, unit}',
-  'schema.sharedProps.letterSpacing': 'Letter spacing: {value, unit}',
+    'Horizontal alignment (default LEFT)',
+  'schema.sharedProps.textAlignVertical': 'Vertical alignment (default TOP)',
+  'schema.sharedProps.textCase': 'Case transform (default ORIGINAL)',
+  'schema.sharedProps.textDecoration': 'Decoration line (default NONE)',
+  'schema.sharedProps.lineHeight':
+    'Line height: {unit:"AUTO"} or {value,unit:PIXELS|PERCENT}',
+  'schema.sharedProps.letterSpacing': 'Letter spacing; unit is PIXELS|PERCENT',
   'schema.sharedProps.textStyleId': 'Local text style id',
   'schema.sharedProps.textTruncation':
     'Text truncation: DISABLED | ENDING (Figma only)',
@@ -496,10 +516,10 @@ export const MESSAGES_EN = {
     'Main axis sizing mode: FIXED | AUTO',
   'schema.sharedProps.counterAxisSizingMode':
     'Cross axis sizing mode: FIXED | AUTO',
-  'schema.sharedProps.counterAxisAlignItems':
-    'Cross axis alignment: MIN | MAX | CENTER',
-  'schema.sharedProps.layoutGrow': 'Grow factor inside auto-layout',
-  'schema.sharedProps.layoutAlign': 'Cross-axis alignment: INHERIT | STRETCH',
+  'schema.sharedProps.counterAxisAlignItems': 'Cross axis alignment',
+  'schema.sharedProps.layoutGrow':
+    'Grow factor on the parent main axis (0 = no growth)',
+  'schema.sharedProps.layoutAlign': 'Self alignment on the parent cross axis',
   'schema.sharedProps.fillStyleId': 'Local fill style id',
   'schema.sharedProps.effectStyleId': 'Local effect style id',
   'schema.sharedProps.effects': 'Effect list (shadow/blur, stackable)',
@@ -565,9 +585,13 @@ export const MESSAGES_EN = {
   'syncOverrides.description': 'Review the synced instances',
   'createFrame.title': 'Create frame container',
   'createFrame.description':
-    'Create a single FRAME node; input holds only FRAME fields: width/height size, layoutMode auto-layout (itemSpacing/padding*/main and cross axis sizing and alignment) plus visual fields such as fills and strokes. Only one root FRAME is created; use children only for small structures (a container plus its direct children, child x/y relative to the parent) — never pass a whole screen tree in one children call. Build layer by layer with jsd_batch, then reparent each layer into its parent with jsd_reparent_nodes. Set layoutMode=HORIZONTAL or VERTICAL before auto-layout fields (otherwise they are ignored). **Siblings that sit evenly spaced on one axis must be built with auto-layout, never hand-computed coordinates** (tab bars, pill groups, KPI rows, card headers, list rows, whole-screen vertical sections; criterion and both landing paths in jsd://recipes/auto-layout). **Get the sizing mode right**: on a layout container give only the width and let the other axis hug via AUTO — especially for content-sized containers such as dialogs and cards; only a screen root takes FIXED on both axes (a hardcoded height leaves dead space, or clips content when too small). Without explicit fills the engine defaults to a white background; pass fills:[{type:"SOLID",color:{r:0,g:0,b:0},opacity:0}] for a transparent container. Always pass a semantic name (e.g. "Sidebar", "KPI-OEE"); unnamed nodes fall back to the engine default name node. Use jsd_batch to create multiple roots or complex trees',
+    'Create a single FRAME node; input holds only FRAME fields: width/height size, layoutMode auto-layout (itemSpacing/padding*/main and cross axis sizing and alignment) plus visual fields such as fills and strokes. Only one root FRAME is created; use children only for small structures (a container plus its direct children, child x/y relative to the parent) — never pass a whole screen tree in one children call. Build layer by layer with jsd_batch, then reparent each layer into its parent with jsd_reparent_nodes. Set layoutMode=HORIZONTAL or VERTICAL before auto-layout fields (otherwise they are ignored). **Siblings that sit evenly spaced on one axis must be built with auto-layout, never hand-computed coordinates** (tab bars, pill groups, KPI rows, card headers, list rows, whole-screen vertical sections; criterion and both landing paths in skill://canvas/references/auto-layout.md). **Get the sizing mode right**: on a layout container give only the width and let the other axis hug via AUTO — especially for content-sized containers such as dialogs and cards; only a screen root takes FIXED on both axes (a hardcoded height leaves dead space, or clips content when too small). Without explicit fills the engine defaults to a white background; pass fills:[{type:"SOLID",color:{r:0,g:0,b:0},opacity:0}] for a transparent container. Always pass a semantic name (e.g. "Sidebar", "KPI-OEE"); unnamed nodes fall back to the engine default name node. Use jsd_batch to create multiple roots or complex trees',
   'layoutHint.uniform':
-    'Detected {count} children evenly spaced along {mode} (gap {gap}px) but the container declares no layoutMode. That is exactly the auto-layout criterion: set layoutMode:{mode} + itemSpacing:{gap} and the layout owns their positions — no coordinate recompute when copy or item count changes (advisory only, the create already succeeded; criterion and both landing paths in jsd://recipes/auto-layout)',
+    'Detected {count} children evenly spaced along {mode} (gap {gap}px) but the container declares no layoutMode. That is exactly the auto-layout criterion: set layoutMode:{mode} + itemSpacing:{gap} and the layout owns their positions — no coordinate recompute when copy or item count changes (advisory only, the create already succeeded; criterion and both landing paths in skill://canvas/references/auto-layout.md)',
+  'structureHint.flatBatch':
+    'This batch moves {batchCount} nodes into the same parent ({parentId}) — the shape of "every section flattened onto one layer". Structural layering is universal: screen -> semantic sections (status bar / header / hero / list / promo / bottom nav) -> card-level primitives; every element belongs to a semantic container, never straight onto the screen root. Recipe: skill://canvas/references/design-strategy.md (advisory only, the moves already succeeded)',
+  'structureHint.svgNoGroups':
+    'The SVG source carries no semantic <g id="..."> layers (counted {groupCount}) — after import the whole graphic lands as one un-splittable vector, so restyling a single layer means recomputing and re-importing. Cut one <g> per semantic layer with an ASCII semantic id (plot / grid / axis-x / series-<name> / legend); put a single transform on the outer plot group. Recipe: skill://canvas/references/chart-by-code.md section 5 (advisory only, the import already succeeded)',
   'createRectangle.title': 'Create rectangle',
   'createRectangle.description':
     'Create a single RECTANGLE node; input holds only rectangle fields: width/height, cornerRadius per corner and visual fields such as fills and strokes. Only one root rectangle; use children only for small structures (child x/y relative to the parent). Always pass a semantic name (e.g. "Card base", "Chart gridlines"); unnamed nodes fall back to the engine default name node. Use jsd_batch for multiple roots or complex trees',
@@ -595,7 +619,7 @@ export const MESSAGES_EN = {
   'createBooleanOperation.title': 'Create boolean operation node',
   'createSvg.title': 'Import SVG',
   'createSvg.description':
-    'Import an SVG into the canvas as editable layers (native createNodeFromSvg parsing; paths/gradients/strokes preserved). Pick one source: svg (inline string) or svgPath (path to a local .svg file, read by the background service). **Charts and data visualisations must use svgPath** (line, bar, pie/donut, scatter, radar, area, gauge, dashboard, Sankey, …): there is no built-in chart tool — write a script that computes the SVG, write it to a local file, then pass the path. Engine hard constraints (violations fail silently): the root element needs xmlns plus explicit width/height/viewBox; colours as hex only; no external images/fonts/scripts; approximate curves with C/Q, never the A command; canvas ≤2000×2000; split semantic layers into `<g id>` (one wrapper group is no grouping), with a single transform on the outer group only. Before you start, ReadMcpResource the recipe jsd://recipes/chart-by-code — it carries the zero-dependency example, the colour and type-scale conventions, and the post-import layer check plus visual acceptance checklist. Use jsd_batch to orchestrate multiple root nodes or complex trees',
+    'Import an SVG into the canvas as editable layers (native createNodeFromSvg parsing; paths/gradients/strokes preserved). Pick one source: svg (inline string) or svgPath (path to a local .svg file, read by the background service). **Charts and data visualisations must use svgPath** (line, bar, pie/donut, scatter, radar, area, gauge, dashboard, Sankey, …): there is no built-in chart tool — write a script that computes the SVG, write it to a local file, then pass the path. Engine hard constraints (violations fail silently): the root element needs xmlns plus explicit width/height/viewBox; colours as hex only; no external images/fonts/scripts; approximate curves with C/Q, never the A command; canvas ≤2000×2000; split semantic layers into `<g id>` (one wrapper group is no grouping), with a single transform on the outer group only. Before you start, ReadMcpResource the recipe skill://canvas/references/chart-by-code.md — it carries the zero-dependency example, the colour and type-scale conventions, and the post-import layer check plus visual acceptance checklist. Use jsd_batch to orchestrate multiple root nodes or complex trees',
   'createIcon.title': 'Insert built-in icon',
   'htmlToDesign.title': 'HTML to design nodes',
   'htmlToDesign.description':
@@ -705,7 +729,7 @@ export const MESSAGES_EN = {
   'resources.title7': 'Recipe index',
   'resources.title8': 'Recipe body',
   'ping.followUp':
-    'Read the current selection once the connection is confirmed; for creation tasks read the design-strategy prompt first',
+    'Read the current selection once the connection is confirmed. **Creation tasks: read the recipe at step 0** (hosts generally do not inject server instructions, so mcp.instructions is dropped; you must fetch it yourself): ReadMcpResource skill://canvas/SKILL.md for the index — charts/dataviz -> skill://canvas/references/chart-by-code.md, whole-page design -> skill://canvas/references/design-strategy.md + skill://canvas/references/auto-layout.md, bulk rework -> skill://canvas/references/script-ops.md. The cost of skipping is measurable: one full-screen task ran step by step with no recipe, flattened 38 nodes onto one layer, and needed multiple rounds of rework',
   'getSelection.title': 'Read canvas selection',
   'getSelection.description':
     'Read the current selection of the canvas, serialized with direct children; equivalent to jsd_get_selection depth=2',
@@ -717,10 +741,10 @@ export const MESSAGES_EN = {
   'getPage.followUp':
     'Read a specific node serialized by id; pass scope=document to search across pages',
   'mcp.instructions':
-    'Tools for operating the design canvas. One operation per jsd_* tool, no op dispatch; the aggregate entrypoints jsd_manage_nodes / jsd_manage_components are only for batch or mixed structure operations. Discipline:\n- **The first step of any design/creation task is reading the jsd_get_page roster** (assets.summary counts components / variants / styles / variables): reuse whatever matches — spread components with jsd_create_instance, switch to an existing variant value with jsd_set_instance_properties, and use the platform platformOps entry for styles and variables. Only build a new node when the roster genuinely lacks it (and name new assets "family/state" so the next run can reuse them).\n- Create nodes with per-type tools: jsd_create_frame / jsd_create_rectangle / jsd_create_text etc., one node type each; use jsd_batch for multi-root or deeply nested trees. The root x/y comes from placement (default center overwrites the root x/y with the viewport centre; pass placement:{mode:"manual"} to lay out by coordinates, or mode:"absolute" with x/y). Build the hierarchy deep enough — never stop at one level: children is only for small structures (a container plus its direct children; child x/y is relative to the parent), never pass a whole screen tree in one children call. Every element must live inside a semantic container, never directly under the screen root: screen → semantic sections (sidebar / topbar / filter bar / KPI row / each card) → elements inside a card grouped by meaning. Always pass a semantic name (unnamed nodes fall back to the engine default name node). Then jsd_reparent_nodes to group (pass parentId explicitly; cross-parent moves preserve absolute position and recompute x/y under the new parent, and auto-layout containers take over the position). Set auto-layout (layoutMode/itemSpacing/padding* …) last with jsd_set_layout.\n- Modify properties with the dedicated tools: fills jsd_set_fill_color, stroke jsd_set_stroke, radius jsd_set_cornerRadius, text jsd_set_text, position jsd_move_node, size jsd_resize_node (x/y too), layout jsd_set_layout, effects jsd_set_effects, visibility jsd_set_visibility, rename jsd_rename_node, shape jsd_set_shape.\n- Orchestrate multi-step flows with jsd_batch: reference earlier results with double-brace placeholders (step id + field path); intermediate ids never reach the model. Placeholders are valid only inside the same call. Step echoes are trimmed (nodes keep id/name/type/x/y), and batches with icons/vectors need a separate jsd_export for visual acceptance — an echo is not proof it worked.\n- Batch styling with ids: recursive=true applies to descendants only, not the target itself (styling a group of icon containers does not frame the container); add includeSelf=true to include it.\n- Style overrides on children inside an INSTANCE are not guaranteed to render; when hit, the result warnings name the matching child in the main component — fix the main component and every instance inherits it.\n- Result key contract (needed to write jsd_batch placeholders; not from outputSchema, which is projected to key names + types only, see daemon/compact-schema.ts): node results created is a single object or an array (per-type create / jsd_clone_node / jsd_outline_stroke / jsd_create_instance / jsd_detach_instance are arrays; jsd_create_svg / jsd_create_icon / jsd_group_nodes / jsd_flatten_nodes / jsd_create_component / jsd_import_component are single objects), updated / moved / swapped are arrays of objects (keys id/name/type/x/y/width/height/z/parentId), id lists selected / removed / ungrouped / cleaned are string arrays, jsd_find returns nodes + total, jsd_get_selection returns selection + pageName, jsd_export returns exports (with path / dataUrl). Placeholders look like {{id.updated[0].id}}; for a single object write {{id.created.id}} (adding [0] breaks it).\n- Always read the result warnings: they name facts that "echoed success but did not take effect" (fields ignored by platform capability gating, read-back mismatches such as root x/y overwritten by placement, TEXT textAutoResize silently set to NONE, unknown fontName combinations, sibling drift after structure changes). Font resolution: family from jsd_list_fonts fonts[].family verbatim, style the full name from the same entry (e.g. SourceHanSansCN-Bold, not "Bold").\n- ok=false or "node X not found": first jsd_find to check whether the id is gone (it may have been deleted as collateral), then jsd_repair_nodes if needed and retry.\n- When producing ≥2 sibling units that share one structure: make a COMPONENT first, then spread it with INSTANCE; name them "component family/state".\n- For multi-step work read the matching recipe prompt first (they live in prompts/list, names carry no jsd_ prefix; fetching one injects the full flow and acceptance criteria) instead of improvising with tools: charts / data visualization → chart-by-code (line, bar, pie / donut, scatter, radar, area, gauge — compute the geometry in a script, write the SVG to disk, import it via svgPath on jsd_create_svg); HTML to design → html-to-design; designing a screen from scratch → design-strategy; laying out screen sections / auto layout (should a container use it, the two adoption paths, the sections usually missed) → auto-layout; bulk text edits → text-replace-strategy; icon grid → icon-grid; merging multi-step canvas ops into one call → script-ops; syncing styles across sibling instances → variant-sync; variant set construction → variant-set; binding variables in bulk → variable-binding; defining and setting component properties → component-property. The same recipes are also exposed as MCP resources: when a host does not inject this section (observed on most clients), go by the resources instead — read jsd://recipes for the index (with when-to-use per entry) and jsd://recipes/<id> for the body.',
+    'Before canvas work, read skill://canvas/SKILL.md and relevant references. If skills are unavailable, use jsd_list_prompts/jsd_get_prompt or jsd://recipes. For creation, read jsd_get_page and reuse existing components, variants, styles and variables. Use semantic containers, reusable components for repeated structures and auto-layout for evenly spaced rows/columns. Root coordinates follow placement; use manual for explicit coordinates. Child coordinates are parent-relative unless layout controls them. Serialize canvas requests. Use ids for identical edits and jsd_batch for dependent steps (50 maximum; references are batch-local). recursive affects descendants; includeSelf=true includes containers. Use exact font family/style pairs from jsd_list_fonts. Read warnings, independently read back critical fields and visually inspect exported changes. Writes may have landed after a timeout; verify before retrying. Keep edits within user scope.',
   'ping.title': 'Check {client} plugin connection',
   'batch.description':
-    'Batch orchestrator: runs several jsd_* steps in order inside one request. Earlier results are injected into later args through double-brace placeholders (content = step id + field path); intermediate ids never reach the model, which cuts round-trips and context a lot.\nA placeholder that occupies a whole argument keeps its type (an array can be used directly as ids); embedded in a string it is expanded as JSON text. Placeholders are valid only inside the same call (the step table is destroyed when the call ends; referencing a previous batch aborts the whole batch). Name addressing is a separate route: {{@comp:Button}} resolves to a component / variant-set id and {{@var:accent/blue}} to a variable id, both looked up in the jsd_get_page asset list (read at most once per batch and shared across the steps of that batch; exact names win, then case-insensitive), write the name exactly as the list stores it — on jsDesign a component named with "/" is split into set + member, so assets.components[].name keeps only the leaf and the creation-time path will not match) and a miss or a duplicate name aborts with the candidates named rather than guessing (platforms that cannot read other pages list only the current page). Resources created inside this batch are not in that snapshot — keep using {{id.created[0].id}} for them. Duplicate ids, unknown tools or unresolvable references abort immediately; a failing step aborts by default (stopOnError=false, or per-step continueOnError=true, lets it finish). **When the list does not fit, use `callsFile`**: pass the absolute path of a JSON file holding {"calls":[…]}(optionally with stopOnError / checkDrift) or a bare array — same shape as calls — and the ids never enter the context. That file can also be run directly with the CLI: `text-to-design-mcp exec <file> [--json] [--dry-run]`.\nEchoes are trimmed: node objects keep id/name/type/x/y/width/height/z/parentId; vectorPaths and constraints are dropped entirely. Steps still over 20K chars after trimming degrade to an id list, and the full detail of the whole batch is spilled to a JSONL file (temp dir, one line per step `{id,tool,ok,data}`) with the step echo carrying path and line (echoTrimmed=true, plus an echoNote naming each affected step); only an over-limit or failed write falls back to a bare id list, named in warnings. Note: echoes never carry child nodes — a node is summarized as a whole, so children plus characters / fills / *StyleId / vectorPaths are absent; read the JSONL or call the tool alone to read a subtree instead of assuming the children are gone or the write failed. Resolution is unaffected (the full data is used internally). Batches containing icons must be verified visually with one jsd_export — an echo is not proof.\nResult keys and placeholder syntax per tool (a wrong key aborts the batch; a single object and a one-element array are interchangeable, so {{id.created[0].id}} and {{id.created.id}} both resolve — reading .field straight off a multi-element array still aborts): created is an array for per-type create / jsd_clone_node / jsd_outline_stroke / jsd_create_instance / jsd_detach_instance and a single object for jsd_create_svg / jsd_create_icon / jsd_flatten_nodes / jsd_group_nodes / jsd_create_component / jsd_import_component / jsd_combine_as_variants / jsd_create_style; jsd_find -> nodes; jsd_get_selection -> selection; jsd_set_* -> updated; jsd_swap_component -> swapped; jsd_delete_style -> removed[] (array of id strings, so {{id.removed[0]}})\\\\n· jsd_platform_op -> the step result IS the op payload (no .data envelope): {{id.variables[0].id}} for figma_variables_create, {{id.styles[0].boundVariables}} for figma_style_variables_list; each op documents its own shape in jsd_ping platformOps; jsd_manage_nodes ops: select/remove/ungroup/repair -> id string arrays, clone/outline_stroke -> created[group/flatten -> created (single object), reparent -> moved[].\nStructure drift review is on by default (checkDrift=false disables it): steps containing remove/reparent/group/ungroup/flatten/repair record sibling coordinates before the change and report any node that moved on its own. For multi-step recipes (charts, designing a screen from scratch, section layout and auto layout, HTML to design, bulk copy edits, components and variants, variable binding) read the recipe index jsd://recipes first (ReadMcpResource) instead of improvising tool calls; for whole-page / whole-file bulk edits (many groups per call, ids kept out of the context, read-back verification, chunking by block) read jsd://recipes/script-ops.',
+    'Run tool steps sequentially. Supply calls or callsFile (an absolute path readable by the server), at most 50 steps. Each step has id/tool/args; later args may reference paths such as {{step.created[0].id}}, valid only within this batch. Resolve existing assets with {{@comp:Name}} / {{@var:Name}}. Prefer one tool with ids for identical edits; use batch for different values or dependent tools. In compact mode, discover non-public capabilities with jsd_describe_tools before executing them here. Unknown tools are rejected. Execution errors stop by default; stopOnError/continueOnError control continuation, while plan errors still stop. A batch is not a transaction; earlier writes may remain. Read back after timeouts before replaying writes. Echoes trim subtrees and style fields; read spilled details via path/line. Verify fields with separate jsd_find and visual changes with export. checkDrift is enabled by default and reports sibling movement with original coordinates; false disables it for this call. See skill://canvas/references/script-ops.md; the recipe index is jsd://recipes.',
   'manageNodes.description':
     'Aggregate entrypoint for node structure operations dispatched by op: select | remove | clone | group | ungroup | flatten | outline_stroke | reparent | repair. For a single operation prefer the matching small tool: jsd_select_nodes / jsd_delete_node / jsd_clone_node / jsd_group_nodes / jsd_ungroup_nodes / jsd_flatten_nodes / jsd_outline_stroke / jsd_reparent_nodes / jsd_repair_nodes (their descriptions carry platform caveats and the correct flow). Property edits belong to jsd_set_* (incl. jsd_set_shape); component/instance work belongs to jsd_manage_components or jsd_create_component / jsd_sync_overrides — ops are not interchangeable.\nResult keys per op (needed to write correct jsd_batch placeholders; a wrong key aborts the batch): select -> selected[and remove -> removed[are id strings; clone/outline_stroke -> created[is an array of nodes; group/flatten -> created is a single node object; ungroup -> ungrouped[is id strings; reparent -> moved[(updated[mirrors it); repair -> cleaned[is id strings.',
   'createBooleanOperation.description':

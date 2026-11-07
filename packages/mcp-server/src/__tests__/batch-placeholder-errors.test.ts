@@ -66,7 +66,7 @@ beforeEach(() => {
 });
 
 async function runBatch(args: Record<string, unknown>): Promise<BatchResult> {
-  const exec = lookupExecutor('jsd_batch');
+  const exec = lookupExecutor('jsd_batch', fakeServer);
   expect(exec, 'jsd_batch 未注册').toBeDefined();
   const out = (await exec?.(args, undefined)) as {
     structuredContent?: unknown;

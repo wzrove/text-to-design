@@ -36,7 +36,7 @@ export function registerPlatformTools(
     // 的变量与样式表,不发网络请求 —— 标成 open world 会让客户端以为要联网而弹确认。
     annotations: {
       readOnlyHint: false,
-      destructiveHint: false,
+      destructiveHint: true,
       idempotentHint: false,
       openWorldHint: false,
     },

@@ -3,7 +3,7 @@
  *
  * ## 为什么要有这个东西
  *
- * 配方(`jsd://recipes/auto-layout`)与 instructions 都写了「屏内分区一律先上布局」,
+ * 配方(`skill://canvas/references/auto-layout.md`)与 instructions 都写了「屏内分区一律先上布局」,
  * 但两条通路都不保证被读到:instructions 多数宿主读完即弃(见 dec 0030 一节的实测),
  * 配方要模型主动 ReadMcpResource。于是**最常见的失败形态是「没人说不许手摆坐标」** ——
  * 模型手算 x/y 建出一排等距卡片,一路绿灯,直到要改文案或加一项才发现每处都要重算。

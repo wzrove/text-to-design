@@ -1,7 +1,20 @@
 import { type McpServer, ResourceTemplate } from '@modelcontextprotocol/server';
+import type { MessageKey } from 'text-to-design-shared';
 import type { Bridge } from '../bridge';
+import { RESOURCE_DOCUMENT_TTL_MS, RESOURCE_FONTS_TTL_MS } from '../config';
 import type { ToolHandle } from '../core/registry';
+import { resourceIcon } from '../core/tool-icons';
+import type { McpI18n } from '../i18n';
 import { getPlatformState } from '../platform-state';
+
+/**
+ * 资源标题必须**译出来**再交给 SDK,不能把 MessageKey 透传进 title。
+ *
+ * 曾经写的是 `title: 'resources.title7'` —— SDK 原样转发,宿主原样展示,
+ * 模型在 ListMcpResources 里读到的就是这串键名。契约上「资源清单是路由表」
+ * 一直成立(uri 对得上、description 也写全了),失效的只是「扫一眼就知道该读哪条」。
+ */
+const resourceTitle = (t: McpI18n['t'], key: MessageKey): string => t(key);
 
 function jsonContents(
   uri: string | URL,
@@ -27,12 +40,15 @@ function jsonContents(
 export function registerResources(
   server: McpServer,
   bridge: Bridge,
+  i18n: McpI18n,
 ): ToolHandle[] {
+  const { t } = i18n;
   const selection = server.registerResource(
     'canvas-selection',
     'jsd://canvas/selection',
     {
-      title: 'resources.title',
+      title: resourceTitle(t, 'resources.title'),
+      icons: resourceIcon(),
       description:
         '当前选中节点的序列化树(含直接子节点),实时从插件读取;等价于 jsd_get_selection depth=2。⚠ 每个节点带 z = 在父级 children 里的下标 = 绘制顺序(0 = 最底层,越大越靠上)',
       mimeType: 'application/json',
@@ -47,7 +63,9 @@ export function registerResources(
     'fonts',
     'jsd://fonts',
     {
-      title: 'resources.title2',
+      title: resourceTitle(t, 'resources.title2'),
+      icons: resourceIcon(),
+      cacheHint: { ttlMs: RESOURCE_FONTS_TTL_MS, cacheScope: 'private' },
       description:
         '当前环境可用的字体族与各族的可用字型(families / fonts:[{family,styles}]),实时从插件读取。**只回第一页**并给出 total/truncated —— 字体库实测可达约 1900 族,整表会撑爆上下文;要按名字找或翻页请用 jsd_list_fonts 的 family/offset/limit',
       mimeType: 'application/json',
@@ -62,7 +80,9 @@ export function registerResources(
     'styles',
     'jsd://styles',
     {
-      title: 'resources.title3',
+      title: resourceTitle(t, 'resources.title3'),
+      icons: resourceIcon(),
+      cacheHint: { ttlMs: RESOURCE_DOCUMENT_TTL_MS, cacheScope: 'private' },
       description:
         '当前文档可复用的本地样式(PAINT/TEXT/EFFECT/GRID),含 id/name/type;按名应用样式前先读这里拿准确样式名。⚠ 空清单不等于没有样式:本平台未声明样式枚举能力时恒空,回包会带 note 说明',
       mimeType: 'application/json',
@@ -77,7 +97,9 @@ export function registerResources(
     'page',
     'jsd://page',
     {
-      title: 'resources.title4',
+      title: resourceTitle(t, 'resources.title4'),
+      icons: resourceIcon(),
+      cacheHint: { ttlMs: RESOURCE_DOCUMENT_TTL_MS, cacheScope: 'private' },
       description:
         '**当前页**概览:①第一层节点的几何(id/名称/类型/宽高/x/y,不递归);②可复用资源清单(assets.summary 给四类计数;组件、变体集(带维度→可选值)、样式(PAINT/TEXT/EFFECT/GRID)、变量,每项含 id+名称)。范围:样式与变量是文档级;组件与变体在只读得到当前页的平台(即时设计/MasterGo)**只覆盖当前页**,note 会点名。**设计前先读这里:命中的一律复用,禁止新建重复件**。等价于 jsd_get_page',
       mimeType: 'application/json',
@@ -92,7 +114,8 @@ export function registerResources(
     'node',
     new ResourceTemplate('jsd://node/{id}', { list: undefined }),
     {
-      title: 'resources.title5',
+      title: resourceTitle(t, 'resources.title5'),
+      icons: resourceIcon(),
       description:
         '按 id 读取节点的序列化结构,如 jsd://node/12:3;等价于 jsd_find ids 精确查找',
       mimeType: 'application/json',
@@ -111,7 +134,8 @@ export function registerResources(
     'platform-state',
     'jsd://platform/state',
     {
-      title: 'resources.title6',
+      title: resourceTitle(t, 'resources.title6'),
+      icons: resourceIcon(),
       description:
         'daemon 缓存的插件平台状态(platform / capabilities / coreCapabilities / platformOps),取自最近一次 jsd_ping 回包;插件离线或尚未探测到平台时为空(此时先调 jsd_ping)。读缓存不发插件请求 —— 用它判断「当前平台支持什么、有哪些特有 op」比每次 ping 便宜',
       mimeType: 'application/json',

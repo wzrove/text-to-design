@@ -193,6 +193,21 @@ export const MESSAGES_ZH_CN = {
   'bridge.log.pingOk': 'ping 插件成功: {data}',
   'bridge.log.pingFailed': 'ping 插件失败: {message}',
   'bridge.error.useBridge': 'useBridge 必须在 <BridgeProvider> 内使用',
+  // ── 值域说明(挂在字段 schema 上的「这个值长什么样」) ──
+  'schemaValue.color':
+    '颜色:hex(如 "#ff0000";8 位 hex 的 alpha 转为 paint opacity)或 {r,g,b}(通道 0-1,>1 视为 0-255)',
+  'schemaValue.rgba':
+    '颜色:hex(如 "#ff000080")或 {r,g,b,a}(通道 0-1,>1 视为 0-255;a 缺省 1)',
+  'schemaValue.gradientStops': '渐变停止点,至少 2 个',
+  'schemaValue.constraint':
+    'MIN=吸附左/上|MAX=吸附右/下|STRETCH=拉伸|CENTER=居中|SCALE=等比缩放',
+
+  'schemaValue.strokeJoin': '拐角连接:斜接/斜切/圆角',
+  'schemaValue.strokeCap': '端点样式;ARROW_* 仅 Figma',
+  'schemaValue.textDecoration': '装饰线,缺省 NONE',
+  'schemaValue.textCase': '大小写变换,缺省 ORIGINAL',
+  'schemaValue.scaleMode': '缩放模式:填充裁剪|完整适配|裁剪|平铺',
+  'schemaValue.arcData': '环形路径参数,可画圆环',
   // ── zod .describe 字段说明(见 0016:schema 存键,边界投影成文案) ──
   'schema.base.r':
     '红色通道,范围 0-1(0=无,1=满),如纯红为 1;>1 视为 0-255,自动整组归一化',
@@ -202,8 +217,7 @@ export const MESSAGES_ZH_CN = {
     '不透明度,范围 0-1(0=全透明,1=不透明),缺省按 1 处理;>1 视为 0-255 自动归一化',
   'schema.base.color': '该停止点的颜色(带 alpha)',
   'schema.base.position': '停止点位置,范围 0-1(0=起点,1=终点)',
-  'schema.base.transformSchema':
-    '变换矩阵,如 [[1,0,0],[0,1,0]] 表示无变换(Identity)',
+  'schema.base.transformSchema': '2×3 仿射;[[1,0,0],[0,1,0]]=无变换',
   'schema.base.type': '填充类型:纯色',
   'schema.base.opacity': '不透明度 0-1,缺省 1',
   'schema.base.visible': '是否可见,缺省 true',
@@ -278,35 +292,54 @@ export const MESSAGES_ZH_CN = {
     '各步骤结果,顺序与入参一致;被中止而未执行的步骤不出现在此列表',
   'schema.executeOp.depth':
     '序列化深度:0=仅自身,1=含直接子节点,2=含孙节点;缺省 2',
+  'schema.executeSchemas.isMask': '作遮罩用(几何区域不变)',
+  'schema.executeSchemas.childrenOf':
+    '子节点,最多 100 个直接子节点;x/y 相对父节点,缺省叠在 (0,0)。更大的结构分批建后用 jsd_reparent_nodes 归组',
+  'schema.executeSchemas.fills':
+    '填充。FRAME 缺省白底;其他图形同时传 strokes 时填充置空(纯描边)—— 要底色请显式传 fills',
+  'schema.executeSchemas.layoutMode':
+    '自动布局方向;传 itemSpacing/padding*/primaryAxis* 前必须先设为 HORIZONTAL 或 VERTICAL',
+  'schema.executeSchemas.itemSpacing':
+    '项间距(px),需先设 layoutMode;primaryAxisAlignItems=SPACE_BETWEEN 时忽略',
+  'schema.executeSchemas.primaryAxisAlignItems':
+    '主轴对齐;为 SPACE_BETWEEN 时 itemSpacing 被忽略',
+  'schema.executeSchemas.frameNote':
+    'FRAME=容器(可 auto-layout)。不传 fills 时引擎默认白底,透明请传 fills:[{type:"SOLID",color:{r:0,g:0,b:0},opacity:0}]',
+  'schema.executeSchemas.vectorNote':
+    'VECTOR=矢量(配合 vectorPaths 传 SVG path data)。⚠ 创建后 vectorPaths 偶发丢失/形变,短直线段改用 LINE+rotation',
+  'schema.executeSchemas.characters':
+    '文本内容。个别 emoji 依赖客户端字体可能缺字(渲染成 ☒),上线前逐个目检',
+  'schema.executeSchemas.fontName':
+    '字体 {family,style},需精确匹配;先用 jsd_list_fonts 查可用字体(不可用时静默回退默认)',
+  'schema.executeSchemas.textAutoResize':
+    '文本自适应:缺省 WIDTH_AND_HEIGHT=按内容撑开(此时 width/height 被覆盖)|HEIGHT=固定宽自适应高|NONE=固定尺寸|TRUNCATE=截断',
   'schema.executeSchemas.type': '子节点类型',
   'schema.executeSchemas.x': '相对父节点的 X(px)',
   'schema.executeSchemas.y': '相对父节点的 Y(px)',
-  'schema.executeSchemas.x2':
-    'X 坐标(px,相对父节点,缺省 0;根节点的摆放由 placement 控制)',
-  'schema.executeSchemas.y2':
-    'Y 坐标(px,相对父节点,缺省 0;根节点的摆放由 placement 控制)',
+  'schema.executeSchemas.x2': 'X(px,相对父节点,缺省 0;根节点见 placement)',
+  'schema.executeSchemas.y2': 'Y(px,相对父节点,缺省 0;根节点见 placement)',
   'schema.executeSchemas.width': '宽度(px)',
   'schema.executeSchemas.height': '高度(px)',
-  'schema.executeSchemas.rotation':
-    '旋转角度(deg,绕节点自身左上角原点,x/y 不变)',
+  'schema.executeSchemas.rotation': '旋转角(deg),绕左上角原点',
   'schema.executeSchemas.opacity': '不透明度 0-1',
-  'schema.executeSchemas.strokes': '描边列表(Paint 数组)',
-  'schema.executeSchemas.strokeWeight': '描边宽度(px)',
-  'schema.executeSchemas.strokeTopWeight': '描边顶部宽(px)',
-  'schema.executeSchemas.strokeBottomWeight': '描边底部宽(px)',
-  'schema.executeSchemas.strokeLeftWeight': '描边左侧宽(px)',
-  'schema.executeSchemas.strokeRightWeight': '描边右侧宽(px)',
-  'schema.executeSchemas.strokeAlign': '描边对齐:CENTER|INSIDE|OUTSIDE',
-  'schema.executeSchemas.strokeCap':
-    '描边端点:NONE|ROUND|SQUARE|ARROW_LINES|ARROW_EQUILATERAL',
-  'schema.executeSchemas.strokeJoin': '描边连接:MITER|BEVEL|ROUND',
-  'schema.executeSchemas.dashPattern': '虚线段数组,如 [4,4]',
-  'schema.executeSchemas.effects': '效果列表(阴影/模糊,可多层叠加)',
-  'schema.executeSchemas.vertical': '自动布局中的约束',
+  'schema.executeSchemas.strokes': '描边列表,整体替换(非合并)',
+  'schema.executeSchemas.strokeWeight': '描边宽度(px);分边字段缺省时按它',
+  'schema.executeSchemas.strokeTopWeight':
+    '上边框宽(px);设了则覆盖 strokeWeight',
+  'schema.executeSchemas.strokeBottomWeight': '下边框宽(px);同上',
+  'schema.executeSchemas.strokeLeftWeight': '左边框宽(px);同上',
+  'schema.executeSchemas.strokeRightWeight': '右边框宽(px);同上',
+  'schema.executeSchemas.strokeAlign': '描边对齐(缺省 INSIDE)',
+  'schema.executeSchemas.strokeCap': '端点样式;ARROW_* 仅 Figma',
+  'schema.executeSchemas.strokeJoin': '拐角连接样式',
+  'schema.executeSchemas.dashPattern': '虚线:段长数组,如 [4,4]',
+  'schema.executeSchemas.effects': '效果列表(阴影/模糊)',
+  'schema.executeSchemas.vertical': '父容器缩放时的约束',
   'schema.executeSchemas.clipsContent': '是否裁剪溢出内容',
   'schema.executeSchemas.cornerSmoothing': '圆角平滑度 0-1',
   'schema.executeSchemas.layoutGrids': '布局网格(参考线)',
-  'schema.executeSchemas.cornerRadius': '圆角半径(px),四角统一',
+  'schema.executeSchemas.cornerRadius':
+    '圆角半径(px),四角统一(LINE/TEXT 无圆角)',
   'schema.executeSchemas.topLeftRadius': '左上圆角(px)',
   'schema.executeSchemas.topRightRadius': '右上圆角(px)',
   'schema.executeSchemas.bottomLeftRadius': '左下圆角(px)',
@@ -317,61 +350,40 @@ export const MESSAGES_ZH_CN = {
   'schema.executeSchemas.paddingLeft': '左内边距(px)',
   'schema.executeSchemas.primaryAxisSizingMode': '主轴尺寸模式:FIXED|AUTO',
   'schema.executeSchemas.counterAxisSizingMode': '交叉轴尺寸模式:FIXED|AUTO',
-  'schema.executeSchemas.counterAxisAlignItems': '交叉轴对齐:MIN|MAX|CENTER',
-  'schema.executeSchemas.layoutGrow': '自动布局内伸缩系数',
-  'schema.executeSchemas.layoutAlign':
-    '自动布局内对齐:MIN|CENTER|MAX|STRETCH|INHERIT',
+  'schema.executeSchemas.counterAxisAlignItems': '交叉轴对齐',
+  'schema.executeSchemas.layoutGrow': '父布局主轴剩余空间的伸展系数(0=不伸)',
+  'schema.executeSchemas.layoutAlign': '父布局交叉轴上的自对齐',
   'schema.executeSchemas.type2': 'RECTANGLE=矩形',
-  'schema.executeSchemas.cornerRadius2': '圆角半径(px)',
-  'schema.executeSchemas.startingAngle': '起始角度(radians)',
-  'schema.executeSchemas.endingAngle': '结束角度(radians)',
+  'schema.executeSchemas.startingAngle': '起始角度(rad)',
+  'schema.executeSchemas.endingAngle': '结束角度(rad)',
   'schema.executeSchemas.innerRadius': '内半径(0-1 ratio)',
   'schema.executeSchemas.innerRadius2': '环形路径参数(弧线),可画圆环',
-  'schema.executeSchemas.innerRadius3': 'ELLIPSE=椭圆(配合 arcData 可画环)',
+  'schema.executeSchemas.ellipseNote': 'ELLIPSE=椭圆(配合 arcData 可画环)',
   'schema.executeSchemas.type3': 'LINE=线段',
   'schema.executeSchemas.pointCount': '多边形角点数,如 6=六边形',
-  'schema.executeSchemas.cornerRadius3': '圆角半径(px)',
-  'schema.executeSchemas.topLeftRadius2': '左上圆角(px)',
-  'schema.executeSchemas.topRightRadius2': '右上圆角(px)',
-  'schema.executeSchemas.bottomLeftRadius2': '左下圆角(px)',
-  'schema.executeSchemas.bottomRightRadius2': '右下圆角(px)',
   'schema.executeSchemas.bottomRightRadius3': 'POLYGON=多边形(配合 pointCount)',
   'schema.executeSchemas.pointCount2': '星形角点数,如 5=五角星',
   'schema.executeSchemas.innerRadius4':
-    '星形内半径比例(0-1,相对外半径),值越小角越尖锐',
+    '星形内半径比例(0-1,相对外半径),越小角越尖',
   'schema.executeSchemas.cornerRadius4': '圆角半径(px)',
-  'schema.executeSchemas.topLeftRadius3': '左上圆角(px)',
-  'schema.executeSchemas.topRightRadius3': '右上圆角(px)',
-  'schema.executeSchemas.bottomLeftRadius3': '左下圆角(px)',
-  'schema.executeSchemas.bottomRightRadius4': '右下圆角(px)',
   'schema.executeSchemas.bottomRightRadius5':
     'STAR=星形(配合 pointCount + innerRadius)',
   'schema.executeSchemas.vectorPaths':
     '矢量路径数组,每项含 SVG path data(如 "M0 0 L100 100")',
   'schema.executeSchemas.fontSize': '字号(px),默认 16',
-  'schema.executeSchemas.textAlignHorizontal':
-    '水平对齐:LEFT|CENTER|RIGHT|JUSTIFIED',
-  'schema.executeSchemas.textAlignVertical': '垂直对齐:TOP|CENTER|BOTTOM',
-  'schema.executeSchemas.textCase': '文本大小写:ORIGINAL|UPPER|LOWER|TITLE',
-  'schema.executeSchemas.textDecoration':
-    '文本装饰:NONE|UNDERLINE|STRIKETHROUGH',
+  'schema.executeSchemas.textAlignHorizontal': '水平对齐,缺省 LEFT',
+  'schema.executeSchemas.textAlignVertical': '垂直对齐,缺省 TOP',
+  'schema.executeSchemas.textCase': '大小写变换,缺省 ORIGINAL',
+  'schema.executeSchemas.textDecoration': '装饰线,缺省 NONE',
   'schema.executeSchemas.lineHeight':
     '行高:{value,unit},unit 为 PIXELS|PERCENT;或 {unit:"AUTO"}',
   'schema.executeSchemas.letterSpacing':
     '字距:{value,unit},unit 为 PIXELS|PERCENT',
   'schema.executeSchemas.letterSpacing2':
     'TEXT=文本(配合 characters/fontSize/fontName 等)',
-  'schema.executeSchemas.children':
-    '子节点数组,至少 2 个;递归嵌套,最多 100 个直接子节点',
-  'schema.executeSchemas.paddingTop2': '上内边距(px)',
-  'schema.executeSchemas.paddingRight2': '右内边距(px)',
-  'schema.executeSchemas.paddingBottom2': '下内边距(px)',
-  'schema.executeSchemas.paddingLeft2': '左内边距(px)',
-  'schema.executeSchemas.primaryAxisSizingMode2': '主轴尺寸模式:FIXED|AUTO',
-  'schema.executeSchemas.counterAxisSizingMode2': '交叉轴尺寸模式:FIXED|AUTO',
-  'schema.executeSchemas.counterAxisAlignItems2': '交叉轴对齐',
+  'schema.executeSchemas.children': '子节点数组,至少 2 个',
   'schema.executeSchemas.path': 'GROUP=分组(内部用 Frame 实现)',
-  'schema.executeSchemas.children2': '要合并的子节点数组(至少 2 个)',
+  'schema.executeSchemas.children2': '要合并的子节点,至少 2 个',
   'schema.executeSchemas.children3': 'BOOLEAN_OPERATION=布尔运算(合并子节点)',
   'schema.execute.name': '生成的图层名,默认 svg-design',
   'schema.execute.html': 'HTML 片段,支持内联 style',
@@ -425,34 +437,34 @@ export const MESSAGES_ZH_CN = {
   'schema.sharedProps.pointCount': '多边形/星形角点数(仅 POLYGON/STAR 生效)',
   'schema.sharedProps.innerRadius':
     '星形内半径比例(0-1,相对外半径;仅 STAR 生效)',
-  'schema.sharedProps.strokes':
-    '描边列表(Paint 数组;整体替换,非合并,需保留的描边要一并传入)',
-  'schema.sharedProps.strokeWeight': '描边宽度(px)',
-  'schema.sharedProps.strokeTopWeight': '描边顶部宽(px)',
-  'schema.sharedProps.strokeBottomWeight': '描边底部宽(px)',
-  'schema.sharedProps.strokeLeftWeight': '描边左侧宽(px)',
-  'schema.sharedProps.strokeRightWeight': '描边右侧宽(px)',
-  'schema.sharedProps.strokeAlign': '描边对齐:CENTER|INSIDE|OUTSIDE',
-  'schema.sharedProps.strokeCap':
-    '描边端点:NONE|ROUND|SQUARE|ARROW_LINES|ARROW_EQUILATERAL',
-  'schema.sharedProps.strokeJoin': '描边连接:MITER|BEVEL|ROUND',
-  'schema.sharedProps.dashPattern': '虚线段数组,如 [4,4]',
+  'schema.sharedProps.strokes': '描边列表,整体替换(非合并)',
+  'schema.sharedProps.strokeWeight': '描边宽度(px);分边字段缺省时按它',
+  'schema.sharedProps.strokeTopWeight': '上边框宽(px);设了则覆盖 strokeWeight',
+  'schema.sharedProps.strokeBottomWeight': '下边框宽(px);同上',
+  'schema.sharedProps.strokeLeftWeight': '左边框宽(px);同上',
+  'schema.sharedProps.strokeRightWeight': '右边框宽(px);同上',
+  'schema.sharedProps.strokeAlign': '描边对齐(缺省 INSIDE)',
+  'schema.sharedProps.strokeCap': '端点样式;ARROW_* 仅 Figma',
+  'schema.sharedProps.strokeJoin': '拐角连接样式',
+  'schema.sharedProps.dashPattern': '虚线:段长数组,如 [4,4]',
   'schema.sharedProps.strokeStyleId':
     '描边样式 id(团队库样式;平台无此能力时被忽略)',
-  'schema.sharedProps.topLeftRadius': '左上圆角(px),适用类型同 cornerRadius',
+  'schema.sharedProps.cornerRadius':
+    '圆角半径(px),四角统一;LINE/TEXT 无圆角;分角字段覆盖它',
+  'schema.sharedProps.topLeftRadius': 'schema.sharedProps.cornerRadius',
   'schema.sharedProps.topRightRadius': '右上圆角(px),适用类型同 cornerRadius',
   'schema.sharedProps.bottomLeftRadius': '左下圆角(px),适用类型同 cornerRadius',
   'schema.sharedProps.bottomRightRadius':
     '右下圆角(px),适用类型同 cornerRadius',
   'schema.sharedProps.characters': '文本内容(仅 TEXT 节点生效)',
   'schema.sharedProps.fontSize': '字号(px)',
-  'schema.sharedProps.textAlignHorizontal':
-    '水平对齐:LEFT|CENTER|RIGHT|JUSTIFIED',
-  'schema.sharedProps.textAlignVertical': '垂直对齐:TOP|CENTER|BOTTOM',
-  'schema.sharedProps.textCase': '文本大小写:ORIGINAL|UPPER|LOWER|TITLE',
-  'schema.sharedProps.textDecoration': '文本装饰:NONE|UNDERLINE|STRIKETHROUGH',
-  'schema.sharedProps.lineHeight': '行高:{value,unit}',
-  'schema.sharedProps.letterSpacing': '字距:{value,unit}',
+  'schema.sharedProps.textAlignHorizontal': '水平对齐,缺省 LEFT',
+  'schema.sharedProps.textAlignVertical': '垂直对齐,缺省 TOP',
+  'schema.sharedProps.textCase': '大小写变换,缺省 ORIGINAL',
+  'schema.sharedProps.textDecoration': '装饰线,缺省 NONE',
+  'schema.sharedProps.lineHeight':
+    '行高;{unit:"AUTO"} 或 {value,unit:PIXELS|PERCENT}',
+  'schema.sharedProps.letterSpacing': '字距;unit 为 PIXELS|PERCENT',
   'schema.sharedProps.textStyleId':
     '文本样式 id(团队库样式;平台无此能力时被忽略)',
   'schema.sharedProps.textTruncation':
@@ -464,10 +476,9 @@ export const MESSAGES_ZH_CN = {
   'schema.sharedProps.paddingLeft': '左内边距(px)',
   'schema.sharedProps.primaryAxisSizingMode': '主轴尺寸模式:FIXED|AUTO',
   'schema.sharedProps.counterAxisSizingMode': '交叉轴尺寸模式:FIXED|AUTO',
-  'schema.sharedProps.counterAxisAlignItems': '交叉轴对齐:MIN|MAX|CENTER',
-  'schema.sharedProps.layoutGrow': '自动布局内伸缩系数',
-  'schema.sharedProps.layoutAlign':
-    '自动布局内对齐:MIN|CENTER|MAX|STRETCH|INHERIT',
+  'schema.sharedProps.counterAxisAlignItems': '交叉轴对齐',
+  'schema.sharedProps.layoutGrow': '父布局主轴剩余空间的伸展系数(0=不伸)',
+  'schema.sharedProps.layoutAlign': '父布局交叉轴上的自对齐',
   'schema.sharedProps.fillStyleId':
     '填充样式 id(团队库样式;平台无此能力时被忽略)',
   'schema.sharedProps.effectStyleId':
@@ -532,9 +543,13 @@ export const MESSAGES_ZH_CN = {
   'syncOverrides.description': '复核同步后的实例',
   'createFrame.title': '创建 Frame 容器',
   'createFrame.description':
-    '创建单个 FRAME 容器节点,入参只含 FRAME 字段:width/height 尺寸、layoutMode 自动布局(itemSpacing/padding*/主轴交叉轴尺寸对齐)与填充描边等视觉字段。本工具只建一个根 FRAME;children 只用于「容器 + 其直属子节点」这类小结构(子节点 x/y 相对父节点),**别把整屏的整棵树塞进一次 children**(易整批失败)—— 分层分批用 jsd_batch 编排,再用 jsd_reparent_nodes 逐层归组。auto-layout 前必须设 layoutMode=HORIZONTAL 或 VERTICAL(否则布局字段被忽略)。**同轴等距的兄弟元素一律用 auto-layout 建,不要手算坐标**(标签栏 / 胶囊组 / KPI 行 / 卡片头 / 列表行 / 整屏纵向分区都在此列;判据与两条落地路径见 jsd://recipes/auto-layout)。**尺寸模式别写反**:开布局只给宽度、高度交给 AUTO 撑开,弹窗/卡片这类内容自适应的容器尤甚;只有屏根才两轴 FIXED(写死高度会留死白,写死高度不够会裁内容)。未显式传 fills 时引擎默认白底,透明容器传 fills:[{type:"SOLID",color:{r:0,g:0,b:0},opacity:0}]。**name 必传且语义化**(如「侧栏」「KPI-设备综合效率」),不传会落成引擎默认名 node。建多个根节点/复杂树用 jsd_batch 编排',
+    '创建单个 FRAME 容器节点,入参只含 FRAME 字段:width/height 尺寸、layoutMode 自动布局(itemSpacing/padding*/主轴交叉轴尺寸对齐)与填充描边等视觉字段。本工具只建一个根 FRAME;children 只用于「容器 + 其直属子节点」这类小结构(子节点 x/y 相对父节点),**别把整屏的整棵树塞进一次 children**(易整批失败)—— 分层分批用 jsd_batch 编排,再用 jsd_reparent_nodes 逐层归组。auto-layout 前必须设 layoutMode=HORIZONTAL 或 VERTICAL(否则布局字段被忽略)。**同轴等距的兄弟元素一律用 auto-layout 建,不要手算坐标**(标签栏 / 胶囊组 / KPI 行 / 卡片头 / 列表行 / 整屏纵向分区都在此列;判据与两条落地路径见 skill://canvas/references/auto-layout.md)。**尺寸模式别写反**:开布局只给宽度、高度交给 AUTO 撑开,弹窗/卡片这类内容自适应的容器尤甚;只有屏根才两轴 FIXED(写死高度会留死白,写死高度不够会裁内容)。未显式传 fills 时引擎默认白底,透明容器传 fills:[{type:"SOLID",color:{r:0,g:0,b:0},opacity:0}]。**name 必传且语义化**(如「侧栏」「KPI-设备综合效率」),不传会落成引擎默认名 node。建多个根节点/复杂树用 jsd_batch 编排',
   'layoutHint.uniform':
-    '检测到 {count} 个子节点沿 {mode} 方向等距排列(间距 {gap}px),但本容器没声明 layoutMode。这正是 auto-layout 的判据:设 layoutMode:{mode} + itemSpacing:{gap} 之后位置由布局接管,改文案或加一项都不必重算坐标(本条只是提示,创建已成功;判据与两条落地路径见 jsd://recipes/auto-layout)',
+    '检测到 {count} 个子节点沿 {mode} 方向等距排列(间距 {gap}px),但本容器没声明 layoutMode。这正是 auto-layout 的判据:设 layoutMode:{mode} + itemSpacing:{gap} 之后位置由布局接管,改文案或加一项都不必重算坐标(本条只是提示,创建已成功;判据与两条落地路径见 skill://canvas/references/auto-layout.md)',
+  'structureHint.flatBatch':
+    '本批有 {batchCount} 步把节点移入同一个父级({parentId})—— 这是「所有分区平铺在同一层」的形状。结构分层是通用纪律:屏 → 语义分区(状态栏 / 页头 / 主视觉 / 列表 / 运营位 / 底栏)→ 卡片内图元,每个元素归到语义容器,不许直挂屏根。配方见 skill://canvas/references/design-strategy.md(本条只是提示,移入已成功)',
+  'structureHint.svgNoGroups':
+    'SVG 源码里没有按语义切 <g id="...">(数到 {groupCount} 个)—— 导入后整张图落成不可拆的矢量,想单独调某一层只能回源重算重导。每个语义层切一个 <g>,id 用 ASCII 语义名(plot / grid / axis-x / series-<名> / legend);绘图区只在外层写一个 transform。配方见 skill://canvas/references/chart-by-code.md 第 5 节(本条只是提示,导入已成功)',
   'createRectangle.title': '创建矩形',
   'createRectangle.description':
     '创建单个 RECTANGLE 矩形节点,入参只含矩形字段:width/height 尺寸、cornerRadius 四角圆角与填充描边等视觉字段。本工具只建一个根矩形;children 只用于小结构(子节点 x/y 相对父节点)。**name 必传且语义化**(如「卡片底板」「图表-网格线」),不传会落成引擎默认名 node。建多个根节点/复杂树用 jsd_batch 编排',
@@ -564,7 +579,7 @@ export const MESSAGES_ZH_CN = {
   // 本键由 0016 的规则承载「图表路由」:工具的 description 必须整体是一个键
   // (注册期 t() 只对整串查表),拼接出来的串查不到、会原样下发。
   'createSvg.description':
-    '将 SVG 直接导入画布为可编辑图层(createNodeFromSvg 原生解析,保留路径/渐变/描边)。来源二选一:svg(内联字符串)或 svgPath(本地 .svg 文件路径,由后台服务读盘)。**图表 / 数据可视化一律走 svgPath**(折线图、柱状图、饼图 / 环形图、散点图、雷达图、面积图、仪表盘、看板、桑基图……):没有内置图表工具 —— 先自己写脚本把 SVG 算好、落到本地文件,再传路径。引擎硬约束(违反会静默画不出来):根元素必须带 xmlns 与显式 width/height/viewBox;颜色只写 hex;不引外链图片/字体/script;曲线用 C/Q 自己近似,不要用 A 指令;画布 ≤2000×2000;按语义层切 `<g id>`(一层不套等于没分组),绘图区只在外层写一个 transform。动手前先 ReadMcpResource 读配方 jsd://recipes/chart-by-code —— 内含零依赖示例、配色字号口径、导入后回读层级与导图验收清单。建多个根节点/复杂树用 jsd_batch 编排',
+    '将 SVG 直接导入画布为可编辑图层(createNodeFromSvg 原生解析,保留路径/渐变/描边)。来源二选一:svg(内联字符串)或 svgPath(本地 .svg 文件路径,由后台服务读盘)。**图表 / 数据可视化一律走 svgPath**(折线图、柱状图、饼图 / 环形图、散点图、雷达图、面积图、仪表盘、看板、桑基图……):没有内置图表工具 —— 先自己写脚本把 SVG 算好、落到本地文件,再传路径。引擎硬约束(违反会静默画不出来):根元素必须带 xmlns 与显式 width/height/viewBox;颜色只写 hex;不引外链图片/字体/script;曲线用 C/Q 自己近似,不要用 A 指令;画布 ≤2000×2000;按语义层切 `<g id>`(一层不套等于没分组),绘图区只在外层写一个 transform。动手前先 ReadMcpResource 读配方 skill://canvas/references/chart-by-code.md —— 内含零依赖示例、配色字号口径、导入后回读层级与导图验收清单。建多个根节点/复杂树用 jsd_batch 编排',
   'createIcon.title': '插入内置图标',
   'htmlToDesign.title': 'HTML 转设计节点',
   'htmlToDesign.description':
@@ -664,7 +679,8 @@ export const MESSAGES_ZH_CN = {
   'resources.title6': '平台状态与能力表',
   'resources.title7': '配方索引',
   'resources.title8': '配方正文',
-  'ping.followUp': '连接确认后读取当前选中;创作类任务先读 design-strategy 配方',
+  'ping.followUp':
+    '连接确认后读取当前选中。**创作类任务在第 0 步读配方**(宿主普遍不注入 server instructions,mcp.instructions 读了也白读,只能自己主动读):先 ReadMcpResource skill://canvas/SKILL.md 拿索引 —— 画图表 / 数据可视化读 skill://canvas/references/chart-by-code.md,从零设计整页读 skill://canvas/references/design-strategy.md + skill://canvas/references/auto-layout.md,批量改造读 skill://canvas/references/script-ops.md。跳过配方的代价可量化:实测一次整屏任务全程单步调用、没读任何配方,38 个节点全平铺在一层,返工多轮',
   'getSelection.title': '读取画布选中',
   'getSelection.description':
     '获取画布当前选中节点的序列化树(名称/类型/尺寸/位置/填充/子结构);depth 控制层级深度,默认 2。⚠ 每个节点带 z = 在父级 children 里的下标 = 绘制顺序(0 = 最底层,越大越靠上),判断遮挡读 z 即可',
@@ -675,12 +691,12 @@ export const MESSAGES_ZH_CN = {
   'getPage.followUp':
     '按 id 读取具体节点的序列化结构;要跨页查找传 scope=document',
   'mcp.instructions':
-    '操作设计画布的工具集。一个操作对应一个 jsd_* 工具,无 op 分发;聚合入口 jsd_manage_nodes / jsd_manage_components 仅用于批量/混合结构操作。调用纪律:\n- **设计/创作类任务的第一步是读 jsd_get_page 的资源清单**(assets.summary 给组件/变体/样式/变量四类计数):命中的一律复用 —— 组件用 jsd_create_instance、变体切到已有取值用 jsd_set_instance_properties、样式与变量按本平台 platformOps 的入口;只有清单里确实没有,才允许新建同名/同用途的件(新建时按「组件族/状态」命名,方便下次复用)。\n- 建节点用 per-type 工具:jsd_create_frame / jsd_create_rectangle / jsd_create_text 等,每个工具只建一类节点;多根/复杂嵌套树用 jsd_batch 编排多个建节点步骤。**根节点的 x/y 由 placement 决定**(缺省 center 用视口中心覆盖根节点自身的 x/y;要按坐标排布传 placement:{mode:"manual"},或 mode:"absolute"+x/y 统一坐标),**层级结构要建够,别只做到一层**:children 只用于「容器 + 其直属子节点」这类小结构(子节点 x/y 相对父节点),整屏的整棵树别塞进一次 children;每个元素都要归到语义容器里,不许直挂屏根 —— 屏 → 语义分区(侧栏 / 顶栏 / 筛选条 / KPI 行 / 每张卡片)→ 卡片内图元按语义编组。name 必传且语义化(不传会落成引擎默认名 node)。建完再 jsd_reparent_nodes 归组(**parentId 显式传目标容器 id**;跨父级移动会保持节点绝对位置,内部自动换算新父下的 x/y,不用手动摆回,移入 auto-layout 容器时位置由布局接管);auto-layout(layoutMode/itemSpacing/padding* 等)最后用 jsd_set_layout 单独设置。\n- 改属性用专责工具:填充 jsd_set_fill_color、描边 jsd_set_stroke、圆角 jsd_set_cornerRadius、文本 jsd_set_text、位置 jsd_move_node、尺寸 jsd_resize_node(可同时传 x/y)、布局 jsd_set_layout、效果 jsd_set_effects、显隐 jsd_set_visibility、改名 jsd_rename_node、形状 jsd_set_shape。\n- 跨工具多步流程用 jsd_batch 编排:双花括号占位符(步骤id.字段路径)引用上步结果,中间 id 不回传模型;**占位符只在同一次调用的本批次内有效** —— 跨批次引用必报「占位符引用的步骤不存在或未成功」并中止整批,跨批次要硬编码上一步回显里的真实 id;步骤回显已做摘要裁剪(节点只留 id/name/type/x/y),含图标/矢量的批次(jsd_create_icon / jsd_clone_node)另配一次 jsd_export 目视验收 —— 回显不等于生效。\n- 批量刷样式用 ids 一次下发:recursive=true 只作用于**后代**,不含目标节点自身(给一组图标容器刷描边,容器自己不会被套上方框);要连容器自身一起改才传 includeSelf=true。\n- 实例子节点(位于 INSTANCE 内)的样式覆盖平台不保证渲染生效,命中时结果 warnings 直接给出主组件里对应子节点的 id —— 改主组件即所有实例继承。\n- 结果键约定(写 jsd_batch 占位符靠这份,不靠 outputSchema —— 出参 schema 只投影到「键名+类型」级,见 daemon/compact-schema.ts):节点类结果 created 是单对象或数组(per-type create / jsd_clone_node / jsd_outline_stroke / jsd_create_instance / jsd_detach_instance 是**数组**,jsd_create_svg / jsd_create_icon / jsd_group_nodes / jsd_flatten_nodes / jsd_create_component / jsd_import_component 是**单对象**;jsd_manage_nodes 的 clone/outline_stroke 是数组,group/flatten 是单对象),updated / moved / swapped 是对象数组(键:id/name/type/x/y/width/height/z/parentId);id 清单类 selected / removed / ungrouped / cleaned 是字符串数组;jsd_find 回 nodes + total,jsd_get_selection 回 selection + pageName,jsd_export 回 exports(含 path / dataUrl)。占位符形如 {{上一步id.updated[0].id}},单对象写 {{id.created.id}}(多了 [0] 反而解析失败)。\n- 结果 warnings 一律读:它点名的都是「回显成功但没生效」的事实(平台能力门控字段被忽略、字段回读与请求不一致如 root x/y 被 placement 覆盖 / TEXT 的 textAutoResize 未声明却被置 NONE、fontName 组合不存在被静默忽略、结构变更后的同层漂移),不要当成普通提示跳过。字体写法:family 用 jsd_list_fonts 的 fonts[].family 原样、style 用同一项的**全名**(如 SourceHanSansCN-Bold,不是简称 "Bold")。\n- ok=false 或「没找到 X 节点」:先 jsd_find 复核 id 是否已失效(可能被连坐删除),必要时 jsd_repair_nodes 清理后重试。\n- 产出含 ≥2 个结构一致的同级单元时:先提 COMPONENT 再用 INSTANCE 铺开;命名走「组件族/状态」。\n- 多步套路先读配方 prompt(prompts/list 里,名字无 jsd_ 前缀;取一条即把完整流程与产出标准注入上下文),别临场拼工具:画图表 / 数据可视化 → chart-by-code(折线、柱状、饼图 / 环形、散点、雷达、面积、仪表盘;自己写脚本算几何、落盘 SVG,再经 jsd_create_svg 的 svgPath 导入);HTML 转设计稿 → html-to-design;界面从零设计 → design-strategy;界面排布 / 自动布局(容器该不该上布局、两条落地路径、最易漏的分区)→ auto-layout;批量改文案 → text-replace-strategy;图标网格 → icon-grid;多步画布操作合并成一次调用 → script-ops;同类实例批量同步样式 → variant-sync;变体集构建 → variant-set;变量绑定与批量套用 → variable-binding;组件属性的定义与设值 → component-property。同一批配方也作为 MCP 资源提供:宿主若不注入本段(实测多数客户端如此),以资源为准 —— 读 jsd://recipes 取索引(含每条的何时用),读 jsd://recipes/<id> 取正文。',
+    '操作设计画布前按任务读取 skill://canvas/SKILL.md 及对应附录；无法读取 skill 时使用 jsd_list_prompts/jsd_get_prompt 或 jsd://recipes。创作先读 jsd_get_page，复用已有组件、变体、样式和变量。按语义容器分层，重复结构复用组件；同轴等距内容用 auto-layout。根节点坐标受 placement 控制，指定坐标用 manual；子坐标相对父级，布局子项由布局接管。画布请求串行；同值批改用 ids，多步用 jsd_batch（最多 50 步，占位符仅本批有效）。recursive 只改后代，includeSelf=true 才包括容器自身。字体使用 jsd_list_fonts 返回的成对原值。读 warnings，关键字段独立回读，视觉改动导出目检。超时可能已经写入，先核实再重试；只改用户指定范围。',
   'ping.title': '检查{client}插件连接',
   'batch.description':
-    '批量编排器:一次请求内顺序执行多个 jsd_* 步骤,前一步结果经双花括号占位符(内容为 步骤id.字段路径)注入后一步 args,中间 id 不回传模型,显著减少往返与上下文。\\n占位符独占一个参数值时保留原类型(数组可直接作 ids 用),嵌在字符串中按 JSON 文本展开;**占位符只在同一次调用的本批次内有效**(步骤表随调用结束即销毁,引用上一批次的步骤必报「占位符引用的步骤不存在或未成功」并中止整批 —— 跨批次请硬编码上一步回显里的真实 id);名字寻址是另一条路:`{{@comp:按钮}}` 取组件/变体集的 id、`{{@var:accent/blue}}` 取变量的 id,取值来自 jsd_get_page 的资源清单(每批最多读一次,同批复用同一份快照;精确名优先,再退忽略大小写),名字一律照清单里的**原样**写 —— 即时设计实测会把带 `/` 的组件名拆成「集合 / 成分」,`assets.components[].name` 只剩叶子名,照创建时那个路径写会不命中);零命中或多命中同名都点名中止、绝不猜(该平台读不到非当前页时清单只覆盖当前页);刚在本批里建出来的资源不在这份快照内,照旧用 {{id.created[0].id}};id 重复/未知工具/引用失败立即中止,工具执行失败默认也中止(stopOnError=false 或单步 continueOnError=true 可走完)。**清单装不下时用 `callsFile`**:给一个 JSON 文件的绝对路径(内容为 {"calls":[…]}(可带 stopOnError / checkDrift)或直接一个数组,与 calls 同形),id 就不必写进上下文 —— 该文件也能用 CLI `text-to-design-mcp exec <文件> [--json] [--dry-run]` 直接跑。\\n回显已做摘要裁剪:节点对象只留 id/name/type/x/y/width/height/z/parentId,vectorPaths(单条 >10KB、16 位小数)与 constraints 等渲染无关字段整键丢弃;裁剪后仍超 20K 字符的步骤降级为 id 清单,并把**整批完整明细**写成 JSONL 落盘(临时目录,一行一步 `{id,tool,ok,data}`),该步回显给 path 与 line(结果里 echoTrimmed=true,并附 echoNote 逐步点名);落盘超上限或写盘失败才退回纯 id 清单,warnings 点名。⚠ **批内回显不含子节点**:节点是整对象摘要化,children 与 characters / fills / *StyleId / vectorPaths 都不在回显里 —— 要读子树请读那个 JSONL 或把该工具**单独调用一次**,别当成「子节点没了 / 字段没生效」。占位符解析不受影响(内部仍用完整数据)。含图标的批次(jsd_create_icon / jsd_clone_node / jsd_create_vector)务必配一次 jsd_export 目视验收,别只看回显。\\n各工具返回键与占位符写法(键写错会报「无法解析占位符引用」并中止整批):\\n· created 为数组 → {{id.created[0].id}}:per-type create(jsd_create_rectangle / jsd_create_frame 等)、jsd_clone_node、jsd_outline_stroke、jsd_create_instance、jsd_detach_instance\\n· created 为单对象 → {{id.created.id}}:jsd_create_svg / jsd_create_icon / jsd_flatten_nodes / jsd_group_nodes / jsd_create_component / jsd_import_component / jsd_combine_as_variants / jsd_create_style\\n· jsd_find → {{id.nodes[0].id}};jsd_get_selection → {{id.selection[0].id}}\\n· 属性类 jsd_set_* → {{id.updated[0].id}};jsd_swap_component → {{id.swapped[0].id}};jsd_delete_style → {{id.removed[0]}}(id 字符串数组)\\\\n· jsd_platform_op → 回包**就是该 op 自己的返回**(没有 .data 那一层信封):figma_variables_create 取 {{id.variables[0].id}}、figma_style_variables_list 取 {{id.styles[0].boundVariables}}、mg_list_variables 取 {{id.variables[0].id}};每个 op 的返回形状写在 jsd_ping 的 platformOps 描述里\\n· jsd_manage_nodes 各 op:select→selected[](id 字符串)、remove→removed[](id 字符串)、clone/outline_stroke→created[](节点**数组**)、group/flatten→created(节点**单对象**,与 jsd_group_nodes / jsd_flatten_nodes 同形)、ungroup→ungrouped[](id 字符串)、reparent→moved[](与 updated[] 同义,两个键都回)、repair→cleaned[](id 字符串)—— id 字符串数组取 {{id.selected[0]}},节点数组取 {{id.created[0].id}},节点单对象取 {{id.created.id}}(单对象与单元素数组互认:`{{id.created[0].id}}` 与 `{{id.created.id}}` 都能解析;多元素数组直接取 `.字段` 仍中止)\\n· jsd_manage_components 各 op:create_component/create_instance/detach_instance/import_component/combine_as_variants→created(detach_instance 是数组,不是 updated)、swap_component→swapped[]、set_instance_properties→updated[]、copy_overrides→snapshotId、apply_overrides/sync_overrides→applied[]\\n· 拿不准某步的返回结构时,先单独调它一次看回显再拼进 batch —— 猜错会连带整批中止。\\n结构变更复核(默认开,checkDrift=false 可关):步骤里含 remove/reparent/group/ungroup/flatten/repair 时,变更前记下受影响父层(含 reparent 的目标父级与当前页顶层)的子节点坐标,收尾再读一次比对 —— 引擎在删改结构后会把**没碰到**的兄弟节点静默挪走(实测 (24,720)→(28,618):无报错、回显正常,渲染上像样式问题,极易走错排查方向)。漂移写进结果 warnings 并给出原值,照原值用 jsd_move_node 回填即可;覆盖面仅限本次操作触及的父层(协议没有整树读法,别的层漂移查不到)。多步套路(画图表 / 从零设计整页 / 屏内排布与自动布局 / HTML 转设计稿 / 批量改文案 / 组件与变体 / 变量绑定)先读配方索引 jsd://recipes(ReadMcpResource),别临场拼工具;整页/整档的批量改造(一次调用吃多组、id 不进上下文、回读复核、按块切批)读 jsd://recipes/script-ops。\'',
+    '顺序编排多个工具步骤。calls 与 callsFile 二选一，单批最多 50 步；文件须是服务进程可读的绝对路径。步骤用 id/tool/args，后续参数可引用 {{步骤id.created[0].id}} 等返回路径，占位符仅本批有效；已有资源可用 {{@comp:名称}} / {{@var:名称}}。同值属性批改优先单工具 ids，不同值或多工具依赖再用 batch。精简档未公开的能力先用 jsd_describe_tools 查询完整 schema，再放入本批执行；不支持任意未知工具。默认遇错停止，可按 stopOnError/continueOnError 控制执行失败；计划错误仍停止。批次不是事务，失败前写入可能保留；超时先回读，不盲目重放。回显会裁剪子树与样式字段，完整结果按 path/line 读取；核实属性需独立 jsd_find，视觉改动另导图。checkDrift 默认开启，结构操作发现兄弟节点漂移会给 warnings 与原坐标；false 仅关闭本次复核。完整流程见 skill://canvas/references/script-ops.md,配方索引见 jsd://recipes。',
   'manageNodes.description':
-    "按 op 分发的节点结构操作聚合入口:select|remove|clone|group|ungroup|flatten|outline_stroke|reparent|repair。单次单操作请优先用对应小工具:jsd_select_nodes / jsd_delete_node / jsd_clone_node / jsd_group_nodes / jsd_ungroup_nodes / jsd_flatten_nodes / jsd_outline_stroke / jsd_reparent_nodes / jsd_repair_nodes(描述含平台缺陷与正确流程)。属性修改用 jsd_set_* 系列(含 jsd_set_shape);组件/实例操作用 jsd_manage_components 或 jsd_create_component / jsd_sync_overrides 等,两工具 op 不通用。\\n各 op 的返回键(在 jsd_batch 里用占位符引用时才不会写错,写错会中止整批):select→selected[](id 字符串)、remove→removed[](id 字符串)、clone/outline_stroke→created[](节点**数组**)、group/flatten→created(节点**单对象**:这两个 op 内部走的就是 jsd_group_nodes / jsd_flatten_nodes 那条路)、ungroup→ungrouped[](id 字符串)、reparent→moved[](同时附 updated[],两者同一份数组)、repair→cleaned[](id 字符串)。id 字符串数组取 {{步骤id.selected[0]}},节点数组取 {{步骤id.created[0].id}},节点单对象取 {{步骤id.created.id}}(单对象与单元素数组互认:{{步骤id.created[0].id}} 与 {{步骤id.created.id}} 都能解析;多元素数组直接取 .字段 仍中止)。'",
+    "按 op 分发的节点结构操作聚合入口:select|remove|clone|group|ungroup|flatten|outline_stroke|reparent|repair。单次单操作请优先用对应小工具:jsd_select_nodes / jsd_delete_node / jsd_clone_node / jsd_group_nodes / jsd_ungroup_nodes / jsd_flatten_nodes / jsd_outline_stroke / jsd_reparent_nodes / jsd_repair_nodes(描述含平台缺陷与正确流程)。**但连续 ≥2 次同类调用就是改批量的信号**:结构一致的重复步骤(第 N 行 / 第 N 张卡)一律进 jsd_batch 或 callsFile,别一个个单步调 —— 一次 MCP 往返 3~10s,整屏几十次单步会白耗十分钟。属性修改用 jsd_set_* 系列(含 jsd_set_shape);组件/实例操作用 jsd_manage_components 或 jsd_create_component / jsd_sync_overrides 等,两工具 op 不通用。\\n各 op 的返回键(在 jsd_batch 里用占位符引用时才不会写错,写错会中止整批):select→selected[](id 字符串)、remove→removed[](id 字符串)、clone/outline_stroke→created[](节点**数组**)、group/flatten→created(节点**单对象**:这两个 op 内部走的就是 jsd_group_nodes / jsd_flatten_nodes 那条路)、ungroup→ungrouped[](id 字符串)、reparent→moved[](同时附 updated[],两者同一份数组)、repair→cleaned[](id 字符串)。id 字符串数组取 {{步骤id.selected[0]}},节点数组取 {{步骤id.created[0].id}},节点单对象取 {{步骤id.created.id}}(单对象与单元素数组互认:{{步骤id.created[0].id}} 与 {{步骤id.created.id}} 都能解析;多元素数组直接取 .字段 仍中止)。'",
   'createBooleanOperation.description':
     '创建单个 BOOLEAN_OPERATION 布尔运算节点,booleanOperation 运算方式({ops})与 children 必填且至少 2 个合并子节点。本工具只建一个根布尔节点。**name 必传且语义化**,不传会落成引擎默认名 node。建多个根节点/复杂树用 jsd_batch 编排',
   'setFillColor.description':
