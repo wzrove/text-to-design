@@ -1,4 +1,7 @@
-import { errorGroupKey, type TelemetryErrorPayload } from 'text-to-design-shared';
+import {
+  errorGroupKey,
+  type TelemetryErrorPayload,
+} from 'text-to-design-shared';
 import type { errorReports } from './db/schema';
 
 type ErrorReportInsert = typeof errorReports.$inferInsert;
@@ -20,7 +23,12 @@ export function mergeBatchByFingerprint(
     const code = e.code ?? null;
     const scope = e.scope ?? null;
     const subject = e.subject ?? null;
-    const fingerprint = errorGroupKey({ scope, code, subject, message: e.message });
+    const fingerprint = errorGroupKey({
+      scope,
+      code,
+      subject,
+      message: e.message,
+    });
     const prev = rows.get(fingerprint);
     if (prev != null) {
       prev.count = (prev.count ?? 1) + (e.count ?? 1);

@@ -60,13 +60,17 @@ import type {
   VALUE_TO_MG,
 } from './node-facade';
 import type { MG_VARIABLE_TYPES, MG_VARIABLE_TYPES_UNSUPPORTED } from './ops';
-
-/** 联合类型全部成员的键并集 */
-type KeysOf<T> = T extends unknown ? keyof T : never;
-/** 断言 T 为 never;不是 never 时编译错误会打出违规的键名 */
-type ExpectNever<T extends never> = T;
-type Missing<K extends string, T> = K extends KeysOf<T> ? never : K;
-type Declared<K extends string, T> = K extends KeysOf<T> ? true : never;
+// 通用类型工具走共享文件;平台事实(KEY_TO_MG 反向断言 / HostProjectionGap / HostAbsentGap …)留在本文件
+import type {
+  Declared,
+  ExpectNever,
+  HostContractCheck,
+  Missing,
+  NodeContractCheck,
+  PageContractCheck,
+  ViewportContractCheck,
+  UiContractCheck,
+} from '../shared-guarantee';
 
 // ---- 1) 重命名表:契约名必须缺席、MG 名必须存在 ----
 
@@ -178,11 +182,8 @@ type HostAbsentGap =
   /** MG 没有「一条 API 删样式」的入口:原生是 `getStyleById(id)`(:1436)+ `BaseStyle.remove()`(:1994)两步,契约的 `removeStyle` 是本仓包的聚合动作 */
   | 'removeStyle';
 
-export type HostContractCheck = ExpectNever<
-  Missing<
-    Exclude<keyof DesignHost, HostProjectionGap | HostAbsentGap>,
-    PluginAPI
-  >
+export type HostPresenceCheck = ExpectNever<
+  HostContractCheck<DesignHost, HostProjectionGap | HostAbsentGap>['check']
 >;
 /** 投影项的来源必须真的在 document 上(证明「不是没有,是位置不同」) */
 export type PageProjectionCheck = ExpectNever<
@@ -201,14 +202,14 @@ export type VariablesProjectionSourceCheck = ExpectNever<
   Missing<'getVariables', PluginAPI['variables']>
 >;
 
-export type PageContractCheck = ExpectNever<
-  Missing<keyof PageSkeleton, PluginAPI['document']['currentPage']>
+export type PagePresenceCheck = ExpectNever<
+  PageContractCheck<PageSkeleton, PluginAPI['document']['currentPage']>['check']
 >;
-export type UiContractCheck = ExpectNever<
-  Missing<Exclude<keyof DesignHost['ui'], HostProjectionGap>, PluginAPI['ui']>
+export type UiPresenceCheck = ExpectNever<
+  UiContractCheck<DesignHost, HostProjectionGap>['check']
 >;
-export type ViewportContractCheck = ExpectNever<
-  Missing<keyof DesignHost['viewport'], PluginAPI['viewport']>
+export type ViewportPresenceCheck = ExpectNever<
+  ViewportContractCheck<DesignHost>['check']
 >;
 
 /**
@@ -288,14 +289,11 @@ export const _setPropsArgsCheck: RuntimeInstanceNode['setProperties'] extends (p
   ? true
   : false = true;
 
-export type NodeContractCheck = ExpectNever<
-  Missing<
-    Exclude<
-      keyof NodeSkeleton,
-      RenameContractKeys | TextRangeContractKeys | NodeAbsentGap
-    >,
-    RuntimeSceneNode
-  >
+export type NodePresenceCheck = ExpectNever<
+  NodeContractCheck<
+    NodeSkeleton,
+    RenameContractKeys | TextRangeContractKeys | NodeAbsentGap
+  >['check']
 >;
 /** 反向:登记为无法表达的东西必须真的不在 MG typings 里 */
 export type NodeGapHonestyCheck = ExpectNever<

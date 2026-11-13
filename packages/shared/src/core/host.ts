@@ -268,7 +268,7 @@ export interface PageSkeleton extends ContainerSkeleton {
  * 后面接异步能力就要改一遍全链路签名 —— 0017 就是这条纪律在第三平台上的兑现
  * (两处成员由同步改异步)。
  */
-export interface DesignHost {
+export interface DesignHost extends DesignHostOptionalCapabilities {
   createFrame(): NodeSkeleton;
   createRectangle(): NodeSkeleton;
   createEllipse(): NodeSkeleton;
@@ -347,23 +347,12 @@ export interface DesignHost {
   importComponentByKeyAsync(key: string): Promise<NodeSkeleton>;
 
   /**
-   * 解组:把 GROUP/FRAME 拆掉、子节点回到原父级(对应 Figma 的
-   * `figma.ungroup(node)`;jsDesign typings 未声明,运行时缺失时由 core 报错)。
-   * 返回解组后回到原父级的子节点,供 core 统计。
-   */
-  ungroup?(node: NodeSkeleton): readonly NodeSkeleton[];
-
-  /**
    * 同步按 id 解析。**dynamic-page 下无条件抛异常**(与页面是否已加载无关),
    * 仅 jsDesign / legacy 模式可用;存在 `getNodeByIdAsync` 时 Access 层一律走异步。
    */
   getNodeById(id: string): NodeSkeleton | null;
-  /** dynamic-page 下唯一的按 id 解析入口(0011);jsDesign 无此符号,登记为缺口 */
-  getNodeByIdAsync?(id: string): Promise<NodeSkeleton | null>;
-  /** 全量加载文档页(dynamic-page 下跨页遍历 / documentchange 的前置) */
-  loadAllPagesAsync?(): Promise<void>;
-  /** dynamic-page 下 `currentPage` 变为只读,切页只能走异步 */
-  setCurrentPageAsync?(page: PageSkeleton): Promise<void>;
+  // getNodeByIdAsync / loadAllPagesAsync / setCurrentPageAsync 见
+  // DesignHostOptionalCapabilities:它们是平台缺口,不是三平台共有的契约。
   loadFontAsync(font: shared.FontName): Promise<void>;
   listAvailableFontsAsync(): Promise<{ fontName: shared.FontName }[]>;
 
@@ -379,18 +368,8 @@ export interface DesignHost {
     html: string,
     options: { width?: number; height?: number; title?: string },
   ): void;
-  /**
-   * 本地样式枚举:同步 getter 为两平台 PluginAPI 原生符号,`*Async` 为
-   * dynamic-page 下的替代入口(Figma 有、jsDesign 无,登记为缺口)。
-   */
-  getLocalPaintStyles?(): readonly StyleSummary[];
-  getLocalTextStyles?(): readonly StyleSummary[];
-  getLocalEffectStyles?(): readonly StyleSummary[];
-  getLocalGridStyles?(): readonly StyleSummary[];
-  getLocalPaintStylesAsync?(): Promise<readonly StyleSummary[]>;
-  getLocalTextStylesAsync?(): Promise<readonly StyleSummary[]>;
-  getLocalEffectStylesAsync?(): Promise<readonly StyleSummary[]>;
-  getLocalGridStylesAsync?(): Promise<readonly StyleSummary[]>;
+  // 本地样式枚举的 8 个入口见 DesignHostOptionalCapabilities
+  // (同步 getter 为两平台原生符号,*Async 为 dynamic-page 替代入口,Figma 有、jsDesign 无)。
   /**
    * 建一条本地样式(取值来自 {@link StyleCreateInit.node} 那个节点),回它的摘要。
    *
@@ -430,7 +409,7 @@ export interface DesignHost {
    * 所以本成员是**可选**而不是「按平台返回空」:探测判据是 `typeof`,不是平台名 ——
    * core 不认识平台,也不该认识(0022)。
    */
-  getLocalVariablesAsync?(): Promise<readonly shared.AssetRef[]>;
+  // getLocalVariablesAsync 见 DesignHostOptionalCapabilities(0039,仅 Figma 运行时存在)。
   on(event: string, handler: (...args: unknown[]) => void): void;
   /**
    * 宿主键值存储(0016 的语言选择持久化)。两平台符号同名同签名:
@@ -443,11 +422,8 @@ export interface DesignHost {
    *
    * 按 0010 一律异步:即使某个平台内部同步也标 Promise,调用点已 await。
    */
-  readonly clientStorage?: {
-    getAsync(key: string): Promise<unknown>;
-    setAsync(key: string, value: unknown): Promise<void>;
-    deleteAsync(key: string): Promise<void>;
-  };
+  // clientStorage 见 DesignHostOptionalCapabilities
+  // (0016;各方法可能声明存在而运行时未实现,调用点仍须 try/catch)。
   readonly ui: {
     postMessage(message: unknown): void;
     onmessage: ((message: unknown) => void) | null;
@@ -474,6 +450,45 @@ export interface DesignHost {
      * core 不碰宿主符号,也不替平台猜数值。
      */
     chromeHeight?(): unknown;
+  };
+}
+
+/**
+ * 可选能力面:三平台**不一定都有**的成员。
+ *
+ * 为什么单独列出来(dec 9517eea4):这些成员此前混在 {@link DesignHost} 里,
+ * 只能靠 `typeof host.xxx === 'function'` 探测。而**符号存在性 ≠ 可用性**
+ * (dec 0010/0042/0043 的真机取证):即时设计的 host 是 `Object.create(native)`,
+ * typings 未声明的成员运行时照样透出来、且可能**永不 settle** —— 探测在这些平台上
+ * 永远答"有"。真实选路只能靠 `RuntimeContext` 的能力位声明。
+ *
+ * 本接口是那份声明的**静态对应物**:`DesignHost` 继承它,所以现有调用点不必改;
+ * 新增代码应优先依赖能力位,探测只作为「能力位未注入」时的 fail-open 兜底。
+ */
+export interface DesignHostOptionalCapabilities {
+  /** 解组:jsDesign/MG 的 typings 都没有,运行时缺失时由 core 报错 */
+  ungroup?(node: NodeSkeleton): readonly NodeSkeleton[];
+  /** dynamic-page 下唯一的按 id 解析入口(0011);jsDesign 无此符号 */
+  getNodeByIdAsync?(id: string): Promise<NodeSkeleton | null>;
+  /** 全量加载文档页;jsDesign 有符号但永不返回(见 canReadDocumentScope) */
+  loadAllPagesAsync?(): Promise<void>;
+  setCurrentPageAsync?(page: PageSkeleton): Promise<void>;
+  /** 本地样式枚举(dec 0042/0043):同步 getter 与 async 入口按平台声明选路 */
+  getLocalPaintStyles?(): readonly StyleSummary[];
+  getLocalTextStyles?(): readonly StyleSummary[];
+  getLocalEffectStyles?(): readonly StyleSummary[];
+  getLocalGridStyles?(): readonly StyleSummary[];
+  getLocalPaintStylesAsync?(): Promise<readonly StyleSummary[]>;
+  getLocalTextStylesAsync?(): Promise<readonly StyleSummary[]>;
+  getLocalEffectStylesAsync?(): Promise<readonly StyleSummary[]>;
+  getLocalGridStylesAsync?(): Promise<readonly StyleSummary[]>;
+  /** 本地变量枚举(0039):仅 Figma 运行时存在 */
+  getLocalVariablesAsync?(): Promise<readonly shared.AssetRef[]>;
+  /** 宿主键值存储(0016 语言持久化):可能「声明存在而运行时未实现」 */
+  readonly clientStorage?: {
+    getAsync(key: string): Promise<unknown>;
+    setAsync(key: string, value: unknown): Promise<void>;
+    deleteAsync(key: string): Promise<void>;
   };
 }
 

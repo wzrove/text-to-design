@@ -13,7 +13,7 @@ import {
   SERVER_VERSION,
 } from '../config';
 import { log, warn } from '../logger';
-import { compactOutputSchema } from './compact-schema';
+import { compactOutputSchema } from '../core/compact-schema';
 import { friendlyInputSchema } from './friendly-schema';
 import {
   proxyNotification,
@@ -137,69 +137,117 @@ export function createCatalogProxy(
 
   // ---- 动态同步:diff 上游清单与本地注册表,增/删/改 ----
 
+  /**
+   * 一份目录的 diff 同步:**先注册成功后移除旧句柄**。
+   *
+   * 此前四个 sync 各自「先 remove 再 register」,注册抛错时该工具/资源在下一轮
+   * diff 之前从下游目录里整个消失(中间窗口)。现在注册失败保留旧句柄,失败只降级
+   * 为一条 warning(单条失败不连坐整批)。
+   *
+   * `handles` 的 key 是下游可见的身份(tool/prompt 名、资源 URI),`raw` 是上游线格式
+   * 指纹 —— 指纹没变就跳过,变了才重注册(见 syncTools 里对体积/投影规则的说明)。
+   */
+  function syncRegistry<T>(
+    handles: Map<string, RegisteredEntry>,
+    items: readonly T[],
+    opts: {
+      keyOf(item: T): string;
+      /** 注册失败时 warning 里的类别名(工具 / prompt / 资源) */
+      kind: string;
+      /** 返回本次要注册的句柄;抛错视为该条注册失败 */
+      register(item: T): RemovableHandle;
+    },
+  ): void {
+    const seen = new Set<string>();
+    for (const item of items) {
+      const key = opts.keyOf(item);
+      seen.add(key);
+      const raw = JSON.stringify(item);
+      const known = handles.get(key);
+      if (known && known.raw === raw) continue;
+      let handle: RemovableHandle;
+      try {
+        handle = opts.register(item);
+      } catch (e) {
+        // 注册失败不连坐整批,且**保住旧句柄**:先 remove 会让它在下游目录里凭空消失
+        warn(
+          `${opts.kind}注册失败(${key}): ${e instanceof Error ? e.message : String(e)}`,
+        );
+        continue;
+      }
+      if (known != null) {
+        known.handle.remove();
+        handles.delete(key);
+      }
+      handles.set(key, { handle, raw });
+    }
+    for (const [key, entry] of [...handles]) {
+      if (!seen.has(key)) {
+        entry.handle.remove();
+        handles.delete(key);
+      }
+    }
+  }
+
   async function syncTools(): Promise<void> {
     const { tools } = await withUpstream((c) =>
       c.listTools(undefined, { cacheMode: 'refresh' }),
     );
-    const seen = new Set<string>();
     const sizes: CatalogSize[] = [];
-    for (const t of tools) {
-      seen.add(t.name);
-      // 指纹与体积都从 **JSON Schema 本体** 算,不从转换后的注册对象算:
-      // fromJsonSchema 返回的东西带函数,JSON.stringify 量不出真实体积
-      // (实测会少读一个数量级),也感知不到投影规则的变化。投影规则一改,
-      // raw 就变 → 已连接的会话下一轮 sync 自动重注册,不必等 shim 重启。
-      const projectedOutput = t.outputSchema
-        ? compactOutputSchema(t.outputSchema)
-        : undefined;
-      const wire: Record<string, unknown> = {
-        title: t.title,
-        description: t.description,
-        annotations: t.annotations,
-        icons: t.icons,
-        _meta: t._meta,
-        ...(t.inputSchema
-          ? // 入参失败信息走友好化改写(回显入参+联合分支清单),
-            // 避免 ajv 对 oneOf 平铺出的超长报错误导调用方
-            { inputSchema: friendlyInputSchema(t.inputSchema as never) }
-          : {}),
-        ...(projectedOutput === undefined
-          ? {}
-          : // 出参只投影到「键名 + 类型」级:声明比事实大 25 倍的原样目录会把
-            // 下游工具索引撑爆,详见 ./compact-schema.ts
-            { outputSchema: fromJsonSchema(projectedOutput as never) }),
-      };
-      const raw = JSON.stringify({
-        title: t.title,
-        description: t.description,
-        annotations: t.annotations,
-        icons: t.icons,
-        _meta: t._meta,
-        inputSchema: t.inputSchema,
-        outputSchema: projectedOutput,
-      });
-      sizes.push({
-        name: t.name,
-        bytes: Buffer.byteLength(raw, 'utf8'),
-        outputBytes:
-          projectedOutput === undefined
-            ? 0
-            : Buffer.byteLength(JSON.stringify(projectedOutput), 'utf8'),
-      });
-      const known = toolHandles.get(t.name);
-      if (known && known.raw === raw) continue;
-      known?.handle.remove();
-      toolHandles.delete(t.name);
-      const register = mcp.registerTool.bind(mcp) as unknown as (
-        name: string,
-        config: Record<string, unknown>,
-        cb: (
-          args: Record<string, unknown>,
-          ctx: ServerContext,
-        ) => Promise<unknown>,
-      ) => RemovableHandle;
-      try {
-        const handle = register(t.name, wire, async (args, ctx) =>
+    const register = mcp.registerTool.bind(mcp) as unknown as (
+      name: string,
+      config: Record<string, unknown>,
+      cb: (
+        args: Record<string, unknown>,
+        ctx: ServerContext,
+      ) => Promise<unknown>,
+    ) => RemovableHandle;
+    syncRegistry(toolHandles, tools, {
+      keyOf: (t) => t.name,
+      kind: '工具',
+      register: (t) => {
+        // 指纹与体积都从 **JSON Schema 本体** 算,不从转换后的注册对象算:
+        // fromJsonSchema 返回的东西带函数,JSON.stringify 量不出真实体积
+        // (实测会少读一个数量级),也感知不到投影规则的变化。投影规则一改,
+        // raw 就变 → 已连接的会话下一轮 sync 自动重注册,不必等 shim 重启。
+        const projectedOutput = t.outputSchema
+          ? compactOutputSchema(t.outputSchema)
+          : undefined;
+        const raw = JSON.stringify({
+          title: t.title,
+          description: t.description,
+          annotations: t.annotations,
+          icons: t.icons,
+          _meta: t._meta,
+          inputSchema: t.inputSchema,
+          outputSchema: projectedOutput,
+        });
+        sizes.push({
+          name: t.name,
+          bytes: Buffer.byteLength(raw, 'utf8'),
+          outputBytes:
+            projectedOutput === undefined
+              ? 0
+              : Buffer.byteLength(JSON.stringify(projectedOutput), 'utf8'),
+        });
+        const wire: Record<string, unknown> = {
+          title: t.title,
+          description: t.description,
+          annotations: t.annotations,
+          icons: t.icons,
+          _meta: t._meta,
+          ...(t.inputSchema
+            ? // 入参失败信息走友好化改写(回显入参+联合分支清单),
+              // 避免 ajv 对 oneOf 平铺出的超长报错误导调用方
+              { inputSchema: friendlyInputSchema(t.inputSchema as never) }
+            : {}),
+          ...(projectedOutput === undefined
+            ? {}
+            : // 出参只投影到「键名 + 类型」级:声明比事实大 25 倍的原样目录会把
+              // 下游工具索引撑爆,详见 ./compact-schema.ts
+              { outputSchema: fromJsonSchema(projectedOutput as never) }),
+        };
+        return register(t.name, wire, async (args, ctx) =>
           withUpstream(
             (c) =>
               c.callTool(
@@ -217,64 +265,43 @@ export function createCatalogProxy(
             },
           ),
         );
-        toolHandles.set(t.name, { handle, raw });
-      } catch (e) {
-        // 单工具注册失败不连坐整批:不入 toolHandles,下一轮 diff 会重试
-        warn(
-          `工具注册失败(${t.name}): ${e instanceof Error ? e.message : String(e)}`,
-        );
-      }
-    }
+      },
+    });
     reportCatalogSize(sizes);
-    for (const [name, entry] of [...toolHandles]) {
-      if (!seen.has(name)) {
-        entry.handle.remove();
-        toolHandles.delete(name);
-      }
-    }
   }
 
   async function syncPrompts(): Promise<void> {
     const { prompts } = await withUpstream((c) =>
       c.listPrompts(undefined, { cacheMode: 'refresh' }),
     );
-    const seen = new Set<string>();
-    for (const p of prompts) {
-      seen.add(p.name);
-      const raw = JSON.stringify(p);
-      const known = promptHandles.get(p.name);
-      if (known && known.raw === raw) continue;
-      known?.handle.remove();
-      promptHandles.delete(p.name);
-      const handle = mcp.registerPrompt(
-        p.name,
-        {
-          title: p.title,
-          description: p.description,
-          icons: p.icons,
-          _meta: p._meta,
-          argsSchema: promptArgsSchema(p.arguments),
-        },
-        (args, ctx) =>
-          withUpstream((c) =>
-            c.getPrompt(
-              {
-                name: p.name,
-                ...(args ? { arguments: args as Record<string, string> } : {}),
-                _meta: ctx.mcpReq._meta,
-              },
-              proxyRequestOptions(ctx),
+    syncRegistry(promptHandles, prompts, {
+      keyOf: (p) => p.name,
+      kind: 'prompt',
+      register: (p) =>
+        mcp.registerPrompt(
+          p.name,
+          {
+            title: p.title,
+            description: p.description,
+            icons: p.icons,
+            _meta: p._meta,
+            argsSchema: promptArgsSchema(p.arguments),
+          },
+          (args, ctx) =>
+            withUpstream((c) =>
+              c.getPrompt(
+                {
+                  name: p.name,
+                  ...(args
+                    ? { arguments: args as Record<string, string> }
+                    : {}),
+                  _meta: ctx.mcpReq._meta,
+                },
+                proxyRequestOptions(ctx),
+              ),
             ),
-          ),
-      );
-      promptHandles.set(p.name, { handle, raw });
-    }
-    for (const [name, entry] of [...promptHandles]) {
-      if (!seen.has(name)) {
-        entry.handle.remove();
-        promptHandles.delete(name);
-      }
-    }
+        ),
+    });
   }
 
   async function syncResources(): Promise<void> {
@@ -284,82 +311,60 @@ export function createCatalogProxy(
         c.listResourceTemplates(undefined, { cacheMode: 'refresh' }),
       ),
     ]);
-    const seenStatic = new Set<string>();
-    for (const r of resources) {
-      const uri = r.uri;
-      seenStatic.add(uri);
-      const raw = JSON.stringify(r);
-      const known = resourceHandles.get(uri);
-      if (known && known.raw === raw) continue;
-      known?.handle.remove();
-      resourceHandles.delete(uri);
-      const handle = mcp.registerResource(
-        r.name,
-        uri,
-        {
-          title: r.title,
-          description: r.description,
-          mimeType: r.mimeType,
-          icons: r.icons,
-          annotations: r.annotations,
-          _meta: r._meta,
-        },
-        async (u, ctx) =>
-          withUpstream((c) =>
-            c.readResource(
-              { uri: u.href, _meta: ctx.mcpReq._meta },
-              { ...proxyRequestOptions(ctx), cacheMode: 'bypass' },
+    syncRegistry(resourceHandles, resources, {
+      keyOf: (r) => r.uri,
+      kind: '资源',
+      register: (r) =>
+        mcp.registerResource(
+          r.name,
+          r.uri,
+          {
+            title: r.title,
+            description: r.description,
+            mimeType: r.mimeType,
+            icons: r.icons,
+            annotations: r.annotations,
+            _meta: r._meta,
+          },
+          async (u, ctx) =>
+            withUpstream((c) =>
+              c.readResource(
+                { uri: u.href, _meta: ctx.mcpReq._meta },
+                { ...proxyRequestOptions(ctx), cacheMode: 'bypass' },
+              ),
             ),
-          ),
-      );
-      resourceHandles.set(uri, { handle, raw });
-    }
-    for (const [key, entry] of [...resourceHandles]) {
-      if (!seenStatic.has(key)) {
-        entry.handle.remove();
-        resourceHandles.delete(key);
-      }
-    }
+        ),
+    });
 
-    const seenTpl = new Set<string>();
-    for (const t of resourceTemplates) {
-      const tpl = String(t.uriTemplate);
-      seenTpl.add(tpl);
-      const raw = JSON.stringify(t);
-      const known = templateHandles.get(tpl);
-      if (known && known.raw === raw) continue;
-      known?.handle.remove();
-      templateHandles.delete(tpl);
-      const handle = mcp.registerResource(
-        t.name,
-        new ResourceTemplate(tpl, { list: undefined }),
-        {
-          title: t.title,
-          description: t.description,
-          mimeType: t.mimeType,
-          icons: t.icons,
-          annotations: t.annotations,
-          _meta: t._meta,
-        },
-        async (u, vars, ctx) => {
-          // 模板变量已在上游模板 URI 中声明;读取时原样回传完整 URI
-          void vars;
-          return withUpstream((c) =>
-            c.readResource(
-              { uri: u.href, _meta: ctx.mcpReq._meta },
-              { ...proxyRequestOptions(ctx), cacheMode: 'bypass' },
-            ),
-          );
-        },
-      );
-      templateHandles.set(tpl, { handle, raw });
-    }
-    for (const [key, entry] of [...templateHandles]) {
-      if (!seenTpl.has(key)) {
-        entry.handle.remove();
-        templateHandles.delete(key);
-      }
-    }
+    syncRegistry(templateHandles, resourceTemplates, {
+      keyOf: (t) => String(t.uriTemplate),
+      kind: '资源模板',
+      register: (t) => {
+        const tpl = String(t.uriTemplate);
+        return mcp.registerResource(
+          t.name,
+          new ResourceTemplate(tpl, { list: undefined }),
+          {
+            title: t.title,
+            description: t.description,
+            mimeType: t.mimeType,
+            icons: t.icons,
+            annotations: t.annotations,
+            _meta: t._meta,
+          },
+          async (u, vars, ctx) => {
+            // 模板变量已在上游模板 URI 中声明;读取时原样回传完整 URI
+            void vars;
+            return withUpstream((c) =>
+              c.readResource(
+                { uri: u.href, _meta: ctx.mcpReq._meta },
+                { ...proxyRequestOptions(ctx), cacheMode: 'bypass' },
+              ),
+            );
+          },
+        );
+      },
+    });
   }
 
   const syncToolsInOrder = serializeSync(syncTools);

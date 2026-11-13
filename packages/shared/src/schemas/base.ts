@@ -1,4 +1,10 @@
 import { z } from 'zod';
+import {
+  IMAGE_SCALE_MODE_VALUES,
+  LAYOUT_GRID_ALIGN_VALUES,
+  LAYOUT_GRID_PATTERN_VALUES,
+  VECTOR_WINDING_RULE_VALUES,
+} from '../dicts/enum-values';
 import { BLEND_MODE_VALUES } from '../dicts/platform-value-domain';
 
 // ---- 基础类型 (对齐 plugin-typings runtime) ----
@@ -171,7 +177,7 @@ export const paintSchema = z.discriminatedUnion('type', [
       type: z.literal('IMAGE').describe('schema.base.type5'),
       imageHash: z.string().describe('schema.base.imageHash'),
       scaleMode: z
-        .enum(['FILL', 'FIT', 'CROP', 'TILE'])
+        .enum(IMAGE_SCALE_MODE_VALUES)
         .optional()
         .describe('schemaValue.scaleMode'),
     })
@@ -250,9 +256,11 @@ export const constraintTypeSchema = z
 export type ConstraintType = z.infer<typeof constraintTypeSchema>;
 
 // 布局网格 (对齐 runtime LayoutGrid)
+type LayoutGridPattern = (typeof LAYOUT_GRID_PATTERN_VALUES)[number];
+type LayoutGridAlign = (typeof LAYOUT_GRID_ALIGN_VALUES)[number];
 export interface LayoutGrid {
-  pattern: 'ROWS' | 'COLUMNS' | 'GRID';
-  alignment?: 'MIN' | 'MAX' | 'CENTER' | 'STRETCH';
+  pattern: LayoutGridPattern;
+  alignment?: LayoutGridAlign;
   sectionSize?: number;
   count?: number;
   gutterSize?: number;
@@ -264,10 +272,10 @@ export interface LayoutGrid {
 export const layoutGridSchema: z.ZodType<LayoutGrid> = z
   .object({
     pattern: z
-      .enum(['ROWS', 'COLUMNS', 'GRID'])
+      .enum(LAYOUT_GRID_PATTERN_VALUES)
       .describe('schema.base.pattern'),
     alignment: z
-      .enum(['MIN', 'MAX', 'CENTER', 'STRETCH'])
+      .enum(LAYOUT_GRID_ALIGN_VALUES)
       .optional()
       .describe('schema.base.alignment'),
     sectionSize: z.number().optional().describe('schema.base.sectionSize'),
@@ -303,9 +311,10 @@ export const layoutGridSchema: z.ZodType<LayoutGrid> = z
   });
 
 // 矢量路径 (对齐 runtime VectorPath)
+type VectorWindingRule = (typeof VECTOR_WINDING_RULE_VALUES)[number];
 export interface VectorPath {
   data: string;
-  windingRule?: 'NONZERO' | 'EVENODD' | 'NONE';
+  windingRule?: VectorWindingRule;
 }
 
 export const vectorPathSchema: z.ZodType<VectorPath> = z.object({
@@ -315,7 +324,7 @@ export const vectorPathSchema: z.ZodType<VectorPath> = z.object({
       'SVG path data,如 "M0 0 L100 0 L100 100 Z"(M=移动到,L=画线到,Z=闭合)。仅支持 M/L/Q/C/Z 指令(SVG 子集,不支持 A 圆弧等);完整 SVG 请改用 jsd_create_svg',
     ),
   windingRule: z
-    .enum(['NONZERO', 'EVENODD', 'NONE'])
+    .enum(VECTOR_WINDING_RULE_VALUES)
     .default('NONZERO')
     .describe('schema.base.windingRule'),
 });

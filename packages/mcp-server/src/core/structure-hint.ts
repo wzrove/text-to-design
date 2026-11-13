@@ -18,6 +18,8 @@
  * layout-hint 判的是「进参里 children 等距但没声明 layoutMode」,命中条件依赖调用方
  * 一次性塞 3+ 子节点;而上述失败形态是**建后逐个 reparent**,永远凑不齐 children,
  * 所以它救不到。本文件判的是**归并后的形态**:同一父级下直属子节点太多 = 该分层。
+ * 判据实际执行在两处:批次内由 tools/batch.ts 把后续步骤数放进 ExecutorOptions.batch;
+ * 批次外只能靠父级现有子节点数,而本文件**不读画布**,读不到就不报(见 detectFlatBatch)。
  *
  * ## 阈值为什么是 9
  *
@@ -33,29 +35,28 @@ export const CROWDED_CHILDREN_THRESHOLD = 9;
 export type CrowdedParentHit = {
   /** 被归入的父节点 id */
   parentId: string;
-  /** 该父级下的直属子节点数(只数本批移入的,用于提示文案的「这一批」) */
+  /** 判据用的合计步数 = 本批步数 + 父级原有直属子节点数(缺省即本批步数) */
   batchCount: number;
 };
 
 /**
- * 判「这一批 reparent 是不是又在往同一个父级平铺」。
+ * 判「这类 reparent 是不是又在往同一个父级平铺」。两个来源各缺一半,故都收:
  *
- * 只做一件事:数**本批**有多少步指向同一个 parentId。它不知道父级原有子节点数
- * (那需要一次额外往返读画布,代价大于提示本身的价值),所以阈值口径是
- * 「本批 ≥ 9 步进同一父级」—— 这正好是「一次整屏任务把分区全塞进屏根」的形状。
+ * - `steps`:`jsd_batch` 里的**后续步骤**(不含本步,由 batch 从整批 calls 里数出来,
+ *   见 tools/batch.ts)。这是唯一能看见「后面还有几步进同一个父级」的地方 ——
+ *   单步执行体拿到的是**解析后**的 args,占位符已换成 id,同批其余步骤它根本看不见;
+ * - `existingChildCount`:**非批次**路径(逐个 reparent 的历史失败形态)只能靠
+ *   「父级本来就有几个孩子」判,而那个数要额外往返读画布 —— 这里不读,读不到就只按
+ *   steps 数判。单发调用传不出这两样,于是单发永不命中:这是有意的,单步 reparent
+ *   本身不足以判「平铺」。
  *
+ * 命中口径:`steps 数 + existingChildCount ≥ CROWDED_CHILDREN_THRESHOLD`。
  * 已按语义分好的批次不会命中:它们每步的 parentId 各不相同(每张卡一个容器)。
  */
 export function detectFlatBatch(
   steps: { parentId?: unknown }[],
   options: {
-    /**
-     * 父级当前的直属子节点数(可选)。
-     *
-     * 单步 reparent 拿不到「这批几次」的信息 —— 它是第 N 次调用,不是第 N 步。
-     * 调用方若能便宜地读到父级现有子节点数就传进来,这时判据变成
-     * 「归入后该父级直属子节点数 ≥ 阈值」;读不到就只按本批计数判(见下)。
-     */
+    /** 父级当前的直属子节点数(读得到才传,读不到别猜) */
     existingChildCount?: number;
   } = {},
 ): CrowdedParentHit | null {
@@ -66,21 +67,41 @@ export function detectFlatBatch(
     counts.set(pid, (counts.get(pid) ?? 0) + 1);
   }
   const existing = options.existingChildCount;
+  const base =
+    typeof existing === 'number' && existing >= 0 ? existing : 0;
   let best: CrowdedParentHit | null = null;
   for (const [parentId, batchCount] of counts) {
-    // 两个口径取大的那个:
-    // ① 本批就够多 = 一次整屏任务把分区全塞进屏根(批量层能看见);
-    // ② 本批 + 父级原有 ≥ 阈值 = 单步 reparent 反复进同一屏根(拿到 existingChildCount 时才判)。
-    const projected =
-      typeof existing === 'number' && existing >= 0
-        ? batchCount + existing
-        : batchCount;
+    const projected = batchCount + base;
     if (projected < CROWDED_CHILDREN_THRESHOLD) continue;
     if (best == null || projected > best.batchCount) {
       best = { parentId, batchCount: projected };
     }
   }
   return best;
+}
+
+/**
+ * 本批里与本步「同工具、同 parentId」的**后续步骤**数(不含本步),给
+ * `ExecutorOptions.batch.siblingSteps` 用。只读已经解析好的字面 args:占位符
+ * 形态的 parentId 数不出来,那是刻意的 —— 猜一个「大概指向同一个父级」只会制造误报,
+ * 而这条提示的代价是误报一次后面全被当噪音(见文件头)。
+ */
+export function siblingStepsByParent(
+  calls: readonly { tool: string; args?: unknown }[],
+  index: number,
+  resolved: { tool: string; args: Record<string, unknown> },
+): number {
+  const parentId = resolved.args.parentId;
+  if (typeof parentId !== 'string' || parentId === '') return 0;
+  let n = 0;
+  for (let j = index + 1; j < calls.length; j++) {
+    const later = calls[j];
+    if (later.tool !== resolved.tool) continue;
+    const args = later.args;
+    if (args == null || typeof args !== 'object') continue;
+    if ((args as Record<string, unknown>).parentId === parentId) n++;
+  }
+  return n;
 }
 
 /**

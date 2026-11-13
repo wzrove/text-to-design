@@ -7,16 +7,15 @@ import {
   type BatchResult,
   batchResultSchema,
   batchSchema,
+  type ErrorCode,
 } from 'text-to-design-shared';
 import type { Bridge } from '../bridge';
 import { BATCH_TIMEOUT_MS, MAX_BATCH_SPILL_BYTES } from '../config';
+import { BridgeError, errorCodeOf } from '../core/bridge-error';
 import { loadBatchCallsFile } from '../core/calls-file';
-import {
-  bridgeTool,
-  executorNames,
-  lookupExecutor,
-  type ToolHandle,
-} from '../core/registry';
+import { siblingStepsByParent } from '../core/structure-hint';
+import type { ToolHandle } from '../core/tool-def';
+import { bridgeTool, executorNames, lookupExecutor } from '../core/tool-exec';
 import type { McpI18n } from '../i18n';
 
 /**
@@ -68,6 +67,31 @@ class StepFailedRefError extends Error {
     super(message);
     this.name = 'StepFailedRefError';
   }
+}
+
+/**
+ * 单步失败文案:类别取自结果的 `code`(err() 的第二通道),正文只做展示截断。
+ *
+ * 此前只拿正文 `slice(0, 300)` 当分类依据 —— 文案是给人读的中文句子,改一个字的
+ * 措辞就会让分类漂移。这里给不可重试的类别补一句处置口径,其余原样透传,
+ * 保证失败步骤的 `error` 仍是人读文本(不回退成裸枚举值)。
+ */
+const RETRYABLE_STEP_CODE: Partial<Record<ErrorCode, string>> = {
+  not_connected:
+    '插件未连接(本次步骤没有发到设计客户端)。先 jsd_ping / 确认面板显示「已连接」再重试。',
+  plugin_timeout:
+    '请求超时(插件可能仍在执行)。先 jsd_ping 确认连接,再 jsd_find 复核该步是否已落地,别盲目重发。',
+  platform_unsupported: '当前设计客户端不支持该能力,见下方原始报错里的替代路径。',
+  invalid_args: '入参不合法,按下方原始报错点名要删/要补的字段后重试。',
+};
+
+function stepFailureText(
+  code: ErrorCode | undefined,
+  text: string,
+): string {
+  const hint = code == null ? undefined : RETRYABLE_STEP_CODE[code];
+  const body = text.slice(0, 300);
+  return hint == null ? body : `${hint} 原始报错: ${body}`;
 }
 
 /** 解析单个引用表达式;步骤不存在/路径不可达时抛错(附可用步骤) */
@@ -487,13 +511,25 @@ export function registerBatchTools(
       let assetsPromise: Promise<PageAssets> | undefined;
       const loadAssets: AssetLoader = () => {
         assetsPromise ??= (async () => {
-          const assets = await bridge.request(
-            'get_page',
-            {},
-            {
-              ...(signal != null ? { signal } : {}),
-            },
-          );
+          let assets: unknown;
+          try {
+            assets = await bridge.request(
+              'get_page',
+              {},
+              {
+                ...(signal != null ? { signal } : {}),
+              },
+            );
+          } catch (failure) {
+            // 三种失败必须分开报:此前一律吞成「按名字没命中」,「插件连不上」被说成
+            // 「画布上没这个组件」,调用方会去改名而不是去连插件。
+            const detail =
+              failure instanceof Error ? failure.message : String(failure);
+            throw new BridgeError(
+              errorCodeOf(failure),
+              `按名字取资源要先读一次 jsd_get_page,但这次资源清单没读到(${detail})—— 这是「资源清单不可得」(插件未连接 / 请求失败),不是「画布上没有这个组件或变量」。先确认插件已连接(jsd_ping)后重试本批,或把要用的 id 直接写进 args。`,
+            );
+          }
           return (assets as { assets?: PageAssets })?.assets ?? {};
         })();
         return assetsPromise;
@@ -545,16 +581,29 @@ export function registerBatchTools(
           break;
         }
         // ---- 执行期:受 stopOnError/continueOnError 控制 ----
-        const out = (await executor(resolvedArgs, signal, { skipHooks })) as {
+        // 批次上下文按**本步之前已解析**的 args 算:同工具、同 parentId 的后续步骤数。
+        // 占位符写不出「这批几次」,而 reparent 的平铺判据要的就是这个数
+        // (core/structure-hint.ts)。
+        const siblings = siblingStepsByParent(
+          calls,
+          i,
+          { tool: call.tool, args: resolvedArgs },
+        );
+        const out = (await executor(resolvedArgs, signal, {
+          skipHooks,
+          ...(siblings === 0 ? {} : { batch: { siblingSteps: siblings } }),
+        })) as {
           isError?: boolean;
           structuredContent?: unknown;
           content?: { type: string; text?: string }[];
           warnings?: string[];
+          code?: ErrorCode;
         };
         if (out.isError === true) {
           const text =
             out.content?.find((c) => c.type === 'text')?.text ?? '工具返回错误';
-          fail(text.slice(0, 300));
+          // 分类读 code,正文只用于展示:此前拿正文前 300 字做分类,中文措辞一动分类就漂
+          fail(stepFailureText(out.code, text));
           if (!(stopOnError === false || call.continueOnError === true)) break;
           continue;
         }

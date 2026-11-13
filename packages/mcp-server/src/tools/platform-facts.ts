@@ -1,11 +1,9 @@
 import {
   DOMAIN_CAPABILITY,
   type KnowledgeDomain,
-  LAYOUT_GRID_UNVERIFIABLE_PLATFORMS,
   PLATFORM_LABEL,
   PLATFORMS,
   type PlatformKey,
-  PROP_APPLICABILITY,
   platformDomainFact,
   platformMethodParamAcceptedKinds,
 } from 'text-to-design-shared';
@@ -14,15 +12,16 @@ import {
  * 平台事实的**唯一渲染点**(数据在 `dicts/platform-knowledge.ts`,句子在这里拼)。
  *
  * 为什么要有这一层:表里装的是**标识符**(工具名 / op 名 / 字段名 / typings 行号),
- * 不是给人读的句子 —— 句子得有人拼,而拼句子的地方恰好有两处:
- * ① **工具描述**:装配期拼一次(`buildServer` 里注册工具时),要覆盖**全部平台**;
- * ② **配方 prompt**:调用期拼,只讲**当前平台**(见 `tools/prompts.ts`)。
- * 两处各写一遍句子,就是同一条事实的第二、第三份措辞 —— 写完就开始漂,这正是 0032
- * 要根除的形态(`core/host.ts` 那条「两平台都收 string|boolean」的注释就是漂出来的)。
+ * 不是给人读的句子 —— 同一件事在工具描述与配方里各写一遍,就是第二、第三份措辞,
+ * 写完就开始漂(0032);`core/host.ts` 那条「两平台都收 string|boolean」的注释就是漂出来的。
+ *
+ * **现存消费方只有一处**:`tools/platform.ts` 的 `jsd_platform_op` 描述 —— 装配期
+ * 调一次,`platform` 传 `null` 覆盖全部平台。配方 prompt 自 2026-11 改为只读 markdown
+ * 正文(`tools/prompts.ts` 的注释),**已不再调用本文件**;需要新消费方时先想清楚它是不是
+ * 在给模型重讲同一件事(重讲就是漂移的入口)。
  *
  * **本文件不读模块级平台状态**:平台由调用方显式传(`null` = 装配期或未探测)。
- * 两种时机由调用方决定:描述在装配期拼(`buildServer` 早于插件连接,此刻读缓存必然
- * 为空,见 0030),prompt 在调用期拼 —— 本文件不替它们选时机。
+ * 描述在装配期拼(`buildServer` 早于插件连接,此刻读缓存必然为空,见 0030)。
  *
  * 「某平台声明了没有」这类**运行期**事实也只由调用方传 `claimed`(取自 ping 回包的
  * capabilities),本文件不重复声明(claim 的唯一真源是插件侧 `meta.capabilities`)。
@@ -50,7 +49,7 @@ function fallbackOf(platform: PlatformKey, domain: KnowledgeDomain): string {
 }
 
 /**
- * 多状态组件(变体集)怎么做 —— 工具描述与配方共用。
+ * 多状态组件(变体集)怎么做 —— 供 jsd_platform_op 的描述。
  *
  * 判据是**能力位** `inPlaceVariants`,平台名只作例子。调用期(`claimed != null`,
  * 取自 ping 回包的 capabilities)出精确句;装配期(`claimed == null`)出「按能力位
@@ -82,7 +81,7 @@ export function variantStrategyText(
         ? ''
         : canSwitch
           ? `文档里**已有**的变体集不受影响:\`${readFace}\` 与组件集上的维度取值照常读得到,已有取值照常用 jsd_set_instance_properties 切 —— 缺的只是「用脚本造一个新的」;`
-          : `文档里**已有**的变体集读得到:\`${readFace}\` 与组件集上的维度取值照常可读,但**实例侧切值本平台运行期没有可用入口**(引擎声明了 setProperties / swapComponent,实测分别是「not a function」与内部错误)—— 变体取值只能在画布上手工切换;**读得到 ≠ 切得动**;`;
+          : `文档里**已有**的变体集读得到:\`${readFace}\` 与组件集上的维度取值照常可读,但**实例侧切值本平台运行期没有可用入口**(引擎声明了 setProperties / swapComponent,实测分别是「not a function」与内部错误)—— 变体取值只能在画布上手工切换;**读得到 ≠ 切得动**;`
     const head = claimed
       ? `${label(platform)}声明了原位合并(inPlaceVariants) ⇒ 直接调用即可:并入集合的就是实例所指的 COMPONENT 本身,已有实例链接不断、页面不残留冗余原件,不需要先克隆。`
       : `${label(platform)}未声明原位合并(inPlaceVariants),合成路径在本平台做不出来 —— 别重试、也别去改组件结构。${reuseExisting}替代路径:${fallbackOf(platform, 'variants')}。`;
@@ -107,7 +106,7 @@ export function variantStrategyText(
 }
 
 /**
- * 「组件/实例属性写什么值」—— 工具描述与配方共用。
+ * 「组件/实例属性写什么值」—— 供 jsd_platform_op 的描述。
  *
  * 值形态取自**第四类登记**(`PLATFORM_METHOD_PARAM_DOMAIN`),不在这里手写平台差异:
  * 这正是 `core/host.ts` 那条过时注释的教训(手写的「两平台都收 string|boolean」
@@ -152,7 +151,7 @@ export function componentWriteText(platform: PlatformKey | null): string {
 }
 
 /**
- * 「本平台的变量面」—— 工具描述与配方共用。
+ * 「本平台的变量面」—— 供 jsd_platform_op 的描述。
  *
  * 三平台**缺的形态不一样**,不能一句话糊过去:读写都通的可能不止一家(各家的读路径与
  * 写入口名字都不同,故按表逐平台派生);有的平台 typings 里有整套变量 API 但本仓只接了
@@ -173,9 +172,11 @@ export function variableFaceText(platform: PlatformKey | null): string {
         fact.read == null
           ? ''
           : `本仓只接了**只读枚举**(读路径 \`${fact.read}\`,进 jsd_get_page 的资源清单),`;
-      return `${label(platform)}的 typings 里有变量 API(${fact.nativeUnwired.length} 类入口),${readPart}**写入口一个都没接** —— 属「可以接、只是还没接」,不是平台没有。替代路径:${fallbackOf(platform, 'variables')}`;
+      const text = `${label(platform)}的 typings 里有变量 API(${fact.nativeUnwired.length} 类入口),${readPart}**写入口一个都没接** —— 属「可以接、只是还没接」,不是平台没有。替代路径:${fallbackOf(platform, 'variables')}`;
+      return text;
     }
-    return `${label(platform)}**没有变量能力面**(typings 里没有任何变量声明),别去找变量 op。替代路径:${fallbackOf(platform, 'variables')}`;
+    const absentText = `${label(platform)}**没有变量能力面**(typings 里没有任何变量声明),别去找变量 op。替代路径:${fallbackOf(platform, 'variables')}`;
+    return absentText;
   }
   const withWrite = PLATFORMS.filter(
     (p) => (platformDomainFact(p, 'variables')?.write.length ?? 0) > 0,
@@ -195,187 +196,16 @@ export function variableFaceText(platform: PlatformKey | null): string {
     const writes = (fact?.write ?? []).map((w) => `\`${w}\``).join(' → ');
     return `${label(p)} 读 \`${fact?.read}\`、写 ${writes || '(无)'}`;
   });
-  return [
+  const summary = [
     `变量三平台差别最大,别一句话糊过去:读写都通的 —— ${withWriteLines.join(';')};`,
     `typings 有 API 但本仓未接的(${unwired.map(label).join(' / ') || '无'})—— 属「可以接」;`,
     `连 API 都没有的(${absent.map(label).join(' / ') || '无'})—— 属「接不了」。`,
     '别把后两者当一回事:前者换个版本就能接,后者得换平台。',
   ].join('');
+  return summary;
 }
 
-/**
- * 「绑定变量时参数怎么传」—— **有变量面的平台之间词汇也不同**:Figma 的绑定字段名就是
- * 读侧字段(`boundProperty` 用 fills/strokes 那套),MG 是官方文档的槽位词
- * (`property` + `value`,如 strokeProperty:'all')。
- *
- * 写在这里而不是在 prompts 里按平台分支:0022/0032 的取向是「平台差异只落声明表与它的
- * 投影点」,配方只做拼接。此前这段只有 Figma 那一份,加了 MG 的写入口后若不拆,配方会把
- * Figma 的字段词汇喂给 MG 的调用方。
- */
-export function variableBindBulkText(platform: PlatformKey | null): string {
-  if (platform === 'mastergo') {
-    return '- 一次调用带多组:`bindings: [{ nodeIds, property, value, variableId?, index?, unbind? }]`,一组 = 一个变量 × 一个槽位 × 一批节点;槽位取值见 `mg_variables_apply` 的描述,传错会在入参校验就点名,数组型属性另给 `index`,不要一个节点一次调用;';
-  }
-  if (platform === 'figma') {
-    return '- 一次调用带多组:`bindings: [{ nodeIds, boundProperty, variableId?, subField?, index?, unbind? }]`,一组 = 一个变量 × 一个字段 × 一批节点,不要一个节点一次调用;节点级字段直接写字段名,fills / strokes 绑在 paint 上,index 省略即该数组全部 SOLID 项,effects / layoutGrids 另给 `subField` + `index`;';
-  }
-  return '- 绑定一次传多个 `nodeIds`,参数词汇以本平台变量面给的为准,不要一个节点一次调用;';
-}
-
-/** 「绑定之后怎么回读」—— 三平台的读面不同:节点字段 / 集合模式 / 没有 */
-export function variableBindVerifyText(platform: PlatformKey | null): string {
-  if (platform === 'mastergo') {
-    return [
-      '- ⚠ MG **没有**「图层属性 ↔ 变量」的反读接口:回读只能拿到该图层用到的集合与模式(见 `mg_list_variables`),它证明「集合挂上了」、证不了「挂在该属性上」;',
-      '- 所以绑数组属性(fills / effects / grids)**必须**自己给 `index`,并 jsd_export({ids:[节点id], scale=0.5}) 目视确认渲染真的变了 —— 这一条别省。',
-    ].join('\n');
-  }
-  if (platform === 'figma') {
-    return [
-      '- 回读节点上的绑定,比对里面的 variableId 与你要绑的是同一个 —— **回显成功不等于绑上了**;',
-      '- 涉及视觉的改动再 jsd_export({ids:[节点id], scale=0.5}) 导小图目检一次;',
-    ].join('\n');
-  }
-  return '- 回读本平台提供的绑定读面,比对里面的 variableId 与你要绑的是同一个 —— **回显成功不等于绑上了**;';
-}
-
-/** 「本平台的绑定读侧长什么样」—— 配方第 2 节正文(读面形态 + id 能否直接回喂) */
-export function variableBindShapeText(platform: PlatformKey | null): string {
-  if (platform === 'mastergo') {
-    return [
-      '- MG 的节点上**没有**绑定字段可读:`mg_list_variables` 给出集合 / 模式 / 变量及它们的值,某图层用了哪些集合看 `getLayerVariableModes`;',
-      '- 变量 id 取自 `mg_list_variables` 或 `jsd_get_page` 的 `assets.variables`,**可直接回喂**写入口,不用改名、不用补名称。',
-    ].join('\n');
-  }
-  if (platform === 'figma') {
-    return [
-      '- 读节点上的变量绑定(字段名见上一节):键是引擎的可绑定字段名,值的三态由引擎决定 —— 标量字段是单个别名;fills / strokes / effects / layoutGrids / textRangeFills 是别名数组;componentProperties 是按属性名索引的别名表。**键在 = 至少有一条绑定**(无绑定或平台不提供该字段时整个键省略)。',
-      '- 库存与模式走 `figma_variables_list`(集合 / 模式 / 各变量的值);读路径就是写侧的 `boundProperty` 词汇,值里的 id **可直接回喂**写入口,不用改名、不用补名称。',
-      '- 引擎口径原样保留:有**独立圆角**的节点上,圆角绑定会表现为 topLeftRadius / topRightRadius / bottomLeftRadius / bottomRightRadius 四条(不归一成 cornerRadius)。',
-    ].join('\n');
-  }
-  return [
-    '- 以本平台变量面给出的读路径为准:**键在 = 至少有一条绑定**(平台不提供该字段时整个键省略)。',
-    '- 值里的 id **可直接回喂**写入口,不用改名、不用补名称。',
-  ].join('\n');
-}
-
-/**
- * 「四类可复用件各自的复用入口」—— 设计前那道复用纪律的落地句子。
- *
- * 为什么要单独一段:光说「复用」没用 —— 调用方得知道**每一类怎么复用**才不会退回新建。
- * 入口名字三平台不同(样式与变量尤其),所以按平台给;平台差异只落在这里,
- * 配方只做拼接(0022/0032)。
- */
-export function reuseGuideText(platform: PlatformKey | null): string {
-  if (platform === 'mastergo') {
-    return [
-      '- 组件:`jsd_create_instance` 用 `componentId` 铺实例;同类单元 ≥2 个时**先查清单**,别新建重复组件。',
-      '- 变体集:切到**已有**取值用 `jsd_set_instance_properties`(取值清单看 `assets.variants[].properties`;MG 原生读不到该字段时用 `mg_list_variant_properties` 看)。要造新值用集合级 op,不要靠改主件名字。',
-      '- 样式:节点字段 `fillStyleId` / `strokeStyleId` / `textStyleId` / `effectStyleId` 直接引用样式 id;`assets.styles` 与 `jsd://styles` **列得出来**(2026-10-14 真机已验),按 id / 名复用即可。⚠ 别拿「哪份清单里有它」当判据 —— `assets.styles` 与 `assets.variables` 是同一批资源的两个视角(后四类复合样式建出来进 `assets.variables`),详见下面「四类件之间怎么连」。',
-      '- 变量:`mg_variables_apply` 绑到图层属性,变量 id 从 `mg_list_variables` 或 `assets.variables` 取。要的是「一组值一起复用」(间距 / 圆角 / 描边宽度 / 填色这套)就建 **复合样式变量**:`mg_variables_create` 的 type 有 PAINT / TEXT / EFFECT / GRID / STROKE_WIDTH / CORNER_RADIUS / PADDING(11 项,**SPACING 引擎不收**)—— 建出来本身就是一条样式,只进 `assets.variables`。',
-    ].join('\n');
-  }
-  if (platform === 'figma') {
-    return [
-      '- 组件:`jsd_create_instance` 用 `componentId` 铺实例;同类单元 ≥2 个时**先查清单**,别新建重复组件。',
-      '- 变体集:切到**已有**取值用 `jsd_set_instance_properties`(取值清单看 `assets.variants[].properties`)。',
-      '- 样式:平台 op `figma_style_apply_by_name` 按名应用,或直接写节点字段 `fillStyleId` / `strokeStyleId` / `textStyleId` / `effectStyleId`;**清单里没有就建一条** —— `jsd_create_style` 从指定节点抄。',
-      '- 变量:`figma_variables_apply` 绑到节点(变量 id 先 `figma_variables_list` 或从 `assets.variables` 取);**绑进样式里**用 `figma_style_variables_apply`(改一次,所有引用该样式的节点都跟),回读走 `figma_style_variables_list`。',
-    ].join('\n');
-  }
-  if (platform === 'jsdesign') {
-    return [
-      '- 组件:`jsd_create_instance` 用 `componentId` 铺实例;同类单元 ≥2 个时**先查清单**,别新建重复组件。⚠ 本平台把带 `/` 的组件名拆成「集合 / 成分」—— `assets.components[].name` 是**叶子名**(建 `组/主件` 后清单里叫 `主件`,集合名在 `assets.variants` 上),按名字取组件(`{{@comp:…}}`)时一律照清单里的原样写。',
-      '- 变体集:取值清单读得到(`assets.variants[].properties`),但**切值本平台运行期没有入口** —— 引擎声明了 `setProperties` / `swapComponent`,实测分别是「not a function」与内部错误(2026-10-20),变体取值只能在画布上手工切换。需要脚本可切的多状态请改「每个状态一个独立 COMPONENT」。',
-      '- 样式:节点字段 `fillStyleId` / `strokeStyleId` / `textStyleId` / `effectStyleId` 直接引用样式 id;`assets.styles` 与 `jsd://styles` **列得出来**(2026-10-15 真机:7 条 = 6 PAINT + 1 TEXT),按 id / 名复用即可。⚠ 枚举走**同步**入口(能力位 `styleEnumerationSync`):运行时的 `getLocal*StylesAsync` 是引擎透出的未声明成员,`await` 它**永不 resolve**(0043 / dec e1e66f0a)—— 别想着「换 async 更快」。色板与字体**一律落样式**(PAINT / TEXT / EFFECT / GRID 本平台有工厂,实测可建可绑、可从节点 `*StyleId` 回读);间距与圆角没有样式工厂,只能落节点字段(`jsd_set_layout` / `jsd_set_cornerRadius`)。',
-      '- 变量:本平台没有变量面(`assets.variables` 恒空),别去找变量入口;统一色板走上一条的样式路。',
-    ].join('\n');
-  }
-  return [
-    '- 组件:`jsd_create_instance` 用 `componentId` 铺实例;同类单元 ≥2 个时**先查清单**,别新建重复组件。',
-    '- 变体集:切到**已有**取值用 `jsd_set_instance_properties`(取值清单看 `assets.variants[].properties`)。',
-    '- 样式:节点上的 `*StyleId` 字段引用样式 id(`jsd_create_style` 能从既有节点建出一条),或本平台提供的按名应用入口(清单见 `jsd://platform/state` 的 platformOps)。',
-    '- 变量:本平台的变量入口见 `jsd://platform/state` 的 platformOps(`assets.variables` 恒空即本平台没有变量面)。',
-  ].join('\n');
-}
-
-/**
- * 「四类可复用件**之间**怎么连」—— 设计策略第 0 条里,选型判据之外的那段关系。
- *
- * 为什么单独一段:`reuseGuideText` 说的是「每一类各自的复用入口」,但真正让调用方选错的
- * 是**连线方式三平台根本不同**:Figma 是「变量 → 样式 → 节点」的三层链,MG 把样式塌进
- * 变量(八项复合样式类型),jsDesign 只有样式一层。缺了这段,Figma 上养成的习惯会被照搬
- * 到 MG 去找「样式的变量绑定」、或搬到即时设计去找变量入口。
- *
- * 取舍写在**这一处**,不在 prompts 里按平台分支重写(0032);平台侧的入口名/读路径仍取
- * `dicts/platform-knowledge.ts`,本函数只拼关系。`styleEnumerated` 由调用方从 ping 回包
- * 的 capabilities 传(claim 的唯一真源是插件侧 meta,本文件不复制,见 0043)。
- */
-export function resourceRelationText(
-  platform: PlatformKey | null,
-  styleEnumerated: boolean | null,
-): string {
-  const shared = [
-    '- **三平台一致的三条**:① 分层是「变量(一个值)→ 样式(一组固定视觉)→ 组件(一组节点)→ 变体(组件的多态维度)」,越往下越贵也越难改;② 「改一处影响全部」有**三种源头** —— 改值(变量)/ 改一组值(样式)/ 改结构(主组件),按差异落在哪一层选,别一律抽组件;③ **变体取值绑变量三家都做不到**:三平台的变量类型表里都没有 `VARIANT`(行号见 `dicts/platform-knowledge.ts` 三家的 evidence)——「切到禁用态时颜色跟着主题变」得拆成两件事:变体只管**结构态**,颜色/间距仍由变量或样式扛。',
-    '- **三套词汇别混用**:组件属性走 `jsd_set_instance_properties`,节点字段走 `jsd_set_*`,变量绑定走本平台的变量 op —— 拿错入口的典型症状是「回包成功、画布没变」。',
-  ];
-  const styleFace =
-    styleEnumerated === false
-      ? [
-          '- ⚠ **样式这一面列不出来**:本平台声明了 `styles`(按 id 应用是通的)但没声明 `styleEnumeration`,故 `assets.styles` / `jsd://styles` **恒空**(0043)。已有样式的 id 只能从**正用着它的节点**上读 `fillStyleId` / `strokeStyleId` / `textStyleId` / `effectStyleId`,新建的必须把 `jsd_create_style` 回包的 id **记账** —— 丢了找不回(重复建了按 id 走 `jsd_delete_style`)。⚠ **本仓没有「改样式」的入口**(样式面只有建 `jsd_create_style` 与删 `jsd_delete_style`):样式一旦建成就**改不了值** —— 要换值只有两条路,删了重建(引用它的节点要重新绑 `*StyleId`),或在设计器里手动改。⇒ 所以「改一处全档跟随」这条卖点**在本仓 MCP 侧验证不了**,建样式时就得一次给对(要改就去设计器里手动改,或删了重建)。这是**仓库级缺口**,不分平台。',
-        ]
-      : [];
-  if (platform === 'figma') {
-    return [
-      '- **Figma:三层链(变量 → 样式 → 节点)三端都通,但一套链一套词汇**,别把三档的字段名混着传:① **节点档** `figma_variables_apply`(width / cornerRadius / opacity… 与 fills / strokes / effects / layoutGrids);② **样式档** `figma_style_variables_apply`(数组档叫 **paints** / effects / layoutGrids —— 节点上的 fills / strokes 在样式上叫 paints,子字段固定 color;排版档 fontFamily / fontSize / … 仅 TEXT 样式);③ **组件属性档** `figma_component_properties_set`(值传 `{type, value:{type:"VARIABLE_ALIAS", id}}`,**只此一家**能这么写)。选哪档就一个问句:**改一次要带动多大一片** —— 一个节点(①)/ 所有引用这条样式的节点(②)/ 所有实例的这个属性(③)。',
-      '- **验证走各自的读面,别拿一端的证据宣布另一端生效**:①回读节点 `boundVariables`;②回读 `figma_style_variables_list`(样式档的绑定**只有这里能看到** —— `assets.styles` 只给 id + 名称,节点上的 `boundVariables` 不含样式内部的绑定;`figma_style_variables_apply` 的回包已带写完立刻回读的 `styles[].boundVariables`);③回读 `componentProperties[].boundVariables.value`。',
-      '- ⚠ **两类东西绑不了**:变体属性(`VARIANT` —— 变量类型表里没有它)与 `SLOT` 组件属性(读得到、写侧引擎抛 `cannotSetSlotProperty`);样式档里也没有节点字段(圆角、宽高、透明度绑不到样式上,它们本来就属于节点)。',
-      '- **改值与删除的口子**:同名同类型再调一次 `figma_variables_create` 就是就地更新(没有独立的改值 op);变量删除走 `figma_variables_remove`(删完空集合会留着,集合与模式的生命周期未接),样式删除走 `jsd_delete_style`。',
-      ...styleFace,
-      ...shared,
-    ].join('\n');
-  }
-  if (platform === 'mastergo') {
-    return [
-      '- **MG:变量**包含**样式** —— 不是「变量喂样式」。`mg_variables_create` 的 type 里有八项复合样式(PAINT / TEXT / EFFECT / GRID / STROKE_WIDTH / CORNER_RADIUS / PADDING / SPACING),建出来**本身就是一条样式**。⇒「一组固定视觉,还要随模式切」在 MG 上是**一条变量**、不是一条样式;两条路都通,选错的症状是**在另一半清单里找不到它**:复合样式变量只进 `assets.variables`,不进 `assets.styles`。',
-      '- ⚠ **样式与变量共用一套 id 空间,类别词汇还逐字重名**(它的 `getStyleById` 连变量都查得出来)。删除**必须分入口**:变量走 `mg_variables_remove`,样式走 `jsd_delete_style` —— 拿样式入口删变量会**回包成功、变量真没了**(真机 2026-10-14)。名字在两份清单里撞车时,先确认它在哪一面再动。',
-      '- **样式面八类都通,但落点分两面**:本平台的 `StyleType` 就是那八项(`:1810`),`jsd_create_style` 全收(后四类 STROKE_WIDTH / CORNER_RADIUS / PADDING / SPACING **只此一家**有工厂 —— 另两家没有,传过去会被写前点名拒)。⚠ 真机 2026-10-14:**`assets.styles` 与 `assets.variables` 是同一批资源的两个视角,列出来的内容不互补、也不可预测** —— 后四类走 `jsd_create_style` 建出来进了 `assets.variables`;而 `mg_variables_create type=PAINT` 建的复合样式变量反过来只出现在 `assets.styles`,`mg_list_variables` 按集合筛、按类型筛都列不出它。⇒ **别拿「哪份清单里有它」当判据**:要确认就用回包的 id 直接读(`getVariableById` / `getStyleById` 共用同一套 id,都解析得出来),要删就按错误提示换入口(两边都会点名拒,不会误删)。',
-      '- ⚠ `mg_variables_create` 的 type 只有 **11 项**:typings 的 `VariableType` 列了 SPACING,引擎实建抛 `Unsupported variable type: SPACING`(官方文档也没有它)—— 要 SPACING 走 `jsd_create_style kind=SPACING`。',
-      '- ⚠ 复合样式类型的变量**不进 `mg.variables.getVariables()` 列表**(按集合筛、按类型筛都列不出;`getVariableById(id)` 读得到)。op 的回读因此按 id 查,两条都读不到才落 `pendingReadback` —— 看到它**不要重试**,拿 id 走样式侧确认即可。',
-      '- ⚠ 这四类的**样式侧枚举面没接**(`getLocalStrokeWidthStyles` 等 MG:1517-1520 未投影成契约成员)—— 但它们会出现在 `assets.variables` 里,所以不是找不到,是**在另一份清单里找**。',
-      '- **组件属性 ↔ 变量:读得到、写不了**。`componentProperties[].variableId` 是 MG 给的绑定证据(仅**组件侧**那张表、仅 TEXT/BOOLEAN 属性可能存在),但 `setProperties` 只收 `string|boolean`,平台没有任何写入口 ⇒ 别在这里传 `{type,value:{type:"VARIABLE_ALIAS",…}}`,core 按方法参数登记表点名中止;要绑只能在设计器里手动做,插件这一侧只能验证它存不存在。',
-      '- **模式切换没有入口**:`setVariableMode` / `setPageVariableMode` 未接 ⇒ 换主题要么在设计器里手动切模式,要么每个主题各建一套变量 —— 别拿「建了多个 mode」当它已经会跟着切。',
-      ...styleFace,
-      ...shared,
-    ].join('\n');
-  }
-  if (platform === 'jsdesign') {
-    return [
-      '- **jsDesign:只有样式一层** —— typings 全文没有任何 variable 声明(`grep -in variable` 零命中),这是**平台没有这个面**,不是「本仓还没接」。⇒ 变量能做的「一个语义 token 随模式/主题变」在这里没有对应物:色板、间距、排版一律落**样式**;深浅两套主题只能建成两套样式族按名字批量重刷(`jsd_find` 定位 → `jsd_batch` 改写),或抽成两个组件族 —— 别去试变量 op(daemon 拦成 `platform_unsupported`,白跑一趟往返)。',
-      '- **实例属性写入在本平台运行期不可用**:typings 与官方文档都声明了 `InstanceNode.setProperties`(`plugin-api.d.ts:1093`),实测调它立刻抛 `in setProperties: i.setProperties is not a function`(真机 2026-10-20,真实变体实例上 11~15ms 就失败)⇒ 布尔 / 文本 / 换绑 / 变体取值**一概写不了**。`jsd_component_facts` 的 `setPropertiesAvailable` 直接回报符号在不在,别拿一次失败去试探;`jsd_set_instance_properties` 会在写前点名拒。状态差异走「族名 / 状态」命名的多主件。',
-      '- ⚠ 契约的样式类别是三家 `StyleType` 的**八项并集**,本平台只有四类(PAINT / TEXT / EFFECT / GRID,`plugin-api.d.ts:1137`)⇒ 传 STROKE_WIDTH / CORNER_RADIUS / PADDING / SPACING 会在写前被点名拒(不静默、不会建成别的类);间距与圆角要统一就落节点字段(`jsd_set_layout` / `jsd_set_cornerRadius`),或按「族 / 值」命名后 `jsd_find` + `jsd_batch` 批量刷。',
-      '- **变体集:造不出来、也切不动**。`combineAsVariants` 是唯一产出路径且真机必崩,失败还会留下畸形集合与布尔运算残骸(用 `jsd_repair_nodes` 清)。**已有的变体集读得到**(维度取值看 `assets.variants[].properties`、成员看 `jsd_component_facts` 的 `members`),但实例侧切值**没有可用入口** —— `setProperties` 不是函数、`swapComponent` 抛内部错误(读不到目标节点的 type,原文见 `jsd_component_facts` 的 `swapComponentAvailable`;真机 2026-10-20,独立组件 / 成员 / 克隆实例上全复现)。⚠ 别把「读得到」写成「能切」;要脚本可切的多状态请改「每个状态一个独立 COMPONENT」。',
-      '- **PAINT 这条链是通的,也是本平台做统一色板的唯一正路**(真机 2026-10-15,6 条样式绑 23 个节点):①先**归一化** —— 同名用途却差一两度的色(分割线 `#EDEDEB` / 侧栏边框 `#EAEAE8` / 卡片描边 `#E8E8E6`)必须先收敛成一套值,不收就建样式,建出来只套得住一半节点;②`jsd_create_style({kind:"PAINT", name:"色板/主色", fromNodeId:样板节点})` 从样板抄,回包 id 记账;③绑回 `jsd_set_fill_color` 的 `fillStyleId` / `jsd_set_stroke` 的 `strokeStyleId` —— **创建入参与这两个 set 工具的顶层都收这四个 `*StyleId` 键**,不必「建完再绑」两趟。两个坑(其一是过去式):`jsd_set_text` **原先不收 `fills`**(文字颜色得另跑一趟 `jsd_set_fill_color`),2026-10-15 已放开 —— 现在 `fills` 与排版一趟写入;`strokeStyleId` 的写入**回包会报「插件响应超时」但写入已落**(真机:批量内一次、单发一次都超时,事后 `jsd_find` 回读 `strokeStyleId` 已绑上)⇒ 不要重试,回读一次确认。',
-      '- ⚠ **TEXT 样式:排版能跟,但绑完必须补一次宽度修复,而且不带颜色**(真机 2026-10-15,隔一次独立读 + 导图目检):① 绑 `textStyleId` 后排版**确实跟源** —— fontSize 14 → 20、fontName Regular → Bold、lineHeight AUTO → 32px(全部回读确认);② **但引擎同时把宽度钉成 0**(`textAutoResize` 仍是 WIDTH_AND_HEIGHT、`width=0`)⇒ 画面**完全不可见**(导出 167 字节空白 vs 同尺寸样板 4281 字节);⚠ **写入同 tick 的回显看不到这条** —— 它仍报 112 / 84 / 101 原值,**必须隔一次调用独立读**才现形(这条曾把我误导成「绑定无损」);③ **修法:`jsd_set_text({width: N, textAutoResize:"HEIGHT"})` 两个字段同批传**(你的实测:回读 240 / 32 恢复正常)。只传 `width` 不行、解绑 `textStyleId` 不行、重设 characters 也不行 —— 三种都试过,只有这一种组合有效;④ **样式不带颜色**:`TextStyle` 只有排版字段(typings `:1151-1161`,没有 `fills`),绑完节点 `fills` 保持原色 ⇒ 颜色**一律走 PAINT 样式 + `fillStyleId`**,别指望文本样式带色。⇒ 文字排版**可以用** TEXT 样式,代价是「绑一条补一次宽」;要零成本就用**样板节点当事实来源**(读它的 fontSize / fontName / lineHeight / fills,逐条写进同类文本)。',
-      '- ⚠ **TEXT 宽度被钉成 0 是另一回事,不要归因到样式绑定**:2026-10-15 出现过 26 个文本节点宽度归零、画面全空(导出体积 108KB → 43KB 是这个信号),而那次现场**同一会话里先有两次 25s 超时**(挂死的 `strokeStyleId` 写)且发生在多步批次内;隔离复现三种姿势都不出现 ⇒ 归因未定,别写成「某个字段导致的」。症状的修法走已知那条链:`jsd_resize_node` 传 `width` 把宽度钉回去(要高度随内容走再同时设 `textAutoResize:"HEIGHT"`),`core/props/writers.ts` 的 `warnTinyFixedText` 会点名这种「写进去了但看不见」。⇒ 真正的规矩是:**超时之后必须复核受影响的子树**(单独 `jsd_find` 读几何 + 导图目检),别接着往下写。',
-      ...styleFace,
-      ...shared,
-    ].join('\n');
-  }
-  // 平台未探测:只给会漂移的那一条 —— 先探平台再选路
-  return [
-    '- **三平台的连线方式不同,先探平台再选路**(`jsd_ping` 的 capabilities / `jsd://platform/state`):Figma 是「变量 → 样式 → 节点」三层链,三端都有入口(样式档的绑定靠 `figma_style_variables_list` 才看得见);MasterGo 把样式塌进变量(八项复合样式类型,且与样式共用一套 id 空间、类别词汇逐字重名);即时设计只有样式一层(typings 里没有任何变量声明)。照搬别家做法的典型症状:去找本平台没有的入口,或在另一份清单里找已经建好的那一条。',
-    ...(styleEnumerated == null
-      ? [
-          '- 样式能不能列清单同样按能力位判(`styleEnumeration`):未声明的平台上 `assets.styles` 恒空 —— **别把「列不出来」当「文档里没有」**,已有样式的 id 从节点上的 `*StyleId` 读。',
-        ]
-      : []),
-    ...shared,
-  ].join('\n');
-}
-
-/** 「本平台的组件属性读侧」—— 供 platformNote / 描述复用 */
+/** 「本平台的组件属性读侧」—— 供 descriptionSuffix / 描述复用 */
 export function componentFaceText(platform: PlatformKey | null): string {
   if (platform == null) {
     const readable = PLATFORMS.filter(
@@ -389,48 +219,10 @@ export function componentFaceText(platform: PlatformKey | null): string {
     ].join('');
   }
   const fact = platformDomainFact(platform, 'components');
-  return fact?.read == null
-    ? `${label(platform)}读不到 componentProperties(能力位未声明),只能读 variantProperties。`
-    : `${label(platform)}读得到 componentProperties 与 variantProperties(组件属性传带 \`#\` 后缀的完整键,变体属性传名字)。`;
+  const text =
+    fact?.read == null
+      ? `${label(platform)}读不到 componentProperties(能力位未声明),只能读 variantProperties。`
+      : `${label(platform)}读得到 componentProperties 与 variantProperties(组件属性传带 \`#\` 后缀的完整键,变体属性传名字)。`;
+  return text;
 }
 
-/**
- * 「容器怎么排布」—— 自动布局与栅格参考线两条路都在,免得调用方只知道手摆 x/y。
- *
- * 数据取自两张既有声明表,本文件不另立事实:
- * - 宿主类型:`PROP_APPLICABILITY.layoutGrids`(与 core 写路径同一份,见 0022);
- * - 逐平台可落性:`LAYOUT_GRID_UNVERIFIABLE_PLATFORMS`(MG 复验记录,见 0022 的第四类登记)。
- * 「互斥」那句在 `shared/core/props/writers.ts` 的网格 warnings 里还有一份运行期措辞
- * (那条带各平台证据,摘不掉);本条是**事前**提示,两处判据同源。
- */
-export function layoutHintText(platform: PlatformKey | null): string {
-  const hosts = PROP_APPLICABILITY.layoutGrids.join(' / ');
-  const gridStatus = (p: PlatformKey): string =>
-    LAYOUT_GRID_UNVERIFIABLE_PLATFORMS.includes(p)
-      ? `${label(p)}:\`layoutGrids\` 实测不收(节点级网格不落盘)—— 别重试,要栅格请在设计器里手动加`
-      : `${label(p)}:\`layoutGrids\` 可写,写后走双读回读校验,没生效会在结果 warnings 里点名`;
-  return [
-    '排布有两条路,都可用:① **自动布局** —— `layoutMode=HORIZONTAL|VERTICAL` 配 ',
-    '`itemSpacing/padding*/primary|counterAxisSizingMode|primary|counterAxisAlignItems`',
-    '(节奏按上一条:归组摆好后用 jsd_set_layout);② **栅格参考线** —— `layoutGrids`(仅 ' +
-      hosts +
-      ')。',
-    ...(platform === 'jsdesign'
-      ? [
-          '⚠ **开布局会按内容重算容器尺寸,但声明了 FIXED 的轴会被写路径自动钉回**(真机 2026-10-15):① 建容器那一次带上 `layoutMode` + 两轴 FIXED → 尺寸原样保住(实测 400×300 建出来还是 400×300);② **事后**用 `jsd_set_layout` 开布局,引擎那一瞬间仍会把 400×300 按内容 hug 成 112×176(内容 80 + padding 32)—— **但写路径随后按该轴 sizingMode 的回读值判定:即时设计两轴都回读 FIXED,于是两轴都 `resizeContainer` 钉回开布局前的尺寸**,并在 warnings 里点名「已按声明钉回」、回显尺寸同步为真值;③ ⇒ **要固定就声明该轴 FIXED,不必再手工补 `jsd_resize_node`**;**要按内容撑开就显式传该轴 `AUTO`**(传了 AUTO 就不会钉回);不声明时按引擎自己的回读值走,别靠猜。',
-          '✅ **其余自动布局能力真机全部生效**(2026-10-15,同一组容器实测):`itemSpacing` 与 `padding*`(纵向 3 个子项 y = 16 / 68 / 120,恰好 40+12 递推)、`primaryAxisAlignItems:"SPACE_BETWEEN"`(横向 3 个子项 x = 16 / 160 / 304,此时 `itemSpacing` 按文档被忽略)、`counterAxisAlignItems:"CENTER"`(子项 y = 130 =(300-40)/2)、`layoutGrow`(纵向主轴 40 → 164,吃满剩余空间)、`layoutAlign:"STRETCH"`(交叉轴 80 → 368 = 400-32)、`constraints`(子项 STRETCH 后容器加宽 100,子项宽 80 → 180=16 左距 + 304 右距)、`layoutGrids`(创建入参可写,普通容器与**自动布局容器**上回读都落盘)。⇒ 布局这一面用得起来,别拿绝对坐标绕开。',
-          '⚠ **别传本平台没有的布局字段**:typings(`@jsdesigndeveloper/plugin-typings@1.0.12`)里 `layoutWrap` / `layoutPositioning` / `counterAxisSpacing` / `itemReverseZIndex` / `strokesIncludedInLayout` **一个都没有**(grep 零命中)—— 那是 Figma 的字段,换行与「布局内绝对定位」在这里做不到,别按 Figma 的习惯试。',
-          '⚠ TEXT 要固定宽 / 固定框,先显式传 `textAutoResize`(`"NONE"` 固定框、`"HEIGHT"` 固定宽自动高)再开布局;只给 width 时引擎会把缺省的 WIDTH_AND_HEIGHT 改成 NONE,高度不再随内容重算(实测固定宽 200 的长文本 height 回读仍是 15)—— 这类「高度没跟着内容走」的文本,**重设一次 characters 就触发重排**(同一节点重设后回读 82),别急着改尺寸。⚠ 更狠的一档是**宽度被钉在最小值**:建 TEXT 时 characters 为空(或只给一维尺寸),引擎把缺省的 WIDTH_AND_HEIGHT 置成 NONE 并把宽度钉到 1px(实测只给 height:60 → 宽度 1),之后填 characters **不会重算宽度** —— 21 个字挤在 1px 框里,回读 characters 完整、零告警、画面空白。这跟开不开布局无关;修法是 jsd_resize_node 传 width 钉回去,或建时一次给全 characters 与 width/height。',
-          '**别拿「绝对坐标、最后补布局」回避这套顺序**:布局容器接管子节点 x/y,手摆的坐标在布局里根本不显形 —— 该走的是上面的顺序,不是不开布局。',
-        ]
-      : []),
-    ...(platform === 'figma'
-      ? [
-          '⚠ **主轴默认按内容撑开(引擎自称 hug),交叉轴保得住**(真机 2026-10-15,400×300 容器 + 3 个 80×40 子节点):不声明 sizingMode 时,开纵向布局后 → **400×176**,回读 `primaryAxisSizingMode: **AUTO**`、`counterAxisSizingMode: FIXED` —— 字段与行为一致,**AUTO 那条不钉回**(保留 hug 语义)。**显式声明 FIXED 的轴会被自动钉回请求值**(同一判据:该轴回读 FIXED 而尺寸不符 → `resizeContainer` + warnings 点名「已按声明钉回」),所以「建容器时同批给 `layoutMode` + 两轴 FIXED + `height:300`」现在**真的会得到 300**(此前停在 176,只发一条 warning)。⇒ 要固定就声明该轴 FIXED,要 hug 就不声明或显式传 AUTO。',
-          '✅ 实测可用的部分:`layoutMode` / `itemSpacing` / `padding*` 落库且生效(纵向 3 子项 y = 16 / 68 / 120),交叉轴尺寸开布局时保得住,`primaryAxisSizingMode` **如实回读**(AUTO 就是 AUTO,不被请求值污染 —— 这点比即时设计可信)。',
-        ]
-      : []),
-    '两者互斥:引擎只在**非自动布局**的容器上收网格。',
-    targets(platform).map(gridStatus).join(';'),
-  ].join('');
-}

@@ -8,7 +8,8 @@ import {
 } from 'text-to-design-shared';
 import type { Bridge } from '../bridge';
 import { CLIENT, PING_TIMEOUT_MS } from '../config';
-import { bridgeTool, type ToolHandle } from '../core/registry';
+import type { ToolHandle } from '../core/tool-def';
+import { bridgeTool } from '../core/tool-exec';
 import { getSkillsStatus } from '../daemon/skills';
 import type { McpI18n } from '../i18n';
 
@@ -28,7 +29,6 @@ export function registerSessionTools(
       idempotentHint: true,
       openWorldHint: false,
     },
-    alwaysEnabled: true,
     timeout: PING_TIMEOUT_MS,
     followUp: {
       type: 'tool',

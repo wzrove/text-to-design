@@ -2,7 +2,7 @@ import { type McpServer, ResourceTemplate } from '@modelcontextprotocol/server';
 import type { MessageKey } from 'text-to-design-shared';
 import type { Bridge } from '../bridge';
 import { RESOURCE_DOCUMENT_TTL_MS, RESOURCE_FONTS_TTL_MS } from '../config';
-import type { ToolHandle } from '../core/registry';
+import type { ToolHandle } from '../core/tool-def';
 import { resourceIcon } from '../core/tool-icons';
 import type { McpI18n } from '../i18n';
 import { getPlatformState } from '../platform-state';

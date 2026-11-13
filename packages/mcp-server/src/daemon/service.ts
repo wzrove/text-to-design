@@ -69,12 +69,18 @@ function resolveEntry(): { exe: string; script: string } | { problem: string } {
   return { exe, script };
 }
 
+/**
+ * 服务定义的落盘位置:install 与 uninstall 各写过一遍同一路径,写两遍就必然漂一次
+ * (改一处忘另一处 → 注销删不掉安装写下的文件)。
+ */
+function servicePath(kind: 'linux' | 'darwin'): string {
+  return kind === 'linux'
+    ? join(homedir(), '.config/systemd/user', `${UNIT_NAME}.service`)
+    : join(homedir(), 'Library/LaunchAgents', `com.${UNIT_NAME}.plist`);
+}
+
 function linuxPlan(exe: string, script: string): PlanStep[] {
-  const unitPath = join(
-    homedir(),
-    '.config/systemd/user',
-    `${UNIT_NAME}.service`,
-  );
+  const unitPath = servicePath('linux');
   const unit = `[Unit]
 Description=${SERVER_NAME} (design plugin bridge: WS ${PORT} / MCP HTTP ${HTTP_PORT})
 Documentation=https://github.com/wzrove/text-to-design
@@ -106,11 +112,7 @@ WantedBy=default.target
 }
 
 function darwinPlan(exe: string, script: string): PlanStep[] {
-  const plistPath = join(
-    homedir(),
-    'Library/LaunchAgents',
-    `com.${UNIT_NAME}.plist`,
-  );
+  const plistPath = servicePath('darwin');
   const logPath = join(homedir(), 'Library/Logs', `${UNIT_NAME}.log`);
   const plist = `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -177,6 +179,7 @@ function win32Plan(exe: string, script: string): PlanStep[] {
   ];
 }
 
+/** 注册:三平台分支各一个 body,平台分发只此一处 */
 function planFor(exe: string, script: string): PlanStep[] {
   if (process.platform === 'linux') return linuxPlan(exe, script);
   if (process.platform === 'darwin') return darwinPlan(exe, script);
@@ -184,13 +187,10 @@ function planFor(exe: string, script: string): PlanStep[] {
   return [];
 }
 
+/** 注销:与 planFor 同一组平台分支;路径一律走 servicePath,不在此再写一遍 */
 function uninstallPlan(): PlanStep[] {
   if (process.platform === 'linux') {
-    const unitPath = join(
-      homedir(),
-      '.config/systemd/user',
-      `${UNIT_NAME}.service`,
-    );
+    const unitPath = servicePath('linux');
     return [
       {
         kind: 'run',
@@ -202,11 +202,7 @@ function uninstallPlan(): PlanStep[] {
     ];
   }
   if (process.platform === 'darwin') {
-    const plistPath = join(
-      homedir(),
-      'Library/LaunchAgents',
-      `com.${UNIT_NAME}.plist`,
-    );
+    const plistPath = servicePath('darwin');
     return [
       { kind: 'run', cmd: 'launchctl', args: ['unload', '-w', plistPath] },
       { kind: 'rm', path: plistPath },

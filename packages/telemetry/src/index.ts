@@ -20,26 +20,28 @@ const userInput = z.object({
   mcpVersion: z.string().min(1).max(50).optional(),
 });
 
-const errorInput = z.object({
-  /** 发送端条目级 id;重发同一批时它不变 → rollup 不重复计数(见下方 ON CONFLICT) */
-  id: z.string().min(1).max(TELEMETRY_LIMITS.idMax).optional(),
-  level: z.enum(ERROR_REPORT_LEVELS).default('error'),
-  message: z.string().min(1).max(TELEMETRY_LIMITS.messageMax),
-  stack: z.string().max(TELEMETRY_LIMITS.stackMax).optional(),
-  /** 字节上限见 .refine:键数不限,但序列化后不得超过 contextMaxBytes */
-  context: z.record(z.string(), z.unknown()).optional(),
-  count: z.number().int().min(1).max(1_000_000).default(1),
-  /** 分类三元组:老客户端不传 → NULL,分组退化成只按归一化 message */
-  code: z.enum(ERROR_CODES).optional(),
-  scope: z.enum(LOG_SCOPES).optional(),
-  subject: z.string().min(1).max(TELEMETRY_LIMITS.subjectMax).optional(),
-}).refine(
-  (v) =>
-    v.context == null ||
-    Buffer.byteLength(JSON.stringify(v.context), 'utf8') <=
-      TELEMETRY_LIMITS.contextMaxBytes,
-  { message: 'context too large', path: ['context'] },
-);
+const errorInput = z
+  .object({
+    /** 发送端条目级 id;重发同一批时它不变 → rollup 不重复计数(见下方 ON CONFLICT) */
+    id: z.string().min(1).max(TELEMETRY_LIMITS.idMax).optional(),
+    level: z.enum(ERROR_REPORT_LEVELS).default('error'),
+    message: z.string().min(1).max(TELEMETRY_LIMITS.messageMax),
+    stack: z.string().max(TELEMETRY_LIMITS.stackMax).optional(),
+    /** 字节上限见 .refine:键数不限,但序列化后不得超过 contextMaxBytes */
+    context: z.record(z.string(), z.unknown()).optional(),
+    count: z.number().int().min(1).max(1_000_000).default(1),
+    /** 分类三元组:老客户端不传 → NULL,分组退化成只按归一化 message */
+    code: z.enum(ERROR_CODES).optional(),
+    scope: z.enum(LOG_SCOPES).optional(),
+    subject: z.string().min(1).max(TELEMETRY_LIMITS.subjectMax).optional(),
+  })
+  .refine(
+    (v) =>
+      v.context == null ||
+      Buffer.byteLength(JSON.stringify(v.context), 'utf8') <=
+        TELEMETRY_LIMITS.contextMaxBytes,
+    { message: 'context too large', path: ['context'] },
+  );
 
 const errorsBody = z.object({
   user: userInput,

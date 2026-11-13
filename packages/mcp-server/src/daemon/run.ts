@@ -2,7 +2,6 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import { type FSWatcher, watch, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { basename, dirname } from 'node:path';
-import type { Client } from '@modelcontextprotocol/client';
 import {
   localhostHostValidation,
   localhostOriginValidation,
@@ -27,6 +26,7 @@ import { buildServer } from '../server';
 import { captureError, flushTelemetry, stopTelemetry } from '../telemetry';
 import { latestVersions } from '../version-check';
 import {
+  awaitReady,
   clearSelfExitMarker,
   delay,
   fetchDaemonHealth,
@@ -54,28 +54,30 @@ export { spawnDaemon };
  * - `none`                —— 无人监听(含旧版刚被替换掉) → 继续正常启动
  */
 async function ensureSoleDaemon(): Promise<boolean> {
-  const deadline = Date.now() + DAEMON_WAIT_MS;
-  do {
-    const probe = await probeUpstream();
-    if (probe.state === 'proxy') {
-      await probe.client.close().catch(() => {});
+  // 首轮探测必做:probeUpstream 自己在旧版本时会先完成替换。之后 starting(旧版在退 /
+  // 新版在起)交给 awaitReady 轮询到终态,直到真正 quiet 才算「无人监听」。
+  const seen = await probeUpstream();
+  if (seen.state === 'starting') {
+    const waited = await awaitReady({ first: seen });
+    if (waited?.state === 'proxy') {
+      await waited.client.close().catch(() => {});
       log('已有 daemon 在运行,本次启动跳过');
       return false;
     }
-    if (probe.state === 'foreign') {
-      error(`端口 ${HTTP_PORT} 被非 text-to-design MCP 服务占用,请先释放`);
-      process.exit(1);
+    if (waited?.state === 'foreign') refuseForeignPort();
+    // 等不出终态:仍能探到 health 就是「端口确有人在听」,别再去撞端口
+    if (waited == null && (await fetchDaemonHealth()) !== null) {
+      log('已有 daemon 持有端口,本次启动跳过');
+      return false;
     }
-    if (probe.state === 'none') return true;
-    // starting:旧版在退/新版在起,等它把端口交出来
-    await delay(DAEMON_POLL_MS);
-  } while (Date.now() < deadline);
-
-  // 超时仍可探到 health:端口确有人在听,别再去撞端口
-  if ((await fetchDaemonHealth()) !== null) {
-    log('已有 daemon 持有端口,本次启动跳过');
+    return true;
+  }
+  if (seen.state === 'proxy') {
+    await seen.client.close().catch(() => {});
+    log('已有 daemon 在运行,本次启动跳过');
     return false;
   }
+  if (seen.state === 'foreign') refuseForeignPort();
   return true;
 }
 
@@ -364,22 +366,16 @@ async function retireDaemon(): Promise<void> {
   warn(`daemon 在 ${DAEMON_REPLACE_MS / 1000}s 内未退役,交给产物自检继续兜底`);
 }
 
-/**
- * 等到 daemon 可连(或确认没人在跑)。
- *
- * 退役请求发出后这一小段时间里,探测到的永远是刚死那个 —— 起新实例前必须把
- * 端口等到真正空出来,否则会撞端口。
- */
-async function waitDaemonReady(): Promise<
-  { state: 'proxy'; client: Client } | { state: 'foreign' } | { state: 'none' }
-> {
-  const deadline = Date.now() + DAEMON_WAIT_MS;
-  while (Date.now() < deadline) {
-    const probe = await probeUpstream();
-    if (probe.state === 'proxy' || probe.state === 'foreign') return probe;
-    await delay(DAEMON_POLL_MS);
-  }
-  return { state: 'none' };
+/** 端口被外来服务占着:各入口同一句,不各抄一遍 */
+function refuseForeignPort(): never {
+  error(`端口 ${HTTP_PORT} 被非 text-to-design MCP 服务占用,请先释放`);
+  process.exit(1);
+}
+
+/** awaitReady 超时(null)统一收口:同一个预算、同一句报错 */
+function timeoutExit(): never {
+  error(`daemon 启动超时(${DAEMON_WAIT_MS / 1000}s),请检查残留进程后重试`);
+  process.exit(1);
 }
 
 /** shim 模式:探测 daemon;无则拉起并等待就绪 */
@@ -387,47 +383,32 @@ export async function runShim(): Promise<void> {
   // 先看一眼常驻实例是不是跑在旧构建上:同版本号会让版本自检放行,
   // 这个盲区正是「改了代码却不生效」的来源
   await warnIfDaemonStale();
-  let probe = await probeUpstream();
-  if (probe.state === 'foreign') {
-    error(`端口 ${HTTP_PORT} 被非 text-to-design MCP 服务占用,请先释放`);
-    process.exit(1);
-  }
+  const probe = await probeUpstream();
+  if (probe.state === 'foreign') refuseForeignPort();
   if (probe.state === 'proxy') {
     // shim 重启 = 本地产物可能已换新。请 daemon 退役,自己再起一个 ——
     // 这正是「为什么该由 shim 触发」:只有 shim 的启动才意味着有人加载了新产物。
     await probe.client.close().catch(() => {});
     await retireDaemon();
-    probe = await waitDaemonReady();
-    if (probe.state === 'proxy') {
-      await serveProxy(probe.client);
+    // 退役窗口里探到的永远是刚死那个:等到终态再定起不起,否则会撞端口。
+    // 这里**不**拉起 —— 拉起只发生在确认 none 之后。
+    const after = await awaitReady();
+    if (after?.state === 'proxy') {
+      await serveProxy(after.client);
       return;
     }
-    if (probe.state === 'foreign') {
-      error(`端口 ${HTTP_PORT} 被非 text-to-design MCP 服务占用,请先释放`);
-      process.exit(1);
-    }
+    if (after?.state === 'foreign') refuseForeignPort();
+    if (after == null) timeoutExit();
   }
 
   // starting:本项目 daemon 在跑但未就绪,不必重复拉起,静候即可
-  if (probe.state === 'none') {
-    log('未发现 daemon,自动拉起...');
-    spawnDaemon();
-  } else {
-    log('daemon 正在启动,等待就绪...');
+  if (probe.state === 'none') log('未发现 daemon,自动拉起...');
+  else log('daemon 正在启动,等待就绪...');
+  const ready = await awaitReady({ spawnIfNone: true, first: probe });
+  if (ready?.state === 'proxy') {
+    await serveProxy(ready.client);
+    return;
   }
-  const deadline = Date.now() + DAEMON_WAIT_MS;
-  while (Date.now() < deadline) {
-    await delay(DAEMON_POLL_MS);
-    const retry = await probeUpstream();
-    if (retry.state === 'proxy') {
-      await serveProxy(retry.client);
-      return;
-    }
-    if (retry.state === 'foreign') {
-      error(`端口 ${HTTP_PORT} 被非 text-to-design MCP 服务占用,请先释放`);
-      process.exit(1);
-    }
-  }
-  error(`daemon 启动超时(${DAEMON_WAIT_MS / 1000}s),请检查残留进程后重试`);
-  process.exit(1);
+  if (ready?.state === 'foreign') refuseForeignPort();
+  timeoutExit();
 }

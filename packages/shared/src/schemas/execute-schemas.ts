@@ -5,6 +5,24 @@ import {
   BOOLEAN_OPERATIONS,
 } from '../dicts/boolean-operation';
 import {
+  LAYOUT_MODE_VALUES,
+  SIZING_MODE_VALUES,
+  STROKE_ALIGN_VALUES,
+  STROKE_CAP_VALUES,
+  STROKE_JOIN_VALUES,
+  TEXT_ALIGN_HORIZONTAL_VALUES,
+  TEXT_ALIGN_VERTICAL_VALUES,
+  TEXT_AUTO_RESIZE_VALUES,
+  TEXT_CASE_VALUES,
+  TEXT_DECORATION_VALUES,
+  TEXT_TRUNCATION_VALUES,
+} from '../dicts/enum-values';
+import {
+  COUNTER_AXIS_ALIGN_VALUES,
+  LAYOUT_ALIGN_VALUES,
+  PRIMARY_AXIS_ALIGN_VALUES,
+} from '../dicts/platform-value-domain';
+import {
   blendModeSchema,
   constraintTypeSchema,
   effectSchema,
@@ -18,20 +36,12 @@ import {
 import type { ExecuteOp } from './execute-op';
 import { nodeTypeSchema } from './node-type';
 
-// 从 discriminated union 派生的平面类型(所有字段 optional,与 ExecuteOp 兼容)
-type MergeUnion<T> = T extends unknown ? { [K in keyof T]?: T[K] } : never;
-export type ExecuteOpFromSchema = MergeUnion<
-  | z.infer<typeof frameNodeSchema>
-  | z.infer<typeof rectangleNodeSchema>
-  | z.infer<typeof ellipseNodeSchema>
-  | z.infer<typeof lineNodeSchema>
-  | z.infer<typeof polygonNodeSchema>
-  | z.infer<typeof starNodeSchema>
-  | z.infer<typeof vectorNodeSchema>
-  | z.infer<typeof textNodeSchema>
-  | z.infer<typeof groupNodeSchema>
-  | z.infer<typeof booleanOperationNodeSchema>
->;
+/** 从判别联合派生的扁平类型(全可选)。与手写 `ExecuteOp` 的互证见文件尾 */
+export type ExecuteOpFromSchema = {
+  [K in keyof z.infer<typeof executeNodeSchema>]?: z.infer<
+    typeof executeNodeSchema
+  >[K];
+};
 
 /**
  * 子节点直通 schema。
@@ -41,7 +51,7 @@ export type ExecuteOpFromSchema = MergeUnion<
  * 约 18 万字符。这里只列判别字段与最常用定位字段,其余字段 catchall 放行:引擎收到的数据与
  * 严格校验时完全一致,字段写错由引擎报错;顶层入参本身仍是完整严格校验。
  */
-export const childNodeSchema: z.ZodType<ExecuteOp> = z
+export const childNodeSchema = z
   .object({
     type: nodeTypeSchema.describe('schema.executeSchemas.type'),
     name: z.string().optional(),
@@ -104,15 +114,15 @@ function visualFields() {
       .optional()
       .describe('schema.executeSchemas.strokeRightWeight'),
     strokeAlign: z
-      .enum(['CENTER', 'INSIDE', 'OUTSIDE'])
+      .enum(STROKE_ALIGN_VALUES)
       .optional()
       .describe('schema.executeSchemas.strokeAlign'),
     strokeCap: z
-      .enum(['NONE', 'ROUND', 'SQUARE', 'ARROW_LINES', 'ARROW_EQUILATERAL'])
+      .enum(STROKE_CAP_VALUES)
       .optional()
       .describe('schemaValue.strokeCap'),
     strokeJoin: z
-      .enum(['MITER', 'BEVEL', 'ROUND'])
+      .enum(STROKE_JOIN_VALUES)
       .optional()
       .describe('schemaValue.strokeJoin'),
     dashPattern: z
@@ -207,7 +217,7 @@ const cornerFields = {
 function autoLayoutFields() {
   return {
     layoutMode: z
-      .enum(['NONE', 'HORIZONTAL', 'VERTICAL'])
+      .enum(LAYOUT_MODE_VALUES)
       .optional()
       .describe('schema.executeSchemas.layoutMode'),
     itemSpacing: z
@@ -231,19 +241,19 @@ function autoLayoutFields() {
       .optional()
       .describe('schema.executeSchemas.paddingLeft'),
     primaryAxisSizingMode: z
-      .enum(['FIXED', 'AUTO'])
+      .enum(SIZING_MODE_VALUES)
       .optional()
       .describe('schema.executeSchemas.primaryAxisSizingMode'),
     counterAxisSizingMode: z
-      .enum(['FIXED', 'AUTO'])
+      .enum(SIZING_MODE_VALUES)
       .optional()
       .describe('schema.executeSchemas.counterAxisSizingMode'),
     primaryAxisAlignItems: z
-      .enum(['MIN', 'MAX', 'CENTER', 'SPACE_BETWEEN'])
+      .enum(PRIMARY_AXIS_ALIGN_VALUES)
       .optional()
       .describe('schema.executeSchemas.primaryAxisAlignItems'),
     counterAxisAlignItems: z
-      .enum(['MIN', 'MAX', 'CENTER'])
+      .enum(COUNTER_AXIS_ALIGN_VALUES)
       .optional()
       .describe('schema.executeSchemas.counterAxisAlignItems'),
     layoutGrow: z
@@ -251,7 +261,7 @@ function autoLayoutFields() {
       .optional()
       .describe('schema.executeSchemas.layoutGrow'),
     layoutAlign: z
-      .enum(['MIN', 'CENTER', 'MAX', 'STRETCH', 'INHERIT'])
+      .enum(LAYOUT_ALIGN_VALUES)
       .optional()
       .describe('schema.executeSchemas.layoutAlign'),
   };
@@ -382,23 +392,23 @@ const textNodeSchema = z
       .optional()
       .describe('schema.executeSchemas.fontName'),
     textAlignHorizontal: z
-      .enum(['LEFT', 'CENTER', 'RIGHT', 'JUSTIFIED'])
+      .enum(TEXT_ALIGN_HORIZONTAL_VALUES)
       .optional()
       .describe('schema.executeSchemas.textAlignHorizontal'),
     textAlignVertical: z
-      .enum(['TOP', 'CENTER', 'BOTTOM'])
+      .enum(TEXT_ALIGN_VERTICAL_VALUES)
       .optional()
       .describe('schema.executeSchemas.textAlignVertical'),
     textAutoResize: z
-      .enum(['NONE', 'WIDTH_AND_HEIGHT', 'HEIGHT', 'TRUNCATE'])
+      .enum(TEXT_AUTO_RESIZE_VALUES)
       .optional()
       .describe('schema.executeSchemas.textAutoResize'),
     textCase: z
-      .enum(['ORIGINAL', 'UPPER', 'LOWER', 'TITLE'])
+      .enum(TEXT_CASE_VALUES)
       .optional()
       .describe('schemaValue.textCase'),
     textDecoration: z
-      .enum(['NONE', 'UNDERLINE', 'STRIKETHROUGH'])
+      .enum(TEXT_DECORATION_VALUES)
       .optional()
       .describe('schemaValue.textDecoration'),
     lineHeight: lineHeightSchema
@@ -407,6 +417,14 @@ const textNodeSchema = z
     letterSpacing: letterSpacingSchema
       .optional()
       .describe('schema.executeSchemas.letterSpacing'),
+    // 平台特有超集(仅 Figma):两字段成对使用 —— maxLines 只在
+    // textTruncation=ENDING 时有意义(core/serialize.ts 也只回传 ENDING)。
+    // 放 TEXT 组而非 base:矩形上传它们本就是错,该被 strict 拒。
+    textTruncation: z
+      .enum(TEXT_TRUNCATION_VALUES)
+      .optional()
+      .describe('schema.sharedProps.textTruncation'),
+    maxLines: z.number().optional().describe('schema.sharedProps.maxLines'),
     ...visualFields(),
   })
   .strict()
@@ -445,26 +463,29 @@ const booleanOperationNodeSchema = z
   .strict()
   .describe('schema.executeSchemas.children3');
 
-// 导出: discriminated union on `type`(用于 JSON Schema 生成,LLM 看到按 type 分组的字段)
-// 运行时校验使用,TypeScript 类型保持为扁平 ExecuteOp 以兼容 UI 侧 duck-typing
-export const executeNodeSchema: z.ZodType<ExecuteOp> = z.discriminatedUnion(
-  'type',
-  [
-    frameNodeSchema,
-    rectangleNodeSchema,
-    ellipseNodeSchema,
-    lineNodeSchema,
-    polygonNodeSchema,
-    starNodeSchema,
-    vectorNodeSchema,
-    textNodeSchema,
-    groupNodeSchema,
-    booleanOperationNodeSchema,
-  ],
-);
-
 // 各类型子 schema 导出:供 per-type 拆分工具(create.ts 等)取单节点负载做 inputSchema,
 // 每个工具只用自己那一类,避免整体 executeNodeSchema 大表挑字段。
+const executeNodeOpItems = [
+  frameNodeSchema,
+  rectangleNodeSchema,
+  ellipseNodeSchema,
+  lineNodeSchema,
+  polygonNodeSchema,
+  starNodeSchema,
+  vectorNodeSchema,
+  textNodeSchema,
+  groupNodeSchema,
+  booleanOperationNodeSchema,
+] as const;
+
+/**
+ * 导出: discriminated union on `type`(用于 JSON Schema 生成,LLM 看到按 type 分组的字段)。
+ */
+export const executeNodeSchema: z.ZodType<ExecuteOp> = z.discriminatedUnion(
+  'type',
+  executeNodeOpItems,
+);
+
 export {
   booleanOperationNodeSchema,
   ellipseNodeSchema,
@@ -478,6 +499,8 @@ export {
   vectorNodeSchema,
 };
 
+
+
 // 导出各子类型(供 UI 侧类型断言使用)
 export type FrameNodeOp = z.infer<typeof frameNodeSchema>;
 export type RectangleNodeOp = z.infer<typeof rectangleNodeSchema>;
@@ -489,3 +512,57 @@ export type VectorNodeOp = z.infer<typeof vectorNodeSchema>;
 export type TextNodeOp = z.infer<typeof textNodeSchema>;
 export type GroupNodeOp = z.infer<typeof groupNodeSchema>;
 export type BooleanOperationNodeOp = z.infer<typeof booleanOperationNodeSchema>;
+
+// ---- 手写 ExecuteOp 与派生类型的一致性断言(漂移在编译期失败) ----
+// 守卫 `textTruncation` / `maxLines` 那个 bug:它们在 `ExecuteOp` 与 `core/serialize.ts` 里
+// 都有、schema 里却没有,创建路径传它们直接被 `.strict()` 拒,且没有任何编译期信号。
+// 方向必须逐个字段查,不能用 `Exclude<keyof A, keyof B>`:`keyof ExecuteOpFromSchema`
+// 含 zod 的字符串索引签名,任何键都「存在」,那式子恒为空集(本轮踩过)。
+
+/**
+ * zod 对象**显式声明**的键(不含索引签名)。为什么不用 `keyof typeof X` / `X['shape']`:
+ * `.catchall()` / 索引签名会让那份 `keyof` 退化成 `string`。
+ */
+type DeclaredKeys<S extends z.ZodObject> = keyof z.output<S>;
+
+/** schema 实际收的全部字段名:10 个节点类型的显式键并集 + 子节点直通 schema */
+type SchemaKeys =
+  | DeclaredKeys<typeof frameNodeSchema>
+  | DeclaredKeys<typeof rectangleNodeSchema>
+  | DeclaredKeys<typeof ellipseNodeSchema>
+  | DeclaredKeys<typeof lineNodeSchema>
+  | DeclaredKeys<typeof polygonNodeSchema>
+  | DeclaredKeys<typeof starNodeSchema>
+  | DeclaredKeys<typeof vectorNodeSchema>
+  | DeclaredKeys<typeof textNodeSchema>
+  | DeclaredKeys<typeof groupNodeSchema>
+  | DeclaredKeys<typeof booleanOperationNodeSchema>;
+// childNodeSchema 不进并集:它带 `.catchall()`,其 `keyof` 退化成 `string`,并进来等于恒真。
+
+/** `ExecuteOp` 里必须真的存在于 schema 的键:`type` / `children` 是接口刻意更宽的两处 */
+type WrittenKeys = Exclude<keyof ExecuteOp, 'type' | 'children'>;
+
+/**
+ * **多一份必失:接口声称有、schema 却不收的键**。映射类型把每个键分别判一次,
+ * 失败时 tsc 报的就是缺字段的键名(缺 `textTruncation` 的那次会在这里红)。
+ */
+type MissingFromSchema = {
+  [K in WrittenKeys]: K extends SchemaKeys ? never : K;
+}[WrittenKeys];
+type MissingFromExecuteOp = {
+  [K in SchemaKeys]: K extends keyof ExecuteOp ? never : K;
+}[SchemaKeys];
+
+/**
+ * 两个方向都必须落到 `never`。
+ *
+ * 为什么不用 `const x: {...} = null as never`:那种写法经 `never` 实例化后整个映射
+ * 类型塌成 `never`,任何赋值都成立 —— 恒真断言,漂移检出率为零(实测加字段不报错)。
+ */
+const _noMissingFromSchema: [MissingFromSchema] extends [never] ? true : false =
+  true;
+const _noMissingFromExecuteOp: [MissingFromExecuteOp] extends [never]
+  ? true
+  : false = true;
+void _noMissingFromSchema;
+void _noMissingFromExecuteOp;

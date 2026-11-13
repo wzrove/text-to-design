@@ -280,8 +280,11 @@ export function stopTelemetry(): void {
  * 但那属于改造(dec 0002 的 RuntimeContext 那种量级),此处只给最小钩子。
  */
 export const __telemetryTest = {
-  queue: (): readonly { fingerprint: string; count?: number; inflight?: boolean }[] =>
-    queue,
+  queue: (): readonly {
+    fingerprint: string;
+    count?: number;
+    inflight?: boolean;
+  }[] => queue,
   markInflight: (index: number): void => {
     const e = queue[index];
     if (e != null) e.inflight = true;

@@ -1,6 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/server';
-import type { ToolHook, ToolHookFactory } from '../core/registry';
-import { lookupExecutor } from '../core/registry';
+import type { ToolHook, ToolHookFactory } from '../core/tool-def';
+import { lookupExecutor } from '../core/tool-exec';
 
 /** 当前页顶层 children 在图里的伪层键 */
 const PAGE_KEY = '(page)';

@@ -8,10 +8,12 @@ import {
 import {
   DAEMON_POLL_MS,
   DAEMON_REPLACE_MS,
+  DAEMON_WAIT_MS,
   HTTP_PORT,
   SERVER_VERSION,
 } from '../config';
 import { log, warn } from '../logger';
+import { spawnDaemon } from './spawn';
 
 /** GET daemon /health;无 /health 端点(旧版/外来服务/未启动)或失败 → null */
 export async function fetchDaemonHealth(): Promise<{
@@ -179,4 +181,43 @@ export async function probeUpstream(): Promise<
 
 export function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+export type ProbeState = Awaited<ReturnType<typeof probeUpstream>>;
+/** 终态:proxy(拿到可用客户端)或 foreign(端口被外来服务占着,别去撞) */
+export type ReadyState = Extract<ProbeState, { state: 'proxy' | 'foreign' }>;
+
+/**
+ * 等 daemon 可连 —— 「探测 → 必要时拉起 → 轮询 → 超时」的**唯一**实现。
+ *
+ * 此前 run.ts / exec.ts 各写一遍、分支处置还不一致,于是「拉不拉、等多久、外来服务
+ * 怎么办」每加一个入口就重新猜一次。预算与节奏只从 config 的 DAEMON_WAIT_MS /
+ * DAEMON_POLL_MS 取,调用点不再自带常数。
+ *
+ * - `spawnIfNone`:探到 none 时是否拉起。**只在第一次探到 none 时拉一次** ——
+ *   拉起的进程可能还没监听就被再探成 none,每轮都 spawn 会起一串进程。
+ *   `exec` 子命令必须传 `argv: process.argv.slice(1, 2)`:整个 argv 带过去会让被拉起
+ *   的 daemon 再按 exec 跑一遍(见 spawn.ts)。
+ * - `first`:调用方手头已有的探测结果(如「刚请旧 daemon 退役」那次),省一次往返。
+ * - proxy 的 client 由调用方负责关闭;超时返回 `null`,由调用方决定报什么。
+ */
+export async function awaitReady(opts: {
+  spawnIfNone?: boolean;
+  argv?: readonly string[];
+  first?: ProbeState;
+} = {}): Promise<ReadyState | null> {
+  const deadline = Date.now() + DAEMON_WAIT_MS;
+  let pending = opts.first;
+  let spawned = false;
+  for (;;) {
+    const p = pending ?? (await probeUpstream());
+    pending = undefined;
+    if (p.state === 'proxy' || p.state === 'foreign') return p;
+    if (p.state === 'none' && opts.spawnIfNone === true && !spawned) {
+      spawned = true;
+      spawnDaemon(opts.argv);
+    }
+    if (Date.now() >= deadline) return null;
+    await delay(DAEMON_POLL_MS);
+  }
 }

@@ -23,12 +23,9 @@ import { z } from 'zod';
 import type { Bridge } from '../bridge';
 import { LONG_IO_TIMEOUT_MS, MAX_SVG_SOURCE_BYTES } from '../config';
 import { detectUniformLayout } from '../core/layout-hint';
-import {
-  type BridgeToolDef,
-  bridgeTool,
-  type FollowUp,
-  type ToolHandle,
-} from '../core/registry';
+import type { FollowUp } from '../core/response';
+import { type BridgeToolDef, type ToolHandle } from '../core/tool-def';
+import { bridgeTool } from '../core/tool-exec';
 import { countSemanticGroups } from '../core/structure-hint';
 import { htmlToSvg } from '../htmlToDesign';
 import type { McpI18n } from '../i18n';
@@ -76,7 +73,7 @@ type CreateNodeDef = Pick<
   | 'description'
   | 'followUp'
   | 'platforms'
-  | 'platformNote'
+  | 'descriptionSuffix'
   | 'extraContent'
 >;
 
@@ -198,7 +195,7 @@ export function registerCreateTools(
       // vectorPaths(SVG path data)在那边没有对应字段 —— 建出来会是空矢量。
       // 已知且无替代路径,故按平台拒绝,不让调用方拿到「成功但空」的结果(0017)。
       platforms: ['jsdesign', 'figma'],
-      platformNote:
+      descriptionSuffix:
         '(MasterGo 的矢量节点是 PenNode,路径为 penNetwork 顶点模型,与本工具的 vectorPaths(SVG path data)不同形;该平台暂不支持建矢量)',
       followUp: CREATE_BATCH_FOLLOWUP,
     }),

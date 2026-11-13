@@ -123,9 +123,7 @@ export function createPromptRegistrar(server: McpServer) {
         }
       },
     );
-    return [list, get].map((handle) =>
-      Object.assign(handle, { alwaysEnabled: true }),
-    );
+    return [list, get];
   }
 
   return { registerPrompt, registerTools };

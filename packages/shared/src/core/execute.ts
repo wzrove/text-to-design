@@ -1,4 +1,5 @@
 import { CAPABILITY_OF_GATED_PROP } from '../dicts/capability';
+import { autoHeightOpenNotice, AXIS_SIZING_MODES } from '../dicts/layout-fields';
 import {
   CREATABLE_NODE_TYPES,
   type CreatableNodeType,
@@ -80,10 +81,7 @@ function reconcileCreatedLayout(
   // 拿请求值对账只会自造「没生效」
   const layoutOn = wantMode != null || node.layoutMode != null;
   if (layoutOn) {
-    for (const key of [
-      'primaryAxisSizingMode',
-      'counterAxisSizingMode',
-    ] as const) {
+    for (const key of AXIS_SIZING_MODES) {
       // 调用方没声明时,期望值来自**同一份推断**(内层容器高度 AUTO / 屏根 FIXED),
       // 否则会把「按意图 hug」误报成没生效(2026-10-20)
       const want = spec[key] ?? inferred[key];
@@ -136,9 +134,7 @@ function reconcileCreatedLayout(
       // AUTO 轴按内容撑开属预期,不是没生效。但**请求的高度确实变了**,得说清楚并
       // 给出出口,否则调用方按回显以为写进去的数值生效了(dec 0007 的口径)。
       if (axisMode === 'AUTO') {
-        notes.messages.push(
-          `${label} 的 ${dim} 按内容撑开成 ${got}(请求 ${want})——内层容器高度默认自动(不随内容裁切),只有最外层节点容器钉死;要固定就显式传该轴 sizingMode=FIXED 再用 jsd_resize_node 传 height`,
-        );
+        notes.messages.push(autoHeightOpenNotice({ label, dim, got, want }));
         continue;
       }
       notes.messages.push(

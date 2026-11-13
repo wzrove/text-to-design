@@ -1,6 +1,6 @@
 import { type McpServer, ResourceTemplate } from '@modelcontextprotocol/server';
 import { completeRecipeIds } from '../core/completions';
-import type { ToolHandle } from '../core/registry';
+import type { ToolHandle } from '../core/tool-def';
 import { promptIcon } from '../core/tool-icons';
 import type { McpI18n } from '../i18n';
 import {

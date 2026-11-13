@@ -1,6 +1,24 @@
 import { z } from 'zod';
 
 import type { BooleanOperation } from '../dicts/boolean-operation';
+import {
+  LAYOUT_MODE_VALUES,
+  SIZING_MODE_VALUES,
+  STROKE_ALIGN_VALUES,
+  STROKE_CAP_VALUES,
+  STROKE_JOIN_VALUES,
+  TEXT_ALIGN_HORIZONTAL_VALUES,
+  TEXT_ALIGN_VERTICAL_VALUES,
+  TEXT_AUTO_RESIZE_VALUES,
+  TEXT_CASE_VALUES,
+  TEXT_DECORATION_VALUES,
+  TEXT_TRUNCATION_VALUES,
+} from '../dicts/enum-values';
+import {
+  COUNTER_AXIS_ALIGN_VALUES,
+  LAYOUT_ALIGN_VALUES,
+  PRIMARY_AXIS_ALIGN_VALUES,
+} from '../dicts/platform-value-domain';
 import type {
   BlendMode,
   ConstraintType,
@@ -46,9 +64,9 @@ export interface ExecuteOp {
   strokeBottomWeight?: number;
   strokeLeftWeight?: number;
   strokeRightWeight?: number;
-  strokeAlign?: 'CENTER' | 'INSIDE' | 'OUTSIDE';
-  strokeCap?: 'NONE' | 'ROUND' | 'SQUARE' | 'ARROW_LINES' | 'ARROW_EQUILATERAL';
-  strokeJoin?: 'MITER' | 'BEVEL' | 'ROUND';
+  strokeAlign?: (typeof STROKE_ALIGN_VALUES)[number];
+  strokeCap?: (typeof STROKE_CAP_VALUES)[number];
+  strokeJoin?: (typeof STROKE_JOIN_VALUES)[number];
   dashPattern?: number[];
   cornerRadius?: number;
   topLeftRadius?: number;
@@ -58,25 +76,25 @@ export interface ExecuteOp {
   characters?: string;
   fontSize?: number;
   fontName?: FontName;
-  textAlignHorizontal?: 'LEFT' | 'CENTER' | 'RIGHT' | 'JUSTIFIED';
-  textAlignVertical?: 'TOP' | 'CENTER' | 'BOTTOM';
-  textAutoResize?: 'NONE' | 'WIDTH_AND_HEIGHT' | 'HEIGHT' | 'TRUNCATE';
-  textCase?: 'ORIGINAL' | 'UPPER' | 'LOWER' | 'TITLE';
-  textDecoration?: 'NONE' | 'UNDERLINE' | 'STRIKETHROUGH';
+  textAlignHorizontal?: (typeof TEXT_ALIGN_HORIZONTAL_VALUES)[number];
+  textAlignVertical?: (typeof TEXT_ALIGN_VERTICAL_VALUES)[number];
+  textAutoResize?: (typeof TEXT_AUTO_RESIZE_VALUES)[number];
+  textCase?: (typeof TEXT_CASE_VALUES)[number];
+  textDecoration?: (typeof TEXT_DECORATION_VALUES)[number];
   lineHeight?: LineHeight;
   letterSpacing?: LetterSpacing;
-  layoutMode?: 'NONE' | 'HORIZONTAL' | 'VERTICAL';
+  layoutMode?: (typeof LAYOUT_MODE_VALUES)[number];
   itemSpacing?: number;
   paddingTop?: number;
   paddingRight?: number;
   paddingBottom?: number;
   paddingLeft?: number;
-  primaryAxisSizingMode?: 'FIXED' | 'AUTO';
-  counterAxisSizingMode?: 'FIXED' | 'AUTO';
-  primaryAxisAlignItems?: 'MIN' | 'MAX' | 'CENTER' | 'SPACE_BETWEEN';
-  counterAxisAlignItems?: 'MIN' | 'MAX' | 'CENTER';
+  primaryAxisSizingMode?: (typeof SIZING_MODE_VALUES)[number];
+  counterAxisSizingMode?: (typeof SIZING_MODE_VALUES)[number];
+  primaryAxisAlignItems?: (typeof PRIMARY_AXIS_ALIGN_VALUES)[number];
+  counterAxisAlignItems?: (typeof COUNTER_AXIS_ALIGN_VALUES)[number];
   layoutGrow?: number;
-  layoutAlign?: 'MIN' | 'CENTER' | 'MAX' | 'STRETCH' | 'INHERIT';
+  layoutAlign?: (typeof LAYOUT_ALIGN_VALUES)[number];
   blendMode?: BlendMode;
   effects?: Effect[];
   constraints?: { horizontal: ConstraintType; vertical: ConstraintType };
@@ -85,7 +103,7 @@ export interface ExecuteOp {
   layoutGrids?: LayoutGrid[];
   arcData?: { startingAngle: number; endingAngle: number; innerRadius: number };
   /** 平台特有写字段(仅对应平台生效,其他平台被忽略) */
-  textTruncation?: 'DISABLED' | 'ENDING';
+  textTruncation?: (typeof TEXT_TRUNCATION_VALUES)[number];
   maxLines?: number;
   fillStyleId?: string;
   strokeStyleId?: string;

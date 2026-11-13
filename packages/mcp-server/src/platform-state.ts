@@ -32,12 +32,16 @@ export interface PlatformState {
   at: number;
 }
 
-/** 工具的平台归属声明(缺省=两平台通用) */
+/**
+ * 工具的平台归属声明(缺省=两平台通用)。
+ *
+ * 注册期描述与这里共用 descriptionSuffix:同一句平台差异不可能在「描述末尾」和
+ * 「门控报错里」各写一份 —— 两份措辞就是两份事实(dec 0032 的形态)。
+ */
 export interface PlatformScopedDef {
   name: string;
   platforms?: readonly PluginPlatform[];
-  /** 平台差异说明:注册时拼进描述,平台不适用时作为替代路径提示 */
-  platformNote?: string;
+  descriptionSuffix?: string;
 }
 
 let state: PlatformState | null = null;
@@ -142,7 +146,7 @@ export function isToolApplicable(def: PlatformScopedDef): boolean | null {
 
 /**
  * 平台不适用时的错误说明(适用或平台未知返回 null)。
- * 文案必须给全三件事:当前平台 / 该工具适用平台 / 可执行替代路径(platformNote)。
+ * 文案必须给全三件事:当前平台 / 该工具适用平台 / 可执行替代路径(descriptionSuffix)。
  */
 export function describePlatformGate(def: PlatformScopedDef): string | null {
   if (isToolApplicable(def) !== false) return null;
@@ -151,7 +155,7 @@ export function describePlatformGate(def: PlatformScopedDef): string | null {
   const applicable = def.platforms.map((p) => PLATFORM_LABEL[p]).join(' / ');
   return [
     `工具 ${def.name} 仅适用于 ${applicable},当前插件平台是 ${PLATFORM_LABEL[current]},已拒绝执行(未向插件发起请求)。`,
-    def.platformNote != null ? `${def.platformNote}` : '',
+    def.descriptionSuffix ?? '',
     '平台能力与可用特有操作可读 jsd://platform/state 或调 jsd_ping 复核。',
   ].join('');
 }

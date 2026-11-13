@@ -1,6 +1,19 @@
 import { z } from 'zod';
 
 import {
+  LAYOUT_MODE_VALUES,
+  SIZING_MODE_VALUES,
+  STROKE_ALIGN_VALUES,
+  STROKE_CAP_VALUES,
+  STROKE_JOIN_VALUES,
+  TEXT_ALIGN_HORIZONTAL_VALUES,
+  TEXT_ALIGN_VERTICAL_VALUES,
+  TEXT_AUTO_RESIZE_VALUES,
+  TEXT_CASE_VALUES,
+  TEXT_DECORATION_VALUES,
+  TEXT_TRUNCATION_VALUES,
+} from '../dicts/enum-values';
+import {
   COUNTER_AXIS_ALIGN_VALUES,
   LAYOUT_ALIGN_VALUES,
   PRIMARY_AXIS_ALIGN_VALUES,
@@ -94,15 +107,15 @@ export const strokePropsSchema = z.object({
     .optional()
     .describe('schema.sharedProps.strokeRightWeight'),
   strokeAlign: z
-    .enum(['CENTER', 'INSIDE', 'OUTSIDE'])
+    .enum(STROKE_ALIGN_VALUES)
     .optional()
     .describe('schema.sharedProps.strokeAlign'),
   strokeCap: z
-    .enum(['NONE', 'ROUND', 'SQUARE', 'ARROW_LINES', 'ARROW_EQUILATERAL'])
+    .enum(STROKE_CAP_VALUES)
     .optional()
     .describe('schemaValue.strokeCap'),
   strokeJoin: z
-    .enum(['MITER', 'BEVEL', 'ROUND'])
+    .enum(STROKE_JOIN_VALUES)
     .optional()
     .describe('schemaValue.strokeJoin'),
   dashPattern: z
@@ -135,25 +148,25 @@ export const textPropsSchema = z.object({
       '字体:{family,style};需精确匹配,建议先用 jsd_list_fonts 查可用字体(不可用时静默回退默认字体)',
     ),
   textAlignHorizontal: z
-    .enum(['LEFT', 'CENTER', 'RIGHT', 'JUSTIFIED'])
+    .enum(TEXT_ALIGN_HORIZONTAL_VALUES)
     .optional()
     .describe('schema.sharedProps.textAlignHorizontal'),
   textAlignVertical: z
-    .enum(['TOP', 'CENTER', 'BOTTOM'])
+    .enum(TEXT_ALIGN_VERTICAL_VALUES)
     .optional()
     .describe('schema.sharedProps.textAlignVertical'),
   textAutoResize: z
-    .enum(['NONE', 'WIDTH_AND_HEIGHT', 'HEIGHT', 'TRUNCATE'])
+    .enum(TEXT_AUTO_RESIZE_VALUES)
     .optional()
     .describe(
       '文本自适应:NONE=固定尺寸|WIDTH_AND_HEIGHT=按内容撑开(缺省,此时修改 width/height 会被覆盖)|HEIGHT=固定宽自适应高|TRUNCATE=截断。要固定文本框尺寸必须设为 NONE',
     ),
   textCase: z
-    .enum(['ORIGINAL', 'UPPER', 'LOWER', 'TITLE'])
+    .enum(TEXT_CASE_VALUES)
     .optional()
     .describe('schemaValue.textCase'),
   textDecoration: z
-    .enum(['NONE', 'UNDERLINE', 'STRIKETHROUGH'])
+    .enum(TEXT_DECORATION_VALUES)
     .optional()
     .describe('schemaValue.textDecoration'),
   lineHeight: lineHeightSchema
@@ -164,7 +177,7 @@ export const textPropsSchema = z.object({
     .describe('schema.sharedProps.letterSpacing'),
   textStyleId: z.string().optional().describe('schema.sharedProps.textStyleId'),
   textTruncation: z
-    .enum(['DISABLED', 'ENDING'])
+    .enum(TEXT_TRUNCATION_VALUES)
     .optional()
     .describe('schema.sharedProps.textTruncation'),
   maxLines: z.number().optional().describe('schema.sharedProps.maxLines'),
@@ -172,7 +185,7 @@ export const textPropsSchema = z.object({
 
 export const autoLayoutPropsSchema = z.object({
   layoutMode: z
-    .enum(['NONE', 'HORIZONTAL', 'VERTICAL'])
+    .enum(LAYOUT_MODE_VALUES)
     .optional()
     .describe(
       '自动布局方向:NONE|HORIZONTAL|VERTICAL,FRAME / COMPONENT / COMPONENT_SET 生效。传 itemSpacing/padding*/primaryAxis* 等布局属性前必须先设为 HORIZONTAL 或 VERTICAL',
@@ -194,11 +207,11 @@ export const autoLayoutPropsSchema = z.object({
     .describe('schema.sharedProps.paddingBottom'),
   paddingLeft: z.number().optional().describe('schema.sharedProps.paddingLeft'),
   primaryAxisSizingMode: z
-    .enum(['FIXED', 'AUTO'])
+    .enum(SIZING_MODE_VALUES)
     .optional()
     .describe('schema.sharedProps.primaryAxisSizingMode'),
   counterAxisSizingMode: z
-    .enum(['FIXED', 'AUTO'])
+    .enum(SIZING_MODE_VALUES)
     .optional()
     .describe('schema.sharedProps.counterAxisSizingMode'),
   primaryAxisAlignItems: z

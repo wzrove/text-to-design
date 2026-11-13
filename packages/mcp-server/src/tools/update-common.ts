@@ -5,7 +5,8 @@ import {
   updatedResultSchema,
 } from 'text-to-design-shared';
 import type { z } from 'zod';
-import type { BridgeToolDef, FollowUp, ToolHints } from '../core/registry';
+import type { FollowUp } from '../core/response';
+import type { BridgeToolDef, ToolHints } from '../core/tool-def';
 
 /**
  * 「属性 → 适用节点类型」表已收敛到 shared 字典(dicts/prop-applicability):

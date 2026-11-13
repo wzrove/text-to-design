@@ -73,27 +73,32 @@ export type BatchParams = z.infer<typeof s.batchSchema>;
 export type BatchCall = z.infer<typeof s.batchCallSchema>;
 export type BatchResult = z.infer<typeof s.batchResultSchema>;
 
-export type PluginMethod =
-  | 'ping'
-  | 'get_selection'
-  | 'get_page'
-  | 'execute'
-  | 'create_svg'
-  | s.PropMethod
-  | 'find'
-  | 'export'
-  | 'list_fonts'
-  | 'list_styles'
-  | 'create_style'
-  | 'delete_style'
-  | 'fill_image'
-  | 'node_op'
-  | 'component_op'
-  | 'platform_op';
-
-/** 属性引擎方法 → 各自专属的 params 类型(不再共用一份 50 键大表)。
- *  导出以便 __tests__ 对它与 PropMethod 做编译期对等断言(见 prop-method-parity.test.ts)。 */
-export type PropParamsByMethod = {
+/**
+ * 方法 → params 类型的方法表(唯一真源)。
+ *
+ * 此前这份映射手抄了四份:本表的键、PluginMethod 联合、RequestParams 的条件链、
+ * PluginRequest 的联合成员;少写一份不报错 —— 条件链末尾落在 ListFontsParams 兜底,
+ * 漂移是静默的。现在四者都由本表派生,新增方法只改这一处。
+ * (运行期的字段白名单 PROP_METHOD_FIELDS 仍由 schemas/split-ops 的 *Props 派生,
+ * 与本表的键集对等由 prop-method-parity.test.ts 守。)
+ */
+export type ParamsByMethod = {
+  ping: PingParams;
+  get_selection: GetSelectionParams;
+  get_page: GetPageStructureParams;
+  execute: ExecuteParams;
+  create_svg: CreateSvgParams;
+  find: s.FindParams;
+  export: ExportParams;
+  fill_image: FillImageParams;
+  list_fonts: ListFontsParams;
+  list_styles: ListStylesParams;
+  create_style: CreateStyleParams;
+  delete_style: DeleteStyleParams;
+  node_op: NodeOpParams;
+  component_op: ComponentOpParams;
+  platform_op: s.PlatformOpParams;
+  /** 属性引擎方法:每个方法各一份 params 线格式,params.props 只含本方法白名单内的字段 */
   set_fill: SetFillParams;
   set_stroke: SetStrokeParams;
   set_corner_radius: SetCornerRadiusParams;
@@ -107,141 +112,35 @@ export type PropParamsByMethod = {
   set_shape: SetShapeParams;
 };
 
-export type RequestParams<M extends PluginMethod> = M extends 'ping'
-  ? PingParams
-  : M extends 'get_selection'
-    ? GetSelectionParams
-    : M extends 'execute'
-      ? ExecuteParams
-      : M extends 'create_svg'
-        ? CreateSvgParams
-        : M extends keyof PropParamsByMethod
-          ? PropParamsByMethod[M]
-          : M extends 'find'
-            ? s.FindParams
-            : M extends 'export'
-              ? ExportParams
-              : M extends 'fill_image'
-                ? FillImageParams
-                : M extends 'node_op'
-                  ? NodeOpParams
-                  : M extends 'component_op'
-                    ? ComponentOpParams
-                    : M extends 'platform_op'
-                      ? s.PlatformOpParams
-                      : M extends 'list_styles'
-                        ? ListStylesParams
-                        : M extends 'create_style'
-                          ? CreateStyleParams
-                          : M extends 'delete_style'
-                            ? DeleteStyleParams
-                            : M extends 'get_page'
-                              ? GetPageStructureParams
-                              : ListFontsParams;
+export type PluginMethod = keyof ParamsByMethod;
 
-export type PluginRequest =
-  | { type: 'request'; id: string; method: 'ping'; params: PingParams }
-  | {
-      type: 'request';
-      id: string;
-      method: 'get_selection';
-      params: GetSelectionParams;
-    }
-  | { type: 'request'; id: string; method: 'execute'; params: ExecuteParams }
-  | {
-      type: 'request';
-      id: string;
-      method: 'create_svg';
-      params: CreateSvgParams;
-    }
-  /** 属性引擎方法:每个方法各一份 params 线格式,params.props 只含本方法白名单内的字段 */
-  | { type: 'request'; id: string; method: 'set_fill'; params: SetFillParams }
-  | {
-      type: 'request';
-      id: string;
-      method: 'set_stroke';
-      params: SetStrokeParams;
-    }
-  | {
-      type: 'request';
-      id: string;
-      method: 'set_corner_radius';
-      params: SetCornerRadiusParams;
-    }
-  | { type: 'request'; id: string; method: 'set_text'; params: SetTextParams }
-  | { type: 'request'; id: string; method: 'move'; params: MoveParams }
-  | { type: 'request'; id: string; method: 'resize'; params: ResizeParams }
-  | {
-      type: 'request';
-      id: string;
-      method: 'set_layout';
-      params: SetLayoutParams;
-    }
-  | {
-      type: 'request';
-      id: string;
-      method: 'set_effects';
-      params: SetEffectsParams;
-    }
-  | {
-      type: 'request';
-      id: string;
-      method: 'set_visibility';
-      params: SetVisibilityParams;
-    }
-  | { type: 'request'; id: string; method: 'rename'; params: RenameParams }
-  | { type: 'request'; id: string; method: 'set_shape'; params: SetShapeParams }
-  | { type: 'request'; id: string; method: 'find'; params: s.FindParams }
-  | { type: 'request'; id: string; method: 'export'; params: ExportParams }
-  | {
-      type: 'request';
-      id: string;
-      method: 'fill_image';
-      params: FillImageParams;
-    }
-  | { type: 'request'; id: string; method: 'node_op'; params: NodeOpParams }
-  | {
-      type: 'request';
-      id: string;
-      method: 'component_op';
-      params: ComponentOpParams;
-    }
-  | {
-      type: 'request';
-      id: string;
-      method: 'list_fonts';
-      params: ListFontsParams;
-    }
-  | {
-      type: 'request';
-      id: string;
-      method: 'list_styles';
-      params: ListStylesParams;
-    }
-  | {
-      type: 'request';
-      id: string;
-      method: 'create_style';
-      params: CreateStyleParams;
-    }
-  | {
-      type: 'request';
-      id: string;
-      method: 'delete_style';
-      params: DeleteStyleParams;
-    }
-  | {
-      type: 'request';
-      id: string;
-      method: 'get_page';
-      params: GetPageStructureParams;
-    }
-  | {
-      type: 'request';
-      id: string;
-      method: 'platform_op';
-      params: s.PlatformOpParams;
-    };
+/** 属性引擎方法 → 各自专属的 params 类型(不再共用一份 50 键大表)。
+ *  导出以便 __tests__ 对它与 PropMethod 做编译期对等断言(见 prop-method-parity.test.ts)。 */
+export type PropParamsByMethod = Pick<
+  ParamsByMethod,
+  | 'set_fill'
+  | 'set_stroke'
+  | 'set_corner_radius'
+  | 'set_text'
+  | 'move'
+  | 'resize'
+  | 'set_layout'
+  | 'set_effects'
+  | 'set_visibility'
+  | 'rename'
+  | 'set_shape'
+>;
+
+export type RequestParams<M extends PluginMethod> = ParamsByMethod[M];
+
+export type PluginRequest = {
+  [M in PluginMethod]: {
+    type: 'request';
+    id: string;
+    method: M;
+    params: ParamsByMethod[M];
+  };
+}[PluginMethod];
 
 export type PluginResponse<D = unknown> = {
   type: 'response';

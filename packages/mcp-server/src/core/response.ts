@@ -1,7 +1,16 @@
 import type { ErrorCode } from 'text-to-design-shared';
 import type { z } from 'zod';
 import { errorCodeOf } from './bridge-error';
-import type { FollowUp } from './registry';
+
+/**
+ * 工具结果的 followUp 引导(参照 server.ts 参考实现,MCP 协议结果字段):
+ * 指向推荐的下一个 prompt 或下一个 tool,结果带该字段即提示调用方继续哪一步。
+ * 定义在本模块里而不是工具定义模块:它是**结果协议**的一部分(与 structured/err 同源),
+ * 放工具定义处会让 response ↔ 工具定义成环。
+ */
+export type FollowUp =
+  | { type: 'prompt'; prompt: string }
+  | { type: 'tool'; tool: string; description?: string };
 
 function text(content: unknown): { content: { type: 'text'; text: string }[] } {
   return {
@@ -101,7 +110,12 @@ const ERROR_FOLLOW_UP: Partial<Record<ErrorCode, FollowUp>> = {
   },
 };
 
-/** 错误返回:人读文本 + schema-valid 结构化空结果 + isError,避免"no structured content" */
+/**
+ * 错误返回:人读文本 + schema-valid 结构化空结果 + isError,避免"no structured content"。
+ *
+ * `code` 是给人读之外的第二通道:调用方(jsd_batch)要按**类别**分类失败,
+ * 此前只能对文本做 slice(0,300) 猜 —— 文本是给人看的,分类不该从它反推。
+ */
 export function err(
   e: unknown,
   schema?: z.ZodType,
@@ -111,12 +125,15 @@ export function err(
   structuredContent?: unknown;
   isError: true;
   followUp?: FollowUp;
+  code: ErrorCode;
 } {
-  const resolvedFollowUp = ERROR_FOLLOW_UP[errorCodeOf(e)] ?? followUp;
+  const code = errorCodeOf(e);
+  const resolvedFollowUp = ERROR_FOLLOW_UP[code] ?? followUp;
   const base: {
     content: { type: 'text'; text: string }[];
     isError: true;
     followUp?: FollowUp;
+    code: ErrorCode;
   } = {
     content: [
       {
@@ -125,6 +142,7 @@ export function err(
       },
     ],
     isError: true,
+    code,
   };
   if (resolvedFollowUp !== undefined) base.followUp = resolvedFollowUp;
   return schema ? { ...base, structuredContent: emptyFor(schema) } : base;

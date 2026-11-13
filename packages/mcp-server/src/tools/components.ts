@@ -17,10 +17,10 @@ import type { z } from 'zod';
 import type { Bridge } from '../bridge';
 import {
   type BridgeToolDef,
-  bridgeTool,
   type ToolHandle,
   type ToolHints,
-} from '../core/registry';
+} from '../core/tool-def';
+import { bridgeTool } from '../core/tool-exec';
 import type { McpI18n } from '../i18n';
 import { componentWriteText, variantStrategyText } from './platform-facts';
 

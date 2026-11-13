@@ -1,4 +1,4 @@
-import { createEffect, createSignal, For, onCleanup, Show } from 'solid-js';
+import { createEffect, createSignal, For, Show } from 'solid-js';
 import {
   LOG_LEVEL_ORDER,
   type LogScope,
@@ -238,14 +238,11 @@ export default function LogDrawer(props: {
     followBottom();
   });
 
+  // Esc 归 App 收口(useEscapeKey):抽屉的关闭要连带把焦点还给页头入口,
+  // 两个端点分处两个组件。这里只管焦点接管。
   createEffect(() => {
     if (!props.open) return;
-    const onKey = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') props.onClose();
-    };
-    document.addEventListener('keydown', onKey);
     closeRef?.focus();
-    onCleanup(() => document.removeEventListener('keydown', onKey));
   });
 
   const onScroll = () => {

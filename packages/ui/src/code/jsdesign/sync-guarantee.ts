@@ -45,6 +45,17 @@ import type {
   Effect as WireEffect,
   Paint as WirePaint,
 } from 'text-to-design-shared';
+// 通用类型工具走共享文件;平台事实(JsDesignAbsent / JsDesign*Gap …)留在本文件
+import type {
+  Declared,
+  ExpectNever,
+  ExtraKeys,
+  HostContractCheck,
+  NodeContractCheck,
+  PageContractCheck,
+  ViewportContractCheck,
+  UiContractCheck,
+} from '../shared-guarantee';
 
 // 捕获宿主全局类型(在 import 覆盖前):运行时取值域断言要拿它比
 type RuntimeLayoutMixin = LayoutMixin;
@@ -52,9 +63,6 @@ type RuntimeLayoutMixin = LayoutMixin;
 type RuntimeInstanceNode = InstanceNode;
 
 // ---- 1) 线格式的字段面与取值域必须被运行时覆盖 ----
-
-/** `ExtraKeys<W,R>` = 线格式有、运行时没有的键 —— 非 `never` 即线格式写了幻影字段 */
-type ExtraKeys<W, R> = Exclude<keyof W, keyof R>;
 
 type WireSolid = Extract<WirePaint, { type: 'SOLID' }>;
 type WireImage = Extract<WirePaint, { type: 'IMAGE' }>;
@@ -86,15 +94,6 @@ export type EffectTypeDomainCheck = ExpectNever<
 >;
 
 // ---- 2) 契约成员存在性 ----
-
-/** 联合类型全部成员的键并集(逐成员分配再并起来) */
-type KeysOf<T> = T extends unknown ? keyof T : never;
-/** 断言 T 为 never;不是 never 时编译错误会打出违规的键名 */
-type ExpectNever<T extends never> = T;
-/** 契约成员里运行时没有的键 */
-type Missing<K extends string, T> = K extends KeysOf<T> ? never : K;
-/** 该键被 typings 声明了 */
-type Declared<K extends string, T> = K extends KeysOf<T> ? true : never;
 
 /**
  * jsDesign 侧不存在的平台超集成员 —— 必须与 ui/src/code/jsdesign/meta.ts 的
@@ -185,17 +184,14 @@ type JsDesignAsyncNameGap =
   /** 原生是 `getStyleById(id)` + `Style.remove()` 两步(`plugin-api.d.ts:50 / :1143`),契约这条 `removeStyle` 是本仓包的聚合动作 */
   | 'removeStyle';
 
-export type HostContractCheck = ExpectNever<
-  Missing<
-    Exclude<
-      keyof DesignHost,
-      | JsDesignHostTypingsGap
-      | JsDesignAsyncGap
-      | JsDesignAsyncNameGap
-      | JsDesignCapacityGap
-    >,
-    PluginAPI
-  >
+export type HostPresenceCheck = ExpectNever<
+  HostContractCheck<
+    DesignHost,
+    | JsDesignHostTypingsGap
+    | JsDesignAsyncGap
+    | JsDesignAsyncNameGap
+    | JsDesignCapacityGap
+  >['check']
 >;
 /** 反向:登记为缺口的东西必须真的不在 typings 里(登记不诚实也会报错) */
 export type HostGapCheck = ExpectNever<
@@ -207,27 +203,21 @@ export type HostGapCheck = ExpectNever<
     PluginAPI
   >
 >;
-export type PageContractCheck = ExpectNever<
-  Missing<keyof PageSkeleton, PluginAPI['currentPage']>
+export type PagePresenceCheck = ExpectNever<
+  PageContractCheck<PageSkeleton>['check']
 >;
-export type UiContractCheck = ExpectNever<
-  Missing<
-    Exclude<keyof DesignHost['ui'], JsDesignHostTypingsGap>,
-    PluginAPI['ui']
-  >
+export type UiPresenceCheck = ExpectNever<
+  UiContractCheck<DesignHost, JsDesignHostTypingsGap>['check']
 >;
 /** 反向:登记为 ui 层缺口的必须真的不在 typings 里 */
 export type UiGapCheck = ExpectNever<
   Declared<JsDesignHostTypingsGap, PluginAPI['ui']>
 >;
-export type ViewportContractCheck = ExpectNever<
-  Missing<keyof DesignHost['viewport'], PluginAPI['viewport']>
+export type ViewportPresenceCheck = ExpectNever<
+  ViewportContractCheck<DesignHost>['check']
 >;
-export type NodeContractCheck = ExpectNever<
-  Missing<
-    Exclude<keyof NodeSkeleton, JsDesignAbsent | NodeTypingsGap>,
-    SceneNode
-  >
+export type NodePresenceCheck = ExpectNever<
+  NodeContractCheck<NodeSkeleton, JsDesignAbsent | NodeTypingsGap>['check']
 >;
 export type NodeGapCheck = ExpectNever<Declared<NodeTypingsGap, SceneNode>>;
 

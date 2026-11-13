@@ -3,6 +3,7 @@ import {
   CROWDED_CHILDREN_THRESHOLD,
   countSemanticGroups,
   detectFlatBatch,
+  siblingStepsByParent,
 } from '../core/structure-hint';
 
 /**
@@ -52,10 +53,57 @@ describe('detectFlatBatch', () => {
     expect(detectFlatBatch([{ parentId: 'root' }])).toBeNull();
   });
 
+  it('批次上下文补上后续步骤数后,同一判据能命中(jsd_batch 路径)', () => {
+    // jsd_batch 里 9 步同父:本步 siblingSteps=8 → 合计 9 步,命中
+    const hit = detectFlatBatch(steps(1 + 8));
+    expect(hit).toEqual({ parentId: 'root', batchCount: 9 });
+  });
+
   it('脏输入不报', () => {
     expect(detectFlatBatch([{ parentId: undefined }])).toBeNull();
     expect(detectFlatBatch([{ parentId: '' }])).toBeNull();
     expect(detectFlatBatch([])).toBeNull();
+  });
+});
+
+describe('siblingStepsByParent', () => {
+  const calls = [
+    { tool: 'jsd_reparent_nodes', args: { ids: ['a'], parentId: 'root' } },
+    { tool: 'jsd_reparent_nodes', args: { ids: ['b'], parentId: 'root' } },
+    { tool: 'jsd_reparent_nodes', args: { ids: ['c'], parentId: 'card' } },
+    // 占位符形态:批次执行时才会被解析成 id,数不出来(不猜)
+    { tool: 'jsd_reparent_nodes', args: { ids: ['d'], parentId: '{{s1.created.id}}' } },
+    { tool: 'jsd_move_node', args: { ids: ['e'], parentId: 'root' } },
+  ];
+
+  it('数本步之后同工具、同 parentId 的步', () => {
+    expect(
+      siblingStepsByParent(calls, 0, {
+        tool: 'jsd_reparent_nodes',
+        args: calls[0].args,
+      }),
+    ).toBe(1);
+  });
+
+  it('别的父级 / 别的工具 / 占位符形态都不计', () => {
+    expect(
+      siblingStepsByParent(calls, 3, {
+        tool: 'jsd_reparent_nodes',
+        args: calls[3].args,
+      }),
+    ).toBe(0);
+    expect(
+      siblingStepsByParent(calls, 2, {
+        tool: 'jsd_reparent_nodes',
+        args: calls[2].args,
+      }),
+    ).toBe(0);
+  });
+
+  it('缺 parentId 时不计', () => {
+    expect(
+      siblingStepsByParent(calls, 0, { tool: 'jsd_reparent_nodes', args: {} }),
+    ).toBe(0);
   });
 });
 

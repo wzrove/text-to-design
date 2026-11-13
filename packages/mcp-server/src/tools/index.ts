@@ -1,6 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/server';
 import type { Bridge } from '../bridge';
-import type { ToolHandle } from '../core/registry';
+import type { ToolHandle } from '../core/tool-def';
 import type { McpI18n } from '../i18n';
 import { registerBatchTools } from './batch';
 import { registerComponentTools } from './components';

@@ -29,6 +29,7 @@ import ToastHost from './components/Toast';
 import Tooltip from './components/Tooltip';
 import UpgradeButton from './components/UpgradeButton';
 import UpgradeModal from './components/UpgradeModal';
+import { useEscapeKey } from './utils/useEscapeKey';
 import { locale, t } from './i18n/useLocale';
 import { APP_VERSION, isOutdated } from './utils/version';
 
@@ -178,14 +179,7 @@ function Shell() {
    * 同意弹窗的 Esc 收口:与日志抽屉 / 升级弹窗同一条纪律(焦点归还的端点分处
    * 两个组件,只有 App 同时握着两端)。
    */
-  createEffect(() => {
-    if (!consentOpen()) return;
-    const onKey = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') closeConsent();
-    };
-    document.addEventListener('keydown', onKey);
-    onCleanup(() => document.removeEventListener('keydown', onKey));
-  });
+  useEscapeKey(consentOpen, closeConsent);
 
   /**
    * 未读水位按「错误条数累计」记,而不是最大 id:同一行日志会被 pushLog 合并成
@@ -221,14 +215,7 @@ function Shell() {
    * (浮层 / 页头按钮)分处两个组件 —— 只有同时握着它们的 App 能一次做完。
    * 抽屉自身的遮罩、点外部与焦点接管仍归 `CollapsibleSection`。
    */
-  createEffect(() => {
-    if (!logOpen()) return;
-    const onKey = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') closeLog();
-    };
-    document.addEventListener('keydown', onKey);
-    onCleanup(() => document.removeEventListener('keydown', onKey));
-  });
+  useEscapeKey(logOpen, closeLog);
 
   /**
    * 升级弹窗的关闭收口:焦点还给页头那颗钮。
@@ -237,14 +224,7 @@ function Shell() {
    * UpgradeModal 的类注释),原生 Esc 因此不可用 —— Esc 与日志抽屉同一条纪律,
    * 收口放在这里是因为「弹窗 / 页头按钮」分处两个组件,只有 App 同时握着两端。
    */
-  createEffect(() => {
-    if (!upgradeOpen()) return;
-    const onKey = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') closeUpgrade();
-    };
-    document.addEventListener('keydown', onKey);
-    onCleanup(() => document.removeEventListener('keydown', onKey));
-  });
+  useEscapeKey(upgradeOpen, closeUpgrade);
 
   let rootEl: HTMLDivElement | undefined;
 

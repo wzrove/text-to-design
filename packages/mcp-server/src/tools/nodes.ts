@@ -14,12 +14,8 @@ import {
 } from 'text-to-design-shared';
 import type { z } from 'zod';
 import type { Bridge } from '../bridge';
-import {
-  type BridgeToolDef,
-  bridgeTool,
-  type ToolHandle,
-  type ToolHints,
-} from '../core/registry';
+import { type BridgeToolDef, type ToolHandle, type ToolHints } from '../core/tool-def';
+import { bridgeTool } from '../core/tool-exec';
 import { detectFlatBatch } from '../core/structure-hint';
 import type { McpI18n } from '../i18n';
 import { driftWatchFor, STRUCTURAL_NODE_OPS } from './drift-watch';
@@ -34,7 +30,7 @@ type NodeOpDef = Pick<
   | 'inputSchema'
   | 'followUp'
   | 'platforms'
-  | 'platformNote'
+  | 'descriptionSuffix'
   | 'extraContent'
 > & {
   /** 四个 hint 全部必填(见 core/registry 的 ToolHints) */
@@ -150,7 +146,7 @@ export function registerNodeOpTools(
       // MasterGo 两级 API 都没有 ungroup(PluginAPI 与 GroupNode 都没有该符号,
       // 见 0017 的实测记录),宿主层无从实现 → 平台拒绝,不给「假成功」
       platforms: ['jsdesign', 'figma'],
-      platformNote: '(MasterGo 未提供解组 API;该平台请改用拆分/重排替代)',
+      descriptionSuffix: '(MasterGo 未提供解组 API;该平台请改用拆分/重排替代)',
       inputSchema: ungroupNodesSchema,
       annotations: {
         readOnlyHint: false,
@@ -209,10 +205,20 @@ export function registerNodeOpTools(
        * 挂在 reparent 上而不是 create 上:实测的失败形态是「建一个、reparent 一个」
        * 循环几十次,建的那一步永远只有一个节点,任何按 children 数判的判据都凑不齐;
        * 而 reparent 是唯一能看见「这些节点最终落到了哪一层」的动作。
+       *
+       * 步数来自 `opts.batch.siblingSteps`(jsd_batch 从整批 calls 里数,本步执行体
+       * 看不见别的步骤)。单发调用拿不到它、本工具也不读画布 ⇒ 单发不报,不猜。
        */
-      extraContent: (_data, args) => {
-        const single = args as { parentId?: unknown };
-        const hit = detectFlatBatch([{ parentId: single.parentId }]);
+      extraContent: (_data, args, opts) => {
+        const parentId = (args as { parentId?: unknown }).parentId;
+        const steps = Array.from(
+          { length: 1 + (opts?.batch?.siblingSteps ?? 0) },
+          () => ({ parentId }),
+        );
+        // 空 parentId(走「当前选中」缺省)数不出来:detectFlatBatch 会直接不命中
+        const hit = detectFlatBatch(
+          steps as { parentId?: unknown }[],
+        );
         if (hit != null) {
           return [
             {

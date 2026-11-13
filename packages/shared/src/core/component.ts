@@ -298,6 +298,22 @@ function rejectUnsupportedAlias(
   );
 }
 
+/**
+ * 「本实例没有可写的属性面」那条报错。两处逐字重复(能力位为 false 的两个分支),
+ * 措辞就是那个事实本身 —— 抽成一个函数,别让两份副本各自漂。
+ */
+function noWritablePropertyFaceError(
+  ctx: RuntimeContext,
+  instanceId: string,
+): Error {
+  // i18n-exempt: 随结果上行给模型,不走面板文案
+  return new Error(
+    `实例 ${instanceId} 没有可写的属性面:${
+      ctx.platform == null ? '当前平台' : PLATFORM_LABEL[ctx.platform]
+    } 的 InstanceNode 没有 componentProperties,setProperties 只收 string,该实例也不在变体集里 —— 写任何属性名都只会落到引擎空转(实测 25s 超时、错误不带原因)。布尔 / 文本 / 换绑属性本平台没有入口;变体属性只能改已存在变体集里的维度`,
+  );
+}
+
 /** 写形态里哪些键的值是变量别名(即「这个属性要跟随变量」) */
 function aliasKeysOf(
   writes: Record<string, string | boolean | VariableAliasRef>,
@@ -498,14 +514,7 @@ export async function setInstanceProperties(
         ...Object.keys(known ?? {}),
         ...Object.keys(inst.variantProperties ?? {}),
       ];
-      // i18n-exempt: 随结果上行给模型,不走面板文案
-      if (validKeys.length === 0) {
-        throw new Error(
-          `实例 ${inst.id} 没有可写的属性面:${
-            ctx.platform == null ? '当前平台' : PLATFORM_LABEL[ctx.platform]
-          } 的 InstanceNode 没有 componentProperties,setProperties 只收 string,该实例也不在变体集里 —— 写任何属性名都只会落到引擎空转(实测 25s 超时、错误不带原因)。布尔 / 文本 / 换绑属性本平台没有入口;变体属性只能改已存在变体集里的维度`,
-        );
-      }
+      if (validKeys.length === 0) throw noWritablePropertyFaceError(ctx, inst.id);
       const invalidKeys = Object.keys(params.properties).filter(
         (k) =>
           !validKeys.includes(k) && !validKeys.includes(basePropertyName(k)),
@@ -583,14 +592,7 @@ export async function setInstanceProperties(
         ...Object.keys(setDimensions ?? {}),
         ...Object.keys(known ?? {}),
       ];
-      // i18n-exempt: 随结果上行给模型,不走面板文案
-      if (validKeys.length === 0) {
-        throw new Error(
-          `实例 ${inst.id} 没有可写的属性面:${
-            ctx.platform == null ? '当前平台' : PLATFORM_LABEL[ctx.platform]
-          } 的 InstanceNode 没有 componentProperties,setProperties 只收 string,该实例也不在变体集里 —— 写任何属性名都只会落到引擎空转(实测 25s 超时、错误不带原因)。布尔 / 文本 / 换绑属性本平台没有入口;变体属性只能改已存在变体集里的维度`,
-        );
-      }
+      if (validKeys.length === 0) throw noWritablePropertyFaceError(ctx, inst.id);
       throw new Error(`非法属性名:${key}。本实例可写:${validKeys.join(',')}`);
     }
     planned.push({ inst, props: resolved });
@@ -935,8 +937,21 @@ export interface AppliedOverride {
   message?: string;
 }
 
-/** 插件侧缓存:copy 覆盖同 key;上限 20 条逐出最旧;插件进程重启即清空 */
+/**
+ * 覆盖快照缓存。**刻意是进程级模块单例,不进 RuntimeContext**(与 runtime.ts 的
+ * 「赶走单例」原则并不冲突:那条针对的是**平台事实**,这里是**会话中间态**)。
+ *
+ * 为什么不经 runtime 注入:RuntimeContext 是构造期只读快照,而这个东西要跨两次
+ * 工具调用累积(copy 一次、apply 多次)、上限 20 条逐出;塞进 RuntimeContext 得给它
+ * 开可变成员,还得把上下文一路透传到 tools 层与 mcp-server —— 为一个两段式协议加
+ * 一条新参数,收益是负的。
+ *
+ * 代价与边界:同一插件进程里的所有调用共享它,插件进程重启即清空(这正是协议契约:
+ * snapshotId 只在同一次插件会话内有效);不同平台实例同时存在时会互相看不到对方的快照,
+ * 但快照本身按 sourceId 寻址,撞 id 的窗口只在测试里出现。
+ */
 const OVERRIDE_CACHE_MAX = 20;
+/** 插件侧缓存:copy 覆盖同 key;上限 20 条逐出最旧;插件进程重启即清空 */
 const overrideCache = new Map<string, OverrideSnapshot>();
 
 export function getCachedOverride(

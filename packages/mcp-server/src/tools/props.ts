@@ -14,7 +14,8 @@ import {
   setVisibilitySchema,
 } from 'text-to-design-shared';
 import type { Bridge } from '../bridge';
-import { bridgeTool, type ToolHandle } from '../core/registry';
+import type { ToolHandle } from '../core/tool-def';
+import { bridgeTool } from '../core/tool-exec';
 import type { McpI18n } from '../i18n';
 import { propUpdateTool } from './update-common';
 

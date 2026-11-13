@@ -1,14 +1,12 @@
 import type { McpServer } from '@modelcontextprotocol/server';
-import type { PlatformKey } from 'text-to-design-shared';
 import { z } from 'zod';
 import {
   NODE_TYPE_CANDIDATES,
   optionalCompletableArg,
 } from '../core/completions';
-import type { ToolHandle } from '../core/registry';
+import type { ToolHandle } from '../core/tool-def';
 import { promptIcon } from '../core/tool-icons';
 import type { McpI18n } from '../i18n';
-import { getPlatformState } from '../platform-state';
 import { createPromptRegistrar } from './prompt-tools';
 import { findRecipe, recipeIds, renderRecipeBody } from './recipe-catalog';
 
@@ -159,15 +157,5 @@ export function registerPrompts(
       })
       .map(recipePrompt),
     ...registerTools(),
-  ].map((handle) => Object.assign(handle, { alwaysEnabled: true }));
-}
-
-/**
- * 当前平台,**调用期**读 daemon 的进程级缓存(`ping` 时写入,插件断开即清空)。
- *
- * 为什么不能提到装配期:`buildServer` 在插件连接之前就跑完了(0030),那时缓存必然
- * 是空的 —— 提前读等于把「不区分平台」变成「永远没有平台」。
- */
-export function currentPlatform(): PlatformKey | null {
-  return getPlatformState()?.platform ?? null;
+  ];
 }

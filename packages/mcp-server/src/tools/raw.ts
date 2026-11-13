@@ -16,7 +16,8 @@ import {
 } from 'text-to-design-shared';
 import type { Bridge } from '../bridge';
 import { LONG_IO_TIMEOUT_MS, MAX_INLINE_DATA_URL_BYTES } from '../config';
-import { bridgeTool, type ToolHandle } from '../core/registry';
+import type { ToolHandle } from '../core/tool-def';
+import { bridgeTool } from '../core/tool-exec';
 import type { McpI18n } from '../i18n';
 
 function extFor(mimeType?: string, format?: unknown): string {

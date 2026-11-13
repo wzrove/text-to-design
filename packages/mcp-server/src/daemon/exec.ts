@@ -1,10 +1,9 @@
 import type { Client } from '@modelcontextprotocol/client';
 import type { BatchCall, BatchResult } from 'text-to-design-shared';
-import { BATCH_TIMEOUT_MS, DAEMON_POLL_MS, DAEMON_WAIT_MS } from '../config';
+import { BATCH_TIMEOUT_MS, DAEMON_WAIT_MS } from '../config';
 import { loadBatchCallsFile } from '../core/calls-file';
 import { error } from '../logger';
-import { delay, probeUpstream } from './probe';
-import { spawnDaemon } from './spawn';
+import { awaitReady } from './probe';
 
 /**
  * `text-to-design-mcp exec <calls.json>` —— 从文件跑一次 `jsd_batch`。
@@ -30,19 +29,17 @@ export type ExecOptions = {
 
 /** 连上 daemon;没有就按版本自检逻辑拉起,冷启动预算见 DAEMON_WAIT_MS */
 async function connectDaemon(): Promise<Client> {
-  const deadline = Date.now() + DAEMON_WAIT_MS;
-  while (Date.now() < deadline) {
-    const p = await probeUpstream();
-    if (p.state === 'proxy') return p.client;
-    if (p.state === 'foreign')
-      throw new Error(
-        'MCP 端口被**非本项目**的服务占用,exec 不会去猜它是什么。请先释放端口(见 daemon 启动日志里的排查提示)。',
-      );
-    // none=daemon 不在(杀掉/未起) → 拉起;starting=在跑但未就绪 → 只等待
-    // 只传入口(process.argv.slice(1,2)):exec 这个子命令不能带给被拉起的 daemon,
-    // 否则它会再按 exec 跑一遍(见 spawn.ts 的 argvOverride 注释)
-    if (p.state === 'none') spawnDaemon(process.argv.slice(1, 2));
-    await delay(DAEMON_POLL_MS);
+  // 只传入口(process.argv.slice(1,2)):exec 这个子命令不能带给被拉起的 daemon,
+  // 否则它会再按 exec 跑一遍(见 spawn.ts 的 argvOverride 注释)
+  const ready = await awaitReady({
+    spawnIfNone: true,
+    argv: process.argv.slice(1, 2),
+  });
+  if (ready?.state === 'proxy') return ready.client;
+  if (ready?.state === 'foreign') {
+    throw new Error(
+      'MCP 端口被**非本项目**的服务占用,exec 不会去猜它是什么。请先释放端口(见 daemon 启动日志里的排查提示)。',
+    );
   }
   throw new Error(
     `等待 daemon 就绪超时(${DAEMON_WAIT_MS}ms)。若刚从旧版本升级,旧 daemon 可能还没释放端口,稍后重试即可。`,

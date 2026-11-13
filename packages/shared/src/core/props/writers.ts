@@ -1,3 +1,7 @@
+import {
+  autoHeightOpenNotice,
+  AXIS_SIZING_MODES,
+} from '../../dicts/layout-fields';
 import { LAYOUT_GRID_UNVERIFIABLE_PLATFORMS } from '../../dicts/platform-value-domain';
 import { propAppliesTo } from '../../dicts/prop-applicability';
 import type { LayoutGrid, SerializedNode } from '../../schemas';
@@ -660,10 +664,7 @@ export const layoutWriter: PropWriter = {
     // auto-layout、或布局重算时,会把调用方显式声明的 FIXED 翻成 AUTO(容器按内容
     // hug)—— 实测 jsDesign:chip 声明 width 150 回读 106、KPI 卡声明 height 104
     // 回读 80,而回包零告警。声明过就必须对账,压不住由 0007 的出口点名。
-    for (const key of [
-      'primaryAxisSizingMode',
-      'counterAxisSizingMode',
-    ] as const) {
+    for (const key of AXIS_SIZING_MODES) {
       const expected = src[key];
       if (expected == null) continue;
       // 创建路径没开布局时 write() 一个布局字段都没写(见上面 create 分支的提前
@@ -786,9 +787,7 @@ export function pinFixedAxisDrift(
     // 撑开是意图,不是「请求没生效」—— 但请求的高度确实没落地,得说清楚并给出出口,
     // 否则调用方按回显以为 100 生效了、实际是 80(dec 0007 的口径)。
     if (isInferredAuto(node, dim)) {
-      out.push(
-        `${label} 的 ${dim} 按内容撑开成 ${got}(请求 ${target})——内层容器高度默认自动(不随内容裁切),只有最外层节点容器钉死;要固定就显式传该轴 sizingMode=FIXED 再用 jsd_resize_node 传 height`,
-      );
+      out.push(autoHeightOpenNotice({ label, dim, got, want: target }));
       continue;
     }
     out.push(

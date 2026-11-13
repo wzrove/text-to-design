@@ -1,3 +1,4 @@
+import { LAYOUT_PRESERVE_KEYS } from '../dicts/layout-fields';
 import { CONTAINER_NODE_TYPES } from '../dicts/node-type';
 import type {
   FindParams,
@@ -93,24 +94,6 @@ function isAutoLayoutContainer(node: ContainerSkeleton): boolean {
   );
 }
 
-/**
- * 临时关掉 auto-layout 时会被引擎连带重置的布局属性。
- *
- * 实测:只恢复 layoutMode 是不够的 —— 引擎在 layoutMode → NONE 时会把
- * primaryAxisSizingMode / counterAxisSizingMode 重置成另一组默认(AUTO↔FIXED 对调),
- * 结果「调个层序把容器尺寸模式改了」。下面这些一并快照、恢复。
- */
-const LAYOUT_PRESERVE_KEYS = [
-  'primaryAxisSizingMode',
-  'counterAxisSizingMode',
-  'primaryAxisAlignItems',
-  'counterAxisAlignItems',
-  'itemSpacing',
-  'paddingTop',
-  'paddingRight',
-  'paddingBottom',
-  'paddingLeft',
-] as const;
 
 type LayoutRecord = Record<string, unknown>;
 

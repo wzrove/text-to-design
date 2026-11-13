@@ -13,10 +13,7 @@ import type { DesignHost } from './host';
 import type { RuntimeContext } from './runtime';
 import { serializeNode } from './serialize';
 
-/**
- * 入参类型就地派生(而非从根出口取 `ListFontsParams`):
- * 根出口的 `ListFontsParams` 是同一份 schema 的投影,core 反向依赖根出口会成环。
- */
+/** 与根出口的 `ListFontsParams` 同源(schema 推导),core 不反向依赖根出口 */
 type ListFontsParams = z.infer<typeof listFontsSchema>;
 
 export async function exportNodes(
