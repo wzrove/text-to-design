@@ -94,7 +94,6 @@ function isAutoLayoutContainer(node: ContainerSkeleton): boolean {
   );
 }
 
-
 type LayoutRecord = Record<string, unknown>;
 
 function snapshotLayout(container: ContainerSkeleton): LayoutRecord {

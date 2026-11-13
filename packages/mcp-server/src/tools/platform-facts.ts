@@ -81,7 +81,7 @@ export function variantStrategyText(
         ? ''
         : canSwitch
           ? `文档里**已有**的变体集不受影响:\`${readFace}\` 与组件集上的维度取值照常读得到,已有取值照常用 jsd_set_instance_properties 切 —— 缺的只是「用脚本造一个新的」;`
-          : `文档里**已有**的变体集读得到:\`${readFace}\` 与组件集上的维度取值照常可读,但**实例侧切值本平台运行期没有可用入口**(引擎声明了 setProperties / swapComponent,实测分别是「not a function」与内部错误)—— 变体取值只能在画布上手工切换;**读得到 ≠ 切得动**;`
+          : `文档里**已有**的变体集读得到:\`${readFace}\` 与组件集上的维度取值照常可读,但**实例侧切值本平台运行期没有可用入口**(引擎声明了 setProperties / swapComponent,实测分别是「not a function」与内部错误)—— 变体取值只能在画布上手工切换;**读得到 ≠ 切得动**;`;
     const head = claimed
       ? `${label(platform)}声明了原位合并(inPlaceVariants) ⇒ 直接调用即可:并入集合的就是实例所指的 COMPONENT 本身,已有实例链接不断、页面不残留冗余原件,不需要先克隆。`
       : `${label(platform)}未声明原位合并(inPlaceVariants),合成路径在本平台做不出来 —— 别重试、也别去改组件结构。${reuseExisting}替代路径:${fallbackOf(platform, 'variants')}。`;
@@ -225,4 +225,3 @@ export function componentFaceText(platform: PlatformKey | null): string {
       : `${label(platform)}读得到 componentProperties 与 variantProperties(组件属性传带 \`#\` 后缀的完整键,变体属性传名字)。`;
   return text;
 }
-

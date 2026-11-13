@@ -6,8 +6,8 @@ import {
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { Bridge } from '../bridge';
-import { toolCatalog } from '../core/tool-catalog';
 import { compactOutputSchema } from '../core/compact-schema';
+import { toolCatalog } from '../core/tool-catalog';
 import { buildServer } from '../server';
 
 /**

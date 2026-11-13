@@ -1,5 +1,8 @@
 import { CAPABILITY_OF_GATED_PROP } from '../dicts/capability';
-import { autoHeightOpenNotice, AXIS_SIZING_MODES } from '../dicts/layout-fields';
+import {
+  AXIS_SIZING_MODES,
+  autoHeightOpenNotice,
+} from '../dicts/layout-fields';
 import {
   CREATABLE_NODE_TYPES,
   type CreatableNodeType,

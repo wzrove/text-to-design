@@ -81,14 +81,12 @@ const RETRYABLE_STEP_CODE: Partial<Record<ErrorCode, string>> = {
     '插件未连接(本次步骤没有发到设计客户端)。先 jsd_ping / 确认面板显示「已连接」再重试。',
   plugin_timeout:
     '请求超时(插件可能仍在执行)。先 jsd_ping 确认连接,再 jsd_find 复核该步是否已落地,别盲目重发。',
-  platform_unsupported: '当前设计客户端不支持该能力,见下方原始报错里的替代路径。',
+  platform_unsupported:
+    '当前设计客户端不支持该能力,见下方原始报错里的替代路径。',
   invalid_args: '入参不合法,按下方原始报错点名要删/要补的字段后重试。',
 };
 
-function stepFailureText(
-  code: ErrorCode | undefined,
-  text: string,
-): string {
+function stepFailureText(code: ErrorCode | undefined, text: string): string {
   const hint = code == null ? undefined : RETRYABLE_STEP_CODE[code];
   const body = text.slice(0, 300);
   return hint == null ? body : `${hint} 原始报错: ${body}`;
@@ -584,11 +582,10 @@ export function registerBatchTools(
         // 批次上下文按**本步之前已解析**的 args 算:同工具、同 parentId 的后续步骤数。
         // 占位符写不出「这批几次」,而 reparent 的平铺判据要的就是这个数
         // (core/structure-hint.ts)。
-        const siblings = siblingStepsByParent(
-          calls,
-          i,
-          { tool: call.tool, args: resolvedArgs },
-        );
+        const siblings = siblingStepsByParent(calls, i, {
+          tool: call.tool,
+          args: resolvedArgs,
+        });
         const out = (await executor(resolvedArgs, signal, {
           skipHooks,
           ...(siblings === 0 ? {} : { batch: { siblingSteps: siblings } }),

@@ -60,7 +60,10 @@ export interface PageContractCheck<
   check: Missing<Keys<P>, HostPage>;
 }
 
-export interface UiContractCheck<P extends { ui: unknown }, Gap extends string> {
+export interface UiContractCheck<
+  P extends { ui: unknown },
+  Gap extends string,
+> {
   check: Missing<Exclude<Keys<P['ui']>, Gap>, PluginAPI['ui']>;
 }
 

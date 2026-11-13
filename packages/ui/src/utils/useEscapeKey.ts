@@ -1,4 +1,4 @@
-import { createEffect, onCleanup, type Accessor } from 'solid-js';
+import { type Accessor, createEffect, onCleanup } from 'solid-js';
 
 /**
  * 浮层打开时把 Escape 收口到一个回调。
@@ -10,7 +10,10 @@ import { createEffect, onCleanup, type Accessor } from 'solid-js';
  *
  * 判据用 open() 而非 props.open:调用方传 accessor,关掉时 effect 重新跑即自动注销。
  */
-export function useEscapeKey(open: Accessor<boolean>, onEscape: () => void): void {
+export function useEscapeKey(
+  open: Accessor<boolean>,
+  onEscape: () => void,
+): void {
   createEffect(() => {
     if (!open()) return;
     const onKey = (e: KeyboardEvent): void => {

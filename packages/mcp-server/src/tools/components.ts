@@ -15,11 +15,7 @@ import {
 } from 'text-to-design-shared';
 import type { z } from 'zod';
 import type { Bridge } from '../bridge';
-import {
-  type BridgeToolDef,
-  type ToolHandle,
-  type ToolHints,
-} from '../core/tool-def';
+import type { BridgeToolDef, ToolHandle, ToolHints } from '../core/tool-def';
 import { bridgeTool } from '../core/tool-exec';
 import type { McpI18n } from '../i18n';
 import { componentWriteText, variantStrategyText } from './platform-facts';

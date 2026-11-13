@@ -67,8 +67,7 @@ export function detectFlatBatch(
     counts.set(pid, (counts.get(pid) ?? 0) + 1);
   }
   const existing = options.existingChildCount;
-  const base =
-    typeof existing === 'number' && existing >= 0 ? existing : 0;
+  const base = typeof existing === 'number' && existing >= 0 ? existing : 0;
   let best: CrowdedParentHit | null = null;
   for (const [parentId, batchCount] of counts) {
     const projected = batchCount + base;

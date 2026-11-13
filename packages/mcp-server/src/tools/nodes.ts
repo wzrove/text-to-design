@@ -14,9 +14,9 @@ import {
 } from 'text-to-design-shared';
 import type { z } from 'zod';
 import type { Bridge } from '../bridge';
-import { type BridgeToolDef, type ToolHandle, type ToolHints } from '../core/tool-def';
-import { bridgeTool } from '../core/tool-exec';
 import { detectFlatBatch } from '../core/structure-hint';
+import type { BridgeToolDef, ToolHandle, ToolHints } from '../core/tool-def';
+import { bridgeTool } from '../core/tool-exec';
 import type { McpI18n } from '../i18n';
 import { driftWatchFor, STRUCTURAL_NODE_OPS } from './drift-watch';
 
@@ -216,9 +216,7 @@ export function registerNodeOpTools(
           () => ({ parentId }),
         );
         // 空 parentId(走「当前选中」缺省)数不出来:detectFlatBatch 会直接不命中
-        const hit = detectFlatBatch(
-          steps as { parentId?: unknown }[],
-        );
+        const hit = detectFlatBatch(steps as { parentId?: unknown }[]);
         if (hit != null) {
           return [
             {

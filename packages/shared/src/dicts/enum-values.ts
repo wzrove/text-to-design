@@ -10,11 +10,7 @@
  */
 
 /** 描边对齐 */
-export const STROKE_ALIGN_VALUES = [
-  'CENTER',
-  'INSIDE',
-  'OUTSIDE',
-] as const;
+export const STROKE_ALIGN_VALUES = ['CENTER', 'INSIDE', 'OUTSIDE'] as const;
 
 /** 描边端点;ARROW_* 仅 Figma */
 export const STROKE_CAP_VALUES = [
@@ -26,11 +22,7 @@ export const STROKE_CAP_VALUES = [
 ] as const;
 
 /** 描边拐角连接 */
-export const STROKE_JOIN_VALUES = [
-  'MITER',
-  'BEVEL',
-  'ROUND',
-] as const;
+export const STROKE_JOIN_VALUES = ['MITER', 'BEVEL', 'ROUND'] as const;
 
 /** 文本水平对齐 */
 export const TEXT_ALIGN_HORIZONTAL_VALUES = [
@@ -41,11 +33,7 @@ export const TEXT_ALIGN_HORIZONTAL_VALUES = [
 ] as const;
 
 /** 文本垂直对齐 */
-export const TEXT_ALIGN_VERTICAL_VALUES = [
-  'TOP',
-  'CENTER',
-  'BOTTOM',
-] as const;
+export const TEXT_ALIGN_VERTICAL_VALUES = ['TOP', 'CENTER', 'BOTTOM'] as const;
 
 /** 文本自适应;缺省 WIDTH_AND_HEIGHT */
 export const TEXT_AUTO_RESIZE_VALUES = [
@@ -71,30 +59,16 @@ export const TEXT_DECORATION_VALUES = [
 ] as const;
 
 /** 文本截断(仅 Figma;顺序即玩法的两端) */
-export const TEXT_TRUNCATION_VALUES = [
-  'DISABLED',
-  'ENDING',
-] as const;
+export const TEXT_TRUNCATION_VALUES = ['DISABLED', 'ENDING'] as const;
 
 /** 自动布局方向 */
-export const LAYOUT_MODE_VALUES = [
-  'NONE',
-  'HORIZONTAL',
-  'VERTICAL',
-] as const;
+export const LAYOUT_MODE_VALUES = ['NONE', 'HORIZONTAL', 'VERTICAL'] as const;
 
 /** 主轴/交叉轴尺寸模式(两个字段同域) */
-export const SIZING_MODE_VALUES = [
-  'FIXED',
-  'AUTO',
-] as const;
+export const SIZING_MODE_VALUES = ['FIXED', 'AUTO'] as const;
 
 /** 布局网格形态 */
-export const LAYOUT_GRID_PATTERN_VALUES = [
-  'ROWS',
-  'COLUMNS',
-  'GRID',
-] as const;
+export const LAYOUT_GRID_PATTERN_VALUES = ['ROWS', 'COLUMNS', 'GRID'] as const;
 
 /** 布局网格对齐(网格线位置) */
 export const LAYOUT_GRID_ALIGN_VALUES = [
@@ -112,9 +86,4 @@ export const VECTOR_WINDING_RULE_VALUES = [
 ] as const;
 
 /** 图片填充缩放方式 */
-export const IMAGE_SCALE_MODE_VALUES = [
-  'FILL',
-  'FIT',
-  'CROP',
-  'TILE',
-] as const;
+export const IMAGE_SCALE_MODE_VALUES = ['FILL', 'FIT', 'CROP', 'TILE'] as const;

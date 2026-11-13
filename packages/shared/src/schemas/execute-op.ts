@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 import type { BooleanOperation } from '../dicts/boolean-operation';
-import {
+import type {
   LAYOUT_MODE_VALUES,
   SIZING_MODE_VALUES,
   STROKE_ALIGN_VALUES,
@@ -14,7 +14,7 @@ import {
   TEXT_DECORATION_VALUES,
   TEXT_TRUNCATION_VALUES,
 } from '../dicts/enum-values';
-import {
+import type {
   COUNTER_AXIS_ALIGN_VALUES,
   LAYOUT_ALIGN_VALUES,
   PRIMARY_AXIS_ALIGN_VALUES,

@@ -201,11 +201,13 @@ export type ReadyState = Extract<ProbeState, { state: 'proxy' | 'foreign' }>;
  * - `first`:调用方手头已有的探测结果(如「刚请旧 daemon 退役」那次),省一次往返。
  * - proxy 的 client 由调用方负责关闭;超时返回 `null`,由调用方决定报什么。
  */
-export async function awaitReady(opts: {
-  spawnIfNone?: boolean;
-  argv?: readonly string[];
-  first?: ProbeState;
-} = {}): Promise<ReadyState | null> {
+export async function awaitReady(
+  opts: {
+    spawnIfNone?: boolean;
+    argv?: readonly string[];
+    first?: ProbeState;
+  } = {},
+): Promise<ReadyState | null> {
   const deadline = Date.now() + DAEMON_WAIT_MS;
   let pending = opts.first;
   let spawned = false;

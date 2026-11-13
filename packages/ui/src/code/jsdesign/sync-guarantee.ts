@@ -53,8 +53,8 @@ import type {
   HostContractCheck,
   NodeContractCheck,
   PageContractCheck,
-  ViewportContractCheck,
   UiContractCheck,
+  ViewportContractCheck,
 } from '../shared-guarantee';
 
 // 捕获宿主全局类型(在 import 覆盖前):运行时取值域断言要拿它比

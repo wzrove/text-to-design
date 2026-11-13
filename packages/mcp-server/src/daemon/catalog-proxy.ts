@@ -12,8 +12,8 @@ import {
   SERVER_NAME,
   SERVER_VERSION,
 } from '../config';
-import { log, warn } from '../logger';
 import { compactOutputSchema } from '../core/compact-schema';
+import { log, warn } from '../logger';
 import { friendlyInputSchema } from './friendly-schema';
 import {
   proxyNotification,

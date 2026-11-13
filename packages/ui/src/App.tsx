@@ -29,8 +29,8 @@ import ToastHost from './components/Toast';
 import Tooltip from './components/Tooltip';
 import UpgradeButton from './components/UpgradeButton';
 import UpgradeModal from './components/UpgradeModal';
-import { useEscapeKey } from './utils/useEscapeKey';
 import { locale, t } from './i18n/useLocale';
+import { useEscapeKey } from './utils/useEscapeKey';
 import { APP_VERSION, isOutdated } from './utils/version';
 
 function Shell() {

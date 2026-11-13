@@ -17,9 +17,7 @@ export function allowedTopKeys(schema: z.ZodType): string[] | null {
 }
 
 /** 入参里的顶层键名;非 object / 数组返回 null(不是「空对象」—— 无从点名) */
-export function receivedTopKeys(
-  args: unknown,
-): Record<string, unknown> | null {
+export function receivedTopKeys(args: unknown): Record<string, unknown> | null {
   if (args == null || typeof args !== 'object' || Array.isArray(args)) {
     return null;
   }

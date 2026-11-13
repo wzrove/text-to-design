@@ -271,9 +271,7 @@ export interface LayoutGrid {
 
 export const layoutGridSchema: z.ZodType<LayoutGrid> = z
   .object({
-    pattern: z
-      .enum(LAYOUT_GRID_PATTERN_VALUES)
-      .describe('schema.base.pattern'),
+    pattern: z.enum(LAYOUT_GRID_PATTERN_VALUES).describe('schema.base.pattern'),
     alignment: z
       .enum(LAYOUT_GRID_ALIGN_VALUES)
       .optional()

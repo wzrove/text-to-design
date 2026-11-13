@@ -137,9 +137,7 @@ const serializedNodeBodySchema = z.object({
   isMask: z.boolean().optional(),
   variantProperties: z.record(z.string(), z.string()).optional(),
   mainComponentId: z.string().optional(),
-  variantGroupProperties: z
-    .record(z.string(), z.array(z.string()))
-    .optional(),
+  variantGroupProperties: z.record(z.string(), z.array(z.string())).optional(),
   /** 平台特有字段(仅对应平台运行时存在,如 Figma;其他平台恒缺省) */
   textTruncation: z.enum(TEXT_TRUNCATION_VALUES).optional(),
   maxLines: z.number().optional(),

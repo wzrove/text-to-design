@@ -72,7 +72,10 @@ describe('siblingStepsByParent', () => {
     { tool: 'jsd_reparent_nodes', args: { ids: ['b'], parentId: 'root' } },
     { tool: 'jsd_reparent_nodes', args: { ids: ['c'], parentId: 'card' } },
     // 占位符形态:批次执行时才会被解析成 id,数不出来(不猜)
-    { tool: 'jsd_reparent_nodes', args: { ids: ['d'], parentId: '{{s1.created.id}}' } },
+    {
+      tool: 'jsd_reparent_nodes',
+      args: { ids: ['d'], parentId: '{{s1.created.id}}' },
+    },
     { tool: 'jsd_move_node', args: { ids: ['e'], parentId: 'root' } },
   ];
 

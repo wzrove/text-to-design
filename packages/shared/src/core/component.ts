@@ -514,7 +514,8 @@ export async function setInstanceProperties(
         ...Object.keys(known ?? {}),
         ...Object.keys(inst.variantProperties ?? {}),
       ];
-      if (validKeys.length === 0) throw noWritablePropertyFaceError(ctx, inst.id);
+      if (validKeys.length === 0)
+        throw noWritablePropertyFaceError(ctx, inst.id);
       const invalidKeys = Object.keys(params.properties).filter(
         (k) =>
           !validKeys.includes(k) && !validKeys.includes(basePropertyName(k)),
@@ -592,7 +593,8 @@ export async function setInstanceProperties(
         ...Object.keys(setDimensions ?? {}),
         ...Object.keys(known ?? {}),
       ];
-      if (validKeys.length === 0) throw noWritablePropertyFaceError(ctx, inst.id);
+      if (validKeys.length === 0)
+        throw noWritablePropertyFaceError(ctx, inst.id);
       throw new Error(`非法属性名:${key}。本实例可写:${validKeys.join(',')}`);
     }
     planned.push({ inst, props: resolved });

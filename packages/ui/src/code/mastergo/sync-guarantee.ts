@@ -49,6 +49,17 @@ import type {
   Effect as WireEffect,
   Paint as WirePaint,
 } from 'text-to-design-shared';
+// 通用类型工具走共享文件;平台事实(KEY_TO_MG 反向断言 / HostProjectionGap / HostAbsentGap …)留在本文件
+import type {
+  Declared,
+  ExpectNever,
+  HostContractCheck,
+  Missing,
+  NodeContractCheck,
+  PageContractCheck,
+  UiContractCheck,
+  ViewportContractCheck,
+} from '../shared-guarantee';
 import type {
   GRID_ALIGN_TO_MG,
   KEY_TO_MG,
@@ -60,17 +71,6 @@ import type {
   VALUE_TO_MG,
 } from './node-facade';
 import type { MG_VARIABLE_TYPES, MG_VARIABLE_TYPES_UNSUPPORTED } from './ops';
-// 通用类型工具走共享文件;平台事实(KEY_TO_MG 反向断言 / HostProjectionGap / HostAbsentGap …)留在本文件
-import type {
-  Declared,
-  ExpectNever,
-  HostContractCheck,
-  Missing,
-  NodeContractCheck,
-  PageContractCheck,
-  ViewportContractCheck,
-  UiContractCheck,
-} from '../shared-guarantee';
 
 // ---- 1) 重命名表:契约名必须缺席、MG 名必须存在 ----
 

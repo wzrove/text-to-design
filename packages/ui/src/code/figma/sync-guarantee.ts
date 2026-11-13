@@ -54,8 +54,8 @@ import type {
   Missing,
   NodeContractCheck,
   PageContractCheck,
-  ViewportContractCheck,
   UiContractCheck,
+  ViewportContractCheck,
 } from '../shared-guarantee';
 
 // ---- 1) 线格式的字段面与取值域必须被运行时覆盖 ----
@@ -148,7 +148,10 @@ type UiDerivedGap = 'chromeHeight';
 type HostNamespaceProjectionGap = 'getLocalVariablesAsync';
 
 export type HostPresenceCheck = ExpectNever<
-  HostContractCheck<DesignHost, HostAsyncNameGap | HostNamespaceProjectionGap>['check']
+  HostContractCheck<
+    DesignHost,
+    HostAsyncNameGap | HostNamespaceProjectionGap
+  >['check']
 >;
 export type HostAsyncNameGapCheck = ExpectNever<
   Declared<HostAsyncNameGap, PluginAPI>

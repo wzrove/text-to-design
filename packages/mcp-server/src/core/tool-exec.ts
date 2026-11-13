@@ -13,12 +13,8 @@ import { BridgeError, errorCodeOf } from './bridge-error';
 import { localizeSchema } from './localize-schema';
 import { err, type FollowUp, structured } from './response';
 import { describeInvalidArgs } from './schema-error';
-import type {
-  BridgeToolDef,
-  ToolExecutor,
-  ToolHandle,
-} from './tool-def';
 import { isPublicTool, registerCapability, toolCatalog } from './tool-catalog';
+import type { BridgeToolDef, ToolExecutor, ToolHandle } from './tool-def';
 import { iconForTool } from './tool-icons';
 
 export function lookupExecutor(

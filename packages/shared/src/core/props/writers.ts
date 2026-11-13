@@ -1,6 +1,6 @@
 import {
-  autoHeightOpenNotice,
   AXIS_SIZING_MODES,
+  autoHeightOpenNotice,
 } from '../../dicts/layout-fields';
 import { LAYOUT_GRID_UNVERIFIABLE_PLATFORMS } from '../../dicts/platform-value-domain';
 import { propAppliesTo } from '../../dicts/prop-applicability';
