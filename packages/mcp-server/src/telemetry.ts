@@ -6,6 +6,8 @@ import {
   errorGroupKey,
   isErrorReportLevel,
   type LogRecord,
+  TELEMETRY_LIMITS,
+  type TelemetryErrorPayload,
 } from 'text-to-design-shared';
 import { SERVER_VERSION } from './config';
 import { getConsent } from './consent';
@@ -52,7 +54,7 @@ const DATA_DIR = join(homedir(), '.text-to-design');
 const INSTALL_ID_PATH = join(DATA_DIR, 'install-id');
 
 /** 后端单批上限(/v1/errors 每次最多 50 条);队列总容量放宽一倍 */
-const BATCH_MAX = 50;
+const BATCH_MAX = TELEMETRY_LIMITS.batchMax;
 const QUEUE_MAX = 100;
 /** 首条错误入队后的聚合窗口:窗口内不重置,持续错误流也能按期成批(dec 1a135e6a) */
 const FLUSH_DELAY_MS = 10_000;
@@ -60,8 +62,14 @@ const FLUSH_DELAY_MS = 10_000;
 const RETRY_BASE_MS = 10_000;
 const RETRY_MAX_MS = 300_000;
 
-/** 一条待上报错误 = 结构化日志 + 投递/聚合元数据(形状与落盘、UI 推送一致) */
-interface QueuedError extends LogRecord {
+/**
+ * 一条待上报错误 = 结构化日志 + 投递/聚合元数据(形状与落盘、UI 推送一致)。
+ *
+ * `level` 收窄到 {@link ErrorReportLevel}:入队前已经过 `isErrorReportLevel` 门控,
+ * 线上契约也只收这三档。
+ */
+interface QueuedError extends Omit<LogRecord, 'level'> {
+  level: TelemetryErrorPayload['level'];
   /** 条目级稳定 id:重试重发同一批时 worker 靠它去重(dec 1a135e6a) */
   id: string;
   /** 分组键(scope|code|subject|归一化 message,见 shared/dicts/error-report) */
@@ -168,10 +176,12 @@ export function captureError(record: LogRecord): void {
   const platform = getPlatformState()?.platform;
   queue.push({
     ...record,
+    // 门控已把 level 收到 ErrorReportLevel(类型守卫),但 spread 后要显式再取一次
+    level: record.level,
     id: randomUUID(),
     fingerprint,
-    message: message.slice(0, 8000),
-    stack: record.stack?.slice(0, 20000),
+    message: message.slice(0, TELEMETRY_LIMITS.messageMax),
+    stack: record.stack?.slice(0, TELEMETRY_LIMITS.stackMax),
     context:
       platform != null
         ? { ...(record.context ?? {}), platform }
@@ -187,7 +197,7 @@ export function captureError(record: LogRecord): void {
 }
 
 /** 显式投影:inflight / fingerprint 是本地调度状态,不上线 */
-function toWire(e: QueuedError): Record<string, unknown> {
+function toWire(e: QueuedError): TelemetryErrorPayload {
   return {
     id: e.id,
     level: e.level,
@@ -261,3 +271,27 @@ export function stopTelemetry(): void {
   stopped = true;
   cancelFlush();
 }
+
+/**
+ * 测试专用:读队列快照 + 把首条标成「在途」/复位全部模块状态。
+ *
+ * `captureError` 的核心不变量(去重、跳过在途)只体现在队列这一模块级可变状态上,
+ * 没有它就只能断言间接效果。生产路径不调本出口;把状态收进可注入对象是更彻底的做法,
+ * 但那属于改造(dec 0002 的 RuntimeContext 那种量级),此处只给最小钩子。
+ */
+export const __telemetryTest = {
+  queue: (): readonly { fingerprint: string; count?: number; inflight?: boolean }[] =>
+    queue,
+  markInflight: (index: number): void => {
+    const e = queue[index];
+    if (e != null) e.inflight = true;
+  },
+  reset: (): void => {
+    queue = [];
+    installId = '';
+    flushing = false;
+    failCount = 0;
+    stopped = false;
+    cancelFlush();
+  },
+};

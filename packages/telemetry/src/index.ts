@@ -5,13 +5,14 @@ import { createMiddleware } from 'hono/factory';
 import {
   ERROR_CODES,
   ERROR_REPORT_LEVELS,
-  errorGroupKey,
   LOG_SCOPES,
+  TELEMETRY_LIMITS,
 } from 'text-to-design-shared';
 import { z } from 'zod';
 import { getDb } from './db';
 import { errorReports, telemetryUsers } from './db/schema';
 import { type Env, envOf } from './env';
+import { mergeBatchByFingerprint } from './merge-batch';
 
 const userInput = z.object({
   fingerprint: z.string().min(1).max(200),
@@ -21,21 +22,28 @@ const userInput = z.object({
 
 const errorInput = z.object({
   /** 发送端条目级 id;重发同一批时它不变 → rollup 不重复计数(见下方 ON CONFLICT) */
-  id: z.string().min(1).max(100).optional(),
+  id: z.string().min(1).max(TELEMETRY_LIMITS.idMax).optional(),
   level: z.enum(ERROR_REPORT_LEVELS).default('error'),
-  message: z.string().min(1).max(8000),
-  stack: z.string().max(20000).optional(),
+  message: z.string().min(1).max(TELEMETRY_LIMITS.messageMax),
+  stack: z.string().max(TELEMETRY_LIMITS.stackMax).optional(),
+  /** 字节上限见 .refine:键数不限,但序列化后不得超过 contextMaxBytes */
   context: z.record(z.string(), z.unknown()).optional(),
   count: z.number().int().min(1).max(1_000_000).default(1),
   /** 分类三元组:老客户端不传 → NULL,分组退化成只按归一化 message */
   code: z.enum(ERROR_CODES).optional(),
   scope: z.enum(LOG_SCOPES).optional(),
-  subject: z.string().min(1).max(200).optional(),
-});
+  subject: z.string().min(1).max(TELEMETRY_LIMITS.subjectMax).optional(),
+}).refine(
+  (v) =>
+    v.context == null ||
+    Buffer.byteLength(JSON.stringify(v.context), 'utf8') <=
+      TELEMETRY_LIMITS.contextMaxBytes,
+  { message: 'context too large', path: ['context'] },
+);
 
 const errorsBody = z.object({
   user: userInput,
-  errors: z.array(errorInput).min(1).max(50),
+  errors: z.array(errorInput).min(1).max(TELEMETRY_LIMITS.batchMax),
 });
 
 const app = new Hono<{ Bindings: Env }>();
@@ -66,6 +74,12 @@ const requireAuth = createMiddleware<{ Bindings: Env }>(async (c, next) => {
 app.use('/v1/*', requireAuth);
 
 app.post('/v1/errors', async (c) => {
+  // content-length 早拒:zod 校验在 c.req.json() **之后**,不先看长度就是把整个 body
+  // 读进内存再判。单条 context 无键数上限,放大面就在这。
+  const declared = Number(c.req.header('content-length') ?? '');
+  if (Number.isFinite(declared) && declared > TELEMETRY_LIMITS.bodyMaxBytes) {
+    return c.json({ error: 'body too large' }, 413);
+  }
   const parsed = errorsBody.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) {
     return c.json({ error: 'invalid body' }, 400);
@@ -94,39 +108,8 @@ app.post('/v1/errors', async (c) => {
     if (!row) {
       throw new Error('user upsert returned no row');
     }
-    // 批内先按指纹合并:Postgres 的 ON CONFLICT DO UPDATE 不允许同一批里同一
-    // 冲突键出现两次(会报 21000)。当前客户端已在窗口内合并,但老客户端只按原始
-    // message 去重,归一化后仍可能撞键 —— 不先合并就是整批 500。
-    const rows = new Map<string, typeof errorReports.$inferInsert>();
-    for (const e of errors) {
-      const code = e.code ?? null;
-      const scope = e.scope ?? null;
-      const subject = e.subject ?? null;
-      const fingerprint = errorGroupKey({
-        scope,
-        code,
-        subject,
-        message: e.message,
-      });
-      const prev = rows.get(fingerprint);
-      if (prev != null) {
-        prev.count = (prev.count ?? 1) + e.count;
-        continue;
-      }
-      rows.set(fingerprint, {
-        errorId: e.id ?? null,
-        userId: row.id,
-        level: e.level,
-        message: e.message,
-        stack: e.stack ?? null,
-        context: e.context ?? null,
-        count: e.count,
-        fingerprint,
-        code,
-        scope,
-        subject,
-      });
-    }
+    // 批内先按指纹合并,理由见 mergeBatchByFingerprint 的注释。
+    const rows = mergeBatchByFingerprint(errors, row.id);
     await tx
       .insert(errorReports)
       .values([...rows.values()])

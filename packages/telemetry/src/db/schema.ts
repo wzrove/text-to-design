@@ -49,6 +49,9 @@ export const errorReports = pgTable(
     /**
      * 分组键 `scope|code|subject|归一化 message`(shared/dicts/error-report,两侧同一份实现)。
      * 跨窗口 rollup 靠它 —— 客户端窗口内去重、服务端跨窗口去重,同一错误最终只有一行。
+     *
+     * 字段语义见 shared/dicts/telemetry-wire 的 `TelemetryErrorPayload`(线上载荷契约),
+     * 本表只做落库映射,不另写一份描述。
      */
     fingerprint: text('fingerprint'),
     /** 错误类别(ERROR_CODES);老客户端不传 → NULL */

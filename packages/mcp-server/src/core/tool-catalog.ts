@@ -2,7 +2,7 @@ import { fromJsonSchema, type McpServer } from '@modelcontextprotocol/server';
 import { MCP_CORE_TOOLS, MCP_LEGACY_TOOLS } from 'text-to-design-shared';
 import { z } from 'zod';
 import { compactOutputSchema } from './compact-schema';
-import type { ToolExecutor, ToolHandle, ToolHints } from './registry';
+import type { ToolExecutor, ToolHandle, ToolHints } from './tool-def';
 
 export type ToolProfile = 'full' | 'compact';
 
@@ -63,16 +63,17 @@ export function registerCapability(
   execute: ToolExecutor,
 ): ToolHandle {
   const catalog = toolCatalog(server);
+  // compact 档下旧聚合入口既不进目录、也不进执行体表:专责工具已能承担单 op,
+  // 留着 executor 等于给隐藏入口留一条 `jsd_batch` 可按名直调的后门。
   if (
     catalog.profile === 'compact' &&
     MCP_LEGACY_TOOLS.includes(capability.name)
   ) {
-    return { enable() {}, disable() {} };
+    return {};
   }
   catalog.capabilities.set(capability.name, capability);
   catalog.executors.set(capability.name, execute);
-  if (!isPublicTool(server, capability.name))
-    return { enable() {}, disable() {} };
+  if (!isPublicTool(server, capability.name)) return {};
   const { name, outputSchema, ...config } = capability;
   const projected =
     outputSchema == null

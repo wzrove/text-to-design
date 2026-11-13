@@ -6,10 +6,12 @@
  */
 export * from './boolean-operation';
 export * from './capability';
+export * from './enum-values';
 export * from './error-code';
 export * from './error-report';
 export * from './font';
 export * from './i18n';
+export * from './layout-fields';
 export * from './log';
 export * from './mcp-tools';
 export * from './node-type';
@@ -19,4 +21,5 @@ export * from './platform-value-domain';
 export * from './prop-applicability';
 export * from './search-scope';
 export * from './style-kind';
+export * from './telemetry-wire';
 export * from './unapplied-prop';
