@@ -1,5 +1,11 @@
 # text-to-design-ui
 
+## 0.12.6
+
+### Patch Changes
+
+- [`7ac0fc4`](https://github.com/wzrove/text-to-design/commit/7ac0fc4150c90df06fc5afed429fe94397cb4a06) Thanks [@wzrove](https://github.com/wzrove)! - style: 补 lefthook 格式化落到工作区的未提交改动
+
 ## 0.12.5
 
 ### Patch Changes
