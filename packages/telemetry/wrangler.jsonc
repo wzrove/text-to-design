@@ -7,7 +7,24 @@
   "main": "src/index.ts",
   "compatibility_date": "2026-10-24",
   "compatibility_flags": ["nodejs_compat"],
-  "observability": { "enabled": true }
-  // 上线前置(详见 README):npx wrangler hyperdrive create 后填 id 并取消注释
-  // "hyperdrive": [{ "binding": "DB", "id": "<hyperdrive-id>" }]
+  // 上线前置:npx wrangler hyperdrive create 后填 id 并取消注释。
+  // id 是账号资源标识,不硬编码进仓库 —— fork 或被他人部署会连到原作者实例。
+  // "hyperdrive": [{ "binding": "DB", "id": "<hyperdrive-id>" }],
+  // 密钥**不**写在这里:vars 是明文,随配置进 git 并下发到每个实例。
+  // 用 npx wrangler secret put TELEMETRY_API_KEY(控制台同理)。
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1,
+    "logs": {
+      "enabled": true,
+      "head_sampling_rate": 1,
+      "invocation_logs": true,
+      "persist": true
+    },
+    "traces": {
+      "enabled": true,
+      "head_sampling_rate": 1,
+      "persist": true
+    }
+  }
 }
