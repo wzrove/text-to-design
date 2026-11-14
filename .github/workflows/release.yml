@@ -33,11 +33,12 @@ jobs:
     timeout-minutes: 30
     # 遥测端点/密钥是 mcp 的**构建期**值(packages/mcp-server/vite.config.ts 的 loadEnv
     # 只认 process.env,CI 上没有 .env.local),不在这里喂 = 发出去的包遥测整体 no-op。
+    # 密钥复用 TELEMETRY_API_KEY:与遥测服务端同一个 secret,两端同名同值。
     # 放 job 级而非 step 级:`pnpm release` 的 build 跑在 changesets/action 子进程里,
     # 期间还会被 `prepublishOnly` 再触发一次,step 级 env 漏一层就空洞。
     env:
       TEXT_TO_DESIGN_TELEMETRY_URL: ${{ secrets.TEXT_TO_DESIGN_TELEMETRY_URL }}
-      TEXT_TO_DESIGN_TELEMETRY_KEY: ${{ secrets.TEXT_TO_DESIGN_TELEMETRY_KEY }}
+      TELEMETRY_API_KEY: ${{ secrets.TELEMETRY_API_KEY }}
     permissions:
       contents: write # 推 tag / 建 Release / changesets 开版本 PR
       pull-requests: write

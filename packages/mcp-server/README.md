@@ -235,7 +235,7 @@ Figma 用户不会再读到 jsDesign 的兜底细节;平台未探测时给「先
 | `TEXT_TO_DESIGN_MCP_LOG` | `/tmp/text-to-design-mcp.log` | 日志文件路径(JSONL,与遥测上报同一形状) |
 | `TEXT_TO_DESIGN_MCP_LOG_LEVEL` | `info` | 落盘级别:`debug`/`info`/`warn`/`error`/`fatal`;只约束日志文件,面板推送全量下发 |
 | `TEXT_TO_DESIGN_TELEMETRY_URL` | 构建期注入 | 错误上报端点;**构建期**从**仓库根** `.env.local` 读取(见 `vite.config.ts`),运行时 env 可覆盖 |
-| `TEXT_TO_DESIGN_TELEMETRY_KEY` | 构建期注入 | 上报密钥,要与 worker 的 `TELEMETRY_API_KEY` 一致 |
+| `TELEMETRY_API_KEY` | 构建期注入 | 上报密钥,与服务端同一个变量名 —— 一份 `.env.local` 两端共用,不存在错位 |
 
 本地开发:根 `.env.local`(模板根 `.env.local.example`)填好后 `pnpm build` —— URL/KEY 被烤进 `dist`。优先序:**真实环境变量(CI secret)> `.env.local`**;两者都没有 = 上报整体关闭(不再用 `dev-insecure-key` 去撞生产)。
 

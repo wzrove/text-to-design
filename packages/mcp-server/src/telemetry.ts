@@ -48,7 +48,8 @@ const DEFAULT_API_KEY =
     : '';
 
 const ENDPOINT = process.env.TEXT_TO_DESIGN_TELEMETRY_URL ?? DEFAULT_ENDPOINT;
-const API_KEY = process.env.TEXT_TO_DESIGN_TELEMETRY_KEY ?? DEFAULT_API_KEY;
+// 密钥名与服务端 (packages/telemetry) 同一个:一份 .env.local 两端共用,不必再手动对齐
+const API_KEY = process.env.TELEMETRY_API_KEY ?? DEFAULT_API_KEY;
 
 const DATA_DIR = join(homedir(), '.text-to-design');
 const INSTALL_ID_PATH = join(DATA_DIR, 'install-id');

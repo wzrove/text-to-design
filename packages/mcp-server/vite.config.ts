@@ -15,10 +15,10 @@ import { defineConfig, loadEnv } from 'vite';
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, resolve(import.meta.dirname, '../..'), '');
   const telemetryUrl = env.TEXT_TO_DESIGN_TELEMETRY_URL ?? '';
-  const telemetryKey = env.TEXT_TO_DESIGN_TELEMETRY_KEY ?? '';
+  const telemetryKey = env.TELEMETRY_API_KEY ?? '';
   if (process.env.CI && (telemetryUrl === '' || telemetryKey === '')) {
     console.warn(
-      '[text-to-design-mcp] 未注入 TEXT_TO_DESIGN_TELEMETRY_URL / TEXT_TO_DESIGN_TELEMETRY_KEY,本次产物遥测关闭',
+      '[text-to-design-mcp] 未注入 TEXT_TO_DESIGN_TELEMETRY_URL / TELEMETRY_API_KEY,本次产物遥测关闭',
     );
   }
   return {

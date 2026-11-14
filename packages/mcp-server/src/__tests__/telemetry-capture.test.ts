@@ -12,7 +12,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
  */
 
 const ENDPOINT_KEY = 'TEXT_TO_DESIGN_TELEMETRY_URL';
-const API_KEY_KEY = 'TEXT_TO_DESIGN_TELEMETRY_KEY';
+const API_KEY_KEY = 'TELEMETRY_API_KEY';
 
 async function freshTelemetry(): Promise<{
   captureError: typeof import('../telemetry').captureError;

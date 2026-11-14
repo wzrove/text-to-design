@@ -40,7 +40,7 @@ Compose 从 `.env.local` 读取 `TELEMETRY_API_KEY`;数据库用户名、密码�
 配置源:仓库根 `.env.local` —— dev/start 用 `--env-file-if-exists=../../.env.local`,drizzle-kit 由 `drizzle.config.ts` 显式 `loadEnvFile` 同一份。**真实环境变量始终优先**,文件缺席也能跑(CI / 部署侧直接给 env)。
 环境变量读取统一走 `envOf(c)`:Workers 取绑定 `c.env`,Node/Bun 取 `process.env`,绑定优先。
 
-mcp 侧要指到本地 worker 时,根 `.env.local` 里的 `TEXT_TO_DESIGN_TELEMETRY_URL/KEY` 就是它 —— 但 mcp 是**构建期**读取(`pnpm --filter text-to-design-mcp build`),不进运行时。
+mcp 侧要指到本地 worker 时,根 `.env.local` 里的 `TEXT_TO_DESIGN_TELEMETRY_URL` 就是端点;密钥复用本服务同一个 `TELEMETRY_API_KEY`(两端同名同值,不需要再维护第二份)—— 但 mcp 是**构建期**读取(`pnpm --filter text-to-design-mcp build`),不进运行时。
 
 ## 构建
 
@@ -82,7 +82,7 @@ daemon 侧上报器见 `packages/mcp-server/src/telemetry.ts`。**冲刷是事�
 
 ```bash
 TEXT_TO_DESIGN_TELEMETRY_URL=https://<worker>.workers.dev/v1/errors
-TEXT_TO_DESIGN_TELEMETRY_KEY=<与 Workers secret 同值>
+TELEMETRY_API_KEY=<与 Workers secret 同值>
 ```
 
 ## 表
