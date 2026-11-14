@@ -28,6 +28,7 @@ import { latestVersions } from '../version-check';
 import {
   awaitReady,
   clearSelfExitMarker,
+  daemonIsStale,
   delay,
   fetchDaemonHealth,
   probeUpstream,
@@ -386,8 +387,14 @@ export async function runShim(): Promise<void> {
   const probe = await probeUpstream();
   if (probe.state === 'foreign') refuseForeignPort();
   if (probe.state === 'proxy') {
-    // shim 重启 = 本地产物可能已换新。请 daemon 退役,自己再起一个 ——
-    // 这正是「为什么该由 shim 触发」:只有 shim 的启动才意味着有人加载了新产物。
+    // 「shim 重启」只说明宿主重连了,**不说明产物换了**(见 daemonIsStale 的注释)。
+    // 只有 daemon 真跑在旧构建上才值得轮换;否则直接复用它 —— 无条件轮换会让宿主
+    // 的重连抖动把 daemon 连环杀掉,每次都不及就绪,最终 MCP 面永久 disconnected。
+    if ((await daemonIsStale()) == null) {
+      log('复用常驻 daemon(已跑在当前构建上,不轮换)');
+      await serveProxy(probe.client);
+      return;
+    }
     await probe.client.close().catch(() => {});
     await retireDaemon();
     // 退役窗口里探到的永远是刚死那个:等到终态再定起不起,否则会撞端口。

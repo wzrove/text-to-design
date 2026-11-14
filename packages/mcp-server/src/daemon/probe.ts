@@ -89,6 +89,48 @@ export function selfExitMarkerAt(): number | null {
 }
 
 /**
+ * 常驻 daemon 是否跑在**旧**构建上 —— 轮换决策的唯一依据。
+ *
+ * 判据:daemon 的启动时刻 < 本地产物 mtime。成立才算「它加载的代码比磁盘旧,
+ * 值得为它换一次」;不成立说明它加载的正是当前产物,再轮换只会白杀一次进程。
+ *
+ * 为什么必须有这条判定:shim 重启 = 宿主(编辑器/AI 客户端)重连,这**不等于**
+ * 产物换了。此前 runShim 探到 proxy 就无条件请 daemon 退役 —— 宿主断线重连
+ * 抖动时(客户端 supervisor 反复拉起 shim,实测 1 秒一轮)daemon 被连环杀掉,
+ * 每次都来不及就绪,15s 预算耗尽,MCP 面永久表现为 disconnected。
+ *
+ * 返回 null 的三种情况都不算陈旧(保守:宁可复用,不可滥杀):
+ * - 读不到产物 mtime(打包进快照 / 只读安装)
+ * - daemon 没上报 startedAt(旧版 daemon)—— 交给版本自检处理
+ * - daemon 启动时刻晚于产物
+ */
+export async function daemonIsStale(
+  deps: {
+    /** 取产物 mtime;默认读 process.argv[1]。测试注入用 */
+    artifactMtime?: () => number | null;
+    /** 取 daemon /health;默认走 HTTP。测试注入用 */
+    readHealth?: typeof fetchDaemonHealth;
+  } = {},
+): Promise<{ mtime: number; startedAt: number } | null> {
+  let mtime: number | null;
+  if (deps.artifactMtime) {
+    mtime = deps.artifactMtime();
+  } else {
+    const entry = process.argv[1];
+    if (!entry) return null;
+    try {
+      mtime = statSync(entry).mtimeMs;
+    } catch {
+      return null;
+    }
+  }
+  if (mtime == null) return null;
+  const health = await (deps.readHealth ?? fetchDaemonHealth)();
+  if (health?.startedAt == null || health.startedAt >= mtime) return null;
+  return { mtime, startedAt: health.startedAt };
+}
+
+/**
  * 构建陈旧告警(每次进程只报一次,且只告警不自动替换)。
  *
  * 为什么需要:版本自检比的是 `version`,而开发期反复 `pnpm build` 不改版本号,
@@ -103,18 +145,11 @@ export function selfExitMarkerAt(): number | null {
 export async function warnIfDaemonStale(): Promise<void> {
   if (staleWarned) return;
   staleWarned = true;
-  const entry = process.argv[1];
-  if (!entry) return;
-  let mtime: number;
-  try {
-    mtime = statSync(entry).mtimeMs;
-  } catch {
-    return; // 读不到产物 mtime(打包进快照等)就跳过
-  }
-  const health = await fetchDaemonHealth();
-  if (health?.startedAt == null || health.startedAt >= mtime) return;
+  const stale = await daemonIsStale();
+  if (!stale) return;
+  const { mtime, startedAt } = stale;
   warn(
-    `常驻 daemon 跑在旧构建上(daemon 启动 ${new Date(health.startedAt).toISOString()} < 产物 ${new Date(mtime).toISOString()}),本次代码改动未生效。` +
+    `常驻 daemon 跑在旧构建上(daemon 启动 ${new Date(startedAt).toISOString()} < 产物 ${new Date(mtime).toISOString()}),本次代码改动未生效。` +
       `shim 启动会请它轮换;它自己不退时:curl -X POST http://127.0.0.1:${HTTP_PORT}/shutdown`,
   );
 }
