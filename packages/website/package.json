@@ -11,15 +11,15 @@
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "^4.3.3",
+    "@tailwindcss/postcss": "^4.3.4",
     "@types/node": "catalog:",
-    "gsap": "^3.15.0",
-    "lucide-solid": "^1.48.0",
-    "postcss": "^8.5.26",
-    "solid-js": "^1.9.15",
-    "tailwindcss": "^4.3.3",
+    "gsap": "^3.15.1",
+    "lucide-solid": "^1.69.0",
+    "postcss": "^8.5.32",
+    "solid-js": "^1.9.18",
+    "tailwindcss": "^4.3.4",
     "typescript": "catalog:",
     "vite": "catalog:",
-    "vite-plugin-solid": "^2.11.14"
+    "vite-plugin-solid": "^2.11.15"
   }
 }
