@@ -38,7 +38,13 @@ jobs:
         # "Mixed changesets" 只在 release 的 version 阶段炸 —— 主干已合入时 PR 门禁拦不住
         # --against 是第二道:改了 shared/ 这类会被 bundle 进 dist 的代码却没写 changeset 时,
         # .changeset/ 是空的,光看它会直接放过(发版时 isPublished 判定版本未变 → 静默跳过)
-        run: pnpm chset:check --against "${{ github.event.pull_request.base.sha || github.event.before }}"
+        # 基线统一用「与主干的 ref」:PR 走 base.ref,push 走 default branch。
+        # 不用 github.event.before —— 它在 workflow_call 下会落成被调 workflow 自己的 ref,
+        # 且 push 事件里遇到同内容重推会与 HEAD 相同(diff 为空),门禁随即空转或错位。
+        run: |
+          BASE_REF="${{ github.event.pull_request.base.ref || github.event.repository.default_branch }}"
+          git fetch --no-tags origin "+refs/heads/${BASE_REF}:refs/remotes/origin/${BASE_REF}" 2>/dev/null || true
+          pnpm chset:check --against "origin/${BASE_REF}"
       - name: 类型检查
         run: pnpm typecheck
       - name: 不变式测试

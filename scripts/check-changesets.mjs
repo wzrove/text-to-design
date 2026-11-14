@@ -96,10 +96,18 @@ const COVERAGE = [
   },
 ];
 
-/** git diff --name-only <ref>...HEAD;ref 不存在(浅克隆 / 无 origin)返回 null 表示跳过 */
+/**
+ * `git diff --name-only ${ref}..HEAD` —— 只要 ref 到 HEAD 之间**新增**的改动。
+ *
+ * 不用三点语法(`${ref}...HEAD`):三点会退到 merge-base,而 CI 上的 base ref 若与 HEAD
+ * 分叉很早(主干 forward / 分支重推),merge-base 会落在很老的位置,把**别人的**改动
+ * 一并算进这批 —— 门禁随即对着与本批无关的目录报缺 changeset(实测误报过 ui 与 mcp)。
+ *
+ * ref 取不到(浅克隆 / 无 origin)返回 null,由调用方决定跳过还是告警。
+ */
 function changedSince(root, ref) {
   try {
-    return execFileSync('git', ['diff', '--name-only', `${ref}...HEAD`], {
+    return execFileSync('git', ['diff', '--name-only', `${ref}..HEAD`], {
       cwd: root,
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'ignore'],
@@ -144,7 +152,16 @@ export function checkChangesets(root = ROOT) {
  */
 export function checkCoverage(root = ROOT, ref) {
   const files = changedSince(root, ref);
-  if (files == null) return { problems: [], skipped: true };
+  // 取不到改动集就**不能**静默放过:那等于门禁在最需要它的场景(浅克隆 / ref 打错)
+  // 完全失效,而且 CI 会显示绿灯。交给调用方按环境决定是报错还是只告警。
+  if (files == null) {
+    return {
+      problems: [
+        `取不到 ${ref} 的改动集(浅克隆 / ref 不存在),无法确认 changeset 覆盖`,
+      ],
+      skipped: true,
+    };
+  }
   const dir = join(root, '.changeset');
   let names = [];
   try {
@@ -184,10 +201,14 @@ if (isMain) {
       process.exit(2);
     }
     coverage = checkCoverage(ROOT, ref);
-    if (coverage.skipped) {
-      console.error(`取不到 ${ref} 的改动集(浅克隆 / ref 不存在),反向门禁跳过`);
+    // --allow-missing-ref:本地浅克隆或无 origin 时供人工放行;CI 不传,取不到即失败
+    if (coverage.skipped && process.argv.includes('--allow-missing-ref')) {
+      console.error(
+        `取不到 ${ref} 的改动集,按 --allow-missing-ref 跳过反向门禁`,
+      );
+    } else {
+      problems.push(...coverage.problems);
     }
-    problems.push(...coverage.problems);
   }
   if (process.argv.includes('--json')) {
     console.log(JSON.stringify({ problems, packages, coverage }, null, 2));
