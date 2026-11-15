@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { NO_CAPABILITIES } from '../core/runtime';
 import { reparentNodes } from '../core/nodes';
 import { type FakeHost, makeFrame, makeHost, makeRect } from './fixtures';
 
@@ -52,10 +53,16 @@ describe('reparentNodes 前置:目标父级必须是容器', () => {
     const child = makeRect('1:3', '文案');
     const host = makeHost([rect, child]);
     await expect(
-      reparentNodes(host, { ids: [child.id], parentId: rect.id }),
+      reparentNodes(host, NO_CAPABILITIES, {
+        ids: [child.id],
+        parentId: rect.id,
+      }),
     ).rejects.toThrow(/不是容器/);
     await expect(
-      reparentNodes(host, { ids: [child.id], parentId: rect.id }),
+      reparentNodes(host, NO_CAPABILITIES, {
+        ids: [child.id],
+        parentId: rect.id,
+      }),
     ).rejects.toThrow(/FRAME/);
     // 没被挪走:报错发生在任何写入之前
     expect(child.parent?.id).not.toBe(rect.id);
@@ -65,7 +72,7 @@ describe('reparentNodes 前置:目标父级必须是容器', () => {
     const parent = makeFrame('1:1', '容器');
     const child = makeRect('1:2', '子');
     const host = makeHost([parent, child]);
-    const r = await reparentNodes(host, {
+    const r = await reparentNodes(host, NO_CAPABILITIES, {
       ids: [child.id],
       parentId: parent.id,
     });
@@ -93,7 +100,10 @@ describe('reparentNodes 收尾:被父级布局改写的属性要压回', () => {
     });
 
     host.registry.set(row.id, row);
-    const r = await reparentNodes(host, { ids: [row.id], parentId: parent.id });
+    const r = await reparentNodes(host, NO_CAPABILITIES, {
+      ids: [row.id],
+      parentId: parent.id,
+    });
 
     expect(r.moved[0].layoutMode).toBe('HORIZONTAL');
     expect(r.warnings).toBeUndefined();
@@ -120,7 +130,10 @@ describe('reparentNodes 收尾:被父级布局改写的属性要压回', () => {
     });
     host.registry.set(row.id, row);
 
-    const r = await reparentNodes(host, { ids: [row.id], parentId: parent.id });
+    const r = await reparentNodes(host, NO_CAPABILITIES, {
+      ids: [row.id],
+      parentId: parent.id,
+    });
     const warn = r.warnings?.join('') ?? '';
     expect(warn).toContain('layoutMode');
     expect(warn).toContain('jsd_set_layout');
