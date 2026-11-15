@@ -481,23 +481,26 @@ export function registerPlugin(
           const p = msg.params;
           switch (p.op) {
             case 'select':
-              send(id, true, await setSelection(host, p.ids ?? []));
+              send(id, true, await setSelection(host, ctx, p.ids ?? []));
               break;
             case 'remove':
               send(
                 id,
                 true,
-                await removeNodes(host, { ids: p.ids, matchName: p.matchName }),
+                await removeNodes(host, ctx, {
+                  ids: p.ids,
+                  matchName: p.matchName,
+                }),
               );
               break;
             case 'clone':
-              send(id, true, await cloneNodes(host, p.ids ?? []));
+              send(id, true, await cloneNodes(host, ctx, p.ids ?? []));
               break;
             case 'group':
               send(
                 id,
                 true,
-                await groupNodes(host, {
+                await groupNodes(host, ctx, {
                   ids: p.ids ?? [],
                   name: p.name,
                   // 布局参数必须原样透传:此前只传 ids/name,导致 layoutMode
@@ -519,20 +522,27 @@ export function registerPlugin(
               send(
                 id,
                 true,
-                await groupNodes(host, { ids: p.ids ?? [], ungroup: true }),
+                await groupNodes(host, ctx, {
+                  ids: p.ids ?? [],
+                  ungroup: true,
+                }),
               );
               break;
             case 'flatten':
-              send(id, true, await flattenNodes(host, p.ids ?? []));
+              send(id, true, await flattenNodes(host, ctx, p.ids ?? []));
               break;
             case 'outline_stroke':
-              send(id, true, await outlineStrokeNodes(host, p.ids ?? []));
+              send(
+                id,
+                true,
+                await outlineStrokeNodes(host, ctx, p.ids ?? []),
+              );
               break;
             case 'reparent':
               send(
                 id,
                 true,
-                await reparentNodes(host, {
+                await reparentNodes(host, ctx, {
                   ids: p.ids ?? [],
                   parentId: p.parentId,
                   index: p.index,
@@ -571,7 +581,7 @@ export function registerPlugin(
               break;
             }
             case 'create_instance':
-              send(id, true, await createInstances(host, p.ids ?? []));
+              send(id, true, await createInstances(host, ctx, p.ids ?? []));
               break;
             case 'detach_instance':
               send(id, true, await detachInstanceNodes(host, ctx, p.ids ?? []));
@@ -590,7 +600,7 @@ export function registerPlugin(
               send(
                 id,
                 true,
-                await swapComponents(host, {
+                await swapComponents(host, ctx, {
                   ids: p.ids ?? [],
                   componentId: p.componentId ?? '',
                 }),
@@ -657,13 +667,16 @@ export function registerPlugin(
           break;
         }
         case 'export': {
-          const r = await exportNodes(host, msg.params);
+          const r = await exportNodes(host, ctx, msg.params);
           send(id, true, r);
           break;
         }
         case 'fill_image': {
           const bytes = msg.params.bytes ?? new Uint8Array(0);
-          const r = await fillImageNode(host, { ids: msg.params.ids, bytes });
+          const r = await fillImageNode(host, ctx, {
+            ids: msg.params.ids,
+            bytes,
+          });
           send(id, true, r);
           break;
         }

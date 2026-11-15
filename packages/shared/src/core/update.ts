@@ -94,7 +94,7 @@ export async function updateSelection(
   }
   let base: readonly NodeSkeleton[];
   if (params.ids != null && params.ids.length > 0) {
-    base = await resolveNodes(host, params.ids);
+    base = await resolveNodes(host, params.ids, ctx);
   } else {
     base = host.currentPage.selection;
   }

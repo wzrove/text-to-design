@@ -18,6 +18,7 @@ type ListFontsParams = z.infer<typeof listFontsSchema>;
 
 export async function exportNodes(
   host: DesignHost,
+  ctx: RuntimeContext,
   params: {
     ids: string[];
     format?: 'PNG' | 'JPG' | 'SVG' | 'PDF';
@@ -26,7 +27,7 @@ export async function exportNodes(
 ): Promise<{ exports: Record<string, RawExportFile> }> {
   const format = params.format ?? 'PNG';
   const scale = params.scale ?? 1;
-  const nodes = await resolveNodes(host, params.ids);
+  const nodes = await resolveNodes(host, params.ids, ctx);
   if (nodes.length === 0) {
     throw new Error('没有找到要导出的节点');
   }
@@ -56,13 +57,14 @@ export async function exportNodes(
 
 export async function fillImageNode(
   host: DesignHost,
+  ctx: RuntimeContext,
   params: { ids: string[]; bytes: Uint8Array },
 ): Promise<{ updated: SerializedNode[] }> {
   if (!params.bytes || params.bytes.byteLength === 0) {
     throw new Error('无效的图片字节数据');
   }
   const image = await host.createImageFromBytesAsync(params.bytes);
-  const nodes = await resolveNodes(host, params.ids);
+  const nodes = await resolveNodes(host, params.ids, ctx);
   if (nodes.length === 0) {
     throw new Error('没有找到要填充图片的节点');
   }

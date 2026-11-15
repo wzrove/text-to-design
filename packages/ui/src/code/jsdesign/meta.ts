@@ -41,6 +41,11 @@ export const meta: PlatformMeta = {
     // 主组件读同步字段(真机 2026-10-19):运行时透出的 `getMainComponentAsync` 永不 settle ——
     // `jsd_copy_overrides`(只读快照、不写属性)25109ms 超时即由它引起,见 dec 0010 / e1e66f0a。
     'mainComponentSync',
+    // 节点解析走同步入口(2026-11-15):e1e66f0a 留下的那半 —— 运行时透出的
+    // `getNodeByIdAsync` 同族永不 settle。daemon 日志取证:set_stroke 17 连 25s
+    // forward_timeout(11-10)+ find 5 次 25s(11-15),同会话 ping 恒 4~12ms ⇒
+    // 凡按 ids 解析节点的工具周期性挂死,唯一共同前置是 resolveOne 的 typeof 探测。
+    'nodeResolveSync',
   ],
   // 只读组件面(2026-10-20):三页官方文档与 typings 在组件/变体节点上逐字一致,契约里缺的
   // 几个字段(实例数 / 发布 key / remote / description / scaleFactor / 变体集默认变体与成员)

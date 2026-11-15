@@ -41,7 +41,7 @@ export async function createComponentNodes(
   // ids 只做「存在性校验」,不改动这些节点:组件一律新建,不把已有节点卷进来 ——
   // appendChild 已有节点会触发引擎再包一层 wrapper,后续删 wrapper 连坐删子树并残留 dangling。
   if (params.ids != null && params.ids.length > 0) {
-    const nodes = await resolveNodes(host, params.ids);
+    const nodes = await resolveNodes(host, params.ids, ctx);
     if (nodes.length === 0) {
       throw new Error('没有找到要固化为组件的节点');
     }
@@ -72,9 +72,10 @@ export async function createComponentNodes(
 
 export async function createInstances(
   host: DesignHost,
+  ctx: RuntimeContext,
   ids: string[],
 ): Promise<{ created: SerializedNode[] }> {
-  const byId = await resolveNodesMap(host, ids);
+  const byId = await resolveNodesMap(host, ids, ctx);
   const components = [...byId.values()].filter((n) => n.type === 'COMPONENT');
   if (components.length === 0) {
     // 逐 id 点名:没找到的与类型不符的分开说,别让调用方猜是哪个 id 为什么不行
@@ -138,15 +139,16 @@ export async function createInstances(
 
 export async function swapComponents(
   host: DesignHost,
+  ctx: RuntimeContext,
   params: { ids: string[]; componentId: string },
 ): Promise<{ swapped: SerializedNode[] }> {
-  const component = (await resolveNodes(host, [params.componentId])).find(
+  const component = (await resolveNodes(host, [params.componentId], ctx)).find(
     (n) => n.type === 'COMPONENT',
   );
   if (!component) {
     throw new Error(`没有找到组件: ${params.componentId}`);
   }
-  const instances = (await resolveNodes(host, params.ids)).filter(
+  const instances = (await resolveNodes(host, params.ids, ctx)).filter(
     (n) => n.type === 'INSTANCE',
   );
   if (instances.length === 0) {
@@ -436,7 +438,7 @@ export async function setInstanceProperties(
     >;
   },
 ): Promise<{ updated: SerializedNode[] }> {
-  const instances = (await resolveNodes(host, params.ids)).filter(
+  const instances = (await resolveNodes(host, params.ids, ctx)).filter(
     (n) => n.type === 'INSTANCE',
   );
   if (instances.length === 0) {
@@ -679,7 +681,7 @@ export async function combineAsVariantsNodes(
   ctx: RuntimeContext,
   params: { ids: string[]; name?: string },
 ): Promise<{ created: SerializedNode }> {
-  const components = (await resolveNodes(host, params.ids)).filter(
+  const components = (await resolveNodes(host, params.ids, ctx)).filter(
     (n) => n.type === 'COMPONENT',
   );
   if (components.length < 2) {
@@ -857,7 +859,7 @@ export async function detachInstanceNodes(
   created: SerializedNode[];
   failed: { id: string; message: string }[];
 }> {
-  const instances = (await resolveNodes(host, ids)).filter(
+  const instances = (await resolveNodes(host, ids, ctx)).filter(
     (n) => n.type === 'INSTANCE',
   );
   if (instances.length === 0) {
@@ -1017,7 +1019,7 @@ async function captureOverrideSnapshot(
   sourceId: string,
   includeVisibleProps: boolean,
 ): Promise<OverrideSnapshot> {
-  const source = (await resolveNodes(host, [sourceId])).find(
+  const source = (await resolveNodes(host, [sourceId], ctx)).find(
     (n) => n.type === 'INSTANCE',
   );
   if (!source) {
@@ -1065,11 +1067,11 @@ async function applyOverrideSnapshot(
   // 因 `swapToSource:false` 而没套的变体属性名(逐实例去重后统一出一条告警)
   const skippedIdentity: string[] = [];
   // 批量预解析(0011):循环内不再逐个 await,避免 N+1
-  const targets = await resolveNodesMap(host, ids);
+  const targets = await resolveNodesMap(host, ids, ctx);
   const mainId = snapshot.mainComponentId;
   const mains =
     swapToSource && mainId != null
-      ? await resolveNodesMap(host, [mainId])
+      ? await resolveNodesMap(host, [mainId], ctx)
       : new Map<string, NodeSkeleton>();
   for (const targetId of ids) {
     try {

@@ -25,15 +25,28 @@ export function isUsable(n: NodeSkeleton): boolean {
 /**
  * 按 id 解析单个节点。
  *
- * 顺序:异步入口(有则用) → 同步入口(jsDesign / legacy) → 当前页 findOne 兜底。
+ * 顺序:异步入口(声明允许时) → 同步入口(jsDesign / legacy) → 当前页 findOne 兜底。
  * 任一步拿到「读属性会崩」的悬挂节点都当作不存在,交给上层报「未找到」,而不是
  * 把引擎断言冒泡出去。
+ *
+ * ⚠ 异步入口的选路**不靠 typeof 探测**,按声明(dec e06dbd23;e1e66f0a 遗留半项,
+ * 补完):即时设计的 host 是 Object.create(native),typings 未声明的
+ * getNodeByIdAsync 在运行时照样存在且**永不 settle** ⇒ await 撞满 25s 转发上限,
+ * 既 catch 不到、加超时也只是放弃这次调用。真机证据:2026-11-10 set_stroke 17 连
+ * 25s forward_timeout、2026-11-15 find 5 次同症,同会话 ping 恒 4~12ms —— 凡按 ids
+ * 解析节点的工具周期性挂死,唯一共同前置就是这里。故由 nodeResolveSync 声明只问
+ * 同步入口(即时设计声明;Figma 不声明:dynamic-page 下同步入口必抛,只能走 async)。
+ *
+ * ctx.capabilities == null(未注入)时沿用 typeof 探测(fail-open,与 0002 一致)。
  */
 export async function resolveOne(
   host: DesignHost,
   id: string,
+  ctx?: RuntimeContext,
 ): Promise<NodeSkeleton | null> {
-  if (typeof host.getNodeByIdAsync === 'function') {
+  const preferSync =
+    ctx != null && hostCapabilityState(ctx, 'nodeResolveSync') === true;
+  if (!preferSync && typeof host.getNodeByIdAsync === 'function') {
     try {
       const n = await host.getNodeByIdAsync(id);
       if (n != null && isUsable(n)) return n;
@@ -65,8 +78,11 @@ export async function resolveOne(
 export async function resolveNodes(
   host: DesignHost,
   ids: readonly string[],
+  ctx?: RuntimeContext,
 ): Promise<NodeSkeleton[]> {
-  const found = await Promise.all(ids.map((id) => resolveOne(host, id)));
+  const found = await Promise.all(
+    ids.map((id) => resolveOne(host, id, ctx)),
+  );
   return found.filter((n): n is NodeSkeleton => n != null);
 }
 
@@ -74,9 +90,10 @@ export async function resolveNodes(
 export async function resolveNodesMap(
   host: DesignHost,
   ids: readonly string[],
+  ctx?: RuntimeContext,
 ): Promise<Map<string, NodeSkeleton>> {
   const pairs = await Promise.all(
-    ids.map(async (id) => [id, await resolveOne(host, id)] as const),
+    ids.map(async (id) => [id, await resolveOne(host, id, ctx)] as const),
   );
   const map = new Map<string, NodeSkeleton>();
   for (const [id, n] of pairs) if (n != null) map.set(id, n);

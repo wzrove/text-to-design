@@ -101,7 +101,7 @@ export async function createStyle(
         `另两家的间距与圆角只能落在节点字段上(见 jsd_set_layout / jsd_set_cornerRadius / jsd_set_stroke)`,
     );
   }
-  const [node] = await resolveNodes(host, [params.fromNodeId]);
+  const [node] = await resolveNodes(host, [params.fromNodeId], ctx);
   if (node == null) throw new Error(`没有找到取值的节点: ${params.fromNodeId}`);
   // **必须先判再建**:引擎的工厂(`figma.createEffectStyle()` 等)一执行就落下真资源,
   // 之后灌值阶段才报「节点上没有对应值」= 回包失败但文档里多了一条空样式

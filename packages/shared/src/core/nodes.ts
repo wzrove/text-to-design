@@ -298,7 +298,7 @@ export async function findNodes(
   let scopedToCurrentPage = false;
 
   if (params.ids != null && params.ids.length > 0) {
-    nodes = await resolveNodes(host, params.ids);
+    nodes = await resolveNodes(host, params.ids, ctx);
   } else {
     // 0039 修订:跨页读的前提是平台声明了 `documentScopeRead`,判据在**调用前**。
     // 未声明的平台(即时设计 / MG)在这里退回当前页 —— 不是「不支持这个参数」,
@@ -374,9 +374,10 @@ export async function findNodes(
 
 export async function setSelection(
   host: DesignHost,
+  ctx: RuntimeContext,
   ids: string[],
 ): Promise<{ selected: string[] }> {
-  const nodes = await resolveNodes(host, ids);
+  const nodes = await resolveNodes(host, ids, ctx);
   if (nodes.length === 0) {
     throw new Error('没有找到要选中的节点');
   }
@@ -498,13 +499,14 @@ export async function getPageStructure(
 
 export async function removeNodes(
   host: DesignHost,
+  ctx: RuntimeContext,
   params: { ids?: string[]; matchName?: string },
 ): Promise<{
   removed: string[];
 }> {
   let nodes: NodeSkeleton[];
   if (params.ids != null && params.ids.length > 0) {
-    nodes = await resolveNodes(host, params.ids);
+    nodes = await resolveNodes(host, params.ids, ctx);
   } else {
     nodes = [...host.currentPage.selection];
   }
@@ -523,9 +525,10 @@ export async function removeNodes(
 
 export async function cloneNodes(
   host: DesignHost,
+  ctx: RuntimeContext,
   ids: string[],
 ): Promise<{ created: SerializedNode[] }> {
-  const nodes = await resolveNodes(host, ids);
+  const nodes = await resolveNodes(host, ids, ctx);
   if (nodes.length === 0) {
     throw new Error(
       `没有找到要复制的节点(请求 ids: ${ids.length ? JSON.stringify(ids) : '无'});请先用 jsd_find 确认节点存在且 id 有效`,
@@ -601,6 +604,7 @@ function ungroupNode(host: DesignHost, node: NodeSkeleton): boolean {
 
 export async function groupNodes(
   host: DesignHost,
+  ctx: RuntimeContext,
   params: {
     ids: string[];
     name?: string;
@@ -618,7 +622,7 @@ export async function groupNodes(
   },
 ): Promise<{ created: SerializedNode } | { ungrouped: string[] }> {
   if (params.ungroup) {
-    const nodes = await resolveNodes(host, params.ids);
+    const nodes = await resolveNodes(host, params.ids, ctx);
     const grouped = nodes.filter(
       (n) => n.type === 'GROUP' || n.type === 'FRAME',
     );
@@ -646,7 +650,7 @@ export async function groupNodes(
     }
     return { ungrouped };
   }
-  const nodes = await resolveNodes(host, params.ids);
+  const nodes = await resolveNodes(host, params.ids, ctx);
   if (nodes.length < 2) {
     throw new Error('分组至少需要 2 个节点');
   }
@@ -816,9 +820,10 @@ export async function groupNodes(
 
 export async function flattenNodes(
   host: DesignHost,
+  ctx: RuntimeContext,
   ids: string[],
 ): Promise<{ created: SerializedNode }> {
-  const nodes = await resolveNodes(host, ids);
+  const nodes = await resolveNodes(host, ids, ctx);
   if (nodes.length < 2) {
     throw new Error('flatten 至少需要 2 个节点');
   }
@@ -829,11 +834,12 @@ export async function flattenNodes(
 
 export async function outlineStrokeNodes(
   host: DesignHost,
+  ctx: RuntimeContext,
   ids: string[],
 ): Promise<{
   created: SerializedNode[];
 }> {
-  const nodes = await resolveNodes(host, ids);
+  const nodes = await resolveNodes(host, ids, ctx);
   if (nodes.length === 0) {
     throw new Error('没有找到要转描边的节点');
   }
@@ -862,6 +868,7 @@ function canReorderInto(
 
 export async function reparentNodes(
   host: DesignHost,
+  ctx: RuntimeContext,
   params: {
     ids: string[];
     parentId?: string;
@@ -872,7 +879,7 @@ export async function reparentNodes(
   updated: SerializedNode[];
   warnings?: string[];
 }> {
-  const nodes = await resolveNodes(host, params.ids);
+  const nodes = await resolveNodes(host, params.ids, ctx);
   if (nodes.length === 0) {
     throw new Error('没有找到要移动的节点');
   }
@@ -888,7 +895,7 @@ export async function reparentNodes(
   const firstParent = (nodes[0].parent as NodeSkeleton | null) ?? null;
   let parent: NodeSkeleton | PageSkeleton | undefined;
   if (params.parentId != null) {
-    parent = (await resolveNodes(host, [params.parentId]))[0];
+    parent = (await resolveNodes(host, [params.parentId], ctx))[0];
   } else if (selectionHasTarget) {
     parent =
       selection.find((s) => !movingIds.has(s.id)) ??

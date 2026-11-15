@@ -84,6 +84,23 @@ export const HOST_CAPABILITY_SPEC = {
     kind: 'flow',
     labelKey: 'capability.host.mainComponentSync',
   },
+  // 行为型:**按 id 解析节点走同步入口** —— 运行时透出的 getNodeByIdAsync 在本平台永不 settle。
+  //
+  // 为什么需要这一位(2026-11-15,即时设计):e1e66f0a 修样式枚举与主组件读时,
+  // resolveOne 的 getNodeByIdAsync 这半被明确留下(「即时设计上 find 一直是毫秒级,
+  // 没有它挂的证据」)。此后证据落地:daemon 日志 2026-11-10 的 set_stroke 17 连
+  // 25s forward_timeout、2026-11-15 的 find 5 次 25s 超时,而同会话 ping 始终 4~12ms
+  // —— 凡「按 ids 解析节点」的工具周期性挂死、非 ids 工具毫秒级返回,唯一共同前置
+  // 就是 resolveOne 里对 getNodeByIdAsync 的 typeof 探测 + await(永不 settle,
+  // catch 不到)。与 styleEnumerationSync / mainComponentSync / documentScopeRead
+  // 同族:typings 未声明 ≠ 运行时没有,Object.create(native) 把该成员透出来 ⇒
+  // 选路只能靠声明。决策记录:dec e06dbd23(e1e66f0a 遗留半项补完)。
+  // 平台:即时设计声明(走同步 getNodeById);Figma 不声明(dynamic-page 下同步入口
+  // 必抛,必须走 getNodeByIdAsync);MasterGo 不声明(无该符号,探测本就落空)。
+  nodeResolveSync: {
+    kind: 'flow',
+    labelKey: 'capability.host.nodeResolveSync',
+  },
   // 文本截断与最大行数(仅 TEXT;类型不匹配的判定见 core/capabilities.ts)
   textTruncation: {
     kind: 'propGate',

@@ -32,6 +32,8 @@ export const MESSAGES_EN = {
     'Style enumeration uses the sync entry (runtime *Async members are unusable)',
   'capability.host.mainComponentSync':
     'Main component read via the sync field (runtime getMainComponentAsync never settles)',
+  'capability.host.nodeResolveSync':
+    'Node resolution via the sync entry (runtime getNodeByIdAsync never settles)',
   'capability.host.textTruncation': 'Text truncation',
   'capability.host.componentProperties': 'Component properties',
   'capability.host.documentScopeRead':

@@ -27,6 +27,8 @@ export const MESSAGES_ZH_CN = {
     '样式枚举走同步入口(运行时的 *Async 成员不可用)',
   'capability.host.mainComponentSync':
     '主组件走同步字段(运行时的 getMainComponentAsync 永不返回)',
+  'capability.host.nodeResolveSync':
+    '节点解析走同步入口(运行时的 getNodeByIdAsync 永不返回)',
   'capability.host.textTruncation': '文本截断',
   'capability.host.componentProperties': '组件属性',
   'capability.host.documentScopeRead': '文档范围读(能读非当前页)',
