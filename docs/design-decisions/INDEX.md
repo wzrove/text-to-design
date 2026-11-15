@@ -45,6 +45,7 @@
 | [4d4e2570](4d4e2570-MCP注册面评审：保留协议适配并收窄重复入口.md) | MCP注册面评审：保留协议适配并收窄重复入口 | 提议 | mcp-server | 2026-11-01 |
 | [3f364c28](3f364c28-MCP目录精简档提议：核心工具常驻与低频能力按需发现.md) | MCP目录精简档提议：核心工具常驻与低频能力按需发现 | 已采纳 | mcp-server | 2026-11-01 |
 | [9517eea4](9517eea4-DesignHost-拆必选核心与可选能力面：core-不再靠-typeof-探测.md) | DesignHost 拆必选核心与可选能力面：core 不再靠 typeof 探测 | 已采纳 | `shared/core`、`ui/code` | 2026-11-13 |
+| [e06dbd23](e06dbd23-节点解析选路按平台声明：补完-e1e66f0a-遗留的-getNodeByIdAsync-半项.md) | 节点解析选路按平台声明：补完 e1e66f0a 遗留的 getNodeByIdAsync 半项 | 已采纳 | `shared/core`、`shared/dicts`、`ui/code` | 2026-11-15 |
 
 ## 依赖关系
 
