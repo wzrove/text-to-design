@@ -22,6 +22,7 @@ import {
 import { z } from 'zod';
 import type { Bridge } from '../bridge';
 import { LONG_IO_TIMEOUT_MS, MAX_SVG_SOURCE_BYTES } from '../config';
+import { BridgeError } from '../core/bridge-error';
 import { detectUniformLayout } from '../core/layout-hint';
 import type { FollowUp } from '../core/response';
 import { countSemanticGroups } from '../core/structure-hint';
@@ -29,7 +30,13 @@ import type { BridgeToolDef, ToolHandle } from '../core/tool-def';
 import { bridgeTool } from '../core/tool-exec';
 import { htmlToSvg } from '../htmlToDesign';
 import type { McpI18n } from '../i18n';
-import { findIcon, iconToSvg, suggestIcons } from '../icons';
+import {
+  findIcon,
+  ICON_COUNT,
+  iconToSvg,
+  LUCIDE_VERSION,
+  suggestIcons,
+} from '../icons';
 
 /** 各节点类型的 per-type 子 schema(取 shape,type 口径按 0034 覆盖,再挂 placement)。
  *  类型只用到 .shape 重建同形 object,故只声明 shape 这一必需成员,避免 any 逃逸类型检查;
@@ -66,6 +73,50 @@ export function nodeCreateInputSchema(type: CreatableNodeType): z.ZodType {
   return z.object({ ...shape, placement: placementSchema.optional() }).strict();
 }
 
+/** 类型 → create 工具名。与 registerCreateTools 里的 `name:` 一一对应,出错由测试守 */
+const CREATE_TOOL_NAME: Record<CreatableNodeType, string> = {
+  FRAME: 'jsd_create_frame',
+  RECTANGLE: 'jsd_create_rectangle',
+  ELLIPSE: 'jsd_create_ellipse',
+  LINE: 'jsd_create_line',
+  POLYGON: 'jsd_create_polygon',
+  STAR: 'jsd_create_star',
+  VECTOR: 'jsd_create_vector',
+  TEXT: 'jsd_create_text',
+  GROUP: 'jsd_create_group',
+  BOOLEAN_OPERATION: 'jsd_create_boolean_operation',
+};
+
+/**
+ * 字段名 → **只有**某个 create 工具接受它(加上工具名)。
+ *
+ * 用途:调用方把文本字段塞进椭圆入参(`characters`/`fontName`/`fontSize`)时,
+ * 只说「这些字段不被接受」等于让模型自己猜该换哪个工具。这里给出归属。
+ *
+ * 从 PER_TYPE_NODE_SCHEMA 派生而非手抄:任何一次 schema 改动自动同步,不会漂移。
+ * 一个字段被多个类型共享时**不收**(归属不唯一,说了反而误导)。
+ */
+export const CREATE_EXCLUSIVE_FIELDS: ReadonlyMap<
+  string,
+  { tool: string; type: CreatableNodeType }
+> = (() => {
+  const where = new Map<string, CreatableNodeType[]>();
+  for (const type of Object.keys(PER_TYPE_NODE_SCHEMA) as CreatableNodeType[]) {
+    for (const k of Object.keys(PER_TYPE_NODE_SCHEMA[type].shape)) {
+      const list = where.get(k);
+      if (list == null) where.set(k, [type]);
+      else list.push(type);
+    }
+  }
+  const out = new Map<string, { tool: string; type: CreatableNodeType }>();
+  for (const [field, types] of where) {
+    if (types.length !== 1) continue;
+    const type = types[0] as CreatableNodeType;
+    out.set(field, { tool: CREATE_TOOL_NAME[type], type });
+  }
+  return out;
+})();
+
 type CreateNodeDef = Pick<
   BridgeToolDef,
   | 'name'
@@ -89,6 +140,9 @@ function createNodeTool(
   return {
     method: 'execute',
     inputSchema: nodeCreateInputSchema(type),
+    // 越界字段点名归属:例如给椭圆传了 characters/fontName/fontSize,
+    // 直接指到 jsd_create_text,而不是只说「这些字段不被接受」
+    fieldOwnership: CREATE_EXCLUSIVE_FIELDS,
     outputSchema: createdResultSchema,
     payload: (args) => {
       const { placement, ...rest } = args as Record<string, unknown>;
@@ -336,7 +390,13 @@ export function registerCreateTools(
         const hint = suggests.length
           ? `,可尝试:${suggests.map((s) => s.name).join(', ')}`
           : '';
-        throw new Error(`未知图标:${icon}${hint}`);
+        // 带上图标库规模与数据版本:『以往能用的名字突然找不到』多半是运行时解到的
+        // lucide-static 与构建期生成别名表的那份不一致(见 LUCIDE_VERSION 注释)。
+        // 码归 invalid_args 而不是 plugin_error —— 这一步根本没触碰插件。
+        throw new BridgeError(
+          'invalid_args',
+          `未知图标:${icon}${hint}(图标库 ${ICON_COUNT} 个,lucide-static ${LUCIDE_VERSION})`,
+        );
       }
       const svg = iconToSvg(
         def,

@@ -39,8 +39,33 @@ export const updateTargetFields = {
     ),
 };
 
+/**
+ * 必填的节点 id 数组。
+ *
+ * 元素级不能只靠 `z.array(z.string())`:`[null, null]` 这类空位会穿透到 zod 内部,
+ * 逐个元素报 `ids.0: expected string, received undefined`,调用方看不出该改什么
+ * (实测 jsd_reparent_nodes 收到过 ids.0/1/2 全为 undefined 的入参)。
+ * 这里把「有空位」收成一条顶层 issue,并指出常见成因。
+ */
 const requiredIds = (tip: string, min = 1) =>
-  z.array(z.string()).min(min).describe(tip);
+  z
+    // 元素**不用** z.string():那会在下面这条 issue 之前就逐个元素报 zod 原文
+    // (`ids.0: expected string, received undefined`),调用方看不出该改什么。
+    // 收成 unknown[] + 一条 .superRefine 成因 —— 注意必须用 superRefine 而非
+    // `.transform()`:transform 会让 `z.toJSONSchema()`(jsd_describe_tools 要用)
+    // 在默认 output 模式下推不出 schema 而抛错。
+    .array(z.unknown())
+    .min(min)
+    .superRefine((v, ctx) => {
+      if (v.every((x) => typeof x === 'string' && x !== '')) return;
+      ctx.addIssue({
+        code: 'custom',
+        message:
+          'ids 里有空元素或非字符串(undefined / null / 空串):通常是从 jsd_find 结果拼数组时某个下标没取到,请逐元素核对',
+      });
+    })
+    // 对外类型仍是 string[](线上校验已保证),下探到 core 的调用方不需要再断言
+    .describe(tip);
 
 export const selectNodesSchema = z
   .object({ ids: requiredIds('要设为当前选中的节点 id 列表') })

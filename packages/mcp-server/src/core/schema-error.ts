@@ -51,6 +51,8 @@ export function unexpectedKeysMessage(
   allowed: readonly string[],
   received: readonly string[],
   detail: string,
+  /** 越界字段 → 它真正所属的 create 工具(可选;跨类型误用时给出归属) */
+  ownership?: ReadonlyMap<string, { tool: string }>,
 ): string {
   const named = unexpected.slice(0, UNEXPECTED_KEY_LIMIT).join(', ');
   const more =
@@ -61,7 +63,26 @@ export function unexpectedKeysMessage(
     allowed.length <= ALLOWED_KEY_LIST_LIMIT
       ? `该工具接受: [${allowed.join(', ')}]。`
       : `该工具接受 ${allowed.length} 个字段(完整清单见其 schema),本次收到的 [${received.join(', ')}] 里只有上述字段越界。`;
-  return `字段 [${named}]${more} 不被该工具接受,请删掉后重试(其余字段本身合法)。${list}原始校验: ${detail}`;
+  // 越界字段**全部**属于同一个别的 create 工具时,大概率是选错了工具(实测:
+  // jsd_create_ellipse 收到 characters/fontName/fontSize 这组纯文本字段)。
+  // 只在归属唯一且一致时提示,免得把「混着两个工具的字段」也归到一个工具上。
+  let owner = '';
+  if (ownership != null && unexpected.length > 0) {
+    const tools = new Set<string>();
+    for (const k of unexpected) {
+      const hit = ownership.get(k);
+      if (hit == null) {
+        tools.clear();
+        break;
+      }
+      tools.add(hit.tool);
+    }
+    if (tools.size === 1) {
+      const [tool] = [...tools];
+      owner = `这组字段属于 ${tool}:要建该类型请改用该工具;要建当前类型请删掉它们。`;
+    }
+  }
+  return `字段 [${named}]${more} 不被该工具接受,请删掉后重试(其余字段本身合法)。${owner}${list}原始校验: ${detail}`;
 }
 
 /**
@@ -75,12 +96,16 @@ export function describeInvalidArgs(
   inputSchema: z.ZodType,
   args: unknown,
   detail: string,
+  /** 跨类型字段归属表(core 不依赖 tools,由调用方注入) */
+  ownership?: ReadonlyMap<string, { tool: string }>,
 ): string {
   const keys = allowedTopKeys(inputSchema);
   const received = receivedTopKeys(args);
   if (keys == null || received == null) return detail;
   const names = Object.keys(received);
   const unexpected = unexpectedTopKeys(names, keys);
-  if (unexpected.length === 0) return detail;
-  return unexpectedKeysMessage(unexpected, keys, names, detail);
+  if (unexpected.length > 0) {
+    return unexpectedKeysMessage(unexpected, keys, names, detail, ownership);
+  }
+  return detail;
 }

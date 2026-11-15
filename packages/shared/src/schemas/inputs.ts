@@ -286,24 +286,50 @@ export const manageComponentsSchema = z
     }
   });
 
-export const exportSchema = z.object({
-  ids: z
-    .array(z.string())
-    .min(1)
-    .describe(
-      '必填。要导出的节点 id 列表(数组);只导一个节点也要写成数组,如 ["123:456"]。字段名是 ids,不是 nodeId。',
-    ),
-  format: z
-    .enum(['PNG', 'JPG', 'SVG', 'PDF'])
-    .optional()
-    .describe('schema.inputs.format'),
-  scale: z.number().optional().describe('schema.inputs.scale'),
-  savePath: z.string().optional().describe('schema.inputs.savePath'),
-  includeDataUrl: z
-    .boolean()
-    .optional()
-    .describe('schema.inputs.includeDataUrl'),
-});
+/**
+ * 单数 `id` → 复数 `ids` 的机械换算。
+ *
+ * 实测调用方会把「导出一个节点」写成 `{ id: "1:2" }`:描述里只防了 `nodeId`,
+ * 而真正会犯的是 `id`(见 error_reports 里 jsd_export 的 invalid_args 记录)。
+ * 一个节点 = 长度 1 的数组是无歧义的,**不涉及语义取舍**,所以在校验前直接归一化,
+ * 而不是继续靠描述文字劝。原字段名与描述一律保留,老调用方不受影响。
+ */
+function normalizeExportIds(value: unknown): unknown {
+  if (value == null || typeof value !== 'object' || Array.isArray(value)) {
+    return value;
+  }
+  const o = { ...(value as Record<string, unknown>) };
+  // 两者都给了:以 ids 为准并保留 id,让 .strict() 照常点名它越界 —— 不静默二选一
+  if (o.ids == null && o.id !== undefined) {
+    o.ids = Array.isArray(o.id) ? o.id : [o.id];
+    delete o.id;
+  }
+  return o;
+}
+
+export const exportSchema = z.preprocess(
+  normalizeExportIds,
+  z
+    .object({
+      ids: z
+        .array(z.string())
+        .min(1)
+        .describe(
+          '必填。要导出的节点 id 列表(数组);只导一个节点也要写成数组,如 ["123:456"]。字段名是 ids,不是 nodeId。',
+        ),
+      format: z
+        .enum(['PNG', 'JPG', 'SVG', 'PDF'])
+        .optional()
+        .describe('schema.inputs.format'),
+      scale: z.number().optional().describe('schema.inputs.scale'),
+      savePath: z.string().optional().describe('schema.inputs.savePath'),
+      includeDataUrl: z
+        .boolean()
+        .optional()
+        .describe('schema.inputs.includeDataUrl'),
+    })
+    .strict(),
+);
 
 /**
  * 字体清单入参:按家族名过滤 + 分页。

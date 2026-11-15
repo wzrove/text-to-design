@@ -26,6 +26,28 @@ import { extractBytes, stripBytes } from './binary';
 import { postToCode, readCodeMessage } from './codeChannel';
 import type { Conn, LogLevel, Pending } from './types';
 
+/**
+ * 超时错误里的入参摘要:**只放标量与数组长度**,不展开内容。
+ *
+ * 目的是让「为什么超时」在下一次上报里自证 —— 25s 预算被顶穿的三个已知分支
+ * (scope=document 全量加载 / ids 逐个深读 / depth 过大深序列化)在只有
+ * 「插件响应超时」一句话时完全无法区分。
+ */
+function describeParamsForTimeout(params: unknown): string {
+  if (params == null || typeof params !== 'object' || Array.isArray(params)) {
+    return 'none';
+  }
+  const out: string[] = [];
+  for (const [k, v] of Object.entries(params as Record<string, unknown>)) {
+    if (v == null) continue;
+    if (typeof v === 'number' || typeof v === 'boolean') out.push(`${k}=${v}`);
+    else if (typeof v === 'string') out.push(`${k}=${v.length}ch`);
+    else if (Array.isArray(v)) out.push(`${k}[${v.length}]`);
+    else out.push(`${k}=obj`);
+  }
+  return out.length === 0 ? 'none' : out.join(' ');
+}
+
 /** 请求/响应关联:转发挂超时定时器,code 回包直接回发 WS;localPending 仅存定时器/ping 等待 */
 export class Router {
   private localPending = new Map<string, Pending>();
@@ -213,7 +235,12 @@ export class Router {
           code: 'forward_timeout',
           // i18n-exempt: 该文案随错误包上行给 MCP(模型读),语言归 MCP 侧,
           // 不跟面板 locale 走(见 0016「两处语言可以不同步」)
-          message: '插件响应超时',
+          //
+          // 带上**本次调用的入参形状**:25s 超时只说明「没在预算内返回」,而根因可能是
+          // scope=document 全量加载 / ids 深读 / depth 过大深序列化。这三条分支在
+          // 上报的 message 里原来是无法区分的(实测 find 连续 57 次超时,只能猜)。
+          // 只放标量与数组长度,不放 id 内容本身 —— 诊断够用,又不会把画布细节带出去。
+          message: `插件响应超时(入参 ${describeParamsForTimeout(msg.params)})`,
         });
       }
     }, UI_FORWARD_TIMEOUT_MS);

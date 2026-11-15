@@ -98,7 +98,11 @@ export class PendingManager {
       if (signal) {
         if (signal.aborted) {
           clearTimeout(entry.timer);
-          reject(new BridgeError('cancelled', `请求已取消: ${method}`));
+          // 未发出就已取消:与「发出后被取消」区分,否则两者在报错里长得一样,
+          // 排查时分不清是调用方连调都没让发,还是发出去一半被掐断。
+          reject(
+            new BridgeError('cancelled', `请求已取消(尚未发出): ${method}`),
+          );
           return;
         }
         entry.abort = {
@@ -107,8 +111,15 @@ export class PendingManager {
             if (this.pending.delete(id)) {
               clearTimeout(entry.timer);
               this.detachAbort(entry);
-              log(`请求取消: ${id} ${method} 耗时=${Date.now() - startedAt}ms`);
-              reject(new BridgeError('cancelled', `请求已取消: ${method}`));
+              const elapsed = Date.now() - startedAt;
+              log(`请求取消: ${id} ${method} 耗时=${elapsed}ms`);
+              // 带上已耗时:取消发生在 3ms 还是 24s,指向完全不同的原因(连点重复调 / 逼近超时)。
+              reject(
+                new BridgeError(
+                  'cancelled',
+                  `请求已取消: ${method}(已耗时 ${elapsed}ms)`,
+                ),
+              );
             }
           },
         };

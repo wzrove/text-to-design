@@ -92,6 +92,11 @@ export interface BridgeToolDef {
   /** 插件端方法名;与 run 二选一 */
   method?: PluginMethod;
   inputSchema?: z.ZodType;
+  /**
+   * 越界字段 → 它真正所属的工具(可选)。只在跨类型误用时给归属,
+   * 见 core/schema-error.ts 的 unexpectedKeysMessage。
+   */
+  fieldOwnership?: ReadonlyMap<string, { tool: string }>;
   outputSchema: z.ZodType;
   /** 四个 hint 全部必填(见 ToolHints) */
   annotations: ToolHints;

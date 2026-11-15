@@ -270,7 +270,14 @@ export const visualPropsSchema = z.object({
     .object({
       startingAngle: z.number().describe('schema.sharedProps.startingAngle'),
       endingAngle: z.number().describe('schema.sharedProps.endingAngle'),
-      innerRadius: z.number().describe('schema.sharedProps.innerRadius2'),
+      // 必填而非缺省 0:实心扇形要显式写 innerRadius: 0。
+      // 省略时引擎不会替你补 0,是**整个 arcData 无效**,故在此写清而不是留给人猜。
+      innerRadius: z
+        .number()
+        .describe(
+          '必填,不要省略。0 = 实心扇形/饼图;省略不会自动取 0,arcData 缺它整份无效。' +
+            '(schema.sharedProps.innerRadius2)',
+        ),
     })
     .optional()
     .describe('schema.sharedProps.innerRadius3'),
