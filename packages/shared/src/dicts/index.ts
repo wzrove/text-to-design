@@ -6,6 +6,7 @@
  */
 export * from './boolean-operation';
 export * from './capability';
+export * from './node-reference';
 export * from './enum-values';
 export * from './error-code';
 export * from './error-report';

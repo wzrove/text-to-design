@@ -345,7 +345,7 @@ function Shell() {
 
           <ConnectionHint />
 
-          <SelectionCard data={selection()} fill={!canResize()} />
+          <SelectionCard snapshot={selection()} fill={!canResize()} />
 
           <CapabilityCard />
 

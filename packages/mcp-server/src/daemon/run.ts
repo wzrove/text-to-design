@@ -8,7 +8,7 @@ import {
   toNodeHandler,
 } from '@modelcontextprotocol/node';
 import { createMcpHandler } from '@modelcontextprotocol/server';
-import { HEARTBEAT_MS } from 'text-to-design-shared';
+import { copyResultSchema, HEARTBEAT_MS } from 'text-to-design-shared';
 import type { Bridge } from '../bridge';
 import {
   DAEMON_POLL_MS,
@@ -21,6 +21,7 @@ import {
   STARTED_AT,
 } from '../config';
 import { getConsent, initConsent, isAsked, writeConsent } from '../consent';
+import { lookupExecutor } from '../core/registry';
 import { debug, error, log, warn } from '../logger';
 import { buildServer } from '../server';
 import { captureError, flushTelemetry, stopTelemetry } from '../telemetry';
@@ -117,6 +118,31 @@ export async function runDaemon(bridge: Bridge): Promise<void> {
     attachSkills(server, skills);
     return server;
   });
+  bridge.onCopyRequest = async (params, signal) => {
+    const lease = pool.acquire();
+    if (lease == null) throw new Error('MCP server busy; retry Copy later');
+    try {
+      const execute = lookupExecutor('jsd_copy', lease.server);
+      if (execute == null) throw new Error('jsd_copy executor 未注册');
+      const result = (await execute(
+        { ...params },
+        signal,
+      )) as {
+        structuredContent?: unknown;
+        isError?: boolean;
+        content?: { type: string; text?: string }[];
+      };
+      if (result.isError === true) {
+        throw new Error(
+          result.content?.map((item) => item.text ?? '').join('\n') ||
+            'jsd_copy 执行失败',
+        );
+      }
+      return copyResultSchema.parse(result.structuredContent);
+    } finally {
+      lease.release();
+    }
+  };
   const requestLease = new AsyncLocalStorage<ServerLease>();
   const handler = createMcpHandler(
     () => {

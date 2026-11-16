@@ -1,7 +1,15 @@
 import { createEffect, createMemo, createSignal, For, Show } from 'solid-js';
-import type { NodeType } from 'text-to-design-shared';
+import {
+  type CodeRole,
+  type CopyRequest,
+  type NodeType,
+  normalizeCodeRoles,
+  type SelectionSummarySnapshot,
+} from 'text-to-design-shared';
+import { useBridge } from '../bridge/useBridge';
 import { t } from '../i18n/useLocale';
 import { copyWithToast } from '../utils/clipboard';
+import { showToast } from '../utils/toast';
 import CollapsibleSection, { Trigger } from './CollapsibleSection';
 
 interface SelectedNode {
@@ -12,11 +20,6 @@ interface SelectedNode {
   height?: number;
 }
 
-// 类型色点:用主题里预置的 dot-* 分类色槽(见 src/index.css),换色只改那一处,
-// 组件零改动;类型名始终有文字呈现,颜色仅辅助。
-// 键集按 shared 节点类型字典穷举(Record<NodeType,…>)——字典新增类型这里会编译报错,不会静默漏色。
-// Figma 独有的只读类型(SECTION/STICKY/TABLE…)没有专属色点,走 dotClass 的灰色兜底:
-// 灰=本仓未建模、只能看不能建,与「建模过的 14 类」在视觉上就区分开。
 const TYPE_DOT: Record<NodeType, string> = {
   SLICE: 'bg-dot-slice',
   FRAME: 'bg-dot-frame',
@@ -38,131 +41,233 @@ function dotClass(type: string): string {
   return (TYPE_DOT as Record<string, string>)[type] ?? 'bg-base-300';
 }
 
-/** 超过该数量的选中列表自动收起,给日志面板让位;手动展开/收起随时可切 */
 const AUTO_COLLAPSE_COUNT = 10;
 
-function formatSize(bytes: number): string {
-  return bytes < 1024 ? `${bytes} B` : `${(bytes / 1024).toFixed(1)} KB`;
-}
-
-/** 展开外壳走面板里唯一的实现(见 0026),本组件只负责选中节点这一层 */
 export default function SelectionCard(props: {
-  data: unknown;
-  /**
-   * 是否吃掉面板剩余高度(宿主不支持 `ui.resize` 时的降级布局,见
-   * docs/design-decisions/0014)。自适应生效时窗口贴着内容,根元素没有剩余高度
-   * 可吃,`flex-1` 反而会把「内容高度」撑成「窗口高度」而形成测量回环。
-   */
+  snapshot: SelectionSummarySnapshot;
   fill?: boolean;
 }) {
+  const { requestCopy, status } = useBridge();
   const nodes = createMemo<SelectedNode[]>(() => {
-    const data = props.data as
-      | { selection?: SelectedNode[] }
-      | null
-      | undefined;
-    return Array.isArray(data?.selection) ? data.selection : [];
+    const selection = props.snapshot.data?.selection;
+    return Array.isArray(selection) ? selection : [];
   });
-  const payload = createMemo(() => JSON.stringify(props.data ?? {}));
-  const size = createMemo(() => new TextEncoder().encode(payload()).length);
-
+  const hasValidSelection = createMemo(
+    () =>
+      nodes().length > 0 &&
+      nodes().every((node) => typeof node.id === 'string' && node.id.length > 0),
+  );
+  const [mode, setMode] = createSignal<CopyRequest['mode']>('design');
+  const [roles, setRoles] = createSignal<CodeRole[]>([]);
+  const [copying, setCopying] = createSignal(false);
   const [open, setOpen] = createSignal(true);
-  // 大批量选中时自动收起列表,避免长期霸屏挤占日志面板
+  const copyDisabled = createMemo(
+    () =>
+      copying() ||
+      status() !== 'connected' ||
+      !hasValidSelection() ||
+      (mode() === 'code' && roles().length === 0),
+  );
+
   createEffect(() => {
     if (nodes().length > AUTO_COLLAPSE_COUNT) setOpen(false);
   });
 
+  function toggleRole(role: CodeRole, checked: boolean): void {
+    setRoles((current) =>
+      checked
+        ? current.includes(role)
+          ? current
+          : [...current, role]
+        : current.filter((item) => item !== role),
+    );
+  }
+
+  async function copy(
+    scope: 'selection' | 'node',
+    nodeId?: string,
+  ): Promise<void> {
+    if (copying()) return;
+    let request: CopyRequest;
+    try {
+      const requestMode = mode();
+      const base = {
+        scope,
+        requestedIds:
+          scope === 'node' ? [nodeId ?? ''] : nodes().map((node) => node.id),
+        source: {
+          platform: props.snapshot.meta?.platform ?? null,
+          pageName: props.snapshot.data?.pageName ?? null,
+          selectionSeq: props.snapshot.meta?.selectionSeq ?? null,
+        },
+      };
+      request =
+        requestMode === 'code'
+          ? { ...base, mode: 'code', roles: normalizeCodeRoles(roles()) }
+          : { ...base, mode: 'design' };
+    } catch (e) {
+      console.debug('[ui] Copy 请求构造失败', e);
+      showToast(t('toast.copy.failed'), 'error');
+      return;
+    }
+    setCopying(true);
+    try {
+      const result = await requestCopy(request);
+      await copyWithToast(result.text);
+    } catch (e) {
+      console.debug('[ui] MCP Copy 失败', e);
+      showToast(t('toast.copy.failed'), 'error');
+    } finally {
+      setCopying(false);
+    }
+  }
+
   return (
-    /*
-      收起时整块退回标题行(`CollapsibleSection`):`fill` 的 `flex-1` 挂在**卡片**上,
-      而卡片收起后只剩标题行,剩余高度自然回到面板手里 —— 不再有「卡片吃满高度、
-      里面却空着」的那一小块谁都没占的空白。
-    */
-    <CollapsibleSection
-      open={open()}
-      openChange={setOpen}
-      class={props.fill ? 'min-h-0 flex-1' : ''}
-      bodyId="selection-body"
-      bodyClass={`flex min-h-0 flex-col overflow-y-auto p-1 ${
-        props.fill ? 'flex-1' : 'max-h-36'
-      }`}
-      header={
-        <div class="flex items-center justify-between gap-2 border-b border-base-200 px-2.5 py-1.5">
-          <div class="flex min-w-0 items-center gap-2">
-            <h2 class="text-xs font-bold text-base-content/70">
-              {t('selection.title')}
-            </h2>
+    <div class={'flex min-h-0 flex-col ' + (props.fill ? 'flex-1' : '')}>
+      <div class="mb-1 flex shrink-0 items-center gap-3 px-1">
+        <div
+          class="join shrink-0"
+          role="group"
+          aria-label={t('selection.code.modeLabel')}
+        >
+          <button
+            type="button"
+            class={
+              'btn join-item btn-xs ' +
+              (mode() === 'design' ? 'btn-active' : 'btn-ghost')
+            }
+            aria-pressed={mode() === 'design'}
+            onClick={() => setMode('design')}
+          >
+            {t('selection.code.design')}
+          </button>
+          <button
+            type="button"
+            class={
+              'btn join-item btn-xs ' +
+              (mode() === 'code' ? 'btn-active' : 'btn-ghost')
+            }
+            aria-pressed={mode() === 'code'}
+            onClick={() => setMode('code')}
+          >
+            {t('selection.code.code')}
+          </button>
+        </div>
+        <Show when={mode() === 'code'}>
+          <div class="flex items-center gap-3 whitespace-nowrap text-xs">
+            <label class="flex cursor-pointer items-center gap-1">
+              <input
+                type="checkbox"
+                class="checkbox checkbox-xs rounded-sm"
+                checked={roles().includes('frontend')}
+                onChange={(e) => toggleRole('frontend', e.currentTarget.checked)}
+              />
+              {t('selection.code.frontend')}
+            </label>
+            <label class="flex cursor-pointer items-center gap-1">
+              <input
+                type="checkbox"
+                class="checkbox checkbox-xs rounded-sm"
+                checked={roles().includes('backend')}
+                onChange={(e) => toggleRole('backend', e.currentTarget.checked)}
+              />
+              {t('selection.code.backend')}
+            </label>
+          </div>
+        </Show>
+      </div>
+
+      <CollapsibleSection
+        open={open()}
+        openChange={setOpen}
+        class={props.fill ? 'min-h-0 flex-1' : ''}
+        bodyId="selection-body"
+        bodyClass={
+          'flex min-h-0 flex-col overflow-y-auto p-1 ' +
+          (props.fill ? 'flex-1' : 'max-h-36')
+        }
+        header={
+          <div class="flex items-center justify-between gap-2 border-b border-base-200 px-2.5 py-1.5">
+            <div class="flex min-w-0 items-center gap-2">
+              <h2 class="text-xs font-bold text-base-content/70">
+                {t('selection.title')}
+              </h2>
+              <Show when={nodes().length > 0}>
+                <span class="badge badge-sm badge-ghost border-base-300 font-mono text-[10px] text-base-content/60">
+                  {t('selection.badge', { count: nodes().length })}
+                </span>
+              </Show>
+            </div>
             <Show when={nodes().length > 0}>
-              <span class="badge badge-sm badge-ghost border-base-300 font-mono text-[10px] text-base-content/60">
-                {t('selection.badge', {
-                  count: nodes().length,
-                  size: formatSize(size()),
-                })}
-              </span>
+              <div class="flex shrink-0 items-center gap-1">
+                <button
+                  type="button"
+                  class="btn btn-xs btn-primary"
+                  disabled={copyDisabled()}
+                  onClick={() => copy('selection')}
+                >
+                  {t('selection.copy')}
+                </button>
+                <Trigger
+                  open={open()}
+                  controls="selection-body"
+                  onClick={() => setOpen((value) => !value)}
+                />
+              </div>
             </Show>
           </div>
-          <Show when={nodes().length > 0}>
-            <div class="flex shrink-0 items-center gap-1">
-              <button
-                type="button"
-                class="btn btn-xs btn-primary"
-                onClick={() => copyWithToast(payload())}
-              >
-                {t('selection.copy')}
-              </button>
-              <Trigger
-                open={open()}
-                controls="selection-body"
-                onClick={() => setOpen((v) => !v)}
-              />
-            </div>
-          </Show>
-        </div>
-      }
-    >
-      <Show
-        when={nodes().length > 0}
-        fallback={
-          <p
-            class={`px-2.5 py-4 text-center text-xs text-base-content/70 ${
-              props.fill
-                ? 'flex flex-1 flex-col items-center justify-center'
-                : ''
-            }`}
-          >
-            {t('selection.empty.title')}
-            <br />
-            <span class="text-base-content/60">
-              {t('selection.empty.hint')}
-            </span>
-          </p>
         }
       >
-        <For each={nodes()}>
-          {(n) => (
-            <div class="flex items-center gap-2 rounded px-2 py-1.5 transition-colors hover:bg-base-200">
-              <span
-                class={`size-1.5 inline-block shrink-0 rounded-full ${dotClass(n.type)}`}
-              />
-              <div class="min-w-0 flex-1 truncate font-mono text-xs">
-                <span class="text-base-content">{n.name}</span>
-                {/* 类型/尺寸是有用信息而非装饰,/65 保住对比度又弱于主名 */}
-                <span class="text-base-content/65">
-                  {' '}
-                  · {n.type}
-                  {n.width != null ? ` · ${n.width}×${n.height}` : ''}
-                </span>
+        <Show
+          when={nodes().length > 0}
+          fallback={
+            <p
+              class={
+                'px-2.5 py-4 text-center text-xs text-base-content/70 ' +
+                (props.fill
+                  ? 'flex flex-1 flex-col items-center justify-center'
+                  : '')
+              }
+            >
+              {t('selection.empty.title')}
+              <br />
+              <span class="text-base-content/60">
+                {t('selection.empty.hint')}
+              </span>
+            </p>
+          }
+        >
+          <For each={nodes()}>
+            {(node) => (
+              <div class="flex items-center gap-2 rounded px-2 py-1.5 transition-colors hover:bg-base-200">
+                <span
+                  class={
+                    'size-1.5 inline-block shrink-0 rounded-full ' +
+                    dotClass(node.type)
+                  }
+                />
+                <div class="min-w-0 flex-1 truncate font-mono text-xs">
+                  <span class="text-base-content">{node.name}</span>
+                  <span class="text-base-content/65">
+                    {' · ' + node.type}
+                    {node.width != null
+                      ? ' · ' + node.width + '×' + node.height
+                      : ''}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  class="btn btn-xs btn-ghost shrink-0"
+                  disabled={copyDisabled()}
+                  onClick={() => copy('node', node.id)}
+                >
+                  {t('selection.copy')}
+                </button>
               </div>
-              <button
-                type="button"
-                class="btn btn-xs btn-ghost shrink-0"
-                onClick={() => copyWithToast(n.id)}
-              >
-                {t('selection.copy')}
-              </button>
-            </div>
-          )}
-        </For>
-      </Show>
-    </CollapsibleSection>
+            )}
+          </For>
+        </Show>
+      </CollapsibleSection>
+    </div>
   );
 }

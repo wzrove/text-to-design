@@ -7,7 +7,6 @@ import type {
   PluginPlatform,
   PluginRequest,
   PropMethod,
-  SerializedNode,
   UiMinimizeMessage,
 } from 'text-to-design-shared';
 import {
@@ -101,6 +100,7 @@ export function registerPlugin(
   // 画布时不移动相机。拦截收口在 host.viewport 契约层(见 shared/camera-lock.ts),
   // core 的各 scrollAndZoomIntoView 调用点不感知锁的存在。
   let cameraLocked = CAMERA_LOCK_DEFAULT;
+  let selectionSeq = 0;
   // 面板最小化态:旁路消息,见 shared/panel.ts
   let minimized = false;
   let panelTransitioning = false;
@@ -270,17 +270,15 @@ export function registerPlugin(
     const depth = params.depth ?? 2;
     return {
       selection: selection.map((n) => {
-        const s = trySerialize(n, depth);
-        if (s) return s;
-        // 单个节点读取失败(如含 dangling 子节点)时代为最小壳,不整体扑灭 selection
-        const fallback: SerializedNode = {
+        const serialized = trySerialize(n, depth);
+        if (serialized) return serialized;
+        return {
           id: n.id,
           name: n.name,
           type: n.type,
           x: Math.round(n.x) || 0,
           y: Math.round(n.y) || 0,
         };
-        return fallback;
       }),
       pageName: host.currentPage.name,
     };
@@ -290,10 +288,24 @@ export function registerPlugin(
     try {
       host.ui.postMessage({
         type: 'selection',
-        data: getSelection({ depth: 1 }),
+        data: {
+          selection: host.currentPage.selection.map((node) => ({
+            id: node.id,
+            name: node.name,
+            type: node.type,
+            width: node.width,
+            height: node.height,
+          })),
+          pageName: host.currentPage.name,
+        },
+        meta: {
+          platform,
+          observedAt: new Date().toISOString(),
+          selectionSeq: ++selectionSeq,
+        },
       });
     } catch (e) {
-      console.error('[plugin] 推送选中失败', e);
+      console.error('[plugin] 推送选中摘要失败', e);
     }
   }
 

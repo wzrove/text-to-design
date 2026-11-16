@@ -4,6 +4,8 @@ import type { ToolHandle } from '../core/tool-def';
 import type { McpI18n } from '../i18n';
 import { registerBatchTools } from './batch';
 import { registerComponentTools } from './components';
+import { registerCopyTools } from './copy';
+import { registerCodeResources } from './code-resources';
 import { registerCreateTools } from './create';
 import { registerDiscoveryTools } from './discovery';
 import { registerManageTools } from './manage';
@@ -31,6 +33,7 @@ export type RegisterTools = (
 
 export const toolRegistrars: RegisterTools[] = [
   registerSessionTools,
+  registerCopyTools,
   registerCreateTools,
   registerModifyTools,
   // 从聚合入口拆出的单职责小工具(节点结构 / 组件 / 属性)
@@ -44,6 +47,7 @@ export const toolRegistrars: RegisterTools[] = [
   registerPlatformTools,
   registerResources,
   registerRecipeResources,
+  registerCodeResources,
   // 配方 prompt 不依赖插件连接,恒可用
   (server, _bridge, i18n) => registerPrompts(server, i18n),
   registerDiscoveryTools,

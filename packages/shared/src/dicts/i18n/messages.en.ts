@@ -123,8 +123,13 @@ export const MESSAGES_EN = {
   'panel.close': 'Close',
 
   'selection.title': 'Selected nodes',
-  'selection.badge': '{count} nodes · {size} serialized',
+  'selection.badge': '{count} nodes',
   'selection.copy': 'Copy',
+  'selection.code.design': 'Design',
+  'selection.code.code': 'Code',
+  'selection.code.modeLabel': 'Copy task mode',
+  'selection.code.frontend': 'Frontend',
+  'selection.code.backend': 'Backend',
   'selection.empty.title': 'No nodes selected',
   'selection.empty.hint':
     'Select nodes on the canvas and they show up here, ready to copy',
@@ -730,6 +735,8 @@ export const MESSAGES_EN = {
   'resources.title6': 'Platform state and capabilities',
   'resources.title7': 'Recipe index',
   'resources.title8': 'Recipe body',
+  'resources.title9': 'design-to-code contract index',
+  'resources.title10': 'design-to-code contract entry',
   'ping.followUp':
     'Read the current selection once the connection is confirmed. **Creation tasks: read the recipe at step 0** (hosts generally do not inject server instructions, so mcp.instructions is dropped; you must fetch it yourself): ReadMcpResource skill://canvas/SKILL.md for the index — charts/dataviz -> skill://canvas/references/chart-by-code.md, whole-page design -> skill://canvas/references/design-strategy.md + skill://canvas/references/auto-layout.md, bulk rework -> skill://canvas/references/script-ops.md. The cost of skipping is measurable: one full-screen task ran step by step with no recipe, flattened 38 nodes onto one layer, and needed multiple rounds of rework',
   'getSelection.title': 'Read canvas selection',

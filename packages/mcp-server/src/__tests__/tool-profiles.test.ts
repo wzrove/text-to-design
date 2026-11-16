@@ -33,9 +33,9 @@ describe('tool catalog profiles', () => {
     try {
       const all = (await full.client.listTools()).tools;
       const core = (await compact.client.listTools()).tools;
-      expect(all).toHaveLength(58);
-      expect(core).toHaveLength(26);
-      expect(new Set(core.map((tool) => tool.name)).size).toBe(26);
+      expect(all).toHaveLength(59);
+      expect(core).toHaveLength(27);
+      expect(new Set(core.map((tool) => tool.name)).size).toBe(27);
       expect(core.some((tool) => tool.name === 'jsd_describe_tools')).toBe(
         true,
       );
@@ -50,6 +50,8 @@ describe('tool catalog profiles', () => {
         lookupExecutor('jsd_detach_instance', compact.server),
       ).toBeDefined();
       expect(lookupExecutor('jsd_get_prompt', compact.server)).toBeDefined();
+      expect(lookupExecutor('jsd_copy', compact.server)).toBeDefined();
+      expect(core.some((tool) => tool.name === 'jsd_copy')).toBe(true);
     } finally {
       await compact.close();
       await full.close();

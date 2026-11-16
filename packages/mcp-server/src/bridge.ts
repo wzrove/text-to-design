@@ -2,11 +2,20 @@ import type {
   ActivityPhase,
   ActivityPushFrame,
   ConsentPushFrame,
+  CopyRequest,
+  CopyResult,
   LogRecord,
   ServerPush,
   VersionPushFrame,
 } from 'text-to-design-shared';
-import { isConsentSetFrame, isUiVersionFrame } from 'text-to-design-shared';
+import {
+  copyRequestFrameSchema,
+  copyResultSchema,
+  isConsentSetFrame,
+  isCopyRequestFrame,
+  isUiVersionFrame,
+  makeResponse,
+} from 'text-to-design-shared';
 import { BridgeError } from './core/bridge-error';
 import { log, warn } from './logger';
 import type { PluginMethod, RequestOptions } from './pending';
@@ -23,6 +32,11 @@ export class Bridge {
   private pending: PendingManager;
   /** 离线期间攒下的日志(旧→新),上线回放后清空 */
   private logRing: ServerPush[] = [];
+  private copyControllers = new Map<string, AbortController>();
+
+  onCopyRequest:
+    | ((params: CopyRequest, signal: AbortSignal) => Promise<CopyResult>)
+    | null = null;
 
   /** 插件连接状态变化(true=已连上,false=断开),用于日志/状态推送与目录同步 */
   onConnectionChange: ((connected: boolean) => void) | null = null;
@@ -56,6 +70,10 @@ export class Bridge {
       // 原样交 pending.onText(会再解析一次 —— 消息频率是工具调用级,不值得改协议层)
       try {
         const parsed: unknown = JSON.parse(raw.toString());
+        if (isCopyRequestFrame(parsed)) {
+          this.handleCopyRequest(parsed);
+          return;
+        }
         if (isConsentSetFrame(parsed)) {
           this.onConsentSet?.(parsed.granted);
           return;
@@ -77,9 +95,49 @@ export class Bridge {
       this.onConnectionChange?.(true);
     };
     this.transport.onDisconnect = (err) => {
+      for (const controller of this.copyControllers.values()) controller.abort();
+      this.copyControllers.clear();
       this.pending.rejectAll(err);
       this.onConnectionChange?.(false);
     };
+  }
+
+  private handleCopyRequest(frame: {
+    id: string;
+    params: unknown;
+  }): void {
+    const fail = (e: unknown): void => {
+      this.transport.sendPush(
+        JSON.stringify(
+          makeResponse(frame.id, false, undefined, {
+            code: 'engine_error',
+            message: e instanceof Error ? e.message : String(e),
+          }),
+        ),
+      );
+    };
+    const parsed = copyRequestFrameSchema.safeParse(frame);
+    if (!parsed.success) {
+      fail(new Error('jsd_copy 参数无效:' + parsed.error.issues[0]?.message));
+      return;
+    }
+    const callback = this.onCopyRequest;
+    if (callback == null) {
+      fail(new Error('daemon 尚未装配 jsd_copy'));
+      return;
+    }
+    const controller = new AbortController();
+    this.copyControllers.set(frame.id, controller);
+    void callback(parsed.data.params, controller.signal)
+      .then((result) => {
+        this.transport.sendPush(
+          JSON.stringify(
+            makeResponse(frame.id, true, copyResultSchema.parse(result)),
+          ),
+        );
+      })
+      .catch(fail)
+      .finally(() => this.copyControllers.delete(frame.id));
   }
 
   get port(): number {
@@ -91,6 +149,8 @@ export class Bridge {
   }
 
   stop(): void {
+    for (const controller of this.copyControllers.values()) controller.abort();
+    this.copyControllers.clear();
     this.pending.clear();
     this.logRing = [];
     this.transport.stop();

@@ -9,8 +9,11 @@ import {
 } from 'solid-js';
 import type {
   ActivityPhase,
+  CopyRequest,
+  CopyResult,
   LogRecord,
   PluginPlatform,
+  SelectionSummarySnapshot,
 } from 'text-to-design-shared';
 import {
   ACTIVITY_SETTLE_MS,
@@ -40,7 +43,8 @@ export interface BridgeStore {
   status: Accessor<BridgeStatus>;
   port: Accessor<number>;
   log: Accessor<LogEntry[]>;
-  selection: Accessor<unknown>;
+  selection: Accessor<SelectionSummarySnapshot>;
+  requestCopy: (request: CopyRequest) => Promise<CopyResult>;
   platform: Accessor<PluginPlatform | null>;
   /** 插件能力表快照(核心/平台差异能力 + 特有 op 名单);未取到时为 null */
   capability: Accessor<CapabilitySnapshot | null>;
@@ -97,7 +101,9 @@ const BridgeContext = createContext<BridgeStore>();
 export function BridgeProvider(props: ParentProps) {
   const [status, setStatus] = createSignal<BridgeStatus>('disconnected');
   const [log, setLog] = createSignal<LogEntry[]>([]);
-  const [selection, setSelection] = createSignal<unknown>(null);
+  const [selection, setSelection] = createSignal<SelectionSummarySnapshot>({
+    data: null,
+  });
   const [platform, setPlatform] = createSignal<PluginPlatform | null>(null);
   const [capability, setCapability] = createSignal<CapabilitySnapshot | null>(
     null,
@@ -266,7 +272,9 @@ export function BridgeProvider(props: ParentProps) {
           // 掉线期间的选择补发一次,与 daemon 侧状态收敛(幂等,同值重发无害)
           if (consentChoice != null) b.setConsent(consentChoice);
         }
-      } else if (e.type === 'selection') setSelection(() => e.data);
+      } else if (e.type === 'selection') {
+        setSelection(() => ({ data: e.data, meta: e.meta }));
+      }
       else if (e.type === 'version') setLatest(() => e.latest);
       else if (e.type === 'platform') {
         setPlatform(() => e.platform);
@@ -295,6 +303,7 @@ export function BridgeProvider(props: ParentProps) {
     port: createSignal(WS_PORT)[0],
     log,
     selection,
+    requestCopy: (request) => getBridge().copy(request),
     platform,
     capability,
     canResize,

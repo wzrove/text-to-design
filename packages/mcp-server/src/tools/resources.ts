@@ -1,5 +1,10 @@
 import { type McpServer, ResourceTemplate } from '@modelcontextprotocol/server';
-import type { MessageKey } from 'text-to-design-shared';
+import {
+  findResultSchema,
+  type MessageKey,
+  type NodeReference,
+  parseNodeReference,
+} from 'text-to-design-shared';
 import type { Bridge } from '../bridge';
 import { RESOURCE_DOCUMENT_TTL_MS, RESOURCE_FONTS_TTL_MS } from '../config';
 import type { ToolHandle } from '../core/tool-def';
@@ -31,6 +36,41 @@ function jsonContents(
       },
     ],
   };
+}
+
+function referenceDepth(reference: NodeReference): 1 | 2 {
+  return reference.mode === 'code' && !reference.roles.includes('frontend')
+    ? 1
+    : 2;
+}
+
+async function findReferenceNodes(
+  bridge: Bridge,
+  reference: NodeReference,
+): Promise<import('text-to-design-shared').SerializedNode[]> {
+  const byId = new Map<string, import('text-to-design-shared').SerializedNode>();
+  const depth = referenceDepth(reference);
+  for (let offset = 0; offset < reference.requestedIds.length; offset += 100) {
+    const ids = reference.requestedIds.slice(offset, offset + 100);
+    const result = findResultSchema.parse(
+      await bridge.request('find', { ids, depth }),
+    );
+    for (const node of result.nodes) byId.set(node.id, node);
+  }
+  const missing = reference.requestedIds.filter((id) => !byId.has(id));
+  if (missing.length > 0) {
+    throw new Error('节点引用中的 IDs 未返回或已失效:' + missing.join(', '));
+  }
+  return reference.requestedIds.map((id) => byId.get(id)!);
+}
+
+async function readNodeReference(bridge: Bridge, uri: URL) {
+  const reference = parseNodeReference(uri.href);
+  const nodes = await findReferenceNodes(bridge, reference);
+  if (reference.scope === 'selection') {
+    return { selection: nodes, pageName: reference.source.pageName };
+  }
+  return { nodes, total: nodes.length };
 }
 
 /**
@@ -110,6 +150,19 @@ export function registerResources(
     },
   );
 
+  const selectionReference = server.registerResource(
+    'selection-reference',
+    new ResourceTemplate('jsd://canvas/selection{+query}', { list: undefined }),
+    {
+      title: resourceTitle(t, 'resources.title'),
+      icons: resourceIcon(),
+      description:
+        '解析 Copy 生成的固定整组节点引用(v/mode/roles/platform/page/seq/id)。按链接 IDs 补读，不使用当前 selection 替代；支持重复 id 参数',
+      mimeType: 'application/json',
+    },
+    async (uri) => jsonContents(uri, await readNodeReference(bridge, uri)),
+  );
+
   const nodeTemplate = server.registerResource(
     'node',
     new ResourceTemplate('jsd://node/{id}', { list: undefined }),
@@ -121,6 +174,9 @@ export function registerResources(
       mimeType: 'application/json',
     },
     async (uri, vars) => {
+      if (uri.search) {
+        return jsonContents(uri, await readNodeReference(bridge, uri));
+      }
       const rawId = vars.id;
       const id = Array.isArray(rawId) ? rawId[0] : rawId;
       if (!id) throw new Error(`缺少节点 id: ${uri.href}`);
@@ -151,5 +207,13 @@ export function registerResources(
   );
 
   // 资源依赖插件在线:可用性由 Bridge.request 运行时兜底,不随连接隐藏
-  return [selection, fonts, styles, page, nodeTemplate, platformState];
+  return [
+    selection,
+    fonts,
+    styles,
+    page,
+    selectionReference,
+    nodeTemplate,
+    platformState,
+  ];
 }

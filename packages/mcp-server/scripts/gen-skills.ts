@@ -6,6 +6,10 @@ import {
   SKILL_DIR,
 } from '../src/skills/entries';
 import { readRecipeBody, recipeIds } from '../src/tools/recipe-catalog';
+import {
+  assertDesignToCodeSkill,
+  DESIGN_TO_CODE_DIR,
+} from '../src/skills/code-catalog';
 
 // 发布前同时校验 skill 引用与配方元数据，避免生成无法启动的包。
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -13,6 +17,7 @@ const OUT = join(ROOT, 'dist', 'skills');
 
 function main(): void {
   assertSkillGroupsCoverRecipes();
+  assertDesignToCodeSkill();
   for (const id of recipeIds()) {
     if (readRecipeBody(id).trim() === '')
       throw new Error(`Empty recipe: ${id}`);
@@ -22,6 +27,9 @@ function main(): void {
   rmSync(OUT, { recursive: true, force: true });
   mkdirSync(OUT, { recursive: true });
   cpSync(SKILL_DIR, join(OUT, 'canvas'), { recursive: true });
+  cpSync(DESIGN_TO_CODE_DIR, join(OUT, 'design-to-code'), {
+    recursive: true,
+  });
 
   console.log(`skills: 已复制 ${SKILL_DIR} → ${OUT}`);
 }

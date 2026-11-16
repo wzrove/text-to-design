@@ -46,6 +46,9 @@
 | [3f364c28](3f364c28-MCP目录精简档提议：核心工具常驻与低频能力按需发现.md) | MCP目录精简档提议：核心工具常驻与低频能力按需发现 | 已采纳 | mcp-server | 2026-11-01 |
 | [9517eea4](9517eea4-DesignHost-拆必选核心与可选能力面：core-不再靠-typeof-探测.md) | DesignHost 拆必选核心与可选能力面：core 不再靠 typeof 探测 | 已采纳 | `shared/core`、`ui/code` | 2026-11-13 |
 | [e06dbd23](e06dbd23-节点解析选路按平台声明：补完-e1e66f0a-遗留的-getNodeByIdAsync-半项.md) | 节点解析选路按平台声明：补完 e1e66f0a 遗留的 getNodeByIdAsync 半项 | 已采纳 | `shared/core`、`shared/dicts`、`ui/code` | 2026-11-15 |
+| [40bf4e19](40bf4e19-Code模式以会话配置组合接入：复用画布链路与宿主代码能力.md) | Code 模式以会话配置组合接入 | 已被取代 | shared、ui、mcp-server | 2026-11-17 |
+| [d1728d17](d1728d17-Code-Copy交接.md) | Code Copy 交接 | 已被取代 | ui、shared、mcp-server | 2026-11-17 |
+| [5598a4bb](5598a4bb-Code多选交接.md) | Code 多选交接 | 已采纳 | ui、shared、mcp-server | 2026-11-17 |
 
 ## 依赖关系
 

@@ -9,6 +9,8 @@ import type {
   PlatformOpInfo,
   PluginPlatform,
   PluginRequest,
+  SelectionMeta,
+  SelectionSummaryData,
 } from 'text-to-design-shared';
 
 export type { LogLevel };
@@ -40,7 +42,7 @@ export type BridgeStatus =
 export type BridgeEvent =
   | { type: 'status'; status: BridgeStatus }
   | { type: 'log'; record: LogRecord }
-  | { type: 'selection'; data: unknown }
+  | { type: 'selection'; data: SelectionSummaryData | null; meta?: SelectionMeta }
   | { type: 'platform'; platform: PluginPlatform }
   /** `chromeHeight` 已过 readChromeHeight 收口(缺省 → 兜底值,见 shared/panel.ts) */
   | {

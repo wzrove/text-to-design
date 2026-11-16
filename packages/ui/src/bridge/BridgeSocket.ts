@@ -1,4 +1,9 @@
-import { normalizeChromeHeight, WS_PORT } from 'text-to-design-shared';
+import {
+  type CopyRequest,
+  type CopyResult,
+  normalizeChromeHeight,
+  WS_PORT,
+} from 'text-to-design-shared';
 import { t } from '../i18n/useLocale';
 import { ConnectionManager } from './connection';
 import { EventBus } from './events';
@@ -30,8 +35,8 @@ export class BridgeSocket {
     this.router = new Router(this.conn, (record) =>
       this.events.emit({ type: 'log', record }),
     );
-    this.router.onSelection = (data) =>
-      this.events.emit({ type: 'selection', data });
+    this.router.onSelection = (data, meta) =>
+      this.events.emit({ type: 'selection', data, meta });
     this.router.onPlatform = (platform) =>
       this.events.emit({ type: 'platform', platform });
     this.router.onEnv = (env) =>
@@ -158,6 +163,10 @@ export class BridgeSocket {
 
   pingPlugin(): Promise<unknown> {
     return this.router.pingPlugin();
+  }
+
+  copy(request: CopyRequest): Promise<CopyResult> {
+    return this.router.copy(request);
   }
 
   probeServer(): void {

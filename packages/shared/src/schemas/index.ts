@@ -1,5 +1,6 @@
 export * from './base';
 export * from './batch';
+export * from './copy';
 export * from './derived';
 export * from './execute';
 export * from './execute-op';

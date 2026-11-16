@@ -130,8 +130,13 @@ export const MESSAGES_ZH_CN = {
 
   // ── 选中节点卡 ──
   'selection.title': '选中节点',
-  'selection.badge': '{count} 个 · 序列化 {size}',
+  'selection.badge': '{count} 个',
   'selection.copy': '复制',
+  'selection.code.design': '设计',
+  'selection.code.code': 'Code',
+  'selection.code.modeLabel': 'Copy 任务模式',
+  'selection.code.frontend': '前端',
+  'selection.code.backend': '后端',
   'selection.empty.title': '未选中节点',
   'selection.empty.hint': '在画布中点选节点后,这里会实时显示并支持复制',
 
@@ -681,6 +686,8 @@ export const MESSAGES_ZH_CN = {
   'resources.title6': '平台状态与能力表',
   'resources.title7': '配方索引',
   'resources.title8': '配方正文',
+  'resources.title9': 'design-to-code 契约索引',
+  'resources.title10': 'design-to-code 契约正文',
   'ping.followUp':
     '连接确认后读取当前选中。**创作类任务在第 0 步读配方**(宿主普遍不注入 server instructions,mcp.instructions 读了也白读,只能自己主动读):先 ReadMcpResource skill://canvas/SKILL.md 拿索引 —— 画图表 / 数据可视化读 skill://canvas/references/chart-by-code.md,从零设计整页读 skill://canvas/references/design-strategy.md + skill://canvas/references/auto-layout.md,批量改造读 skill://canvas/references/script-ops.md。跳过配方的代价可量化:实测一次整屏任务全程单步调用、没读任何配方,38 个节点全平铺在一层,返工多轮',
   'getSelection.title': '读取画布选中',

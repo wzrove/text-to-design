@@ -2,6 +2,9 @@ import type {
   ActivityPushFrame,
   ConsentPushFrame,
   ConsentSetFrame,
+  CopyRequest,
+  CopyRequestFrame,
+  CopyResult,
   LocaleChoice,
   LocaleStateMessage,
   LogRecord,
@@ -9,15 +12,20 @@ import type {
   PluginPlatform,
   PluginRequest,
   PluginResponse,
+  SelectionMeta,
+  SelectionSummaryData,
   ServerPush,
   ServerStatusFrame,
   UiEnvMessage,
   VersionPushFrame,
 } from 'text-to-design-shared';
 import {
+  COPY_REQUEST_TIMEOUT_MS,
   isActivityPushFrame,
   isConsentPushFrame,
   isVersionPushFrame,
+  selectionMetaSchema,
+  selectionSummaryDataSchema,
   toStoredChoice,
   UI_FORWARD_TIMEOUT_MS,
 } from 'text-to-design-shared';
@@ -56,7 +64,9 @@ export class Router {
   private emit: (record: LogRecord) => void;
 
   /** 插件主动推送的选中状态(selectionchange) */
-  onSelection: ((data: unknown) => void) | null = null;
+  onSelection:
+    | ((data: SelectionSummaryData | null, meta?: SelectionMeta) => void)
+    | null = null;
 
   /** 插件主动推送的当前平台(jsdesign/figma) */
   onPlatform: ((platform: PluginPlatform) => void) | null = null;
@@ -100,6 +110,32 @@ export class Router {
   pingPlugin(): Promise<unknown> {
     const id = `ui-ping-${Date.now()}-${this.globalSeq++}`;
     return this.sendToCode({ type: 'request', id, method: 'ping', params: {} });
+  }
+
+  copy(request: CopyRequest): Promise<CopyResult> {
+    const frame: CopyRequestFrame = {
+      type: 'request',
+      id: 'ui-copy-' + Date.now() + '-' + this.globalSeq++,
+      method: 'jsd_copy',
+      params: request,
+    } as CopyRequestFrame;
+    const ws = this.conn.ws;
+    if (ws == null || ws.readyState !== WebSocket.OPEN) {
+      return Promise.reject(new Error(t('bridge.log.pluginTimeout')));
+    }
+    const promise = new Promise<CopyResult>((resolve, reject) => {
+      this.localPending.set(frame.id, {
+        resolve: (data) => resolve(data as CopyResult),
+        reject,
+        timer: window.setTimeout(() => {
+          if (this.localPending.delete(frame.id)) {
+            reject(new Error(t('bridge.log.pluginTimeout')));
+          }
+        }, COPY_REQUEST_TIMEOUT_MS),
+      });
+    });
+    ws.send(JSON.stringify(frame));
+    return promise;
   }
 
   /** 向 daemon 发 ping 探测(daemon 自动回 pong),用于确认连接双向可达 */
@@ -175,6 +211,14 @@ export class Router {
     ) {
       // daemon 对 ping 探测的自动回包 → 双向可达
       this.onServerPong?.();
+      return;
+    }
+    if (msg.type === 'response' && this.localPending.has(msg.id)) {
+      const entry = this.localPending.get(msg.id)!;
+      this.localPending.delete(msg.id);
+      clearTimeout(entry.timer);
+      if (msg.ok) entry.resolve?.(msg.data);
+      else entry.reject?.(new Error(msg.error?.message ?? 'jsd_copy error'));
       return;
     }
     if (msg.type === 'request') {
@@ -287,7 +331,7 @@ export class Router {
       const pm = readCodeMessage(event.data) as
         | PluginRequest
         | PluginResponse
-        | { type: 'selection'; data: unknown }
+        | { type: 'selection'; data: unknown; meta?: unknown }
         | { type: 'platform'; platform: PluginPlatform }
         | UiEnvMessage
         | LocaleStateMessage
@@ -303,7 +347,13 @@ export class Router {
         return;
       }
       if (pm.type === 'selection') {
-        this.onSelection?.(pm.data);
+        const meta =
+          pm.meta == null ? null : selectionMetaSchema.safeParse(pm.meta);
+        const summary = selectionSummaryDataSchema.safeParse(pm.data);
+        this.onSelection?.(
+          summary.success ? summary.data : null,
+          meta?.success ? meta.data : undefined,
+        );
         return;
       }
       if (pm.type === 'platform') {
