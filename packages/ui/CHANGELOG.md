@@ -1,5 +1,24 @@
 # text-to-design-ui
 
+## 0.12.7
+
+### Patch Changes
+
+- [`57e900c`](https://github.com/wzrove/text-to-design/commit/57e900cba18a666618e780de82bedbba18cf64d9) Thanks [@wzrove](https://github.com/wzrove)! - refactor: improve code readability and consistency across tests and implementations
+
+- [`6d659bc`](https://github.com/wzrove/text-to-design/commit/6d659bccc59f8f8fc77b630a19f178ae87cb2a0c) Thanks [@wzrove](https://github.com/wzrove)! - fix(core): 节点解析改按平台声明选路,修即时设计周期性挂死
+  
+  resolveOne 不再用 typeof 探测 getNodeByIdAsync:即时设计 host 是 Object.create(native),
+  该成员运行时存在但永不 settle,await 撞满 25s 转发上限且 catch 不到 —— 凡按 ids 解析
+  节点的工具周期性挂死。新增 flow 能力位 nodeResolveSync(即时设计声明,Figma / MasterGo
+  不声明),resolveNodes / resolveNodesMap 透传 ctx,所有调用点补齐;ctx 未注入时退回
+  typeof 探测(fail-open)。shared 为 private 包,其源码 bundle 进两个包的 dist,故两包同出。
+
+- [`e82109f`](https://github.com/wzrove/text-to-design/commit/e82109ff7989ab65d3cd5c6dcb69ab787cbfc615) Thanks [@wzrove](https://github.com/wzrove)! - fix(ui): 转发超时报错带本次入参摘要
+  
+  只放标量与数组长度,用于区分 scope=document 全量加载 / ids 深读 / depth 过大三条
+  顶穿 25s 预算的分支;不展开内容,不把画布细节带出去。
+
 ## 0.12.6
 
 ### Patch Changes

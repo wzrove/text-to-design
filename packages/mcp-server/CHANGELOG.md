@@ -1,5 +1,27 @@
 # text-to-design-mcp
 
+## 0.13.11
+
+### Patch Changes
+
+- [`57e900c`](https://github.com/wzrove/text-to-design/commit/57e900cba18a666618e780de82bedbba18cf64d9) Thanks [@wzrove](https://github.com/wzrove)! - refactor: improve code readability and consistency across tests and implementations
+
+- [`e82109f`](https://github.com/wzrove/text-to-design/commit/e82109ff7989ab65d3cd5c6dcb69ab787cbfc615) Thanks [@wzrove](https://github.com/wzrove)! - fix(mcp): 参数校验报错补归属与归一化,减少无效重试
+  
+  create 工具注入 fieldOwnership:越界字段全部属于另一 create 工具时点名该工具;
+  jsd_export 接受单数 id 并在校验前归一化为 ids;ids 数组空位收成一条顶层 issue 并给出
+  成因(用 superRefine 而非 transform,保住 toJSONSchema);arcData.innerRadius 描述明确
+  必填;图标别名归一化后二次查表、目标缺失继续走模糊层,未知图标报错带图标库规模与
+  lucide-static 版本;取消错误区分「尚未发出」并带已耗时。
+
+- [`6d659bc`](https://github.com/wzrove/text-to-design/commit/6d659bccc59f8f8fc77b630a19f178ae87cb2a0c) Thanks [@wzrove](https://github.com/wzrove)! - fix(core): 节点解析改按平台声明选路,修即时设计周期性挂死
+  
+  resolveOne 不再用 typeof 探测 getNodeByIdAsync:即时设计 host 是 Object.create(native),
+  该成员运行时存在但永不 settle,await 撞满 25s 转发上限且 catch 不到 —— 凡按 ids 解析
+  节点的工具周期性挂死。新增 flow 能力位 nodeResolveSync(即时设计声明,Figma / MasterGo
+  不声明),resolveNodes / resolveNodesMap 透传 ctx,所有调用点补齐;ctx 未注入时退回
+  typeof 探测(fail-open)。shared 为 private 包,其源码 bundle 进两个包的 dist,故两包同出。
+
 ## 0.13.10
 
 ### Patch Changes
