@@ -24,7 +24,7 @@ export async function copyText(text: string): Promise<boolean> {
       return true;
     }
   } catch (e) {
-    console.debug('[ui] 异步剪贴板失败，尝试兼容复制', e);
+    console.debug('[ui] 异步剪贴板失败，尝试兼容复制', e); // i18n-exempt: developer console only
   }
   return legacyCopy(text);
 }

@@ -14,7 +14,10 @@ import { makeHost, makeRect } from './fixtures';
  * 与 main-component-sync.test.ts 同构:断言**调了哪条入口**(called 记录),
  * 不是返回值 —— 只看返回值放过「先 await 再回退」,那照样挂 25s。
  */
-function hostWithPhantomAsync(rect: ReturnType<typeof makeRect>, called: { async: boolean }): DesignHost {
+function hostWithPhantomAsync(
+  rect: ReturnType<typeof makeRect>,
+  called: { async: boolean },
+): DesignHost {
   const base = makeHost([rect]);
   return {
     ...base,
@@ -28,7 +31,13 @@ function hostWithPhantomAsync(rect: ReturnType<typeof makeRect>, called: { async
 }
 
 const JSD = runtimeContext(
-  ['styles', 'styleEnumeration', 'styleEnumerationSync', 'mainComponentSync', 'nodeResolveSync'],
+  [
+    'styles',
+    'styleEnumeration',
+    'styleEnumerationSync',
+    'mainComponentSync',
+    'nodeResolveSync',
+  ],
   'jsdesign',
 );
 const FIGMA = runtimeContext([

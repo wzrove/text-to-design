@@ -36,7 +36,7 @@ const ENTRY_FILES: Record<string, string> = {
   ...Object.fromEntries(
     CODE_REFERENCE_IDS.map((id) => [
       id,
-      join(DESIGN_TO_CODE_DIR, 'references', id + '.md'),
+      join(DESIGN_TO_CODE_DIR, 'references', `${id}.md`),
     ]),
   ),
 };
@@ -45,7 +45,7 @@ export function readCodeEntry(entry: string): string {
   const file = ENTRY_FILES[entry];
   if (file == null) {
     throw new Error(
-      '未知 code 资源:' + entry + '(可用 entry:' + CODE_ENTRY_IDS.join(', ') + ')',
+      `未知 code 资源:${entry}(可用 entry:${CODE_ENTRY_IDS.join(', ')})`,
     );
   }
   return readFileSync(file, 'utf8');
@@ -59,7 +59,7 @@ export function assertDesignToCodeSkill(): void {
   const body = readCodeEntry(DESIGN_TO_CODE_SKILL_ROUTE.entry);
   const name = frontmatterName(body);
   if (name !== DESIGN_TO_CODE_SKILL_ROUTE.skillId) {
-    throw new Error('design-to-code frontmatter name 不匹配:' + String(name));
+    throw new Error(`design-to-code frontmatter name 不匹配:${String(name)}`);
   }
   const version = /^contractVersion:\s*(\d+)$/m.exec(body)?.[1];
   if (version !== String(DESIGN_TO_CODE_SKILL_ROUTE.contractVersion)) {

@@ -95,17 +95,15 @@ export class Bridge {
       this.onConnectionChange?.(true);
     };
     this.transport.onDisconnect = (err) => {
-      for (const controller of this.copyControllers.values()) controller.abort();
+      for (const controller of this.copyControllers.values())
+        controller.abort();
       this.copyControllers.clear();
       this.pending.rejectAll(err);
       this.onConnectionChange?.(false);
     };
   }
 
-  private handleCopyRequest(frame: {
-    id: string;
-    params: unknown;
-  }): void {
+  private handleCopyRequest(frame: { id: string; params: unknown }): void {
     const fail = (e: unknown): void => {
       this.transport.sendPush(
         JSON.stringify(
@@ -118,7 +116,7 @@ export class Bridge {
     };
     const parsed = copyRequestFrameSchema.safeParse(frame);
     if (!parsed.success) {
-      fail(new Error('jsd_copy 参数无效:' + parsed.error.issues[0]?.message));
+      fail(new Error(`jsd_copy 参数无效:${parsed.error.issues[0]?.message}`));
       return;
     }
     const callback = this.onCopyRequest;

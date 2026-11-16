@@ -20,7 +20,9 @@ describe('design-to-code 技能目录', () => {
   });
 
   it('入口保持轻量', () => {
-    expect(Buffer.byteLength(readCodeEntry('SKILL.md'), 'utf8')).toBeLessThanOrEqual(8192);
+    expect(
+      Buffer.byteLength(readCodeEntry('SKILL.md'), 'utf8'),
+    ).toBeLessThanOrEqual(8192);
   });
 
   it('受控 entry 拒绝路径穿越和任意文件', () => {

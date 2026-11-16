@@ -35,8 +35,7 @@ export function registerCodeResources(
     {
       title: i18n.t('resources.title9'),
       icons: promptIcon(),
-      description:
-        '节点引用 URL 与 design-to-code skill 的普通资源回退。处理 jsd://node 或 jsd://canvas/selection 链接时先读，按 frontend/backend 路由附录；离线可读，不执行脚本。可用 entry:' + ids,
+      description: `节点引用 URL 与 design-to-code skill 的普通资源回退。处理 jsd://node 或 jsd://canvas/selection 链接时先读，按 frontend/backend 路由附录；离线可读，不执行脚本。可用 entry:${ids}`,
       mimeType: 'text/markdown',
     },
     async () => markdownContents(CODE_INDEX_URI, renderCodeIndex()),
@@ -50,8 +49,7 @@ export function registerCodeResources(
     {
       title: i18n.t('resources.title10'),
       icons: promptIcon(),
-      description:
-        '按受控 entry 读取 design-to-code 入口/附录，如 jsd://code/SKILL.md、jsd://code/frontend。拒绝未知 entry 和路径穿越；与 skills 正文同源。可用 entry:' + ids,
+      description: `按受控 entry 读取 design-to-code 入口/附录，如 jsd://code/SKILL.md、jsd://code/frontend。拒绝未知 entry 和路径穿越；与 skills 正文同源。可用 entry:${ids}`,
       mimeType: 'text/markdown',
     },
     async (uri, vars) => {

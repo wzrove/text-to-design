@@ -3,8 +3,8 @@ import {
   buildNodeReference,
   type CopyRequest,
   type CopyResult,
-  copyResultSchema,
   copyRequestSchema,
+  copyResultSchema,
 } from 'text-to-design-shared';
 import type { Bridge } from '../bridge';
 import type { ToolHandle } from '../core/tool-def';

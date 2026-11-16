@@ -32,6 +32,7 @@
 | [0024](0024-变量绑定进入读路径：boundVariables-按引擎词汇原样透传，不引入归一化层.md) | 变量绑定进入读路径：`boundVariables` 按引擎词汇原样透传，不引入归一化层 | 已采纳（真机已复验） | `shared/`（`schemas/{platform,serialized-node}.ts`、`core/{host,serialize}.ts`、`write-path` 单测）、`ui/code/figma/sync-guarantee.ts` | 2026-09-25 |
 | [0025](0025-Figma补上组件属性的定义入口：一个op承担定义即绑定，不照搬MG的四段式.md) | Figma 补上组件属性**定义**入口：一个 op 承担「定义 + 绑定」，不照搬 MG 四段式 | 已采纳（真机已复验） | `ui/code/figma/{ops,sync-guarantee}.ts`、`mcp-server/tools/nodes.ts`、`mcp-server/README.md` | 2026-09-25 |
 | [0029](0029-能力字典改规格表：kind-判别加-labelKey-收口，删死代码与重复事实.md) | 能力字典改规格表：kind 判别 + labelKey 收口 | 已采纳（UI 侧已验） | `shared/`（`dicts/capability.ts`、`core/{capabilities,buildNode}.ts`、i18n 少一键）、`ui/`（删 `i18n/capabilityKeys.ts`、`CapabilityCard`、`figma/meta.ts` 少一位） | 2026-09-29 |
+| [0035](0035-图表支持：服务端单向编译加复用-SVG-导入通道，骨架原生绘图区-SVG，不引入模式.md) | 图表支持：服务端单向编译 + 复用 SVG 导入通道；另开配方 prompt | 已被取代 | `shared/schemas`、`mcp-server`（已回退） | 2026-10-09 |
 
 ## 说明
 

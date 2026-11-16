@@ -544,11 +544,7 @@ export function registerPlugin(
               send(id, true, await flattenNodes(host, ctx, p.ids ?? []));
               break;
             case 'outline_stroke':
-              send(
-                id,
-                true,
-                await outlineStrokeNodes(host, ctx, p.ids ?? []),
-              );
+              send(id, true, await outlineStrokeNodes(host, ctx, p.ids ?? []));
               break;
             case 'reparent':
               send(

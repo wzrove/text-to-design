@@ -25,7 +25,12 @@ function legacyDocument(result: boolean) {
 describe('异步剪贴板', () => {
   it('writeText 真实完成后才返回成功', async () => {
     let resolve!: () => void;
-    const writeText = vi.fn(() => new Promise<void>((done) => { resolve = done; }));
+    const writeText = vi.fn(
+      () =>
+        new Promise<void>((done) => {
+          resolve = done;
+        }),
+    );
     vi.stubGlobal('navigator', { clipboard: { writeText } });
     let settled = false;
     const pending = copyText('task').then((value) => {

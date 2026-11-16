@@ -80,9 +80,7 @@ export async function resolveNodes(
   ids: readonly string[],
   ctx?: RuntimeContext,
 ): Promise<NodeSkeleton[]> {
-  const found = await Promise.all(
-    ids.map((id) => resolveOne(host, id, ctx)),
-  );
+  const found = await Promise.all(ids.map((id) => resolveOne(host, id, ctx)));
   return found.filter((n): n is NodeSkeleton => n != null);
 }
 

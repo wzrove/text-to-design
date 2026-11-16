@@ -13,7 +13,6 @@ export * from './activity-channel';
 export * from './camera-lock';
 /* 连接层协议(端口/握手帧/重连节奏):daemon 与插件 UI 的唯一真源 */
 export * from './connection';
-export * from './node-reference';
 /* 错误上报同意的跨侧契约(UI 遥控 daemon 门控,旁路帧不过 MCP) */
 export * from './consent-channel';
 /* 平台无关核心逻辑(DesignHost 接口 + 序列化/建节点/组件/更新,无平台 typings 依赖) */
@@ -22,6 +21,7 @@ export * from './core';
 export * from './dicts';
 /* 插件面板尺寸契约(UI ↔ code 的初值、夹取区间与自改高度旁路消息) */
 export * from './locale-channel';
+export * from './node-reference';
 
 export * from './panel';
 /* 重新导出 zod schemas(唯一真源,供 MCP 运行时校验复用) */

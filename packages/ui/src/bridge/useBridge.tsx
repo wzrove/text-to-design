@@ -274,8 +274,7 @@ export function BridgeProvider(props: ParentProps) {
         }
       } else if (e.type === 'selection') {
         setSelection(() => ({ data: e.data, meta: e.meta }));
-      }
-      else if (e.type === 'version') setLatest(() => e.latest);
+      } else if (e.type === 'version') setLatest(() => e.latest);
       else if (e.type === 'platform') {
         setPlatform(() => e.platform);
         void refreshCapabilities();

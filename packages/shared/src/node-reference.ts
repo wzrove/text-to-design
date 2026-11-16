@@ -7,19 +7,20 @@ import {
 import {
   type CopyRequest,
   copyRequestSchema,
-  pluginPlatformSchema,
   type PluginPlatform,
+  pluginPlatformSchema,
 } from './schemas';
 
 export function normalizeCodeRoles(values: readonly unknown[]): CodeRole[] {
-  if (values.length === 0) throw new Error('code Copy 至少选择 frontend 或 backend');
+  if (values.length === 0)
+    throw new Error('code Copy 至少选择 frontend 或 backend'); // i18n-exempt: MCP/URL diagnostics, not panel copy
   const unknown = values.filter(
     (value) =>
       typeof value !== 'string' ||
       !(CODE_ROLES as readonly string[]).includes(value),
   );
   if (unknown.length > 0) {
-    throw new Error('不支持的 code 职责: ' + unknown.map(String).join(', '));
+    throw new Error(`不支持的 code 职责: ${unknown.map(String).join(', ')}`); // i18n-exempt: MCP/URL diagnostics, not panel copy
   }
   return CODE_ROLES.filter((role) => values.includes(role));
 }
@@ -40,10 +41,10 @@ export interface NodeReference {
 
 function requiredSource(request: CopyRequest): NodeReference['source'] {
   if (request.source.platform == null) {
-    throw new Error('缺少平台信息，无法生成稳定节点引用');
+    throw new Error('缺少平台信息，无法生成稳定节点引用'); // i18n-exempt: MCP/URL diagnostics, not panel copy
   }
   const pageName = request.source.pageName?.trim();
-  if (!pageName) throw new Error('缺少页面信息，无法生成稳定节点引用');
+  if (!pageName) throw new Error('缺少页面信息，无法生成稳定节点引用'); // i18n-exempt: MCP/URL diagnostics, not panel copy
   return {
     platform: request.source.platform,
     pageName,
@@ -54,10 +55,13 @@ function requiredSource(request: CopyRequest): NodeReference['source'] {
 export function buildNodeReference(rawRequest: CopyRequest): string {
   const request = copyRequestSchema.parse(rawRequest);
   const source = requiredSource(request);
-  const roles = request.mode === 'code' ? normalizeCodeRoles(request.roles) : [];
+  const roles =
+    request.mode === 'code' ? normalizeCodeRoles(request.roles) : [];
+  const requestedId = request.requestedIds[0];
+  if (requestedId == null) throw new Error('节点 ID 为空'); // i18n-exempt: MCP/URL diagnostics, not panel copy
   const url =
     request.scope === 'node'
-      ? new URL('jsd://node/' + encodeURIComponent(request.requestedIds[0]!))
+      ? new URL(`jsd://node/${encodeURIComponent(requestedId)}`)
       : new URL('jsd://canvas/selection');
   url.searchParams.set('v', String(NODE_REFERENCE_VERSION));
   url.searchParams.set('mode', request.mode);
@@ -79,23 +83,29 @@ export function buildNodeReference(rawRequest: CopyRequest): string {
 function one(params: URLSearchParams, key: string): string {
   const values = params.getAll(key);
   if (values.length !== 1 || values[0] === '') {
-    throw new Error('节点链接字段 ' + key + ' 必须且只能出现一次');
+    throw new Error(`节点链接字段 ${key} 必须且只能出现一次`); // i18n-exempt: MCP/URL diagnostics, not panel copy
   }
   return values[0];
 }
 
 export function parseNodeReference(text: string): NodeReference {
   if (text.trim() !== text || /\s/.test(text)) {
-    throw new Error('节点引用必须且只能包含一个 URL');
+    throw new Error('节点引用必须且只能包含一个 URL'); // i18n-exempt: MCP/URL diagnostics, not panel copy
   }
   let url: URL;
   try {
     url = new URL(text);
   } catch {
-    throw new Error('节点引用 URL 无法解析');
+    throw new Error('节点引用 URL 无法解析'); // i18n-exempt: MCP/URL diagnostics, not panel copy
   }
-  if (url.protocol !== 'jsd:' || url.hash || url.username || url.password || url.port) {
-    throw new Error('不支持的节点引用协议');
+  if (
+    url.protocol !== 'jsd:' ||
+    url.hash ||
+    url.username ||
+    url.password ||
+    url.port
+  ) {
+    throw new Error('不支持的节点引用协议'); // i18n-exempt: MCP/URL diagnostics, not panel copy
   }
   const allowed = new Set([
     'v',
@@ -108,14 +118,14 @@ export function parseNodeReference(text: string): NodeReference {
     'id',
   ]);
   for (const key of new Set(url.searchParams.keys())) {
-    if (!allowed.has(key)) throw new Error('未知节点引用字段: ' + key);
+    if (!allowed.has(key)) throw new Error(`未知节点引用字段: ${key}`); // i18n-exempt: MCP/URL diagnostics, not panel copy
   }
   if (one(url.searchParams, 'v') !== String(NODE_REFERENCE_VERSION)) {
-    throw new Error('不支持的节点引用版本');
+    throw new Error('不支持的节点引用版本'); // i18n-exempt: MCP/URL diagnostics, not panel copy
   }
   const rawMode = one(url.searchParams, 'mode');
   if (rawMode !== 'design' && rawMode !== 'code') {
-    throw new Error('未知节点引用 mode');
+    throw new Error('未知节点引用 mode'); // i18n-exempt: MCP/URL diagnostics, not panel copy
   }
   const mode = rawMode as CopyRequest['mode'];
   let roles: CodeRole[] = [];
@@ -123,15 +133,17 @@ export function parseNodeReference(text: string): NodeReference {
     const rawRoles = one(url.searchParams, 'roles');
     roles = normalizeCodeRoles(rawRoles.split(','));
     if (roles.join(',') !== rawRoles) {
-      throw new Error('roles 必须去重并按 frontend/backend 排列');
+      throw new Error('roles 必须去重并按 frontend/backend 排列'); // i18n-exempt: MCP/URL diagnostics, not panel copy
     }
     if (one(url.searchParams, 'skill') !== DESIGN_TO_CODE_SKILL_ROUTE.skillId) {
-      throw new Error('节点引用 skill 不匹配');
+      throw new Error('节点引用 skill 不匹配'); // i18n-exempt: MCP/URL diagnostics, not panel copy
     }
   } else if (url.searchParams.has('roles') || url.searchParams.has('skill')) {
-    throw new Error('design 节点引用不得包含 roles/skill');
+    throw new Error('design 节点引用不得包含 roles/skill'); // i18n-exempt: MCP/URL diagnostics, not panel copy
   }
-  const platform = pluginPlatformSchema.parse(one(url.searchParams, 'platform'));
+  const platform = pluginPlatformSchema.parse(
+    one(url.searchParams, 'platform'),
+  );
   const pageName = one(url.searchParams, 'page');
   const rawSeq = url.searchParams.has('seq')
     ? one(url.searchParams, 'seq')
@@ -141,19 +153,22 @@ export function parseNodeReference(text: string): NodeReference {
     selectionSeq != null &&
     (!Number.isSafeInteger(selectionSeq) || selectionSeq <= 0)
   ) {
-    throw new Error('节点引用 seq 无效');
+    throw new Error('节点引用 seq 无效'); // i18n-exempt: MCP/URL diagnostics, not panel copy
   }
   if (url.hostname === 'node') {
-    if (url.searchParams.has('id')) throw new Error('单节点链接不得重复携带 id');
+    if (url.searchParams.has('id'))
+      throw new Error('单节点链接不得重复携带 id'); // i18n-exempt: MCP/URL diagnostics, not panel copy
     const parts = url.pathname.split('/').filter(Boolean);
-    if (parts.length !== 1) throw new Error('单节点链接路径无效');
+    const part = parts[0];
+    if (parts.length !== 1 || part == null)
+      throw new Error('单节点链接路径无效'); // i18n-exempt: MCP/URL diagnostics, not panel copy
     let id: string;
     try {
-      id = decodeURIComponent(parts[0]!);
+      id = decodeURIComponent(part);
     } catch {
-      throw new Error('节点 ID 编码无效');
+      throw new Error('节点 ID 编码无效'); // i18n-exempt: MCP/URL diagnostics, not panel copy
     }
-    if (!id) throw new Error('节点 ID 为空');
+    if (!id) throw new Error('节点 ID 为空'); // i18n-exempt: MCP/URL diagnostics, not panel copy
     return {
       version: NODE_REFERENCE_VERSION,
       mode,
@@ -171,7 +186,7 @@ export function parseNodeReference(text: string): NodeReference {
       requestedIds.some((id) => !id) ||
       new Set(requestedIds).size !== requestedIds.length
     ) {
-      throw new Error('整组节点链接 id 缺失或重复');
+      throw new Error('整组节点链接 id 缺失或重复'); // i18n-exempt: MCP/URL diagnostics, not panel copy
     }
     return {
       version: NODE_REFERENCE_VERSION,
@@ -183,5 +198,5 @@ export function parseNodeReference(text: string): NodeReference {
       source: { platform, pageName, selectionSeq },
     };
   }
-  throw new Error('未知节点引用资源路径');
+  throw new Error('未知节点引用资源路径'); // i18n-exempt: MCP/URL diagnostics, not panel copy
 }

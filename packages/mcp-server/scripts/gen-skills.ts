@@ -2,14 +2,14 @@ import { cpSync, mkdirSync, rmSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
+  assertDesignToCodeSkill,
+  DESIGN_TO_CODE_DIR,
+} from '../src/skills/code-catalog';
+import {
   assertSkillGroupsCoverRecipes,
   SKILL_DIR,
 } from '../src/skills/entries';
 import { readRecipeBody, recipeIds } from '../src/tools/recipe-catalog';
-import {
-  assertDesignToCodeSkill,
-  DESIGN_TO_CODE_DIR,
-} from '../src/skills/code-catalog';
 
 // 发布前同时校验 skill 引用与配方元数据，避免生成无法启动的包。
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');

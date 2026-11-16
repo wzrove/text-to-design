@@ -1,7 +1,7 @@
 import { Client } from '@modelcontextprotocol/client';
 import { InMemoryTransport } from '@modelcontextprotocol/server';
-import { describe, expect, it, vi } from 'vitest';
 import { type CopyRequest, parseNodeReference } from 'text-to-design-shared';
+import { describe, expect, it, vi } from 'vitest';
 import { Bridge } from '../bridge';
 import { createMcpI18n } from '../i18n';
 import { buildServer } from '../server';
@@ -27,7 +27,10 @@ describe('jsd_copy 节点引用', () => {
     expect(result.text).not.toContain('JSON');
     expect(result.text.split('\n')).toHaveLength(1);
     expect(read).not.toHaveBeenCalled();
-    expect(parseNodeReference(result.text).requestedIds).toEqual(['1:1', '1:2']);
+    expect(parseNodeReference(result.text).requestedIds).toEqual([
+      '1:1',
+      '1:2',
+    ]);
   });
 
   it('design/node 也只返回节点 URL', () => {
@@ -61,22 +64,31 @@ describe('jsd_copy 节点引用', () => {
       bridge,
       new AbortController().signal,
     );
-    expect(parseNodeReference(result.text).requestedIds).toEqual(['deleted-node']);
+    expect(parseNodeReference(result.text).requestedIds).toEqual([
+      'deleted-node',
+    ]);
     expect(read).not.toHaveBeenCalled();
   });
 });
 
 describe('jsd_copy MCP 注册', () => {
   it('真实 tools/call 返回可解析 URL', async () => {
-    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    const [clientTransport, serverTransport] =
+      InMemoryTransport.createLinkedPair();
     const server = buildServer(new Bridge(), createMcpI18n('zh-CN'));
-    const client = new Client({ name: 'copy-tool', version: '1' }, { capabilities: {} });
+    const client = new Client(
+      { name: 'copy-tool', version: '1' },
+      { capabilities: {} },
+    );
     await server.connect(serverTransport as never);
     await client.connect(clientTransport as never);
     try {
       const { tools } = await client.listTools();
       expect(tools.map((tool) => tool.name)).toContain('jsd_copy');
-      const result = await client.callTool({ name: 'jsd_copy', arguments: request() });
+      const result = await client.callTool({
+        name: 'jsd_copy',
+        arguments: request(),
+      });
       const text = (result.structuredContent as { text: string }).text;
       expect(parseNodeReference(text)).toMatchObject({
         mode: 'code',
@@ -90,9 +102,13 @@ describe('jsd_copy MCP 注册', () => {
   });
 
   it('缺平台或页面时返回错误，不生成弱定位链接', async () => {
-    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    const [clientTransport, serverTransport] =
+      InMemoryTransport.createLinkedPair();
     const server = buildServer(new Bridge(), createMcpI18n('zh-CN'));
-    const client = new Client({ name: 'copy-tool-error', version: '1' }, { capabilities: {} });
+    const client = new Client(
+      { name: 'copy-tool-error', version: '1' },
+      { capabilities: {} },
+    );
     await server.connect(serverTransport as never);
     await client.connect(clientTransport as never);
     try {

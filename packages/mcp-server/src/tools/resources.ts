@@ -48,7 +48,10 @@ async function findReferenceNodes(
   bridge: Bridge,
   reference: NodeReference,
 ): Promise<import('text-to-design-shared').SerializedNode[]> {
-  const byId = new Map<string, import('text-to-design-shared').SerializedNode>();
+  const byId = new Map<
+    string,
+    import('text-to-design-shared').SerializedNode
+  >();
   const depth = referenceDepth(reference);
   for (let offset = 0; offset < reference.requestedIds.length; offset += 100) {
     const ids = reference.requestedIds.slice(offset, offset + 100);
@@ -59,9 +62,13 @@ async function findReferenceNodes(
   }
   const missing = reference.requestedIds.filter((id) => !byId.has(id));
   if (missing.length > 0) {
-    throw new Error('节点引用中的 IDs 未返回或已失效:' + missing.join(', '));
+    throw new Error(`节点引用中的 IDs 未返回或已失效:${missing.join(', ')}`);
   }
-  return reference.requestedIds.map((id) => byId.get(id)!);
+  return reference.requestedIds.map((id) => {
+    const node = byId.get(id);
+    if (node == null) throw new Error(`节点引用中的 ID 未返回或已失效:${id}`);
+    return node;
+  });
 }
 
 async function readNodeReference(bridge: Bridge, uri: URL) {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { NO_CAPABILITIES } from '../core/runtime';
 import { reparentNodes } from '../core/nodes';
+import { NO_CAPABILITIES } from '../core/runtime';
 import { type FakeHost, makeFrame, makeHost, makeRect } from './fixtures';
 
 /**

@@ -124,10 +124,7 @@ export async function runDaemon(bridge: Bridge): Promise<void> {
     try {
       const execute = lookupExecutor('jsd_copy', lease.server);
       if (execute == null) throw new Error('jsd_copy executor 未注册');
-      const result = (await execute(
-        { ...params },
-        signal,
-      )) as {
+      const result = (await execute({ ...params }, signal)) as {
         structuredContent?: unknown;
         isError?: boolean;
         content?: { type: string; text?: string }[];

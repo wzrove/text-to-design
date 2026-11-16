@@ -55,7 +55,9 @@ export default function SelectionCard(props: {
   const hasValidSelection = createMemo(
     () =>
       nodes().length > 0 &&
-      nodes().every((node) => typeof node.id === 'string' && node.id.length > 0),
+      nodes().every(
+        (node) => typeof node.id === 'string' && node.id.length > 0,
+      ),
   );
   const [mode, setMode] = createSignal<CopyRequest['mode']>('design');
   const [roles, setRoles] = createSignal<CodeRole[]>([]);
@@ -106,7 +108,7 @@ export default function SelectionCard(props: {
           ? { ...base, mode: 'code', roles: normalizeCodeRoles(roles()) }
           : { ...base, mode: 'design' };
     } catch (e) {
-      console.debug('[ui] Copy 请求构造失败', e);
+      console.debug('[ui] Copy 请求构造失败', e); // i18n-exempt: developer console only
       showToast(t('toast.copy.failed'), 'error');
       return;
     }
@@ -115,7 +117,7 @@ export default function SelectionCard(props: {
       const result = await requestCopy(request);
       await copyWithToast(result.text);
     } catch (e) {
-      console.debug('[ui] MCP Copy 失败', e);
+      console.debug('[ui] MCP Copy 失败', e); // i18n-exempt: developer console only
       showToast(t('toast.copy.failed'), 'error');
     } finally {
       setCopying(false);
@@ -123,7 +125,7 @@ export default function SelectionCard(props: {
   }
 
   return (
-    <div class={'flex min-h-0 flex-col ' + (props.fill ? 'flex-1' : '')}>
+    <div class={`flex min-h-0 flex-col ${props.fill ? 'flex-1' : ''}`}>
       <div class="mb-1 flex shrink-0 items-center gap-3 px-1">
         <div
           class="join shrink-0"
@@ -160,7 +162,9 @@ export default function SelectionCard(props: {
                 type="checkbox"
                 class="checkbox checkbox-xs rounded-sm"
                 checked={roles().includes('frontend')}
-                onChange={(e) => toggleRole('frontend', e.currentTarget.checked)}
+                onChange={(e) =>
+                  toggleRole('frontend', e.currentTarget.checked)
+                }
               />
               {t('selection.code.frontend')}
             </label>
@@ -249,9 +253,9 @@ export default function SelectionCard(props: {
                 <div class="min-w-0 flex-1 truncate font-mono text-xs">
                   <span class="text-base-content">{node.name}</span>
                   <span class="text-base-content/65">
-                    {' · ' + node.type}
+                    {` · ${node.type}`}
                     {node.width != null
-                      ? ' · ' + node.width + '×' + node.height
+                      ? ` · ${node.width}×${node.height}`
                       : ''}
                   </span>
                 </div>

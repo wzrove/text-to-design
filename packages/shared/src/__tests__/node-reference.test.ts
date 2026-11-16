@@ -54,13 +54,16 @@ describe('节点引用 URL', () => {
     expect(parseNodeReference(text).requestedIds).toEqual(['1:1', '1:2']);
   });
 
-  it.each(['jsdesign', 'figma', 'mastergo'] as const)('%s 保留平台引用', (platform) => {
-    const text = buildNodeReference({
-      ...request(),
-      source: { ...request().source, platform },
-    });
-    expect(parseNodeReference(text).source.platform).toBe(platform);
-  });
+  it.each(['jsdesign', 'figma', 'mastergo'] as const)(
+    '%s 保留平台引用',
+    (platform) => {
+      const text = buildNodeReference({
+        ...request(),
+        source: { ...request().source, platform },
+      });
+      expect(parseNodeReference(text).source.platform).toBe(platform);
+    },
+  );
 
   it('构造后修改 roles/IDs 不影响已生成链接', () => {
     const roles: CodeRole[] = ['frontend'];
@@ -80,23 +83,31 @@ describe('节点引用 URL', () => {
   });
 
   it('缺平台/页面时明确失败', () => {
-    expect(() => buildNodeReference({
-      ...request(),
-      source: { platform: null, pageName: '登录页', selectionSeq: null },
-    })).toThrow(/平台/);
-    expect(() => buildNodeReference({
-      ...request(),
-      source: { platform: 'figma', pageName: ' ', selectionSeq: null },
-    })).toThrow(/页面/);
+    expect(() =>
+      buildNodeReference({
+        ...request(),
+        source: { platform: null, pageName: '登录页', selectionSeq: null },
+      }),
+    ).toThrow(/平台/);
+    expect(() =>
+      buildNodeReference({
+        ...request(),
+        source: { platform: 'figma', pageName: ' ', selectionSeq: null },
+      }),
+    ).toThrow(/页面/);
   });
 
   it('未选择节点或 node 多 ID 被 schema 拒绝', () => {
-    expect(() => copyRequestSchema.parse({ ...request(), requestedIds: [] })).toThrow();
-    expect(() => copyRequestSchema.parse({
-      ...request(),
-      scope: 'node',
-      requestedIds: ['1:1', '1:2'],
-    })).toThrow(/只能包含一个/);
+    expect(() =>
+      copyRequestSchema.parse({ ...request(), requestedIds: [] }),
+    ).toThrow();
+    expect(() =>
+      copyRequestSchema.parse({
+        ...request(),
+        scope: 'node',
+        requestedIds: ['1:1', '1:2'],
+      }),
+    ).toThrow(/只能包含一个/);
   });
 
   it('角色去重和未知角色处理明确', () => {
@@ -122,14 +133,14 @@ describe('节点引用 URL', () => {
   });
 
   it('重复 id、错误 roles 顺序和重复 seq 均被拒绝', () => {
-    const duplicate = buildNodeReference(request()) + '&id=1%3A1';
+    const duplicate = `${buildNodeReference(request())}&id=1%3A1`;
     expect(() => parseNodeReference(duplicate)).toThrow(/重复/);
     const wrongRoles = buildNodeReference(request()).replace(
       'roles=frontend%2Cbackend',
       'roles=backend%2Cfrontend',
     );
     expect(() => parseNodeReference(wrongRoles)).toThrow(/roles/);
-    const duplicateSeq = buildNodeReference(request()) + '&seq=8';
+    const duplicateSeq = `${buildNodeReference(request())}&seq=8`;
     expect(() => parseNodeReference(duplicateSeq)).toThrow(/seq/);
   });
 });

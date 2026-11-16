@@ -82,9 +82,12 @@ export const copyRequestFrameSchema = z.object({
 
 export type CopyRequestFrame = z.infer<typeof copyRequestFrameSchema>;
 
-export function isCopyRequestFrame(
-  value: unknown,
-): value is { type: 'request'; id: string; method: 'jsd_copy'; params: unknown } {
+export function isCopyRequestFrame(value: unknown): value is {
+  type: 'request';
+  id: string;
+  method: 'jsd_copy';
+  params: unknown;
+} {
   if (value == null || typeof value !== 'object') return false;
   const frame = value as Record<string, unknown>;
   return (

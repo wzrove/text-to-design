@@ -115,7 +115,7 @@ export class Router {
   copy(request: CopyRequest): Promise<CopyResult> {
     const frame: CopyRequestFrame = {
       type: 'request',
-      id: 'ui-copy-' + Date.now() + '-' + this.globalSeq++,
+      id: `ui-copy-${Date.now()}-${this.globalSeq++}`,
       method: 'jsd_copy',
       params: request,
     } as CopyRequestFrame;
@@ -214,7 +214,8 @@ export class Router {
       return;
     }
     if (msg.type === 'response' && this.localPending.has(msg.id)) {
-      const entry = this.localPending.get(msg.id)!;
+      const entry = this.localPending.get(msg.id);
+      if (entry == null) return;
       this.localPending.delete(msg.id);
       clearTimeout(entry.timer);
       if (msg.ok) entry.resolve?.(msg.data);

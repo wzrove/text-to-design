@@ -6,7 +6,6 @@
  */
 export * from './boolean-operation';
 export * from './capability';
-export * from './node-reference';
 export * from './enum-values';
 export * from './error-code';
 export * from './error-report';
@@ -15,6 +14,7 @@ export * from './i18n';
 export * from './layout-fields';
 export * from './log';
 export * from './mcp-tools';
+export * from './node-reference';
 export * from './node-type';
 export * from './platform';
 export * from './platform-knowledge';
