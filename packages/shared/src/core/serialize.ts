@@ -165,6 +165,19 @@ function normalizeLineHeight(
 }
 
 /**
+ * 这个对象能不能当「节点的父级」写进 `parentId`。
+ *
+ * `PAGE` / `DOCUMENT` 是节点之上的两层,不是容器节点:写出去会让调用方把页面 id
+ * 当容器 id 回传(见下方 parentId 处的真机记录)。读不到 `type` 时按可写处理 ——
+ * 不因为一次读失败就吞掉父级信息。
+ */
+function isNodeKind(parent: unknown): boolean {
+  const t = (parent as { type?: unknown } | null)?.type;
+  if (typeof t !== 'string') return true;
+  return t !== 'PAGE' && t !== 'DOCUMENT';
+}
+
+/**
  * @param zIndex 已知的父级下标(递归 children 时直接传入,省掉一次父级扫描);
  *   顶层调用留空则按父级 children 现算。
  */
@@ -195,7 +208,10 @@ export function serializeNode(
   if ('visible' in node && typeof node.visible === 'boolean' && !node.visible)
     base.visible = false;
   if ('locked' in node && node.locked) base.locked = true;
-  if ('parent' in node && node.parent) {
+  // 父级是 `PAGE` / `DOCUMENT` 时**不写** parentId:那一层不是节点,写出去会让调用方把
+  // 页面 id 当成容器 id 回传(2026-11-18 Figma 真机:create_svg 建的 FRAME 顶层节点
+  // parentId 指向 PageNode,再喂给 jsd_find 就撞读路径类型校验)。顶层节点没有容器父级。
+  if ('parent' in node && node.parent && isNodeKind(node.parent)) {
     base.parentId = node.parent.id;
   }
   const z = zIndex ?? childIndexOf(node);

@@ -74,8 +74,7 @@ export const batchResultSchema = z.object({
     .describe('schema.batch.error2'),
   /**
    * 回显里的节点只留摘要字段、丢 vectorPaths 等大字段;裁剪后仍超预算的步骤
-   * 降级为 id 清单。置 true 时说明有步骤的回显被压缩过 —— 需要细节请把该工具单独
-   * 调用一次(占位符解析不受影响,内部用的是完整数据)。
+   * 降级为 id 清单。画布详情用 jsd_find 回读。
    */
   echoTrimmed: z.boolean().optional(),
   /**

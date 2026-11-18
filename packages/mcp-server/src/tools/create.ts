@@ -117,6 +117,26 @@ export const CREATE_EXCLUSIVE_FIELDS: ReadonlyMap<
   return out;
 })();
 
+/**
+ * 创建时**绝不该出现**的 id 类字段,以及它们真正该去的地方。
+ *
+ * 与 CREATE_EXCLUSIVE_FIELDS 分开:那张表回答「这个字段属于哪个 create 工具」,
+ * 而这里回答「这个字段根本不该出现在创建入参里,该换成哪个动作」。实测
+ * (error_reports 2026-11-17):`jsd_create_rectangle` 收到过 `id`,其余 10 个字段
+ * 全都合法 —— 调用方是在「更新已有节点」的心智下建节点。原来的报错只把那一个
+ * 字段列出来说「不被接受」,没给出正确的替代工具,调用方只能再猜一轮。
+ */
+export const CREATE_MISPLACED_ID_FIELDS: ReadonlyMap<string, string> = new Map([
+  [
+    'id',
+    '节点 id 由引擎创建后分配，不能预先指定。已有节点用 jsd_move_node / jsd_resize_node 修改，或用 jsd_clone_node 克隆。精简档将对应工具写入 jsd_batch 步骤。',
+  ],
+  [
+    'nodeId',
+    '创建入参不认 nodeId(要改已有节点请用修改类工具);要导出/定位请用 jsd_export / jsd_find',
+  ],
+]);
+
 type CreateNodeDef = Pick<
   BridgeToolDef,
   | 'name'
@@ -143,6 +163,8 @@ function createNodeTool(
     // 越界字段点名归属:例如给椭圆传了 characters/fontName/fontSize,
     // 直接指到 jsd_create_text,而不是只说「这些字段不被接受」
     fieldOwnership: CREATE_EXCLUSIVE_FIELDS,
+    // 放错动作的字段(如创建时传 id):给出替代工具,而不是让调用方再猜一轮
+    fieldMisplaced: CREATE_MISPLACED_ID_FIELDS,
     outputSchema: createdResultSchema,
     payload: (args) => {
       const { placement, ...rest } = args as Record<string, unknown>;

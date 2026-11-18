@@ -10,8 +10,8 @@ export const SERVER_VERSION = version;
 export function resolveToolProfile(
   raw = process.env.TEXT_TO_DESIGN_TOOL_PROFILE,
 ): 'full' | 'compact' {
-  if (raw == null || raw === '' || raw === 'full') return 'full';
-  if (raw === 'compact') return 'compact';
+  if (raw == null || raw === '' || raw === 'compact') return 'compact';
+  if (raw === 'full') return 'full';
   throw new Error(
     `Invalid TEXT_TO_DESIGN_TOOL_PROFILE: ${raw}; expected full or compact`,
   );

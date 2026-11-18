@@ -14,7 +14,6 @@
 | 编号 | 标题 | 状态 | 影响范围 | 最后更新 |
 |---|---|---|---|---|
 | [0029](0029-能力字典改规格表：kind-判别加-labelKey-收口，删死代码与重复事实.md) | 能力字典改规格表：kind 判别 + labelKey 收口 | 已采纳 | `shared/dicts`、`shared/core`、`ui/components` | 2026-09-29 |
-| [0030](0030-MCP-服务实例一次装配、跨请求复用（目录不再按请求重建）.md) | MCP 服务实例一次装配、跨请求复用（目录不再按请求重建） | 已采纳（真机已复验） | `mcp-server`、`daemon` | 2026-09-29 |
 | [0031](0031-MCP-声明面照-2026-07-28-补齐：目录缓存提示-+-工具注解四-hint-必填.md) | MCP 声明面照 2026-07-28 补齐：目录缓存提示 + 工具注解四 hint 必填 | 已采纳（shim 已验） | `mcp-server`（全工具注解） | 2026-09-29 |
 | [0032](0032-平台事实三域收敛为声明表：prompts-与工具描述共用单一投影点.md) | 平台事实三域收敛为声明表：prompts 与工具描述共用单一投影点 | 已采纳（真机已验） | `shared/dicts`、`shared/core`、`mcp-server/tools`、`ui/code` | 2026-10-08 |
 | [0033](0033-MG-集合级变体管理接入-platformOps：原生建维改值替代改名副作用.md) | MG 集合级变体管理接入 platformOps：原生建维改值替代改名副作用 | 已采纳（真机复验通过） | `ui/code/mastergo`、`shared/dicts`、`mcp-server/tools` | 2026-09-29 |
@@ -41,12 +40,14 @@
 | [a7f8846b](a7f8846b-遥测错误结构化：scope-code-subject-分类-+-fingerprint-跨窗口-rollup，message-降为-detail.md) | 遥测错误结构化：scope/code/subject 分类 + fingerprint 跨窗口 rollup，message 降为 detail | 已采纳 | `shared/dicts`、`mcp-server`（logger/telemetry）、`telemetry` | 2026-10-26 |
 | [9c4b0406](9c4b0406-MCP代理保留协议元数据与补全：目录同步和进程生命周期分离.md) | MCP代理保留协议元数据与补全：目录同步和进程生命周期分离 | 已采纳 | mcp-server/daemon | 2026-11-01 |
 | [4d4e2570](4d4e2570-MCP注册面评审：保留协议适配并收窄重复入口.md) | MCP注册面评审：保留协议适配并收窄重复入口 | 提议 | mcp-server | 2026-11-01 |
-| [3f364c28](3f364c28-MCP目录精简档提议：核心工具常驻与低频能力按需发现.md) | MCP目录精简档提议：核心工具常驻与低频能力按需发现 | 已采纳 | mcp-server | 2026-11-01 |
+| [3f364c28](3f364c28-MCP目录精简档提议：核心工具常驻与低频能力按需发现.md) | MCP目录精简档提议：核心工具常驻与低频能力按需发现 | 已被取代 | mcp-server | 2026-11-01 |
 | [9517eea4](9517eea4-DesignHost-拆必选核心与可选能力面：core-不再靠-typeof-探测.md) | DesignHost 拆必选核心与可选能力面：core 不再靠 typeof 探测 | 已采纳 | `shared/core`、`ui/code` | 2026-11-13 |
 | [e06dbd23](e06dbd23-节点解析选路按平台声明：补完-e1e66f0a-遗留的-getNodeByIdAsync-半项.md) | 节点解析选路按平台声明：补完 e1e66f0a 遗留的 getNodeByIdAsync 半项 | 已采纳 | `shared/core`、`shared/dicts`、`ui/code` | 2026-11-15 |
 | [40bf4e19](40bf4e19-Code模式以会话配置组合接入：复用画布链路与宿主代码能力.md) | Code 模式以会话配置组合接入 | 已被取代 | shared、ui、mcp-server | 2026-11-17 |
 | [d1728d17](d1728d17-Code-Copy交接.md) | Code Copy 交接 | 已被取代 | ui、shared、mcp-server | 2026-11-17 |
 | [5598a4bb](5598a4bb-Code多选交接.md) | Code 多选交接 | 已采纳 | ui、shared、mcp-server | 2026-11-17 |
+| [7044aa46](7044aa46-技能前置改由服务端记账并在工具层硬拦.md) | 技能前置改由服务端记账并在工具层硬拦 | 已采纳 | `shared/dicts`、`shared/schemas`、`mcp-server/core`、`mcp-server/daemon`、`mcp-server/tools` | 2026-11-18 |
+| [420facdc](420facdc-默认精简-MCP-目录并统一画布批处理.md) | 默认精简 MCP 目录并统一画布批处理 | 已采纳 | `shared/dicts`、`mcp-server` | 2026-11-19 |
 
 ## 依赖关系
 
@@ -103,4 +104,4 @@ a7f8846b (遥测错误结构化) ── 补 1a135e6a 暂缓的全局错误指纹
 c229422a (语言两档直切) ── 沿 0016；取代其 §结论 4 的选择器形状（优先序与持久化不动）
 ```
 
-更早的记录（0001–0024）见 [`INDEX-2026.md`](INDEX-2026.md)。
+| [7044aa46](7044aa46-技能前置改由服务端记账并在工具层硬拦.md) | 技能前置改由服务端记账并在工具层硬拦 | 已采纳 | `shared`、`mcp-server` | 2026-11-18 |

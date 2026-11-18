@@ -101,22 +101,23 @@ pkill -f text-to-design-mcp
 
 通过 MCP 启动配置的 env 设置 TEXT_TO_DESIGN_TOOL_PROFILE：
 
-- full（默认）：兼容档，保留 58 个原有公开工具。
-- compact：精简档，公开 25 个常用工具和 jsd_describe_tools，共 26 个；其余专责能力保留在内部，查询后通过 jsd_batch 执行。两个旧 manage 入口不在精简档提供。
+- compact（默认）：公开 11 个工具。连接与读取用 `jsd_ping`、`jsd_get_page`、`jsd_get_selection`、`jsd_find`、`jsd_list_fonts`；节点引用与导出用 `jsd_copy`、`jsd_export`；配方用 `jsd_list_prompts`、`jsd_get_prompt`；发现与编排用 `jsd_describe_tools`、`jsd_batch`。画布绘制与编辑统一经批处理，两个旧 manage 入口由对应专责操作替代。
+- full：兼容档，保留 59 个原有公开工具。依赖旧工具名直调的客户端可显式选择此档。
 
 示例 env 配置：
 
 ```json
-{ "TEXT_TO_DESIGN_TOOL_PROFILE": "compact" }
+{ "TEXT_TO_DESIGN_TOOL_PROFILE": "full" }
 ```
 
 档位由常驻 daemon 启动时确定，共享该 daemon 的会话使用同一档位。更改后须重启 daemon，再重连 AI 客户端；只更改 shim 配置或重载设计插件不会切换已有 daemon。
 
 精简档按需操作：
 
-1. jsd_describe_tools 用 group（session/create/nodes/components/props/media/styles/guidance/platform/orchestration）或 query 查询能力摘要，支持 offset/limit 分页。
-2. 用 names 传准确名称（每次最多 3 个），读取完整输入 schema、结果键、风险注解及 public/execution。
-3. 未公开的工具放入 jsd_batch 执行，不能直接 tools/call 其名称；发现过程不会动态注册工具。
+1. 已知名称时直接用 `jsd_describe_tools` 的 names（每次最多 3 个）取完整输入 schema、结果键、风险注解及 public/execution。
+2. 名称未知时用 group（session/create/nodes/components/props/media/styles/guidance/platform/orchestration）或 query 查询摘要，支持 offset/limit 分页。
+3. 将未公开工具作为 `jsd_batch` 的步骤，单项操作也可提交。绘制时按语义块串行分批，每批最多 50 步。同值批改在一个步骤里合并 ids。
+4. 能写文件且 MCP 服务可读时，优先把批次保存为 JSON，再用 `callsFile` 传绝对路径。其余情况用内联 `calls`。每次只传其中一种。
 
 示例：查询 jsd_detach_instance 的 schema，再提交单步 batch：
 
@@ -128,7 +129,7 @@ pkill -f text-to-design-mcp
 }
 ```
 
-两个档位继续提供相同的原生 prompts、resources 与 canvas skill。低频能力的 batch 执行保留原参数校验、平台门控、取消、超时和漂移告警。兼容档适合旧客户端；精简档需通过实际任务比较发现开销与工具误选率。
+两个档位均提供原生 prompts、resources 与 skills。批内操作继续走原执行体，保留参数校验、平台门控、取消、超时和漂移告警。
 
 ### 完整工具清单（兼容档）
 

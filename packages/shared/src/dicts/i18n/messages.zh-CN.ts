@@ -416,7 +416,8 @@ export const MESSAGES_ZH_CN = {
     '目标组件(COMPONENT)节点 id(仅 swap_component 必填)',
   'schema.inputs.format': '导出格式,默认 PNG',
   'schema.inputs.scale': '缩放倍率(PNG/JPG),默认 1',
-  'schema.inputs.savePath': '落盘文件绝对路径,如 /tmp/icon.png',
+  'schema.inputs.savePath':
+    '落盘文件绝对路径,如 /tmp/icon.png。导出多个节点时以它为模板:路径主名后插入各自的节点 id(如 /tmp/icon-1_2.png、/tmp/icon-3_4.png),扩展名不变',
   'schema.inputs.includeDataUrl': '是否同时返回 base64 dataURL,默认 false',
   'schema.inputs.ids2': '要填充图片的节点 id 列表',
   'schema.inputs.sourcePath': '本地图片文件绝对路径,如 /tmp/poster.png',
@@ -551,6 +552,8 @@ export const MESSAGES_ZH_CN = {
   'createFrame.title': '创建 Frame 容器',
   'createFrame.description':
     '创建单个 FRAME 容器节点,入参只含 FRAME 字段:width/height 尺寸、layoutMode 自动布局(itemSpacing/padding*/主轴交叉轴尺寸对齐)与填充描边等视觉字段。本工具只建一个根 FRAME;children 只用于「容器 + 其直属子节点」这类小结构(子节点 x/y 相对父节点),**别把整屏的整棵树塞进一次 children**(易整批失败)—— 分层分批用 jsd_batch 编排,再用 jsd_reparent_nodes 逐层归组。auto-layout 前必须设 layoutMode=HORIZONTAL 或 VERTICAL(否则布局字段被忽略)。**同轴等距的兄弟元素一律用 auto-layout 建,不要手算坐标**(标签栏 / 胶囊组 / KPI 行 / 卡片头 / 列表行 / 整屏纵向分区都在此列;判据与两条落地路径见 skill://canvas/references/auto-layout.md)。**尺寸模式别写反**:开布局只给宽度、高度交给 AUTO 撑开,弹窗/卡片这类内容自适应的容器尤甚;只有屏根才两轴 FIXED(写死高度会留死白,写死高度不够会裁内容)。未显式传 fills 时引擎默认白底,透明容器传 fills:[{type:"SOLID",color:{r:0,g:0,b:0},opacity:0}]。**name 必传且语义化**(如「侧栏」「KPI-设备综合效率」),不传会落成引擎默认名 node。建多个根节点/复杂树用 jsd_batch 编排',
+  'skillFirst.required':
+    '本会话还没读过 {uri} 或任一画布配方 prompt —— 操作画布前必须先读操作指引。请 ReadMcpResource 读技能 URI / skill://canvas/* / jsd://recipes/* 资源,或用 GetPrompt / jsd_get_prompt 读一条配方正文,再重试;未读前所有写入持续拦截,不会自动放行',
   'layoutHint.uniform':
     '检测到 {count} 个子节点沿 {mode} 方向等距排列(间距 {gap}px),但本容器没声明 layoutMode。这正是 auto-layout 的判据:设 layoutMode:{mode} + itemSpacing:{gap} 之后位置由布局接管,改文案或加一项都不必重算坐标(本条只是提示,创建已成功;判据与两条落地路径见 skill://canvas/references/auto-layout.md)',
   'structureHint.flatBatch':
@@ -663,7 +666,7 @@ export const MESSAGES_ZH_CN = {
   'setShape.description': '接着设置填充',
   'export.title': '导出节点为图片',
   'export.description':
-    '导出节点为 PNG/JPG/SVG/PDF;ids 为必填数组(单节点也写成 ids:["123:456"],不是 nodeId),savePath 落盘与 includeDataUrl 返回 base64 可并存。注意:单张图片超过内联上限(默认 512KB)时不返回 base64,自动落盘并返回路径引用,避免撑爆会话内存。完整字段见 inputSchema。',
+    '导出节点为 PNG/JPG/SVG/PDF;ids 为必填数组(单节点也写成 ids:["123:456"],不是 nodeId),savePath 落盘与 includeDataUrl 返回 base64 可并存(多个节点时 savePath 当模板用,各节点文件名自动带节点 id 区分)。注意:单张图片超过内联上限(默认 512KB)时不返回 base64,自动落盘并返回路径引用,避免撑爆会话内存。完整字段见 inputSchema。',
   'export.description2': '导出后用该图片填充到节点',
   'fillImage.title': '本地图片填充节点',
   'fillImage.description': '读取本地图片文件填充到指定节点(IMAGE fill)',
@@ -700,10 +703,10 @@ export const MESSAGES_ZH_CN = {
   'getPage.followUp':
     '按 id 读取具体节点的序列化结构;要跨页查找传 scope=document',
   'mcp.instructions':
-    '操作设计画布前按任务读取 skill://canvas/SKILL.md 及对应附录；无法读取 skill 时使用 jsd_list_prompts/jsd_get_prompt 或 jsd://recipes。创作先读 jsd_get_page，复用已有组件、变体、样式和变量。按语义容器分层，重复结构复用组件；同轴等距内容用 auto-layout。根节点坐标受 placement 控制，指定坐标用 manual；子坐标相对父级，布局子项由布局接管。画布请求串行；同值批改用 ids，多步用 jsd_batch（最多 50 步，占位符仅本批有效）。recursive 只改后代，includeSelf=true 才包括容器自身。字体使用 jsd_list_fonts 返回的成对原值。读 warnings，关键字段独立回读，视觉改动导出目检。超时可能已经写入，先核实再重试；只改用户指定范围。',
+    '操作设计画布前先读 skill://canvas/SKILL.md 及对应附录；技能不可用时改读任一配方 prompt 或 jsd://recipes 资源。服务端按会话记账，未读到任一操作指引前持续拒绝所有写入，不会二次放行。创作先读 jsd_get_page，复用已有组件、变体、样式和变量。按语义容器分层，重复结构复用组件；同轴等距内容用 auto-layout。根节点坐标受 placement 控制，指定坐标用 manual；子坐标相对父级，布局子项由布局接管。画布请求串行；按语义块使用 jsd_batch（最多 50 步，占位符仅本批有效），同值批改在一个步骤里合并 ids。能写入 MCP 服务可读的 JSON 时，优先只传 callsFile 绝对路径；否则用内联 calls。recursive 只改后代，includeSelf=true 才包括容器自身。字体使用 jsd_list_fonts 返回的成对原值。读 warnings，关键字段独立回读，视觉改动导出目检。超时可能已经写入，先核实再重试；只改用户指定范围。',
   'ping.title': '检查{client}插件连接',
   'batch.description':
-    '顺序编排多个工具步骤。calls 与 callsFile 二选一，单批最多 50 步；文件须是服务进程可读的绝对路径。步骤用 id/tool/args，后续参数可引用 {{步骤id.created[0].id}} 等返回路径，占位符仅本批有效；已有资源可用 {{@comp:名称}} / {{@var:名称}}。同值属性批改优先单工具 ids，不同值或多工具依赖再用 batch。精简档未公开的能力先用 jsd_describe_tools 查询完整 schema，再放入本批执行；不支持任意未知工具。默认遇错停止，可按 stopOnError/continueOnError 控制执行失败；计划错误仍停止。批次不是事务，失败前写入可能保留；超时先回读，不盲目重放。回显会裁剪子树与样式字段，完整结果按 path/line 读取；核实属性需独立 jsd_find，视觉改动另导图。checkDrift 默认开启，结构操作发现兄弟节点漂移会给 warnings 与原坐标；false 仅关闭本次复核。完整流程见 skill://canvas/references/script-ops.md,配方索引见 jsd://recipes。',
+    '顺序编排工具步骤，单批最多 50 步。能写入 MCP 服务可读的 JSON 时，优先传 callsFile 绝对路径；否则用内联 calls。两者二选一。步骤用 id/tool/args，后续参数可引用 {{步骤id.created[0].id}} 等返回路径，占位符仅本批有效；已有资源可用 {{@comp:名称}} / {{@var:名称}}。**有依赖的步骤必须放进同一批**：建根→设布局→搬入/改属性这类链，前一步和引用它的步骤拆成两次调用会解析不到占位符（报「不在本批」），一次 jsd_batch 就能解决——别拆步，也别把占位符换成猜出来的 id。返回值形状按工具而异：create_frame/create_rectangle/create_text 等 per-type 返回 created[]（数组，取 {{id.created.id}} 或 {{id.created[0].id}} 均可）、create_svg/create_icon/group 返回 created（单对象）、reparent 返回 moved[]、任一 jsd_set_* 返回 updated[]。args 里不能出现 undefined，否则整批在发送前就被判非法。默认精简档的画布写入统一经本工具，支持单步；用 jsd_describe_tools 的 names 查询步骤 schema。同值批改在一个步骤里合并 ids。默认遇错停止，可按 stopOnError/continueOnError 控制执行失败；计划错误仍停止。批次不是事务，失败前写入可能保留；超时先回读，不盲目重放。回显会裁剪子树与样式字段，完整结果按 path/line 读取；核实属性需独立 jsd_find，视觉改动另导图。checkDrift 默认开启，结构操作发现兄弟节点漂移会给 warnings 与原坐标；false 仅关闭本次复核。完整流程见 skill://canvas/references/script-ops.md,配方索引见 jsd://recipes。',
   'manageNodes.description':
     "按 op 分发的节点结构操作聚合入口:select|remove|clone|group|ungroup|flatten|outline_stroke|reparent|repair。单次单操作请优先用对应小工具:jsd_select_nodes / jsd_delete_node / jsd_clone_node / jsd_group_nodes / jsd_ungroup_nodes / jsd_flatten_nodes / jsd_outline_stroke / jsd_reparent_nodes / jsd_repair_nodes(描述含平台缺陷与正确流程)。**但连续 ≥2 次同类调用就是改批量的信号**:结构一致的重复步骤(第 N 行 / 第 N 张卡)一律进 jsd_batch 或 callsFile,别一个个单步调 —— 一次 MCP 往返 3~10s,整屏几十次单步会白耗十分钟。属性修改用 jsd_set_* 系列(含 jsd_set_shape);组件/实例操作用 jsd_manage_components 或 jsd_create_component / jsd_sync_overrides 等,两工具 op 不通用。\\n各 op 的返回键(在 jsd_batch 里用占位符引用时才不会写错,写错会中止整批):select→selected[](id 字符串)、remove→removed[](id 字符串)、clone/outline_stroke→created[](节点**数组**)、group/flatten→created(节点**单对象**:这两个 op 内部走的就是 jsd_group_nodes / jsd_flatten_nodes 那条路)、ungroup→ungrouped[](id 字符串)、reparent→moved[](同时附 updated[],两者同一份数组)、repair→cleaned[](id 字符串)。id 字符串数组取 {{步骤id.selected[0]}},节点数组取 {{步骤id.created[0].id}},节点单对象取 {{步骤id.created.id}}(单对象与单元素数组互认:{{步骤id.created[0].id}} 与 {{步骤id.created.id}} 都能解析;多元素数组直接取 .字段 仍中止)。'",
   'createBooleanOperation.description':

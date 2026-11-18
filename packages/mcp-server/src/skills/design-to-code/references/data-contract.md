@@ -43,7 +43,7 @@ jsd://canvas/selection?v=1&mode=design&platform=figma&page=%E7%99%BB%E5%BD%95%E9
 - get_page 只提供顶层与资源清单，不是完整设计树。前端/双选按需读取；仅后端不强制获取视觉资源。空清单可能是平台能力缺失，必须读 note。
 - Figma 的跨页能力不能照搬到即时设计/MasterGo。主组件、变量、样式等只读，不自动扩大目标或修改设计。
 - jsd_export 可能给服务端 path 或有限内联内容。宿主与 daemon 不共享文件系统时，path 不是宿主可读文件；确认传输方式或请求可访问导出物。
-- 精简档先 jsd_describe_tools 查工具，再按规则经 jsd_batch 调用。batch 会裁剪 children、文本和样式，摘要不能作为完整设计输入。
+- 默认精简档直接调用 `jsd_find`、`jsd_get_page` 和 `jsd_export` 补读设计输入。批处理回显会裁剪 children、文本和样式。
 
 ## 节点字段状态
 

@@ -53,6 +53,8 @@ export function unexpectedKeysMessage(
   detail: string,
   /** 越界字段 → 它真正所属的 create 工具(可选;跨类型误用时给出归属) */
   ownership?: ReadonlyMap<string, { tool: string }>,
+  /** 越界字段 → 「它不属于创建入参,该换成哪个动作」(可选;给出替代路径) */
+  misplaced?: ReadonlyMap<string, string>,
 ): string {
   const named = unexpected.slice(0, UNEXPECTED_KEY_LIMIT).join(', ');
   const more =
@@ -82,7 +84,16 @@ export function unexpectedKeysMessage(
       owner = `这组字段属于 ${tool}:要建该类型请改用该工具;要建当前类型请删掉它们。`;
     }
   }
-  return `字段 [${named}]${more} 不被该工具接受,请删掉后重试(其余字段本身合法)。${owner}${list}原始校验: ${detail}`;
+  // 不属于任何 create 工具、而是「放错了动作」的字段(如创建时传 id):逐个点名替代路径。
+  // 它与上面的归属提示互斥 —— 一个字段要么属于别的 create 工具,要么根本不该建。
+  let advice = '';
+  if (misplaced != null) {
+    for (const k of unexpected) {
+      const line = misplaced.get(k);
+      if (line != null) advice += `字段 ${k}: ${line}。`;
+    }
+  }
+  return `字段 [${named}]${more} 不被该工具接受,请删掉后重试(其余字段本身合法)。${owner}${advice}${list}原始校验: ${detail}`;
 }
 
 /**
@@ -98,6 +109,8 @@ export function describeInvalidArgs(
   detail: string,
   /** 跨类型字段归属表(core 不依赖 tools,由调用方注入) */
   ownership?: ReadonlyMap<string, { tool: string }>,
+  /** 放错动作的字段 → 替代路径(core 不依赖 tools,由调用方注入) */
+  misplaced?: ReadonlyMap<string, string>,
 ): string {
   const keys = allowedTopKeys(inputSchema);
   const received = receivedTopKeys(args);
@@ -105,7 +118,14 @@ export function describeInvalidArgs(
   const names = Object.keys(received);
   const unexpected = unexpectedTopKeys(names, keys);
   if (unexpected.length > 0) {
-    return unexpectedKeysMessage(unexpected, keys, names, detail, ownership);
+    return unexpectedKeysMessage(
+      unexpected,
+      keys,
+      names,
+      detail,
+      ownership,
+      misplaced,
+    );
   }
   return detail;
 }

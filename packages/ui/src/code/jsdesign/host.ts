@@ -8,11 +8,14 @@ import {
 } from 'text-to-design-shared';
 
 /**
- * jsDesign 原生**同步**建图方法:契约自 0017 起改叫 `*Async`(MasterGo 侧只有
- * Promise 变体),jsDesign 这两个仍是同步 —— 差异收在本文件,不让它渗进 core。
+ * jsDesign 原生**同步**建图方法:typings 1.0.12 全部是同步
+ * (`plugin-api.d.ts:118 createNodeFromSvg(svg): FrameNode`、`:121 createImage(data)`)。
+ *
+ * `createNodeFromSvg` 已不再被本文件包成 `*Async`:契约把它改成同步必需
+ * (见 shared/core/host.ts),原生同步符号直接落到设计主机契约上,DOM 里不再有
+ * 一层 async 边界 —— 即时设计运行时**透出**的异步成员可能永不 settle(dec e1e66f0a)。
  */
 interface JsDesignNativeSyncFactories {
-  createNodeFromSvg(svg: string): NodeSkeleton;
   createImage(bytes: Uint8Array): { hash: string };
 }
 
@@ -27,13 +30,22 @@ interface JsDesignNativeSyncFactories {
  * ⚠ 只覆盖 `createImageFromBytesAsync`(收字节),**不动** jsDesign 原生的
  * `createImageAsync(src: string)`(收来源字符串,语义不同,见 core/host.ts 契约注释);
  * 原生同步的 `createImage(data: Uint8Array): Image` 才是本契约要包的那个。
+ *
+ * `createNodeFromSvg` 不再被包成 `*Async`:契约已把它改成同步必需(shared/core/host.ts),
+ * 原生同步符号(`plugin-api.d.ts:118`)直接满足,经原型委派即可。
+ * 反向由 `sync-guarantee.ts` 的 HostGapCheck 守着 —— `createNodeFromSvgAsync` 仍在
+ * JsDesignAsyncNameGap 里登记,意味着本文件不该、也不该再包这个名字。
  */
 const native = jsDesign as unknown as DesignHost & JsDesignNativeSyncFactories;
 
 export const host: DesignHost = Object.create(native, {
-  createNodeFromSvgAsync: {
-    value: async (svg: string): Promise<NodeSkeleton> =>
-      native.createNodeFromSvg(svg),
+  // 同步原生符号直接满足契约(见 shared/core/host.ts):这里不在外面再包一层 async,
+  // 即时设计运行时**透出**的异步成员可能永不 settle(dec e1e66f0a)。原型委派够用 ——
+  // 与 createImageFromBytesAsync 同一条链,无需自己的属性。
+  createNodeFromSvg: {
+    // 原生回 FrameNode,契约的 NodeSkeleton 是它的窄化超集 —— 与其它建图方法同一种单点断言
+    value: (svg: string): NodeSkeleton =>
+      jsDesign.createNodeFromSvg(svg) as unknown as NodeSkeleton,
     enumerable: true,
   },
   createImageFromBytesAsync: {

@@ -19,8 +19,9 @@ import { findRecipe, recipeIds, renderRecipeBody } from './recipe-catalog';
  * 现在正文的唯一来源是 `src/skills/canvas/references/<id>.md`。
  * 本文件只剩**参数 schema**(客户端靠它弹输入框)—— 那是类型契约,不适合塞进 markdown。
  *
- * 标题、何时用、消息角色都读 markdown 的 frontmatter(见 `recipe-catalog.ts`);
- * 新增一篇 `references/foo.md` 就会自动多出一条 prompt,**除非**它也带参数 ——
+ * 标题、何时用读 markdown 的 frontmatter(见 `recipe-catalog.ts`);消息角色固定
+ * `user`,frontmatter 不再提供 `role`。新增一篇 `references/foo.md` 就会自动多出
+ * 一条 prompt,**除非**它也带参数 ——
  * 带参数的配方要在这里补一条 `PROMPT_SCHEMAS` 条目,否则用空 schema 注册。
  *
  * 想要在正文里指定插入位置,就在 md 里写 `{{参数名}}`;没写占位符的参数
@@ -121,7 +122,7 @@ export function registerPrompts(
         return {
           messages: [
             {
-              role: recipe.role,
+              role: 'user',
               content: {
                 type: 'text' as const,
                 text: renderRecipeBody(id, params),

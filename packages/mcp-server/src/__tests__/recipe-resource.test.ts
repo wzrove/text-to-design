@@ -109,6 +109,24 @@ describe('配方资源', () => {
     'component-property',
   ];
 
+  const PROMPT_ARGS: Record<string, Record<string, string>> = {
+    'chart-by-code': { chart: '按月折线: 12, 18, 15' },
+    'html-to-design': { html: '<p>hello</p>' },
+    'icon-grid': { icons: 'home,search' },
+  };
+
+  it('所有配方 prompt 都固定为 user 消息', async () => {
+    await withServer(async (client) => {
+      for (const r of RECIPES) {
+        const { messages } = await client.getPrompt({
+          name: r.id,
+          arguments: PROMPT_ARGS[r.id] ?? {},
+        });
+        expect(messages[0]?.role, `${r.id} 的 prompt 角色`).toBe('user');
+      }
+    });
+  });
+
   it('每条配方都有正文;参数可省的配方与 prompt 逐字同源', async () => {
     await withServer(async (client) => {
       for (const r of RECIPES) {

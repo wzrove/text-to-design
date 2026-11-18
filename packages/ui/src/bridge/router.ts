@@ -34,26 +34,100 @@ import { extractBytes, stripBytes } from './binary';
 import { postToCode, readCodeMessage } from './codeChannel';
 import type { Conn, LogLevel, Pending } from './types';
 
+/** 摘要在超时消息里的字符上限:长批不把报错本身撑成第二份入参 */
+const TIMEOUT_SHAPE_MAX = 400;
+
 /**
- * 超时错误里的入参摘要:**只放标量与数组长度**,不展开内容。
+ * 超时错误里的入参摘要:**只放标量、数组长度与 `ops` 的类型计数**,不展开内容。
  *
- * 目的是让「为什么超时」在下一次上报里自证 —— 25s 预算被顶穿的三个已知分支
- * (scope=document 全量加载 / ids 逐个深读 / depth 过大深序列化)在只有
- * 「插件响应超时」一句话时完全无法区分。
+ * 目的是让「为什么超时」在下一次上报里自证 —— 25s 预算被顶穿的已知分支
+ * (scope=document 全量加载 / ids 逐个深读 / depth 过大深序列化 / 某个 `execute` op 卡死)
+ * 在只有「插件响应超时」一句话时完全无法区分。
+ *
+ * `ops` / `calls` 单独处理(2026-11-17 线上 2 次 `execute` 超时取证受阻):这两个是
+ * **编排入参**,真正决定耗时的是里面的 `type` / `tool`。只给 `ops[3]` 时,一次
+ * `create_svg` 超时与一次 3 个 `create_frame` 超时在日志里长得一模一样。
+ * 只取类型名、按出现次数折叠(product 名是自由文本,**不**进摘要)。
  */
 function describeParamsForTimeout(params: unknown): string {
   if (params == null || typeof params !== 'object' || Array.isArray(params)) {
     return 'none';
   }
+  /** 编排数组成员的类型名,按出现次数折叠;超长/非字面的名字截断,免得报错被撑大 */
+  const shapeOfRuns = (list: readonly unknown[]): string => {
+    if (list.length === 0) return '';
+    const tally = new Map<string, number>();
+    for (const it of list) {
+      if (it == null || typeof it !== 'object') continue;
+      const rec = it as { type?: unknown; tool?: unknown };
+      const raw =
+        typeof rec.type === 'string'
+          ? rec.type
+          : typeof rec.tool === 'string'
+            ? rec.tool
+            : '?';
+      const name = raw.length > 40 ? `${raw.slice(0, 39)}~` : raw;
+      tally.set(name, (tally.get(name) ?? 0) + 1);
+    }
+    if (tally.size === 0) return `[${list.length}]`;
+    return (
+      '[' +
+      [...tally.entries()]
+        .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+        .map(([name, n]) => (n > 1 ? `${name}×${n}` : name))
+        .join(',') +
+      ']'
+    );
+  };
+  /** 只有这两个键是「工具调用编排」数组;其余数组照旧只给长度 */
+  const runShape = (list: readonly unknown[]): string =>
+    Array.isArray(list) ? shapeOfRuns(list) : '';
   const out: string[] = [];
   for (const [k, v] of Object.entries(params as Record<string, unknown>)) {
     if (v == null) continue;
     if (typeof v === 'number' || typeof v === 'boolean') out.push(`${k}=${v}`);
     else if (typeof v === 'string') out.push(`${k}=${v.length}ch`);
-    else if (Array.isArray(v)) out.push(`${k}[${v.length}]`);
-    else out.push(`${k}=obj`);
+    else if (Array.isArray(v)) {
+      const runs = k === 'ops' || k === 'calls' ? runShape(v) : '';
+      out.push(runs === '' ? `${k}[${v.length}]` : `${k}${runs}`);
+    } else out.push(`${k}=obj`);
   }
-  return out.length === 0 ? 'none' : out.join(' ');
+  if (out.length === 0) return 'none';
+  const joined = out.join(' ');
+  return joined.length > TIMEOUT_SHAPE_MAX
+    ? `${joined.slice(0, TIMEOUT_SHAPE_MAX)}…`
+    : joined;
+}
+
+/**
+ * 超时成因的**已知签名**。
+ *
+ * 25s 只有「没在预算内返回」这一层事实,而线上记录里同一句 `forward_timeout` 背后是
+ * 完全不同的根因(error_reports 2026-11-17:`find` 13 次、`execute` 2 次)。这两条的
+ * 已知机制各有明确症状,故按 method 直接把排查前提写进报错:否则每次都要重走一遍
+ * 「是不是插件卡死」的取证。
+ *
+ * 只写**已知的**:没登记的方法照旧只转入参摘要,不做猜测。
+ */
+function timeoutCauseOf(method: string): string | null {
+  switch (method) {
+    case 'find':
+    case 'get_page':
+      // dec 0039 修订:即时设计/MG 上任何「触碰非当前页」的枚举都会挂到转发上限
+      return '本平台读不到非当前页(触碰即挂死);若调用传了 scope=document,这类枚举在即时设计上可能被退回当前页而前置耗时失控';
+    case 'list_styles':
+    case 'export':
+    case 'jsd_export':
+      return '该方法的运行时成员可能是永不 settle 的 *Async 变体:平台须声明同步入口(dec e1e66f0a)';
+    default:
+      return null;
+  }
+}
+
+function describeTimeoutError(method: string, params: unknown): string {
+  const cause = timeoutCauseOf(method);
+  const tail = cause == null ? '' : `;已知成因:${cause}`;
+  return `插件响应超时(入参 ${describeParamsForTimeout(params)})${tail}`;
 }
 
 /** 请求/响应关联:转发挂超时定时器,code 回包直接回发 WS;localPending 仅存定时器/ping 等待 */
@@ -285,7 +359,7 @@ export class Router {
           // scope=document 全量加载 / ids 深读 / depth 过大深序列化。这三条分支在
           // 上报的 message 里原来是无法区分的(实测 find 连续 57 次超时,只能猜)。
           // 只放标量与数组长度,不放 id 内容本身 —— 诊断够用,又不会把画布细节带出去。
-          message: `插件响应超时(入参 ${describeParamsForTimeout(msg.params)})`,
+          message: describeTimeoutError(msg.method, msg.params),
         });
       }
     }, UI_FORWARD_TIMEOUT_MS);

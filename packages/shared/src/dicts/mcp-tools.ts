@@ -5,25 +5,9 @@ export const MCP_CORE_TOOLS: readonly string[] = [
   'jsd_copy',
   'jsd_find',
   'jsd_list_fonts',
-  'jsd_create_frame',
-  'jsd_create_rectangle',
-  'jsd_create_text',
-  'jsd_create_svg',
-  'jsd_create_icon',
-  'jsd_set_text',
-  'jsd_set_fill_color',
-  'jsd_set_stroke',
-  'jsd_set_layout',
-  'jsd_resize_node',
-  'jsd_set_effects',
-  'jsd_delete_node',
-  'jsd_clone_node',
-  'jsd_reparent_nodes',
-  'jsd_create_component',
-  'jsd_create_instance',
-  'jsd_set_instance_properties',
   'jsd_export',
-  'jsd_fill_image',
+  'jsd_list_prompts',
+  'jsd_get_prompt',
   'jsd_batch',
 ];
 
@@ -106,17 +90,17 @@ export const MCP_TOOL_GROUPS: Readonly<Record<string, readonly string[]>> = {
 
 export const MCP_TOOL_GUIDANCE = {
   'zh-CN': {
-    full: '工具目录为兼容档，公开全部原有工具。',
+    full: '工具目录为兼容档。画布绘制与多步编辑优先用 jsd_batch；单步也可直接调用专责工具。',
     compact:
-      '工具目录为精简档。未公开的操作先用 jsd_describe_tools 按 group/query 查名称，再按 names 读取完整 schema，最后用 jsd_batch 执行；不要直接调用未公开的工具名。',
+      '默认精简档。画布绘制与编辑统一用 jsd_batch，一次操作也可提交单步。已知步骤工具名时，直接用 jsd_describe_tools 的 names 取 schema；名称未知时先按 group/query 查找。同值批改在一个步骤里合并 ids。',
     title: '查询可用工具与参数',
     description:
       '按 group/query 分页查看内部能力摘要；按 names（最多 3 个）读取完整输入 schema、结果键和风险。未公开工具仅通过 jsd_batch 执行。只读、离线可用；查询不会改变公开目录。',
   },
   en: {
-    full: 'Compatibility catalog: all original tools are public.',
+    full: 'Compatibility catalog. Prefer jsd_batch for drawing and multi-step edits. Single operations can also be called directly.',
     compact:
-      'Compact catalog: use jsd_describe_tools with group/query to discover names, then names to read full schemas. Execute non-public tools through jsd_batch; do not call their names directly.',
+      'Default compact catalog. Use jsd_batch for canvas creation and edits, including single steps. Fetch schemas with jsd_describe_tools names when known, or discover names with group/query first. Combine ids in one step for identical edits.',
     title: 'Discover tools and parameters',
     description:
       'Page through capability summaries with group/query; pass names (up to 3) for full input schemas, result keys and risk hints. Execute non-public tools through jsd_batch. Read-only, available offline; discovery never changes the public catalog.',

@@ -302,7 +302,6 @@ function collectIds(value: unknown, out: string[]): void {
  */
 function echoStep(
   structured: unknown,
-  tool: string,
 ): { data: unknown; trimmed: boolean; omitted: boolean } {
   const data = trimEcho(structured);
   const size = jsonSize(data);
@@ -314,7 +313,7 @@ function echoStep(
   return {
     data: {
       echoOmitted: true,
-      note: `本步回显裁剪后仍 ${size} 字符,已省略明细;需要细节请把 ${tool} 单独调用一次`,
+      note: `本步回显裁剪后仍 ${size} 字符，已省略明细。画布详情用 jsd_find 按 id 回读。`,
       ids: [...new Set(ids)],
     },
     trimmed: true,
@@ -338,13 +337,13 @@ function echoNoteText(
   const parts = [
     `回显已裁剪:${trimmed.length} 步(${trimmed.join(' / ')})的节点只保留 id/name/type/x/y/width/height/z/parentId`,
     ' —— 子节点、characters、fills、*StyleId、vectorPaths 等字段不在回显里。',
-    '要读这些字段,请把对应工具**单独调用一次**;批内回显不是验收证据。',
+    '需要这些字段时，用 jsd_find 按 id 独立回读。',
     '占位符 `{{步骤id.…}}` 不受影响,它取的是裁剪前的完整数据。',
   ];
   if (omitted.length > 0) {
     parts.push(
       spill == null
-        ? `其中 ${omitted.length} 步(${omitted.join(' / ')})连摘要都超预算,已降级为 id 清单,步骤内的 note 已点名工具名。`
+        ? `其中 ${omitted.length} 步(${omitted.join(' / ')})连摘要都超预算，已降级为 id 清单。`
         : `其中 ${omitted.length} 步(${omitted.join(' / ')})连摘要都超预算,完整明细已落盘到 ${spill.path}(${spill.bytes} 字节,JSONL 一行一步),按各步 data 里的 line 读即可。`,
     );
   }
@@ -442,6 +441,61 @@ async function resolveRefs(
   return value;
 }
 
+/** 递归收集一段 args 里的占位符引用表达式(顺序即出现顺序,去重交给调用方) */
+function collectRefExprs(value: unknown, out: string[]): void {
+  if (typeof value === 'string') {
+    const whole = WHOLE_REF_RE.exec(value.trim());
+    if (whole != null) {
+      out.push(whole[1]);
+      return;
+    }
+    for (const m of value.matchAll(REF_RE)) out.push(m[1]);
+    return;
+  }
+  if (Array.isArray(value)) {
+    for (const v of value) collectRefExprs(v, out);
+    return;
+  }
+  if (value == null || typeof value !== 'object') return;
+  for (const v of Object.values(value)) collectRefExprs(v, out);
+}
+
+interface PlannedRef {
+  /** 引用它的步骤 id(报错时点名「哪一步等了它」) */
+  stepId: string;
+  /** 写出来的表达式原文,错误文案里原样回给模型 */
+  expr: string;
+  /** 表达式自己的步骤 id 段 */
+  step: string;
+  /** 表达式除步骤 id 外的路径段(没有则空串) */
+  path: string;
+}
+
+/**
+ * 把「引用了计划里根本没有的步骤 id」从笼统的「不存在或未成功」里拆出来。
+ *
+ * 调用方最常见的错法:建根、设布局、搬入这类**有依赖**的步骤被拆成多次调用,
+ * 于是本批里那个 id 从来没出现过。笼统文案看不出这一点 —— 见到「已完成: 无」
+ * 也不知道是键名写错还是干脆没带那一步。这里把「本批从没出现过」单列出来,
+ * 并把批内所有可用步骤 id 回给模型,以便它把前置步骤并进同一批。
+ */
+function undefinedStepRefError(
+  p: PlannedRef,
+  planned: readonly string[],
+): Error {
+  const known = planned.join(', ') || '无';
+  return new Error(
+    '占位符「' +
+      p.expr +
+      '」引用的步骤「' +
+      p.step +
+      '」不在本批 —— 本批已声明的步骤 id: ' +
+      known +
+      '。若它是建根 → 设布局 → 搬入/改属性这类前置步骤,那个 create/set 步骤必须与引用它的步骤放进同一次 jsd_batch,参数里用 {{create.created.id}} 引用;单步拆开发解析不到,也不要去掉占位符硬写 id。' +
+      '本批要引用本批之外的既有节点时,先用 jsd_find / jsd_get_page 取真实 id 直接写进 args。',
+  );
+}
+
 /** 编排类:服务端顺序执行多步 jsd_* 工具,中间值经占位符注入、不回传模型 */
 export function registerBatchTools(
   server: McpServer,
@@ -535,12 +589,36 @@ export function registerBatchTools(
       // 已执行但失败的步骤 id:占位符引用到它们时走 StepFailedRefError(受容错开关管),
       // 与「id 根本不在计划里」区分开。
       const failedSteps = new Set<string>();
-      for (let i = 0; i < calls.length; i++) {
-        const call = calls[i];
-        const id =
+      // 本批声明过的步骤 id(按声明顺序)。判据取自**声明**而不是「已执行」:
+      // 引用在前、被引用的 create 在后时不该被说成「不在本批」。
+      const declaredSteps: string[] = [];
+      for (const [i, call] of calls.entries()) {
+        declaredSteps.push(
           call.id == null || call.id.trim() === ''
             ? `step${i + 1}`
-            : call.id.trim();
+            : call.id.trim(),
+        );
+      }
+      const declaredSet = new Set(declaredSteps);
+      // 反向索引:谁等了谁、表达式怎么写。解析失败时据此点名「哪一步」而不是只回表达式。
+      const refByExpr = new Map<string, PlannedRef>();
+      for (const [i, call] of calls.entries()) {
+        const owner = declaredSteps[i];
+        const written: string[] = [];
+        collectRefExprs(call.args ?? {}, written);
+        for (const expr of written) {
+          if (refByExpr.has(expr)) continue;
+          const dot = expr.indexOf('.');
+          refByExpr.set(expr, {
+            stepId: owner,
+            expr,
+            step: dot === -1 ? expr : expr.slice(0, dot),
+            path: dot === -1 ? '' : expr.slice(dot + 1),
+          });
+        }
+      }
+      for (const [i, call] of calls.entries()) {
+        const id = declaredSteps[i];
         const fail = (msg: string): void => {
           failedSteps.add(id);
           results.push({ id, tool: call.tool, ok: false, error: msg });
@@ -566,7 +644,26 @@ export function registerBatchTools(
             failedSteps,
           )) as Record<string, unknown>;
         } catch (e) {
-          fail(e instanceof Error ? e.message : String(e));
+          // 引用了一个本批从没声明过的步骤 id:单列成「不在本批」,并给出批内可用 id。
+          // 触发场景里最常见的就是有依赖的步骤被拆成多次调用(建根 / 设布局 / 搬入),
+          // 笼统的「不存在或未成功」看不出这一点,模型会去改键名而不是并回同一批。
+          const msg = e instanceof Error ? e.message : String(e);
+          const stale = [
+            ...msg.matchAll(/占位符(?:引用的步骤不存在或未成功:)?「(.+?)」/g),
+          ]
+            .map((m) => m[1])
+            .map((expr) => refByExpr.get(expr))
+            .find(
+              (p) =>
+                p != null &&
+                !failedSteps.has(p.step) &&
+                !declaredSet.has(p.step),
+            );
+          fail(
+            stale == null
+              ? msg
+              : undefinedStepRefError(stale, declaredSteps).message,
+          );
           // 引用了「已执行但失败」的步骤:计划没问题,只是上游没拿到 ——
           // 与执行期失败同等对待,让容错开关生效;引用了计划里根本没有的 id 才是
           // 编排期错误,一律中止。
@@ -606,7 +703,7 @@ export function registerBatchTools(
         }
         // 占位符解析用完整数据,回显用裁剪后的摘要:两者分离,
         // 剪掉 vectorPaths 不会让下游 {{id.created[0].id}} 解析失败。
-        const echo = echoStep(out.structuredContent, call.tool);
+        const echo = echoStep(out.structuredContent);
         if (echo.trimmed) {
           echoTrimmed = true;
           trimmedSteps.push(id);
@@ -630,7 +727,7 @@ export function registerBatchTools(
       const spill = spilled != null && 'error' in spilled ? undefined : spilled;
       if (spilled != null && 'error' in spilled) {
         warnings.push(
-          `本批有 ${omittedSteps.length} 步回显超预算,但完整明细未落盘(${spilled.error});已保留 id 清单,要明细请把对应工具单独调用一次。`,
+          `本批有 ${omittedSteps.length} 步回显超预算，完整明细未落盘(${spilled.error})。已保留 id 清单，可用 jsd_find 回读画布详情。`,
         );
       }
       if (spill != null) {
@@ -643,7 +740,7 @@ export function registerBatchTools(
             ...data,
             path: spill.path,
             line: ln,
-            note: `本步明细已随整批落盘(第 ${ln} 行);也可把 ${r.tool} 单独调用一次。`,
+            note: `本步明细已随整批落盘(第 ${ln} 行)。`,
           };
         }
       }

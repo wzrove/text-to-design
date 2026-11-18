@@ -106,7 +106,7 @@ export function bridgeTool(
               .join('; ');
             throw new BridgeError(
               'invalid_args',
-              `参数校验失败(${def.name}): ${describeInvalidArgs(def.inputSchema, args, detail, def.fieldOwnership)}`,
+              `参数校验失败(${def.name}): ${describeInvalidArgs(def.inputSchema, args, detail, def.fieldOwnership, def.fieldMisplaced)}`,
             );
           }
           args = parsed.data as Record<string, unknown>;

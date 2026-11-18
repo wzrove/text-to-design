@@ -263,10 +263,15 @@ export interface PageSkeleton extends ContainerSkeleton {
  * 同步只保留给「各平台 typings 都只有同步变体 + 纯内存」的成员(如 createFrame /
  * appendChild)。理由:底层 Plugin API 的异步面在扩张且三平台不对称
  * (figma 1.137 有 97 处 Promise,jsDesign 1.0.12 只有 20 处,mastergo 2.19 把
- * `createNodeFromSvg` / `createImage` 都做成了 Promise 版;
+ * `createImage` 做成了 Promise 版;
  * getMainComponentAsync / loadAllPagesAsync 等仅 figma 有),同步签名一旦落成,
- * 后面接异步能力就要改一遍全链路签名 —— 0017 就是这条纪律在第三平台上的兑现
- * (两处成员由同步改异步)。
+ * 后面接异步能力就要改一遍全链路签名。
+ *
+ * ⚠ 这条纪律有一个**反向例外**:异步优先的前提是「异步入口真的会 settle」。即时设计的
+ * host 是 `Object.create(native)` —— typings 未声明的异步成员运行时照样透出来,
+ * 且**永不 settle**(`getNodeByIdAsync` / `getMainComponentAsync` /
+ * `getLocal*StylesAsync` 都是)。故凡**原生就有同步入口**的成员,契约改回同步必需、
+ * 异步留作可选(`createNodeFromSvg` 即 0017 那次改动的**回退**)。
  */
 export interface DesignHost extends DesignHostOptionalCapabilities {
   createFrame(): NodeSkeleton;
@@ -279,16 +284,27 @@ export interface DesignHost extends DesignHostOptionalCapabilities {
   createVector(): NodeSkeleton;
   createComponent(): NodeSkeleton;
   /**
-   * 由 SVG 字符串建节点(一律异步)。
+   * 由 SVG 字符串建节点。**同步必需 + 异步可选**。
    *
-   * 为什么必须异步(0017):MasterGo 只有 `mg.createNodeFromSvgAsync(svg): Promise<FrameNode>`,
-   * 没有同步变体 —— `@mastergo/plugin-typings@2.19.2` 全文件无 `createNodeFromSvg`。
-   * 同步签名一旦保留,第三平台的 adapter 只能返回 Promise,调用方拿到的是 Promise
-   * 而不是节点(`node.id` 全 undefined、`appendChild` 抛 "child is not a node"),
-   * 报错点会漂到组装/序列化深处。故按 0010 的异步优先统一成 Promise;
-   * figma / jsDesign 侧由各自 adapter 把同步原生方法包成 async。
+   * 同步这条是共同底座:Figma(`plugin-api.d.ts` `createNodeFromSvg(svg): FrameNode`)
+   * 与 jsDesign(typings 1.0.12 `:118`)**都是原生同步**。异步那条只在 MasterGo 存在 ——
+   * `mg.createNodeFromSvgAsync(svg): Promise<FrameNode>`,该平台 typings 全文件无同步变体。
+   *
+   * 为什么不再一律异步(dec e1e66f0a 的正向用法):即时设计的 host 是
+   * `Object.create(native)`,typings 未声明的异步成员运行时照样透出来且可能**永不 settle**
+   * —— 建图路径同样会挂到转发上限。同步入口是原生符号,不经过任何 async 边界。
+   *
+   * 选路:同步存在 ⇒ 用它;只有异步 ⇒ await 它;两者皆无 ⇒ 明确报错(不静默回落空节点)。
    */
-  createNodeFromSvgAsync(svg: string): Promise<NodeSkeleton>;
+  createNodeFromSvg(svg: string): NodeSkeleton;
+  /**
+   * 只在没有同步入口的平台(MasterGo)提供;选路见 {@link createNodeFromSvg}。
+   *
+   * ⚠ 反过来也成立:**声明的同步名可能在某个平台实现成异步**(MasterGo 就是这么桥接的,
+   * 见 ui/code/mastergo/host.ts)。故调用方**不得**把 `createNodeFromSvg` 的返回值当同步
+   * 节点直接用 —— 一律经 `core/execute.ts` 的 `createNodeFromSvgResolved` 并 `await`。
+   */
+  createNodeFromSvgAsync?(svg: string): Promise<NodeSkeleton>;
   /**
    * 上传图片字节,拿回**宿主本地**的图片引用(一律异步)。
    *

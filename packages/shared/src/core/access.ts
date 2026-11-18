@@ -23,6 +23,23 @@ export function isUsable(n: NodeSkeleton): boolean {
 }
 
 /**
+ * 「可按 id 解析的工具」认不认这个类型。
+ *
+ * 不认的是**容器之上**的两类:`PAGE` / `DOCUMENT`。它们不是这一层的节点 ——
+ * 传进 `jsd_find` 之类会一路走到序列化,把 `type:"PAGE"` 写进结果,而读路径的
+ * `observedNodeTypeSchema`(dicts/node-type.ts:142)是**节点**类型表,最后一个
+ * zod 输出校验把整条调用判成 `isError`,调用方连一个节点都拿不到(真机 2026-11-18
+ * Figma:`find {ids:[<page id>]}` → `nodes.0.type: Invalid option`)。
+ *
+ * 在解析层就当作「不存在」,与「id 失效」同一出口;要把页面当父级用的调用走专用入口
+ * (`jsd_get_page` / reparent 的 `parentId` 由引擎自己接),不靠这条通用解析。
+ */
+function isResolvableKind(n: NodeSkeleton): boolean {
+  const t = (n as { type?: unknown }).type;
+  return t !== 'PAGE' && t !== 'DOCUMENT';
+}
+
+/**
  * 按 id 解析单个节点。
  *
  * 顺序:异步入口(声明允许时) → 同步入口(jsDesign / legacy) → 当前页 findOne 兜底。
@@ -49,20 +66,20 @@ export async function resolveOne(
   if (!preferSync && typeof host.getNodeByIdAsync === 'function') {
     try {
       const n = await host.getNodeByIdAsync(id);
-      if (n != null && isUsable(n)) return n;
+      if (n != null && isUsable(n) && isResolvableKind(n)) return n;
     } catch {
       // 失效 id / 未加载页,落到下面的兜底
     }
   }
   try {
     const n = host.getNodeById(id);
-    if (n && isUsable(n)) return n;
+    if (n && isUsable(n) && isResolvableKind(n)) return n;
   } catch {
     // dynamic-page 下这里必抛(同步入口被禁);legacy 下可能是失效 id,继续
   }
   try {
     const n = host.currentPage.findOne((x) => x.id === id);
-    return n != null && isUsable(n) ? n : null;
+    return n != null && isUsable(n) && isResolvableKind(n) ? n : null;
   } catch (e) {
     console.error(
       `[core] findOne 失败,跳过 id=${id}: ${e instanceof Error ? e.message : String(e)}`,

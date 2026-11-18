@@ -7,6 +7,7 @@ import {
   SKILLS_LIST_METHOD,
 } from '@modelcontextprotocol/server/ext/skills';
 import { z } from 'zod';
+import { isCanvasGuidanceUri, markGuidanceRead } from '../core/skill-first';
 
 export function registerSkillsProxy(
   server: McpServer,
@@ -38,7 +39,18 @@ export function registerSkillsProxy(
   server.server.setRequestHandler(
     SKILLS_GET_METHOD,
     { params: uriParams },
-    (params, ctx) => upstream(SKILLS_GET_METHOD, params, ctx.mcpReq.signal),
+    async (params, ctx) => {
+      const result = await upstream(
+        SKILLS_GET_METHOD,
+        params,
+        ctx.mcpReq.signal,
+      );
+      // 成功读到画布技能/附录正文才算「已读」;列目录与失败请求不记账(dec 7044aa46)。
+      if (isCanvasGuidanceUri(params.uri)) {
+        markGuidanceRead(server);
+      }
+      return result;
+    },
   );
   if (capability.directoryRead === true) {
     server.server.setRequestHandler(

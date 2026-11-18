@@ -142,4 +142,42 @@ describe('batch 占位符失败的容错语义(0044)', () => {
     const dep = (r.results ?? []).find((x) => x.id === 'dep');
     expect(dep?.error).toContain('不存在或未成功');
   });
+  it('引用了本批从没声明过的步骤:点名「不在本批」并回批内可用 id', async () => {
+    // 真实事故形状:建根(上一次调用)→ 设布局(这一次)引用了 {{v.created.id}},
+    // 只回「已完成: 无」时看不出「那一步压根没带进本批」。
+    const r = await runBatch({
+      calls: [
+        {
+          id: 'lay',
+          tool: 'jsd_set_layout',
+          args: { ids: ['{{v.created.id}}'], layoutMode: 'VERTICAL' },
+        },
+        { id: 'free', tool: 'jsd_create_frame', args: { width: 1, height: 1 } },
+      ],
+    });
+    expect(r.executed).toBe(1);
+    const lay = (r.results ?? []).find((x) => x.id === 'lay');
+    expect(lay?.error).toContain('不在本批');
+    expect(lay?.error, '要点名缺失的步骤 id').toContain('v');
+    expect(lay?.error, '要回批内可用 id,便于自检').toContain('free');
+    expect(lay?.error, '要给出并批的处置动作').toContain('jsd_batch');
+  });
+
+  it('被引用步骤声明在本批更靠后时不改判成「不在本批」', async () => {
+    const r = await runBatch({
+      calls: [
+        {
+          id: 'lay',
+          tool: 'jsd_set_layout',
+          args: { ids: ['{{root.created.id}}'], layoutMode: 'VERTICAL' },
+        },
+        { id: 'root', tool: 'jsd_create_frame', args: { width: 1, height: 1 } },
+      ],
+      stopOnError: false,
+    });
+    const lay = (r.results ?? []).find((x) => x.id === 'lay');
+    expect(lay?.error, '声明过的 id 不该被说成不在本批').not.toContain(
+      '不在本批',
+    );
+  });
 });

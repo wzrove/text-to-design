@@ -14,6 +14,7 @@ export const ERROR_CODES = [
   'invalid_args',
   'unknown_method',
   'platform_unsupported',
+  'skill_first_required',
   'plugin_error',
 ] as const;
 

@@ -12,7 +12,15 @@ import {
   SERVER_NAME,
   SERVER_VERSION,
 } from '../config';
+import { BridgeError } from '../core/bridge-error';
 import { compactOutputSchema } from '../core/compact-schema';
+import { err } from '../core/response';
+import {
+  guidanceFirstVeto,
+  isCanvasGuidanceUri,
+  markGuidanceRead,
+} from '../core/skill-first';
+import { createMcpI18n } from '../i18n';
 import { log, warn } from '../logger';
 import { friendlyInputSchema } from './friendly-schema';
 import {
@@ -130,6 +138,7 @@ export function createCatalogProxy(
     },
   );
 
+  const i18n = createMcpI18n();
   const toolHandles = new Map<string, RegisteredEntry>();
   const promptHandles = new Map<string, RegisteredEntry>();
   const resourceHandles = new Map<string, RegisteredEntry>();
@@ -247,8 +256,24 @@ export function createCatalogProxy(
               // 下游工具索引撑爆,详见 ./compact-schema.ts
               { outputSchema: fromJsonSchema(projectedOutput as never) }),
         };
-        return register(t.name, wire, async (args, ctx) =>
-          withUpstream(
+        return register(t.name, wire, async (args, ctx) => {
+          // 会话级硬门禁放在 shim 侧:读状态与写入请求落在同一个会话实例上,
+          // 不挂池化的 daemon 工具实例(dec 7044aa46)。缺省 readOnlyHint 按协议
+          // 默认 false 处理,新增写工具无需再抄一份名单。
+          const veto = guidanceFirstVeto(
+            mcp,
+            t.annotations?.readOnlyHint !== true,
+            i18n,
+          );
+          if (veto != null) {
+            // 带 outputSchema 的工具报错也要给 schema-valid 空结构,
+            // 否则 SDK 会在返回前把「缺 structuredContent」当成另一个错误。
+            return err(
+              new BridgeError(veto.code, veto.message),
+              wire.outputSchema as z.ZodType | undefined,
+            );
+          }
+          const result = await withUpstream(
             (c) =>
               c.callTool(
                 {
@@ -263,8 +288,16 @@ export function createCatalogProxy(
                 t.annotations?.readOnlyHint === true ||
                 t.annotations?.idempotentHint === true,
             },
-          ),
-        );
+          );
+          // 工具型宿主的 prompt fallback 也解锁:成功读到正文才算,报错不算。
+          if (
+            t.name === 'jsd_get_prompt' &&
+            (result as { isError?: boolean }).isError !== true
+          ) {
+            markGuidanceRead(mcp);
+          }
+          return result;
+        });
       },
     });
     reportCatalogSize(sizes);
@@ -287,8 +320,8 @@ export function createCatalogProxy(
             _meta: p._meta,
             argsSchema: promptArgsSchema(p.arguments),
           },
-          (args, ctx) =>
-            withUpstream((c) =>
+          async (args, ctx) => {
+            const result = await withUpstream((c) =>
               c.getPrompt(
                 {
                   name: p.name,
@@ -299,7 +332,11 @@ export function createCatalogProxy(
                 },
                 proxyRequestOptions(ctx),
               ),
-            ),
+            );
+            // MCP prompt 读到配方正文 = 本会话已读操作指引(dec 7044aa46)。
+            markGuidanceRead(mcp);
+            return result;
+          },
         ),
     });
   }
@@ -326,13 +363,18 @@ export function createCatalogProxy(
             annotations: r.annotations,
             _meta: r._meta,
           },
-          async (u, ctx) =>
-            withUpstream((c) =>
+          async (u, ctx) => {
+            // 静态资源读是宿主读技能的**另一条**路径:模型走 ReadMcpResource 读
+            // skill://canvas/* 或 jsd://recipes/* 时不经过 skills/get(dec 7044aa46)。
+            const result = await withUpstream((c) =>
               c.readResource(
                 { uri: u.href, _meta: ctx.mcpReq._meta },
                 { ...proxyRequestOptions(ctx), cacheMode: 'bypass' },
               ),
-            ),
+            );
+            if (isCanvasGuidanceUri(u.href)) markGuidanceRead(mcp);
+            return result;
+          },
         ),
     });
 
@@ -355,12 +397,17 @@ export function createCatalogProxy(
           async (u, vars, ctx) => {
             // 模板变量已在上游模板 URI 中声明;读取时原样回传完整 URI
             void vars;
-            return withUpstream((c) =>
+            // 宿主走 ReadMcpResource 读技能/配方正文也记账(dec 7044aa46)
+            const result = await withUpstream((c) =>
               c.readResource(
                 { uri: u.href, _meta: ctx.mcpReq._meta },
                 { ...proxyRequestOptions(ctx), cacheMode: 'bypass' },
               ),
             );
+            if (isCanvasGuidanceUri(u.href)) {
+              markGuidanceRead(mcp);
+            }
+            return result;
           },
         );
       },

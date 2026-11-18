@@ -67,10 +67,21 @@ function absoluteOrigin(node: NodeSkeleton): { x: number; y: number } {
  * 引擎给所有节点都挂了同名方法,探测法在真机上恒真,等于没有前置。页面没有 type(它本来
  * 就是容器),直接放行。
  */
-function assertCanParent(parent: NodeSkeleton | PageSkeleton): void {
+function assertCanParent(
+  parent: NodeSkeleton | PageSkeleton,
+  /** 被移动的节点:它们本来就在 parent 下时,插入合法(见下注释) */
+  moving?: readonly NodeSkeleton[],
+): void {
   const p = parent as unknown as { id?: string; type?: string };
   if (p.type == null) return;
+  // 实例父级:成员本来就在实例里的情形放行 —— 本工具对此只调层序(reorderChild),
+  // 不新增子节点,引擎允许。此前一刀切拒掉,「给实例内的子节点调 index」直接 400。
+  const alreadyInside =
+    moving != null &&
+    moving.length > 0 &&
+    moving.every((n) => n.parent?.id === p.id);
   if (p.type === 'INSTANCE') {
+    if (alreadyInside) return;
     throw new Error(
       `目标父级 ${p.id ?? '?'} 是实例(INSTANCE),引擎不允许往实例里加节点 —— 先用 jsd_detach_instance 拆链接,或改用该实例的主组件作父级`,
     );
@@ -202,6 +213,12 @@ function applyPinnedSize(container: ContainerSkeleton, size: PinnedSize): void {
  * index 因此在 auto-layout 容器上也能生效(此前只能报错)。
  * 恢复时连同布局属性一起还原(见 LAYOUT_PRESERVE_KEYS),异常一律在 finally 里恢复,
  * 不留半残状态。
+ *
+ * ⚠ index 必须在这里再夹一次(不能只信调用方的 `clampIndex`):跨父级移动时节点
+ * 仍在**旧**父级的 children 里,目标父级的兄弟数才是上限;而节点已在该父级下时,
+ * 引擎会先把它从 children 摘掉再插入 —— 那一刻兄弟数少一,index == 原长度 就会撞
+ * `Cannot insert node at index greater than the number of existing siblings`
+ * (error_reports 2026-11-17 的 r255)。故按「插入瞬间的兄弟数」夹取。
  */
 function insertChildAt(
   parent: ContainerSkeleton,
@@ -209,7 +226,7 @@ function insertChildAt(
   node: NodeSkeleton,
 ): void {
   if (!isAutoLayoutContainer(parent)) {
-    parent.insertChild(index, node);
+    parent.insertChild(siblingSafeIndex(parent, index, node), node);
     return;
   }
   const owner = parent as ContainerSkeleton & { layoutMode?: LayoutMode };
@@ -218,7 +235,7 @@ function insertChildAt(
   const pinned = pinnedSizeOf(parent, snap, mode);
   try {
     owner.layoutMode = 'NONE';
-    parent.insertChild(index, node);
+    parent.insertChild(siblingSafeIndex(parent, index, node), node);
   } finally {
     // 顺序要紧:方向 → 其余布局属性 → 尺寸。引擎在写方向时会把尺寸模式翻成 AUTO,
     // 尺寸放最后写才不会被它带走。
@@ -514,7 +531,20 @@ export async function removeNodes(
     nodes = nodes.filter((n) => n.name === params.matchName);
   }
   if (nodes.length === 0) {
-    throw new Error('没有要删除的节点');
+    // 点名请求了什么、为什么一个都没落到:调用方看到光秃秃的「没有要删除的节点」时,
+    // 无法区分「id 无效」「matchName 过滤掉了」「什么都没选中」。
+    if (params.ids != null && params.ids.length > 0) {
+      const note =
+        params.matchName != null
+          ? `${params.ids.length} 个 id 里没有一个同时满足 matchName="${params.matchName}"`
+          : `这 ${params.ids.length} 个 id 都没解析到节点(id 失效 / 不在当前页)`;
+      throw new Error(
+        `没有要删除的节点:${note}(请求 ids: ${JSON.stringify(params.ids)})。当前页${host.currentPage.selection.length} 个选中;可用 jsd_find 复核 id 是否有效`,
+      );
+    }
+    throw new Error(
+      '没有要删除的节点:既没传 ids(且未命中 matchName),当前页也没有选中任何节点。传 ids、先 jsd_select_nodes 选中,或用 matchName 按名字删',
+    );
   }
   const removed = nodes.map((n) => n.id);
   for (const n of nodes) {
@@ -920,7 +950,7 @@ export async function reparentNodes(
       };传 parentId 指定目标容器,或用 jsd_select_nodes 先选中父容器;只调整层序可传 index 且选中被调整节点本身`,
     );
   }
-  assertCanParent(parent);
+  assertCanParent(parent, nodes);
   const isAutoLayout = isAutoLayoutContainer(parent);
   // 目标父级的绝对原点:reparent 后用它把子节点还原回原绝对位置。
   // 父级本身不移动,故移动前取值即可。
@@ -1041,7 +1071,28 @@ function parentIndex(parent: ContainerSkeleton, node: NodeSkeleton): number {
   );
 }
 
-/** 把下标夹到父容器 children 的合法区间 */
+/**
+ * 插入瞬间的合法下标。
+ *
+ * 引擎的约束是「index ≤ 插入时现存兄弟数」,而「现存兄弟数」要按**节点此刻是否还在
+ * 该父级下**算:引擎在 insertChild 内部先摘掉已在场的节点,再按 index 插入。因此
+ * 已在该父级下时上限是 `len - 1`,否则是 `len`。用统一的 len 会让 reorder 到
+ * 末位(index = len)必抛 `Cannot insert node at index greater than the number of
+ * existing siblings`。
+ */
+function siblingSafeIndex(
+  parent: ContainerSkeleton,
+  index: number,
+  node: NodeSkeleton,
+): number {
+  const kids = (parent as { children?: readonly NodeSkeleton[] }).children;
+  const len = kids?.length ?? 0;
+  const inPlace = kids?.some((c) => c.id === node.id) === true;
+  const max = inPlace ? Math.max(len - 1, 0) : len;
+  return Math.min(Math.max(Math.trunc(index), 0), max);
+}
+
+/** 跨父级移动时的下标夹取:节点此刻还在别的父级下,上限就是目标 children 长度 */
 function clampIndex(parent: ContainerSkeleton, index: number): number {
   const len =
     (parent as { children?: readonly NodeSkeleton[] }).children?.length ?? 0;
@@ -1069,7 +1120,10 @@ function reorderChild(
   index: number,
 ): void {
   const actual = (): number => parentIndex(parent, node);
-  const target = (): number => clampIndex(parent, index);
+  // 期望值与插入用的是**同一把尺子**:index 的语义是最终下标,而插入时引擎先摘后插,
+  // 上限是 len-1 —— 两者不一致时(调用方传 children.length)插入只会落到 len-1,
+  // 却拿 clampIndex 的 len 去比对,必然误报「调整层序失败」(而顺序其实是对的)。
+  const target = (): number => siblingSafeIndex(parent, index, node);
 
   insertChildAt(parent, index, node);
   if (actual() === target()) return;
