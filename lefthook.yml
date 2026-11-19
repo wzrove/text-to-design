@@ -11,5 +11,7 @@ pre-commit:
 
 commit-msg:
   commands:
-    commitlint:
-      run: pnpm exec commitlint --edit "$1"
+    # 一条命令串起来:先改写署名,再让 commitlint 校验(顺序不能反)。
+    # 用 lefthook 的 {1} 取 msg 文件;拆成两条时其参数传递并不可靠。
+    coauthor-and-lint:
+      run: node scripts/coauthor-trailer.mjs "{1}" && pnpm exec commitlint --edit "{1}"
