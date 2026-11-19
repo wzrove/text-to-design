@@ -14,39 +14,40 @@
 | 编号 | 标题 | 状态 | 影响范围 | 最后更新 |
 |---|---|---|---|---|
 | [0029](0029-能力字典改规格表：kind-判别加-labelKey-收口，删死代码与重复事实.md) | 能力字典改规格表：kind 判别 + labelKey 收口 | 已采纳 | `shared/dicts`、`shared/core`、`ui/components` | 2026-09-29 |
-| [0030](0030-MCP-服务实例一次装配、跨请求复用（目录不再按请求重建）.md) | MCP 服务实例一次装配、跨请求复用（目录不再按请求重建） | 已采纳（真机已复验） | `mcp-server`、`daemon` | 2026-09-29 |
 | [0031](0031-MCP-声明面照-2026-07-28-补齐：目录缓存提示-+-工具注解四-hint-必填.md) | MCP 声明面照 2026-07-28 补齐：目录缓存提示 + 工具注解四 hint 必填 | 已采纳（shim 已验） | `mcp-server`（全工具注解） | 2026-09-29 |
 | [0032](0032-平台事实三域收敛为声明表：prompts-与工具描述共用单一投影点.md) | 平台事实三域收敛为声明表：prompts 与工具描述共用单一投影点 | 已采纳（真机已验） | `shared/dicts`、`shared/core`、`mcp-server/tools`、`ui/code` | 2026-10-08 |
-| [0033](0033-MG-集合级变体管理接入-platformOps：原生建维改值替代改名副作用.md) | MG 集合级变体管理接入 platformOps：原生建维改值替代改名副作用 | 已采纳（真机复验通过） | `ui/code/mastergo`、`shared/dicts`、`mcp-server/tools` | 2026-09-29 |
+| [0033](0033-MG-集合级变体管理接入-platformOps：原生建维改值替代改名副作用.md) | MG 集合级变体管理接入 platformOps：原生建维改值替代改名副作用 | 已采纳（真机复验通过） | `ui/code/mastergo`、`shared`、`mcp-server/tools` | 2026-09-29 |
 | [0034](0034-单类型-create-工具容忍并校验-type：三处口径统一加越界字段点名.md) | 单类型 create 工具容忍并校验 `type`：三处口径统一 + 越界字段点名 | 已采纳（两平台已验） | `mcp-server/tools`、`shared/schemas` | 2026-10-08 |
 | [0036](0036-删掉内置图表编译器：图表一律走代码生成-SVG-再导入配方.md) | 删掉内置图表编译器：图表一律走代码生成 SVG 再导入配方 | 已采纳（三家已验） | `shared/schemas`、`shared/dicts`、`mcp-server/tools`、两个 `README.md` | 2026-10-09 |
 | [0037](0037-提示反馈收口：页头改用-daisyUI-tooltip，操作结果统一走-toast-出口.md) | 提示反馈收口：页头改用 daisyUI tooltip，操作结果统一走 toast 出口 | 已采纳（UI 侧已验） | `ui/components`、`ui/utils`、`shared/i18n` | 2026-10-10 |
 | [0038](0038-版本升级提示：daemon代查npm-latest，页头条件挂载升级入口，Modal给分步清单与复制给LLM.md) | 版本升级提示：daemon 代查 npm latest，页头条件挂载升级入口 | 已采纳（UI 侧已验） | `shared`、`mcp-server`、`ui/components` | 2026-10-10 |
-| [0039](0039-get_page-收窄为顶层几何加资源清单：复用既有契约成员，变量走可选入口.md) | `get_page` 收窄为「顶层几何 + 资源清单」：复用既有契约成员，变量走可选入口 | 已采纳（三家已验） | `shared/schemas`、`shared/core`、`shared/dicts`、`ui/code`、`mcp-server/tools` | 2026-10-10 |
+| [0039](0039-get_page-收窄为顶层几何加资源清单：复用既有契约成员，变量走可选入口.md) | `get_page` 收窄为「顶层几何 + 资源清单」：复用既有契约成员，变量走可选入口 | 已采纳（三家已验） | `shared`、`ui/code`、`mcp-server/tools` | 2026-10-10 |
 | [0040](0040-MG-变量读写接入-platformOps：op-形制对齐-Figma，槽位取值以官方文档为据.md) | MG 变量读写接入 platformOps：op 形制对齐 Figma，槽位取值以官方文档为据 | 已采纳（真机已复验） | `ui/code/mastergo`、`shared/dicts`、`mcp-server/tools` | 2026-10-10 |
-| [0041](0041-组件属性两处静默缺口：写侧键归一回-core，读侧暴露图层引用.md) | 组件属性两处静默缺口：写侧键归一回 core，读侧暴露图层引用 | 已采纳（真机已验） | `shared/core`、`shared/schemas`、`ui/code/jsdesign`、`mcp-server/tools` | 2026-10-10 |
-| [0042](0042-本地样式枚举按类拆分：同步-getter-不可中断，单类入口兼作定位探针.md) | 本地样式枚举按类拆分：同步 getter 不可中断，单类入口兼作定位探针 | 已采纳（机制描述已更正） | `shared/dicts`、`shared/schemas`、`shared/core`、`ui`、`mcp-server/tools` | 2026-10-15 |
-| [0043](0043-样式枚举拆出独立能力位：get_page-与-jsd-styles-按平台声明返空.md) | 样式枚举拆出独立能力位：`get_page` 与 `jsd://styles` 按平台声明返空 | 已采纳（机制描述已更正） | `shared/dicts`、`shared/core`、`ui/code`、`mcp-server/tools` | 2026-10-15 |
+| [0041](0041-组件属性两处静默缺口：写侧键归一回-core，读侧暴露图层引用.md) | 组件属性两处静默缺口：写侧键归一回 core，读侧暴露图层引用 | 已采纳（真机已验） | `shared`、`ui/code/jsdesign`、`mcp-server/tools` | 2026-10-10 |
+| [0042](0042-本地样式枚举按类拆分：同步-getter-不可中断，单类入口兼作定位探针.md) | 本地样式枚举按类拆分：同步 getter 不可中断，单类入口兼作定位探针 | 已采纳（机制描述已更正） | `shared`、`ui`、`mcp-server/tools` | 2026-10-15 |
+| [0043](0043-样式枚举拆出独立能力位：get_page-与-jsd-styles-按平台声明返空.md) | 样式枚举拆出独立能力位：`get_page` 与 `jsd://styles` 按平台声明返空 | 已采纳（机制描述已更正） | `shared`、`ui/code`、`mcp-server/tools` | 2026-10-15 |
 | [942910d2](942910d2-website-多语言沿用-0016-口径：locale-由-Solid-context-显式提供，不引库也不做-en-预渲染.md) | website 多语言沿用 0016 口径：locale 由 Solid context 显式提供 | 已采纳 | `website/i18n`、`website/components` | 2026-10-12 |
 | [de446d4e](de446d4e-决策记录改用-8-位短-id-取号，旧数字号只读保留.md) | 决策记录改用 8 位短 id 取号，旧数字号只读保留 | 已采纳（scratch 已验） | `.agents/skills/software-design-patterns`、`AGENTS.md`、`INDEX.md` | 2026-10-12 |
-| [89d02d1b](89d02d1b-决策索引只存定位信息：状态列收词表值、影响范围降粒度、体积门禁复活.md) | 决策索引只存定位信息：状态列收词表值、影响范围降粒度、体积门禁复活 | 已采纳 | `INDEX.md`、`tests/skill-doc-budget.test.ts`、`.agents/skills/software-design-patterns/` | 2026-10-12 |
-| [7165f370](7165f370-批量编排补上资源名字寻址与变量聚合绑定：一次调用绑多组，VARIANT-只能点名拒绝.md) | 批量编排补上资源名字寻址与变量聚合绑定：一次调用绑多组，VARIANT 只能点名拒绝 | 已采纳 | `mcp-server/tools`、`shared/{schemas,core,dicts}`、`ui/code/{figma,mastergo}` | 2026-10-13 |
-| [25827d0c](25827d0c-四类可复用资源的关系面补齐：样式档读写两端、MG-样式面加宽到八类.md) | 四类可复用资源的关系面补齐：样式档读写两端、MG 样式面加宽到八类 | 已采纳（两家已验） | `shared/`（dicts、schemas、core/styles）、三侧 `ui/code/*`、`mcp-server/tools` 投影与配方 | 2026-10-14 |
+| [89d02d1b](89d02d1b-决策索引只存定位信息：状态列收词表值、影响范围降粒度、体积门禁复活.md) | 决策索引只存定位信息：状态列收词表值、影响范围降粒度、体积门禁复活 | 已采纳 | `INDEX.md`、`tests`、`.agents/skills` | 2026-10-12 |
+| [7165f370](7165f370-批量编排补上资源名字寻址与变量聚合绑定：一次调用绑多组，VARIANT-只能点名拒绝.md) | 批量编排补上资源名字寻址与变量聚合绑定：一次调用绑多组，VARIANT 只能点名拒绝 | 已采纳 | `mcp-server/tools`、`shared`、`ui/code/{figma,mastergo}` | 2026-10-13 |
+| [25827d0c](25827d0c-四类可复用资源的关系面补齐：样式档读写两端、MG-样式面加宽到八类.md) | 四类可复用资源的关系面补齐：样式档读写两端、MG 样式面加宽到八类 | 已采纳（两家已验） | `shared`、`ui/code/*`、`mcp-server/tools` | 2026-10-14 |
 | [cec4a120](cec4a120-两套主键并存改为显式-dec-引用记法加棘轮门禁.md) | 两套主键并存改为显式 dec 引用记法加棘轮门禁 | 已采纳 | `scripts/`、`tests/`、`AGENTS.md`、`shared/` 首批引用改写 | 2026-10-14 |
 | [e1e66f0a](e1e66f0a-样式枚举选路按平台声明：新增-styleEnumerationSync，不靠-.-探测.md) | 样式枚举选路按平台声明：新增 `styleEnumerationSync`，不靠 `?.` 探测 | 已采纳（端到端真机已验） | `shared/dicts`、`shared/core`、`ui/code/jsdesign` | 2026-10-15 |
 | [b2bee2b8](b2bee2b8-删掉-mcp-tdd-台账与报错文档：技能面收窄到设计决策一条.md) | 删掉 mcp-tdd 台账与报错文档：技能面收窄到设计决策一条 | 已采纳 | `.agents/skills`（删除）、`docs`、`AGENTS.md`、`tests` | 2026-10-15 |
-| [28008c70](28008c70-面板最小化：新增-ui_minimize-旁路消息，窗口缩到-50×50-只留-logo.md) | 面板最小化：新增 ui_minimize 旁路消息，窗口缩到 50×50 只留 logo | 已采纳（待真机复验） | `shared`(panel、i18n)、`ui`(components、code) | 2026-10-21 |
+| [28008c70](28008c70-面板最小化：新增-ui_minimize-旁路消息，窗口缩到-50×50-只留-logo.md) | 面板最小化：新增 ui_minimize 旁路消息，窗口缩到 50×50 只留 logo | 已采纳（待真机复验） | `shared`、`ui` | 2026-10-21 |
 | [1a135e6a](1a135e6a-遥测上报改事件驱动冲刷-去定时器、条目级幂等、退避重试.md) | 遥测上报改事件驱动冲刷:去定时器、条目级幂等、退避重试 | 已采纳 | `mcp-server/telemetry`、`telemetry`(worker + DB) | 2026-10-26 |
 | [c229422a](c229422a-面板语言切换改两档直切：默认仍跟系统，撤掉「跟随系统」档与下拉.md) | 面板语言切换改两档直切：默认仍跟系统，撤掉「跟随系统」档与下拉 | 已采纳 | `ui/components`、`shared/dicts`、`tests` | 2026-10-26 |
-| [a7f8846b](a7f8846b-遥测错误结构化：scope-code-subject-分类-+-fingerprint-跨窗口-rollup，message-降为-detail.md) | 遥测错误结构化：scope/code/subject 分类 + fingerprint 跨窗口 rollup，message 降为 detail | 已采纳 | `shared/dicts`、`mcp-server`（logger/telemetry）、`telemetry` | 2026-10-26 |
+| [a7f8846b](a7f8846b-遥测错误结构化：scope-code-subject-分类-+-fingerprint-跨窗口-rollup，message-降为-detail.md) | 遥测错误结构化：scope/code/subject 分类 + fingerprint 跨窗口 rollup，message 降为 detail | 已采纳 | `shared`、`mcp-server`、`telemetry` | 2026-10-26 |
 | [9c4b0406](9c4b0406-MCP代理保留协议元数据与补全：目录同步和进程生命周期分离.md) | MCP代理保留协议元数据与补全：目录同步和进程生命周期分离 | 已采纳 | mcp-server/daemon | 2026-11-01 |
 | [4d4e2570](4d4e2570-MCP注册面评审：保留协议适配并收窄重复入口.md) | MCP注册面评审：保留协议适配并收窄重复入口 | 提议 | mcp-server | 2026-11-01 |
-| [3f364c28](3f364c28-MCP目录精简档提议：核心工具常驻与低频能力按需发现.md) | MCP目录精简档提议：核心工具常驻与低频能力按需发现 | 已采纳 | mcp-server | 2026-11-01 |
+| [3f364c28](3f364c28-MCP目录精简档提议：核心工具常驻与低频能力按需发现.md) | MCP目录精简档提议：核心工具常驻与低频能力按需发现 | 已被取代 | mcp-server | 2026-11-01 |
 | [9517eea4](9517eea4-DesignHost-拆必选核心与可选能力面：core-不再靠-typeof-探测.md) | DesignHost 拆必选核心与可选能力面：core 不再靠 typeof 探测 | 已采纳 | `shared/core`、`ui/code` | 2026-11-13 |
 | [e06dbd23](e06dbd23-节点解析选路按平台声明：补完-e1e66f0a-遗留的-getNodeByIdAsync-半项.md) | 节点解析选路按平台声明：补完 e1e66f0a 遗留的 getNodeByIdAsync 半项 | 已采纳 | `shared/core`、`shared/dicts`、`ui/code` | 2026-11-15 |
 | [40bf4e19](40bf4e19-Code模式以会话配置组合接入：复用画布链路与宿主代码能力.md) | Code 模式以会话配置组合接入 | 已被取代 | shared、ui、mcp-server | 2026-11-17 |
 | [d1728d17](d1728d17-Code-Copy交接.md) | Code Copy 交接 | 已被取代 | ui、shared、mcp-server | 2026-11-17 |
 | [5598a4bb](5598a4bb-Code多选交接.md) | Code 多选交接 | 已采纳 | ui、shared、mcp-server | 2026-11-17 |
+| [7044aa46](7044aa46-技能前置改由服务端记账并在工具层硬拦.md) | 技能前置改由服务端记账并在工具层硬拦 | 已采纳 | `shared/dicts`、`shared/schemas`、`mcp-server/core`、`mcp-server/daemon`、`mcp-server/tools` | 2026-11-18 |
+| [420facdc](420facdc-默认精简-MCP-目录并统一画布批处理.md) | 默认精简 MCP 目录并统一画布批处理 | 已采纳 | `shared/dicts`、`mcp-server` | 2026-11-19 |
 
 ## 依赖关系
 
@@ -103,4 +104,4 @@ a7f8846b (遥测错误结构化) ── 补 1a135e6a 暂缓的全局错误指纹
 c229422a (语言两档直切) ── 沿 0016；取代其 §结论 4 的选择器形状（优先序与持久化不动）
 ```
 
-更早的记录（0001–0024）见 [`INDEX-2026.md`](INDEX-2026.md)。
+| [7044aa46](7044aa46-技能前置改由服务端记账并在工具层硬拦.md) | 技能前置改由服务端记账并在工具层硬拦 | 已采纳 | `shared`、`mcp-server` | 2026-11-18 |

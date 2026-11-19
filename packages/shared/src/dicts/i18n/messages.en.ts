@@ -98,6 +98,9 @@ export const MESSAGES_EN = {
 
   'toast.copy.done': 'Copied',
   'toast.copy.failed': 'Copy failed',
+  'toast.connected': 'Connected: select nodes on the canvas, then Copy for AI',
+  'toast.mode.design': 'Design mode: copy the design for AI',
+  'toast.mode.code': 'Code mode: pick a role, then copy the code',
 
   'conn.connected':
     'Connected. Select nodes on the canvas, click "Copy", then paste into your AI assistant — e.g. "make me another card in this node style"',
@@ -123,16 +126,22 @@ export const MESSAGES_EN = {
   'panel.close': 'Close',
 
   'selection.title': 'Selected nodes',
-  'selection.badge': '{count} nodes',
+  'pet.hint': 'Click to copy all selected nodes; double-click to expand',
+  'selection.selected': '{count} selected',
+  'selection.copy.selected': 'Copy selected',
   'selection.copy': 'Copy',
   'selection.code.design': 'Design',
   'selection.code.code': 'Code',
-  'selection.code.modeLabel': 'Copy task mode',
+  'selection.code.needRole': 'Pick at least one',
+  'selection.code.modeLabel': 'Copy mode',
   'selection.code.frontend': 'Frontend',
   'selection.code.backend': 'Backend',
   'selection.empty.title': 'No nodes selected',
   'selection.empty.hint':
-    'Select nodes on the canvas and they show up here, ready to copy',
+    '① Select nodes on the canvas  ② Pick Design / Code at the top  ③ Copy for AI',
+  'selection.hint.design': 'Copy the design; AI continues from these nodes',
+  'selection.hint.code': 'Copy the code and paste it into your project',
+  'selection.hint.code.noRole': 'Pick frontend or backend before copying',
 
   'capability.card.title': 'Capabilities',
   'capability.card.missing': 'Capabilities unavailable (plugin not connected)',
@@ -446,12 +455,13 @@ export const MESSAGES_EN = {
   'schema.inputs.componentId': 'Target component (COMPONENT) node id',
   'schema.inputs.format': 'Export format, default PNG',
   'schema.inputs.scale': 'Scale factor (PNG/JPG), default 1',
-  'schema.inputs.savePath': 'Absolute path to write, e.g. /tmp/icon.png',
+  'schema.inputs.savePath':
+    'Absolute path to write, e.g. /tmp/icon.png. With several exported nodes it acts as a template: each node id is inserted before the extension (e.g. /tmp/icon-1_2.png, /tmp/icon-3_4.png)',
   'schema.inputs.includeDataUrl':
     'Whether to also return the base64 dataURL, default false',
   'schema.inputs.ids2': 'Node ids to fill with the image',
   'schema.inputs.sourcePath':
-    'Absolute path of the local image, e.g. /tmp/poster.png',
+    'Absolute path of the local image, e.g. /tmp/poster.png; empty files are rejected; default limit 32MB (override with TEXT_TO_DESIGN_MCP_MAX_IMAGE_BYTES)',
   'schema.inputs.params': 'Operation parameters; the shape depends on the op',
   'schema.inputs.family':
     'Filter by family name (case-insensitive substring), e.g. "Source"',
@@ -592,9 +602,11 @@ export const MESSAGES_EN = {
   'syncOverrides.description': 'Review the synced instances',
   'createFrame.title': 'Create frame container',
   'createFrame.description':
-    'Create a single FRAME node; input holds only FRAME fields: width/height size, layoutMode auto-layout (itemSpacing/padding*/main and cross axis sizing and alignment) plus visual fields such as fills and strokes. Only one root FRAME is created; use children only for small structures (a container plus its direct children, child x/y relative to the parent) — never pass a whole screen tree in one children call. Build layer by layer with jsd_batch, then reparent each layer into its parent with jsd_reparent_nodes. Set layoutMode=HORIZONTAL or VERTICAL before auto-layout fields (otherwise they are ignored). **Siblings that sit evenly spaced on one axis must be built with auto-layout, never hand-computed coordinates** (tab bars, pill groups, KPI rows, card headers, list rows, whole-screen vertical sections; criterion and both landing paths in skill://canvas/references/auto-layout.md). **Get the sizing mode right**: on a layout container give only the width and let the other axis hug via AUTO — especially for content-sized containers such as dialogs and cards; only a screen root takes FIXED on both axes (a hardcoded height leaves dead space, or clips content when too small). Without explicit fills the engine defaults to a white background; pass fills:[{type:"SOLID",color:{r:0,g:0,b:0},opacity:0}] for a transparent container. Always pass a semantic name (e.g. "Sidebar", "KPI-OEE"); unnamed nodes fall back to the engine default name node. Use jsd_batch to create multiple roots or complex trees',
+    'Create a single FRAME node; input holds only FRAME fields: width/height size, layoutMode auto-layout (itemSpacing/padding*/main and cross axis sizing and alignment) plus visual fields such as fills and strokes. Only one root FRAME is created; use children only for small structures (a container plus its direct children, child x/y relative to the parent) — never pass a whole screen tree in one children call. Build layer by layer with jsd_batch, then reparent each layer into its parent with jsd_reparent_nodes. Set layoutMode=HORIZONTAL or VERTICAL before auto-layout fields (otherwise they are ignored). **Auto layout is the default: use it for any container whose children can flow along an axis, never hand-compute coordinates** (page sections, panel menus, list rows, card interiors, tab bars, toolbars; fixed width/height still uses layout — lock them with FIXED); only truly overlapping decorations, badges and coordinate-drawn regions stay free-positioned. Criterion and both landing paths in skill://canvas/references/auto-layout.md. **Get the sizing mode right**: on a layout container give only the width and let the other axis hug via AUTO — especially for content-sized containers such as dialogs and cards; only a screen root takes FIXED on both axes (a hardcoded height leaves dead space, or clips content when too small). Without explicit fills the engine defaults to a white background; pass fills:[{type:"SOLID",color:{r:0,g:0,b:0},opacity:0}] for a transparent container. Always pass a semantic name (e.g. "Sidebar", "KPI-OEE"); unnamed nodes fall back to the engine default name node. Use jsd_batch to create multiple roots or complex trees',
+  'skillFirst.required':
+    'This session has not read {uri} or any canvas recipe prompt yet — guidance must be read before canvas work. Read the skill URI / skill://canvas/* / jsd://recipes/* resource with ReadMcpResource, or read one recipe prompt with GetPrompt / jsd_get_prompt (on hosts without a resource reader, jsd_get_prompt name:"canvas/SKILL" reads the skill entry), then retry; all writes stay blocked until guidance is read',
   'layoutHint.uniform':
-    'Detected {count} children evenly spaced along {mode} (gap {gap}px) but the container declares no layoutMode. That is exactly the auto-layout criterion: set layoutMode:{mode} + itemSpacing:{gap} and the layout owns their positions — no coordinate recompute when copy or item count changes (advisory only, the create already succeeded; criterion and both landing paths in skill://canvas/references/auto-layout.md)',
+    'Detected {count} children evenly spaced along {mode} (gap {gap}px) but the container declares no layoutMode. **Auto layout is the default: any container whose children can flow along an axis should use it** — set layoutMode:{mode} + itemSpacing:{gap} and the layout owns their positions, so copy or item-count changes need no coordinate recompute (advisory only, the create already succeeded; criterion and both landing paths in skill://canvas/references/auto-layout.md)',
   'structureHint.flatBatch':
     'This batch moves {batchCount} nodes into the same parent ({parentId}) — the shape of "every section flattened onto one layer". Structural layering is universal: screen -> semantic sections (status bar / header / hero / list / promo / bottom nav) -> card-level primitives; every element belongs to a semantic container, never straight onto the screen root. Recipe: skill://canvas/references/design-strategy.md (advisory only, the moves already succeeded)',
   'structureHint.svgNoGroups':
@@ -626,7 +638,7 @@ export const MESSAGES_EN = {
   'createBooleanOperation.title': 'Create boolean operation node',
   'createSvg.title': 'Import SVG',
   'createSvg.description':
-    'Import an SVG into the canvas as editable layers (native createNodeFromSvg parsing; paths/gradients/strokes preserved). Pick one source: svg (inline string) or svgPath (path to a local .svg file, read by the background service). **Charts and data visualisations must use svgPath** (line, bar, pie/donut, scatter, radar, area, gauge, dashboard, Sankey, …): there is no built-in chart tool — write a script that computes the SVG, write it to a local file, then pass the path. Engine hard constraints (violations fail silently): the root element needs xmlns plus explicit width/height/viewBox; colours as hex only; no external images/fonts/scripts; approximate curves with C/Q, never the A command; canvas ≤2000×2000; split semantic layers into `<g id>` (one wrapper group is no grouping), with a single transform on the outer group only. Before you start, ReadMcpResource the recipe skill://canvas/references/chart-by-code.md — it carries the zero-dependency example, the colour and type-scale conventions, and the post-import layer check plus visual acceptance checklist. Use jsd_batch to orchestrate multiple root nodes or complex trees',
+    'Import an SVG into the canvas as editable layers (native createNodeFromSvg parsing; paths/gradients/strokes preserved). Pick one source: svg (inline string) or svgPath (an **absolute** path to a local .svg file, read by the background service — its cwd differs from your project, so relative paths are rejected). **Charts and data visualisations must use svgPath** (line, bar, pie/donut, scatter, radar, area, gauge, dashboard, Sankey, …): there is no built-in chart tool — write a script that computes the SVG, write it to a local file, then pass the path. Engine hard constraints (violations fail silently): the root element needs xmlns plus explicit width/height/viewBox; colours as hex only; no external images/fonts/scripts; approximate curves with C/Q, never the A command; canvas ≤2000×2000; split semantic layers into `<g id>` (one wrapper group is no grouping), with a single transform on the outer group only. Before you start, ReadMcpResource the recipe skill://canvas/references/chart-by-code.md — it carries the zero-dependency example, the colour and type-scale conventions, and the post-import layer check plus visual acceptance checklist. Use jsd_batch to orchestrate multiple root nodes or complex trees',
   'createIcon.title': 'Insert built-in icon',
   'htmlToDesign.title': 'HTML to design nodes',
   'htmlToDesign.description':
@@ -679,7 +691,7 @@ export const MESSAGES_EN = {
   'prompt.designStrategy.title': 'Design strategy overview',
   'prompt.autoLayout.title': 'Auto layout',
   'prompt.autoLayout.description':
-    'Whether a container should use auto layout (criteria plus easily-missed sections), self-judged direction (child flow axis, do not hardcode HORIZONTAL/VERTICAL), the two adoption paths, platform hard constraints and verification pitfalls',
+    'Auto layout is a default requirement, not an option: any container whose children can flow along an axis must use it (including fixed sizes and screenshot recreations; criteria plus easily-missed sections), self-judged direction (child flow axis, do not hardcode HORIZONTAL/VERTICAL), the two adoption paths, platform hard constraints and verification pitfalls',
   'prompt.textReplace.title': 'Bulk text replacement strategy',
   'prompt.variantSync.title': 'Bulk sync styles across sibling instances',
   'prompt.variableBinding.title': 'Bind variables and apply in bulk',
@@ -710,7 +722,7 @@ export const MESSAGES_EN = {
   'setShape.description': 'Next set the fill',
   'export.title': 'Export nodes as images',
   'export.description':
-    'Export the given nodes to PNG files. Large base64 payloads are dropped from the result and written to disk instead; use jsd_export again with a smaller scale if you need inline data',
+    'Export the given nodes to PNG/JPG/SVG/PDF. With several nodes a single savePath acts as a template: each node id is inserted before the extension so every node gets its own file. Large base64 payloads are dropped from the result and written to disk instead; use jsd_export again with a smaller scale if you need inline data',
   'export.description2': 'Fill the exported image into a node',
   'fillImage.title': 'Fill node with a local image',
   'fillImage.description':
@@ -750,10 +762,10 @@ export const MESSAGES_EN = {
   'getPage.followUp':
     'Read a specific node serialized by id; pass scope=document to search across pages',
   'mcp.instructions':
-    'Before canvas work, read skill://canvas/SKILL.md and relevant references. If skills are unavailable, use jsd_list_prompts/jsd_get_prompt or jsd://recipes. For creation, read jsd_get_page and reuse existing components, variants, styles and variables. Use semantic containers, reusable components for repeated structures and auto-layout for evenly spaced rows/columns. Root coordinates follow placement; use manual for explicit coordinates. Child coordinates are parent-relative unless layout controls them. Serialize canvas requests. Use ids for identical edits and jsd_batch for dependent steps (50 maximum; references are batch-local). recursive affects descendants; includeSelf=true includes containers. Use exact font family/style pairs from jsd_list_fonts. Read warnings, independently read back critical fields and visually inspect exported changes. Writes may have landed after a timeout; verify before retrying. Keep edits within user scope.',
+    'Before canvas work, read skill://canvas/SKILL.md and relevant references; if skills are unavailable, read any recipe prompt or jsd://recipes resource instead. The server tracks this per session and blocks all writes until at least one guidance source is read; repeated calls do not bypass the gate. For creation, read jsd_get_page and reuse existing components, variants, styles and variables. Use semantic containers and reusable components for repeated structures. **Auto layout is the default, not an option: any container whose children can flow along an axis must use it — page sections, panel menus, lists, card interiors, toolbars, screenshot recreations — including fixed sizes**; only truly overlapping decorations and coordinate-drawn regions stay free-positioned. Never hand-place a whole page instead of laying it out. Root coordinates follow placement; use manual for explicit coordinates. Child coordinates are parent-relative unless layout controls them. Serialize canvas requests. Use jsd_batch per semantic block (50 steps maximum; references are batch-local) and combine ids in one step for identical edits. Prefer callsFile with an absolute path when you can write JSON the MCP server can read. Otherwise use inline calls. recursive affects descendants; includeSelf=true includes containers. Use exact font family/style pairs from jsd_list_fonts. Read warnings, independently read back critical fields and visually inspect exported changes. Writes may have landed after a timeout; verify before retrying. Keep edits within user scope.',
   'ping.title': 'Check {client} plugin connection',
   'batch.description':
-    'Run tool steps sequentially. Supply calls or callsFile (an absolute path readable by the server), at most 50 steps. Each step has id/tool/args; later args may reference paths such as {{step.created[0].id}}, valid only within this batch. Resolve existing assets with {{@comp:Name}} / {{@var:Name}}. Prefer one tool with ids for identical edits; use batch for different values or dependent tools. In compact mode, discover non-public capabilities with jsd_describe_tools before executing them here. Unknown tools are rejected. Execution errors stop by default; stopOnError/continueOnError control continuation, while plan errors still stop. A batch is not a transaction; earlier writes may remain. Read back after timeouts before replaying writes. Echoes trim subtrees and style fields; read spilled details via path/line. Verify fields with separate jsd_find and visual changes with export. checkDrift is enabled by default and reports sibling movement with original coordinates; false disables it for this call. See skill://canvas/references/script-ops.md; the recipe index is jsd://recipes.',
+    'Run up to 50 tool steps sequentially. Prefer callsFile with an absolute path when you can write JSON the MCP server can read. Otherwise use inline calls. Supply one input only. Each step has id/tool/args; later args may reference paths such as {{step.created[0].id}}, valid only within this batch. Resolve existing assets with {{@comp:Name}} / {{@var:Name}}. **Dependent steps belong in one batch**: a chain like create root -> set layout -> reparent/add breaks when split across two calls (the placeholder then fails as "not in this batch"), so keep it in one jsd_batch instead of splitting steps or guessing ids. Return shapes differ per tool: per-type create_frame/create_rectangle/create_text return created[] (array; {{id.created.id}} and {{id.created[0].id}} both resolve), create_svg/create_icon/group return created (single object), reparent returns moved[], any jsd_set_* returns updated[]. An undefined value anywhere in args rejects the whole batch before it is sent. In the default compact catalog, use this tool for canvas writes, including single steps. Fetch step schemas with jsd_describe_tools names. Combine ids in one step for identical edits. Execution errors stop by default; stopOnError/continueOnError control continuation, while plan errors still stop. A batch is not a transaction; earlier writes may remain. Read back after timeouts before replaying writes. Echoes trim subtrees and style fields; read spilled details via path/line. Verify fields with separate jsd_find and visual changes with export. checkDrift is enabled by default and reports sibling movement with original coordinates; false disables it for this call. See skill://canvas/references/script-ops.md; the recipe index is jsd://recipes.',
   'manageNodes.description':
     'Aggregate entrypoint for node structure operations dispatched by op: select | remove | clone | group | ungroup | flatten | outline_stroke | reparent | repair. For a single operation prefer the matching small tool: jsd_select_nodes / jsd_delete_node / jsd_clone_node / jsd_group_nodes / jsd_ungroup_nodes / jsd_flatten_nodes / jsd_outline_stroke / jsd_reparent_nodes / jsd_repair_nodes (their descriptions carry platform caveats and the correct flow). Property edits belong to jsd_set_* (incl. jsd_set_shape); component/instance work belongs to jsd_manage_components or jsd_create_component / jsd_sync_overrides — ops are not interchangeable.\nResult keys per op (needed to write correct jsd_batch placeholders; a wrong key aborts the batch): select -> selected[and remove -> removed[are id strings; clone/outline_stroke -> created[is an array of nodes; group/flatten -> created is a single node object; ungroup -> ungrouped[is id strings; reparent -> moved[(updated[mirrors it); repair -> cleaned[is id strings.',
   'createBooleanOperation.description':

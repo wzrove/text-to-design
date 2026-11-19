@@ -13,9 +13,11 @@ import { z } from 'zod';
 
 process.env.TEXT_TO_DESIGN_MCP_LOG = '/tmp/text-to-design-mcp-regress.log';
 
-const { nodeCreateInputSchema, CREATE_EXCLUSIVE_FIELDS } = await import(
-  '../tools/create'
-);
+const {
+  nodeCreateInputSchema,
+  CREATE_EXCLUSIVE_FIELDS,
+  CREATE_MISPLACED_ID_FIELDS,
+} = await import('../tools/create');
 const { describeInvalidArgs } = await import('../core/schema-error');
 const shared = await import('text-to-design-shared');
 
@@ -203,5 +205,70 @@ describe('第8类 jsd_reparent_nodes 被取消', () => {
     const p = manager.request('node_op', {}, { signal: late.signal });
     late.abort();
     await expect(p).rejects.toThrow(/已耗时 \d+ms/);
+  });
+});
+
+/**
+ * 2026-11-17 在线记录里新增的几类(与上面 11-15 那批同源,按 last_seen 当天筛出)。
+ * 同样每条都对着线上原始入参,断言的是「下一轮能自己走出来」,不是「报错变好看」。
+ */
+describe('第9类 jsd_create_rectangle 收到 id', () => {
+  it('越界字段给出替代路径,而不是只说不接受', () => {
+    const schema = nodeCreateInputSchema('RECTANGLE');
+    const args = {
+      id: '1:2',
+      name: 'r',
+      width: 10,
+      height: 10,
+      x: 1,
+      y: 2,
+      cornerRadius: 4,
+      fills: [],
+      strokes: [],
+      strokeWeight: 1,
+      placement: {},
+    };
+    const parsed = schema.safeParse(args);
+    expect(parsed.success).toBe(false);
+    const detail =
+      parsed.error?.issues
+        .map((i) => `${i.path.join('.') || '(root)'}: ${i.message}`)
+        .join('; ') ?? '';
+    const message = describeInvalidArgs(
+      schema,
+      args,
+      detail,
+      CREATE_EXCLUSIVE_FIELDS,
+      CREATE_MISPLACED_ID_FIELDS,
+    );
+    expect(message).toContain('字段 [id]');
+    // 关键:说清 id 从哪来、该用哪类工具,而不是让调用方再猜
+    expect(message).toContain('不能预先指定');
+    expect(message).toContain('jsd_move_node');
+  });
+
+  it('id 不会被放行(schema 不放宽)', () => {
+    expect(
+      nodeCreateInputSchema('RECTANGLE').safeParse({ id: '1:2' }).success,
+    ).toBe(false);
+  });
+});
+
+describe('第10类 jsd_create_icon 未知图标 oil-can', () => {
+  it('多词名按词召回:候选里有 can / spray-can 这类真正同物件的名字', async () => {
+    // oil-can 在 lucide 1.74 里确实不存在(全库只有 fuel 沾边),所以这里不要求
+    // 「能解析」,只要求候选对得上:线上那条报错的候选是 tool-case/candy-cane 这种
+    // 前缀巧合 —— 调用方拿它去试只会再错一轮。
+    const { findIcon, suggestIcons } = await import('../icons');
+    expect(findIcon('oil-can')).toBeNull();
+    const names = suggestIcons('oil-can', 8).map((d) => d.name);
+    expect(names.length).toBeGreaterThan(0);
+    expect(names.some((n) => n === 'can' || n === 'spray-can')).toBe(true);
+    expect(names[0]).not.toBe('tool-case');
+  });
+
+  it('拼写失误仍走编辑距离:arrowlft → arrow-left', async () => {
+    const { suggestIcons } = await import('../icons');
+    expect(suggestIcons('arrowlft', 5)[0]?.name).toBe('arrow-left');
   });
 });

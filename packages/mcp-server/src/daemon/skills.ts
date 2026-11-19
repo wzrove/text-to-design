@@ -9,6 +9,7 @@ export async function loadSkillsCatalog(): Promise<SkillCatalog | null> {
   const dir = dirname(SKILL_DIR);
   try {
     const catalog = await loadSkills(dir);
+    reportSkillUris(catalog.entries.map((entry) => entry.uri));
     debug(`skills: ${catalog.entries.length} 条已发布(${dir})`);
     reportSkillsPublished(catalog.entries.length, null);
     return catalog;
@@ -52,4 +53,20 @@ export function getSkillsStatus(): {
   error?: string;
 } | null {
   return skillsStatus;
+}
+
+/**
+ * 已发布的技能 URI。对账用:ping 承诺的 nextStep 必须真能读,否则门禁会把人卡在一个
+ * 读不到的入口上(dec 7044aa46)。
+ */
+// eslint 之外无门禁;这里记的是「发布结果」不是「用户读过」,两者别混
+
+let skillUris: string[] = [];
+
+export function getSkillUris(): string[] {
+  return skillUris;
+}
+
+export function reportSkillUris(uris: string[]): void {
+  skillUris = uris;
 }

@@ -53,10 +53,20 @@ export const pingResultSchema = z.object({
       published: z.boolean(),
       count: z.number(),
       error: z.string().optional(),
+      /**
+       * 该读的入口 URI 单独成字段:此前它只活在 250 字的 ping.followUp 散文里,
+       * 实测执行期被整个跳过(见 dec 7044aa46 的压力段)。可选,不加不破老宿主。
+       */
+      nextStep: z
+        .string()
+        .optional()
+        .describe(
+          '动手前要读的技能入口 URI:把它当 ReadMcpResource 的 uri 直接读,读到的正文才是本工具的施工纪律',
+        ),
     })
     .optional()
     .describe(
-      '配方技能发布状态:published=false 且带 error 表示服务端未发布;published=true 而你的技能目录里看不到,表示宿主未实现 skills 注入,请直接读 jsd://recipes 资源',
+      '配方技能发布状态:published=false 且带 error 表示服务端未发布;published=true 而你的技能目录里看不到,表示宿主未实现 skills 注入,请直接读 jsd://recipes 资源。nextStep 是本会话动手前必读的技能入口',
     ),
   error: z.string().optional(),
 });

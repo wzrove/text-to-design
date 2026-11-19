@@ -169,19 +169,23 @@ type JsDesignAsyncGap =
 type JsDesignCapacityGap = 'getLocalVariablesAsync';
 
 /**
- * 契约异步化后的**名字**缺口(0017):jsDesign 原生只有同步 `createNodeFromSvg` /
- * `createImage`,`*Async` 两个名字是本仓 adapter 包出来的(见 jsdesign/host.ts),
+ * 契约名与原生符号**不同形**的缺口(0017 留下的名字差):jsDesign 原生只有同步
+ * `createImage`,`createImageFromBytesAsync` 是本仓 adapter 包出来的(见 jsdesign/host.ts),
  * typings 里查不到属预期。官方将来收录同名异步符号时反向断言会失败,提醒收编。
+ *
+ * `createNodeFromSvgAsync` **仍留在名单里**:契约把 `createNodeFromSvg` 改成同步必需、
+ * 异步可选(见 shared/core/host.ts),原生同步符号已直接满足契约;这条异步名字在 typings 里
+ * 依旧不存在,登记它是为了守住「本仓不该再包这个名字」。
  *
  * 注意 jsDesign 已有的 `createImageAsync(src: string)` 是**另一个语义**(收来源字符串),
  * 与契约的 `createImageFromBytesAsync`(收字节)不是一回事,故不在本缺口名单里。
  */
 type JsDesignAsyncNameGap =
-  | 'createNodeFromSvgAsync'
   | 'createImageFromBytesAsync'
+  | 'createNodeFromSvgAsync'
   /** 原生是四个分开的工厂(createPaintStyle / Text / Effect / Grid),契约这条 `createStyle` 是本仓按 kind 分发的**聚合名** */
   | 'createStyle'
-  /** 原生是 `getStyleById(id)` + `Style.remove()` 两步(`plugin-api.d.ts:50 / :1143`),契约这条 `removeStyle` 是本仓包的聚合动作 */
+  /** 原生是 `getStyleById(id)` + `Style.remove()` 两步(`plugin-api.d.ts:50 / :1143`),契约这条 `removeStyle` 是本仓包出的聚合动作 */
   | 'removeStyle';
 
 export type HostPresenceCheck = ExpectNever<

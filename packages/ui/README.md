@@ -37,9 +37,15 @@
 
 ```bash
 pnpm install
+pnpm dev:ui     # 浏览器内 HMR:自动打开 http://localhost:5173/ui.html
 pnpm dev        # 监听文件变化,自动重建 ui/code
 pnpm build      # 构建插件包到 packages/ui/dist/
 ```
+
+面板调试分两条路:
+
+- **布局 / 交互迭代**:`pnpm dev:ui`,Vite dev server 走 ESM + HMR,改组件即时生效;前提是 daemon 在跑(47812),浏览器页面通过同一桥接连接。
+- **插件内验证**:`pnpm dev` 的 watch 会重写 `dist/<platform>/ui.html` 与 `code.js`;设计客户端的插件面板是宿主加载的本地单文件,**没有 iframe HMR**,改完需在设计客户端重新运行插件(或重载插件)。这是宿主限制,不是 Vite 配置能消除的。
 
 ### 环境变量
 

@@ -63,6 +63,11 @@ export const host: DesignHost = {
   // MG 的矢量节点叫 PEN(类型名也是 'PEN'),门面把它翻回契约的 VECTOR
   createVector: () => wrapNode(mg.createPen()),
   createComponent: () => wrapNode(mg.createComponent()),
+  // 本平台 typings 全文件无同步 `createNodeFromSvg`(只有 `mg.createNodeFromSvgAsync`),
+  // 故契约里同步必需的那条由异步入口桥接 —— 这是三平台里唯一走异步的实现,
+  // 选路由 core 的 createNodeFromSvgResolved 按入口存在性作出(见 shared/core/host.ts)。
+  createNodeFromSvg: (svg: string) =>
+    wrapNode(mg.createNodeFromSvgAsync(svg) as never),
   createNodeFromSvgAsync: async (svg: string) =>
     wrapNode(await mg.createNodeFromSvgAsync(svg)),
   createImageFromBytesAsync: async (bytes: Uint8Array) => {
@@ -230,8 +235,8 @@ export const host: DesignHost = {
    * `mg.variables.getVariables()`(`@mastergo/plugin-typings@2.19.2 dist/index.d.ts:1176`,
    * `Variable{id,name,…}:1874`),契约名字在顶层,故在这里投影成 `AssetRef`(只留 id/name)。
    *
-   * 契约是 `Async`,MG 原生是同步 —— 差异收在本文件(同 0017 对
-   * `createNodeFromSvg` / `createImage` 的处理),不让它渗进 core。
+   * 契约是 `Async`,MG 原生是同步 —— 差异收在本文件(同本文件对
+   * `createImageFromBytesAsync` 的处理),不让它渗进 core。
    * 只读枚举:MG 的写入口(Collection / Mode / 建变量)本仓仍未接,故 meta 里不 claim
    * 变量能力位(见 meta.ts)。
    *

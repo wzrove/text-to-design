@@ -1,3 +1,4 @@
+import { resolve } from 'node:path';
 import type { Client } from '@modelcontextprotocol/client';
 import type { BatchCall, BatchResult } from 'text-to-design-shared';
 import { BATCH_TIMEOUT_MS, DAEMON_WAIT_MS } from '../config';
@@ -72,9 +73,31 @@ export async function runExec(input: string, opts: ExecOptions): Promise<void> {
   printPlan(plan.path, plan.calls, stopOnError, opts.json === true);
 
   if (opts.dryRun === true) {
-    process.stdout.write(
-      '--dry-run:只校验了清单,未连接 daemon,未执行任何步骤。\n',
-    );
+    // --json 的契约是 stdout 只有合法 JSON:这里同样给 JSON,提示改走 stderr
+    if (opts.json === true) {
+      process.stdout.write(
+        `${JSON.stringify(
+          {
+            dryRun: true,
+            path: plan.path,
+            stopOnError,
+            calls: plan.calls.map((c, i) => ({
+              id: c.id == null || c.id === '' ? `step${i + 1}` : c.id,
+              tool: c.tool,
+            })),
+          },
+          null,
+          1,
+        )}\n`,
+      );
+      process.stderr.write(
+        '--dry-run:只校验了清单,未连接 daemon,未执行任何步骤。\n',
+      );
+    } else {
+      process.stdout.write(
+        '--dry-run:只校验了清单,未连接 daemon,未执行任何步骤。\n',
+      );
+    }
     return;
   }
 
@@ -84,7 +107,9 @@ export async function runExec(input: string, opts: ExecOptions): Promise<void> {
       {
         name: 'jsd_batch',
         arguments: {
-          calls: plan.calls,
+          // 把已校验的绝对路径原样转交,而不是把整份清单重新内联:
+          // 内联会重新撞 daemon 的 maxToolInputElements(20k),恰好废掉 exec 的用途
+          callsFile: plan.path,
           stopOnError,
           checkDrift: plan.checkDrift,
         },
@@ -104,8 +129,13 @@ export async function runExec(input: string, opts: ExecOptions): Promise<void> {
         process.stdout.write(
           `  ${step.ok ? 'ok ' : 'ERR'} ${step.id} (${step.tool})${step.ok ? '' : `: ${step.error ?? ''}`}\n`,
         );
+      // 批处理在循环前就中止时,structuredContent 是按 schema 填的 0/0 空壳;
+      // 直接用它会报「执行 0/0,全部成功」,与 stderr 里的错误自相矛盾
+      const executed = r?.executed ?? 0;
+      const total = r?.total || plan.calls.length;
+      const failed = res.isError === true || r?.ok === false;
       process.stdout.write(
-        `\n执行 ${r?.executed ?? 0}/${r?.total ?? plan.calls.length}${r?.ok === false ? ',存在失败步骤' : ',全部成功'}\n`,
+        `\n执行 ${executed}/${total}${failed ? ',存在失败步骤' : ',全部成功'}\n`,
       );
       for (const w of r?.warnings ?? []) process.stdout.write(`warn ${w}\n`);
       if (res.isError === true) {
@@ -140,7 +170,8 @@ export async function runExecCli(argv: string[]): Promise<void> {
     return;
   }
   try {
-    await runExec(file, opts);
+    // CLI 在用户 cwd 本地读盘:相对路径解析到这里是明确的,不像 daemon 的 cwd 会漂
+    await runExec(resolve(process.cwd(), file), opts);
   } catch (e) {
     // error() 已同时落盘与外发终端,这里不再补一条 log —— 否则同一句话打两遍
     error(e instanceof Error ? e.message : String(e));

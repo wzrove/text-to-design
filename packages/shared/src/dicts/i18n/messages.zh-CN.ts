@@ -100,6 +100,9 @@ export const MESSAGES_ZH_CN = {
   // 14px 图标。界面本身变了的(开合抽屉、切主题、清空日志)不弹,那是噪声。
   'toast.copy.done': '已复制',
   'toast.copy.failed': '复制失败',
+  'toast.connected': '已连接:在画布选中节点,再点「复制」交给 AI',
+  'toast.mode.design': '设计模式:选中节点后复制设计稿交给 AI',
+  'toast.mode.code': '代码模式:选好前端/后端后复制代码',
 
   // ── 连接提示条 ──
   'conn.connected':
@@ -130,15 +133,22 @@ export const MESSAGES_ZH_CN = {
 
   // ── 选中节点卡 ──
   'selection.title': '选中节点',
-  'selection.badge': '{count} 个',
+  'pet.hint': '单击复制所有选中节点,双击放大面板',
+  'selection.selected': '已选 {count} 个',
+  'selection.copy.selected': '复制选中',
   'selection.copy': '复制',
   'selection.code.design': '设计',
-  'selection.code.code': 'Code',
-  'selection.code.modeLabel': 'Copy 任务模式',
+  'selection.code.code': '代码',
+  'selection.code.needRole': '至少选择一项',
+  'selection.code.modeLabel': '复制模式',
   'selection.code.frontend': '前端',
   'selection.code.backend': '后端',
   'selection.empty.title': '未选中节点',
-  'selection.empty.hint': '在画布中点选节点后,这里会实时显示并支持复制',
+  'selection.empty.hint':
+    '① 在画布选中节点　② 顶部选「设计 / 代码」　③ 点复制交给 AI',
+  'selection.hint.design': '复制设计后,AI 会按这组节点继续改',
+  'selection.hint.code': '复制代码后,粘贴到项目里继续实现',
+  'selection.hint.code.noRole': '先选前端或后端,再复制代码',
 
   // ── 能力卡 ──
   'capability.card.title': '能力',
@@ -416,10 +426,12 @@ export const MESSAGES_ZH_CN = {
     '目标组件(COMPONENT)节点 id(仅 swap_component 必填)',
   'schema.inputs.format': '导出格式,默认 PNG',
   'schema.inputs.scale': '缩放倍率(PNG/JPG),默认 1',
-  'schema.inputs.savePath': '落盘文件绝对路径,如 /tmp/icon.png',
+  'schema.inputs.savePath':
+    '落盘文件绝对路径,如 /tmp/icon.png。导出多个节点时以它为模板:路径主名后插入各自的节点 id(如 /tmp/icon-1_2.png、/tmp/icon-3_4.png),扩展名不变',
   'schema.inputs.includeDataUrl': '是否同时返回 base64 dataURL,默认 false',
   'schema.inputs.ids2': '要填充图片的节点 id 列表',
-  'schema.inputs.sourcePath': '本地图片文件绝对路径,如 /tmp/poster.png',
+  'schema.inputs.sourcePath':
+    '本地图片文件绝对路径,如 /tmp/poster.png;空文件拒绝,默认上限 32MB(可用 TEXT_TO_DESIGN_MCP_MAX_IMAGE_BYTES 覆盖)',
   'schema.inputs.params': '操作参数,结构随 op 而定',
   'schema.inputs.family':
     '按家族名过滤(不区分大小写的子串),如 "Source" 或 "思源"',
@@ -550,9 +562,11 @@ export const MESSAGES_ZH_CN = {
   'syncOverrides.description': '复核同步后的实例',
   'createFrame.title': '创建 Frame 容器',
   'createFrame.description':
-    '创建单个 FRAME 容器节点,入参只含 FRAME 字段:width/height 尺寸、layoutMode 自动布局(itemSpacing/padding*/主轴交叉轴尺寸对齐)与填充描边等视觉字段。本工具只建一个根 FRAME;children 只用于「容器 + 其直属子节点」这类小结构(子节点 x/y 相对父节点),**别把整屏的整棵树塞进一次 children**(易整批失败)—— 分层分批用 jsd_batch 编排,再用 jsd_reparent_nodes 逐层归组。auto-layout 前必须设 layoutMode=HORIZONTAL 或 VERTICAL(否则布局字段被忽略)。**同轴等距的兄弟元素一律用 auto-layout 建,不要手算坐标**(标签栏 / 胶囊组 / KPI 行 / 卡片头 / 列表行 / 整屏纵向分区都在此列;判据与两条落地路径见 skill://canvas/references/auto-layout.md)。**尺寸模式别写反**:开布局只给宽度、高度交给 AUTO 撑开,弹窗/卡片这类内容自适应的容器尤甚;只有屏根才两轴 FIXED(写死高度会留死白,写死高度不够会裁内容)。未显式传 fills 时引擎默认白底,透明容器传 fills:[{type:"SOLID",color:{r:0,g:0,b:0},opacity:0}]。**name 必传且语义化**(如「侧栏」「KPI-设备综合效率」),不传会落成引擎默认名 node。建多个根节点/复杂树用 jsd_batch 编排',
+    '创建单个 FRAME 容器节点,入参只含 FRAME 字段:width/height 尺寸、layoutMode 自动布局(itemSpacing/padding*/主轴交叉轴尺寸对齐)与填充描边等视觉字段。本工具只建一个根 FRAME;children 只用于「容器 + 其直属子节点」这类小结构(子节点 x/y 相对父节点),**别把整屏的整棵树塞进一次 children**(易整批失败)—— 分层分批用 jsd_batch 编排,再用 jsd_reparent_nodes 逐层归组。auto-layout 前必须设 layoutMode=HORIZONTAL 或 VERTICAL(否则布局字段被忽略)。**默认一律先上 auto-layout,不要手算坐标**:任何容器只要子项能沿某轴排布就用布局(整页分区 / 面板菜单 / 列表行 / 卡片内部 / 标签栏 / 工具栏都在此列,固定宽高照上并锁 FIXED);只有真重叠的装饰、角标与坐标绘图区才自由定位。判据与两条落地路径见 skill://canvas/references/auto-layout.md。**尺寸模式别写反**:开布局只给宽度、高度交给 AUTO 撑开,弹窗/卡片这类内容自适应的容器尤甚;只有屏根才两轴 FIXED(写死高度会留死白,写死高度不够会裁内容)。未显式传 fills 时引擎默认白底,透明容器传 fills:[{type:"SOLID",color:{r:0,g:0,b:0},opacity:0}]。**name 必传且语义化**(如「侧栏」「KPI-设备综合效率」),不传会落成引擎默认名 node。建多个根节点/复杂树用 jsd_batch 编排',
+  'skillFirst.required':
+    '本会话还没读过 {uri} 或任一画布配方 prompt —— 操作画布前必须先读操作指引。请 ReadMcpResource 读技能 URI / skill://canvas/* / jsd://recipes/* 资源,或用 GetPrompt / jsd_get_prompt 读一条配方正文(宿主没有资源接口时,jsd_get_prompt 的 name:"canvas/SKILL" 也能读技能入口),再重试;未读前所有写入持续拦截,不会自动放行',
   'layoutHint.uniform':
-    '检测到 {count} 个子节点沿 {mode} 方向等距排列(间距 {gap}px),但本容器没声明 layoutMode。这正是 auto-layout 的判据:设 layoutMode:{mode} + itemSpacing:{gap} 之后位置由布局接管,改文案或加一项都不必重算坐标(本条只是提示,创建已成功;判据与两条落地路径见 skill://canvas/references/auto-layout.md)',
+    '检测到 {count} 个子节点沿 {mode} 方向等距排列(间距 {gap}px),但本容器没声明 layoutMode。**自动布局是默认:子项能沿轴排布的容器都应先上布局**——设 layoutMode:{mode} + itemSpacing:{gap} 之后位置由布局接管,改文案或加一项都不必重算坐标(本条只是提示,创建已成功;判据与两条落地路径见 skill://canvas/references/auto-layout.md)',
   'structureHint.flatBatch':
     '本批有 {batchCount} 步把节点移入同一个父级({parentId})—— 这是「所有分区平铺在同一层」的形状。结构分层是通用纪律:屏 → 语义分区(状态栏 / 页头 / 主视觉 / 列表 / 运营位 / 底栏)→ 卡片内图元,每个元素归到语义容器,不许直挂屏根。配方见 skill://canvas/references/design-strategy.md(本条只是提示,移入已成功)',
   'structureHint.svgNoGroups':
@@ -586,7 +600,7 @@ export const MESSAGES_ZH_CN = {
   // 本键由 0016 的规则承载「图表路由」:工具的 description 必须整体是一个键
   // (注册期 t() 只对整串查表),拼接出来的串查不到、会原样下发。
   'createSvg.description':
-    '将 SVG 直接导入画布为可编辑图层(createNodeFromSvg 原生解析,保留路径/渐变/描边)。来源二选一:svg(内联字符串)或 svgPath(本地 .svg 文件路径,由后台服务读盘)。**图表 / 数据可视化一律走 svgPath**(折线图、柱状图、饼图 / 环形图、散点图、雷达图、面积图、仪表盘、看板、桑基图……):没有内置图表工具 —— 先自己写脚本把 SVG 算好、落到本地文件,再传路径。引擎硬约束(违反会静默画不出来):根元素必须带 xmlns 与显式 width/height/viewBox;颜色只写 hex;不引外链图片/字体/script;曲线用 C/Q 自己近似,不要用 A 指令;画布 ≤2000×2000;按语义层切 `<g id>`(一层不套等于没分组),绘图区只在外层写一个 transform。动手前先 ReadMcpResource 读配方 skill://canvas/references/chart-by-code.md —— 内含零依赖示例、配色字号口径、导入后回读层级与导图验收清单。建多个根节点/复杂树用 jsd_batch 编排',
+    '将 SVG 直接导入画布为可编辑图层(createNodeFromSvg 原生解析,保留路径/渐变/描边)。来源二选一:svg(内联字符串)或 svgPath(本地 .svg 文件的**绝对路径**,由后台服务读盘;服务进程的 cwd 与你的项目不同,相对路径会被拒)。**图表 / 数据可视化一律走 svgPath**(折线图、柱状图、饼图 / 环形图、散点图、雷达图、面积图、仪表盘、看板、桑基图……):没有内置图表工具 —— 先自己写脚本把 SVG 算好、落到本地文件,再传路径。引擎硬约束(违反会静默画不出来):根元素必须带 xmlns 与显式 width/height/viewBox;颜色只写 hex;不引外链图片/字体/script;曲线用 C/Q 自己近似,不要用 A 指令;画布 ≤2000×2000;按语义层切 `<g id>`(一层不套等于没分组),绘图区只在外层写一个 transform。动手前先 ReadMcpResource 读配方 skill://canvas/references/chart-by-code.md —— 内含零依赖示例、配色字号口径、导入后回读层级与导图验收清单。建多个根节点/复杂树用 jsd_batch 编排',
   'createIcon.title': '插入内置图标',
   'htmlToDesign.title': 'HTML 转设计节点',
   'htmlToDesign.description':
@@ -633,7 +647,7 @@ export const MESSAGES_ZH_CN = {
   'prompt.designStrategy.title': '设计策略总纲',
   'prompt.autoLayout.title': '自动布局',
   'prompt.autoLayout.description':
-    '容器该不该上 auto-layout(判据 + 易漏分区)、方向自判(按直属子项流动轴,不写死 HORIZONTAL/VERTICAL)、两条落地路径、平台硬约束与验收坑',
+    '自动布局是默认要求而不是可选项:任何子项能沿轴排布的容器都先上布局(含固定尺寸与按截图复刻的整页,判据 + 易漏分区)、方向自判(按直属子项流动轴,不写死 HORIZONTAL/VERTICAL)、两条落地路径、平台硬约束与验收坑',
   'prompt.textReplace.title': '文本批量替换策略',
   'prompt.variantSync.title': '同类实例样式批量同步',
   'prompt.variableBinding.title': '变量绑定与批量套用',
@@ -663,7 +677,7 @@ export const MESSAGES_ZH_CN = {
   'setShape.description': '接着设置填充',
   'export.title': '导出节点为图片',
   'export.description':
-    '导出节点为 PNG/JPG/SVG/PDF;ids 为必填数组(单节点也写成 ids:["123:456"],不是 nodeId),savePath 落盘与 includeDataUrl 返回 base64 可并存。注意:单张图片超过内联上限(默认 512KB)时不返回 base64,自动落盘并返回路径引用,避免撑爆会话内存。完整字段见 inputSchema。',
+    '导出节点为 PNG/JPG/SVG/PDF;ids 为必填数组(单节点也写成 ids:["123:456"],不是 nodeId),savePath 落盘与 includeDataUrl 返回 base64 可并存(多个节点时 savePath 当模板用,各节点文件名自动带节点 id 区分)。注意:单张图片超过内联上限(默认 512KB)时不返回 base64,自动落盘并返回路径引用,避免撑爆会话内存。完整字段见 inputSchema。',
   'export.description2': '导出后用该图片填充到节点',
   'fillImage.title': '本地图片填充节点',
   'fillImage.description': '读取本地图片文件填充到指定节点(IMAGE fill)',
@@ -700,10 +714,10 @@ export const MESSAGES_ZH_CN = {
   'getPage.followUp':
     '按 id 读取具体节点的序列化结构;要跨页查找传 scope=document',
   'mcp.instructions':
-    '操作设计画布前按任务读取 skill://canvas/SKILL.md 及对应附录；无法读取 skill 时使用 jsd_list_prompts/jsd_get_prompt 或 jsd://recipes。创作先读 jsd_get_page，复用已有组件、变体、样式和变量。按语义容器分层，重复结构复用组件；同轴等距内容用 auto-layout。根节点坐标受 placement 控制，指定坐标用 manual；子坐标相对父级，布局子项由布局接管。画布请求串行；同值批改用 ids，多步用 jsd_batch（最多 50 步，占位符仅本批有效）。recursive 只改后代，includeSelf=true 才包括容器自身。字体使用 jsd_list_fonts 返回的成对原值。读 warnings，关键字段独立回读，视觉改动导出目检。超时可能已经写入，先核实再重试；只改用户指定范围。',
+    '操作设计画布前先读 skill://canvas/SKILL.md 及对应附录；技能不可用时改读任一配方 prompt 或 jsd://recipes 资源。服务端按会话记账，未读到任一操作指引前持续拒绝所有写入，不会二次放行。创作先读 jsd_get_page，复用已有组件、变体、样式和变量。按语义容器分层，重复结构复用组件；**自动布局是默认，不是可选项：任何容器只要子项能沿一个轴排布就一律先上 auto-layout（整页分区、面板菜单、列表、卡片内部、工具栏，按截图复刻也一样），固定尺寸照上**，只有真重叠的装饰与坐标绘图区用自由定位；禁止整页手算坐标替代布局。根节点坐标受 placement 控制，指定坐标用 manual；子坐标相对父级，布局子项由布局接管。画布请求串行；按语义块使用 jsd_batch（最多 50 步，占位符仅本批有效），同值批改在一个步骤里合并 ids。能写入 MCP 服务可读的 JSON 时，优先只传 callsFile 绝对路径；否则用内联 calls。recursive 只改后代，includeSelf=true 才包括容器自身。字体使用 jsd_list_fonts 返回的成对原值。读 warnings，关键字段独立回读，视觉改动导出目检。超时可能已经写入，先核实再重试；只改用户指定范围。',
   'ping.title': '检查{client}插件连接',
   'batch.description':
-    '顺序编排多个工具步骤。calls 与 callsFile 二选一，单批最多 50 步；文件须是服务进程可读的绝对路径。步骤用 id/tool/args，后续参数可引用 {{步骤id.created[0].id}} 等返回路径，占位符仅本批有效；已有资源可用 {{@comp:名称}} / {{@var:名称}}。同值属性批改优先单工具 ids，不同值或多工具依赖再用 batch。精简档未公开的能力先用 jsd_describe_tools 查询完整 schema，再放入本批执行；不支持任意未知工具。默认遇错停止，可按 stopOnError/continueOnError 控制执行失败；计划错误仍停止。批次不是事务，失败前写入可能保留；超时先回读，不盲目重放。回显会裁剪子树与样式字段，完整结果按 path/line 读取；核实属性需独立 jsd_find，视觉改动另导图。checkDrift 默认开启，结构操作发现兄弟节点漂移会给 warnings 与原坐标；false 仅关闭本次复核。完整流程见 skill://canvas/references/script-ops.md,配方索引见 jsd://recipes。',
+    '顺序编排工具步骤，单批最多 50 步。能写入 MCP 服务可读的 JSON 时，优先传 callsFile 绝对路径；否则用内联 calls。两者二选一。步骤用 id/tool/args，后续参数可引用 {{步骤id.created[0].id}} 等返回路径，占位符仅本批有效；已有资源可用 {{@comp:名称}} / {{@var:名称}}。**有依赖的步骤必须放进同一批**：建根→设布局→搬入/改属性这类链，前一步和引用它的步骤拆成两次调用会解析不到占位符（报「不在本批」），一次 jsd_batch 就能解决——别拆步，也别把占位符换成猜出来的 id。返回值形状按工具而异：create_frame/create_rectangle/create_text 等 per-type 返回 created[]（数组，取 {{id.created.id}} 或 {{id.created[0].id}} 均可）、create_svg/create_icon/group 返回 created（单对象）、reparent 返回 moved[]、任一 jsd_set_* 返回 updated[]。args 里不能出现 undefined，否则整批在发送前就被判非法。默认精简档的画布写入统一经本工具，支持单步；用 jsd_describe_tools 的 names 查询步骤 schema。同值批改在一个步骤里合并 ids。默认遇错停止，可按 stopOnError/continueOnError 控制执行失败；计划错误仍停止。批次不是事务，失败前写入可能保留；超时先回读，不盲目重放。回显会裁剪子树与样式字段，完整结果按 path/line 读取；核实属性需独立 jsd_find，视觉改动另导图。checkDrift 默认开启，结构操作发现兄弟节点漂移会给 warnings 与原坐标；false 仅关闭本次复核。完整流程见 skill://canvas/references/script-ops.md,配方索引见 jsd://recipes。',
   'manageNodes.description':
     "按 op 分发的节点结构操作聚合入口:select|remove|clone|group|ungroup|flatten|outline_stroke|reparent|repair。单次单操作请优先用对应小工具:jsd_select_nodes / jsd_delete_node / jsd_clone_node / jsd_group_nodes / jsd_ungroup_nodes / jsd_flatten_nodes / jsd_outline_stroke / jsd_reparent_nodes / jsd_repair_nodes(描述含平台缺陷与正确流程)。**但连续 ≥2 次同类调用就是改批量的信号**:结构一致的重复步骤(第 N 行 / 第 N 张卡)一律进 jsd_batch 或 callsFile,别一个个单步调 —— 一次 MCP 往返 3~10s,整屏几十次单步会白耗十分钟。属性修改用 jsd_set_* 系列(含 jsd_set_shape);组件/实例操作用 jsd_manage_components 或 jsd_create_component / jsd_sync_overrides 等,两工具 op 不通用。\\n各 op 的返回键(在 jsd_batch 里用占位符引用时才不会写错,写错会中止整批):select→selected[](id 字符串)、remove→removed[](id 字符串)、clone/outline_stroke→created[](节点**数组**)、group/flatten→created(节点**单对象**:这两个 op 内部走的就是 jsd_group_nodes / jsd_flatten_nodes 那条路)、ungroup→ungrouped[](id 字符串)、reparent→moved[](同时附 updated[],两者同一份数组)、repair→cleaned[](id 字符串)。id 字符串数组取 {{步骤id.selected[0]}},节点数组取 {{步骤id.created[0].id}},节点单对象取 {{步骤id.created.id}}(单对象与单元素数组互认:{{步骤id.created[0].id}} 与 {{步骤id.created.id}} 都能解析;多元素数组直接取 .字段 仍中止)。'",
   'createBooleanOperation.description':

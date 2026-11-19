@@ -25,10 +25,11 @@ import {
 async function withServer<T>(
   fn: (client: Client) => Promise<T>,
   bridge: Bridge = new Bridge(),
+  options: { toolProfile?: 'full' | 'compact' } = {},
 ): Promise<T> {
   const [clientTransport, serverTransport] =
     InMemoryTransport.createLinkedPair();
-  const server = buildServer(bridge, createMcpI18n('zh-CN'));
+  const server = buildServer(bridge, createMcpI18n('zh-CN'), options);
   const client = new Client(
     { name: 'recipe-resource', version: '1' },
     { capabilities: {} },
@@ -109,6 +110,24 @@ describe('配方资源', () => {
     'component-property',
   ];
 
+  const PROMPT_ARGS: Record<string, Record<string, string>> = {
+    'chart-by-code': { chart: '按月折线: 12, 18, 15' },
+    'html-to-design': { html: '<p>hello</p>' },
+    'icon-grid': { icons: 'home,search' },
+  };
+
+  it('所有配方 prompt 都固定为 user 消息', async () => {
+    await withServer(async (client) => {
+      for (const r of RECIPES) {
+        const { messages } = await client.getPrompt({
+          name: r.id,
+          arguments: PROMPT_ARGS[r.id] ?? {},
+        });
+        expect(messages[0]?.role, `${r.id} 的 prompt 角色`).toBe('user');
+      }
+    });
+  });
+
   it('每条配方都有正文;参数可省的配方与 prompt 逐字同源', async () => {
     await withServer(async (client) => {
       for (const r of RECIPES) {
@@ -171,32 +190,40 @@ describe('配方资源', () => {
   });
 
   it('工具描述里的指针是可执行的资源 URI,不是 prompt 名', async () => {
-    await withServer(async (client) => {
-      const { tools } = await client.listTools();
-      const createSvg = tools.find((t) => t.name === 'jsd_create_svg');
-      expect(createSvg).toBeTruthy();
-      const description = createSvg?.description ?? '';
-      // 2026-11 统一到单一技能入口:指针从 jsd://recipes/<id> 改为 skill://canvas/*
-      // —— 4 个技能入口时模型在跨主题任务上逐个觉得「不是我的活」,一条都没读
-      expect(
-        description,
-        'jsd_create_svg 的描述必须给出模型能自己执行的动作(读资源)',
-      ).toMatch(/skill:\/\/canvas\/(SKILL\.md|references\/chart-by-code\.md)/);
-      // 关键硬约束要落在描述里:模型不读资源也不会踩静默失败
-      for (const rule of ['viewBox', 'hex', '2000×2000', '<g id>']) {
-        expect(description, `描述漏了引擎硬约束:${rule}`).toContain(rule);
-      }
+    // jsd_create_svg 在精简档是非公开工具(只经 jsd_batch 执行),这里要核的是
+    // 描述文本本身,走 full 目录把它暴露出来
+    await withServer(
+      async (client) => {
+        const { tools } = await client.listTools();
+        const createSvg = tools.find((t) => t.name === 'jsd_create_svg');
+        expect(createSvg).toBeTruthy();
+        const description = createSvg?.description ?? '';
+        // 2026-11 统一到单一技能入口:指针从 jsd://recipes/<id> 改为 skill://canvas/*
+        // —— 4 个技能入口时模型在跨主题任务上逐个觉得「不是我的活」,一条都没读
+        expect(
+          description,
+          'jsd_create_svg 的描述必须给出模型能自己执行的动作(读资源)',
+        ).toMatch(
+          /skill:\/\/canvas\/(SKILL\.md|references\/chart-by-code\.md)/,
+        );
+        // 关键硬约束要落在描述里:模型不读资源也不会踩静默失败
+        for (const rule of ['viewBox', 'hex', '2000×2000', '<g id>']) {
+          expect(description, `描述漏了引擎硬约束:${rule}`).toContain(rule);
+        }
 
-      // jsd_batch 仍可指向配方索引(它描述的是配方层);模型侧的单一入口
-      // 是 skill://canvas/SKILL.md —— 两者任一出现即算指针有效
-      const batch = tools.find((t) => t.name === 'jsd_batch');
-      const batchDesc = batch?.description ?? '';
-      expect(
-        batchDesc.includes('skill://canvas/SKILL.md') ||
-          batchDesc.includes(RECIPE_INDEX_URI),
-        'jsd_batch 是多步编排的主入口,应指向技能入口或配方索引',
-      ).toBe(true);
-    });
+        // jsd_batch 仍可指向配方索引(它描述的是配方层);模型侧的单一入口
+        // 是 skill://canvas/SKILL.md —— 两者任一出现即算指针有效
+        const batch = tools.find((t) => t.name === 'jsd_batch');
+        const batchDesc = batch?.description ?? '';
+        expect(
+          batchDesc.includes('skill://canvas/SKILL.md') ||
+            batchDesc.includes(RECIPE_INDEX_URI),
+          'jsd_batch 是多步编排的主入口,应指向技能入口或配方索引',
+        ).toBe(true);
+      },
+      undefined,
+      { toolProfile: 'full' },
+    );
   });
 
   /**

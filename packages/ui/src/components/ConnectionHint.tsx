@@ -81,7 +81,10 @@ export default function ConnectionHint() {
   // 连接状态是关键上下文:形态变化时播报;live region 节点常驻,故另起一处
   // sr-only 载体 —— 可见部分只改显隐,屏读器不会播报显隐变化
   return (
-    <div>
+    // display:contents:外层只是为了「live region + 可见卡」共处一个组件;
+    // 它若自己占一个 flex 项,已连接时卡隐藏后会白拿一份父级 gap(实测 12px)。
+    // contents 让两个子元素直接参与父级 flex,隐藏/显示都不多占一格。
+    <div class="contents">
       <div role="status" aria-live="polite" class="sr-only">
         {t(ANNOUNCE[status()])}
       </div>
@@ -91,10 +94,14 @@ export default function ConnectionHint() {
         返回新 JSX,整块提示条就被卸载重建 —— hint-enter 重播、按钮焦点与
         「已复制」反馈尽失,看起来就是「组件在重载」
 
-        连接期间此处刻意保持引导卡:徽章那边转圈说明「正在连」,这边说的是
-        「还没连上」—— 两句都真,且引导卡的两条路径此刻依然可执行
+        已连接不显示这张卡:状态徽章(绿点)+ 选中卡片的空态已经把「连上了、
+        选节点去复制」说完;再挂一条绿框等于同一句话占两处。连接中/未连接仍
+        保留引导卡,两条路径此刻依然可执行。
       */}
-      <div class={`hint-enter rounded-lg border text-xs ${CARD[variant()]}`}>
+      <div
+        class={`hint-enter rounded-lg border text-xs ${CARD[variant()]}`}
+        classList={{ hidden: variant() === 'connected' }}
+      >
         <p class={line().cls}>{line().text}</p>
 
         <div classList={{ hidden: variant() !== 'disconnected' }}>

@@ -331,6 +331,28 @@ export async function executeOps(
   };
 }
 
+/**
+ * SVG 建节点的入口选路:同步优先,只有异步时 await,两者皆无则明确报错。
+ *
+ * 不靠 `typeof host.createNodeFromSvgAsync === 'function'` 优先探测异步 ——
+ * 即时设计的宿主是 `Object.create(native)`,typings 未声明的异步成员运行时照样存在且
+ * 可能永不 settle(与 getNodeByIdAsync / getMainComponentAsync 同族,dec e1e66f0a)。
+ */
+async function createNodeFromSvgResolved(
+  host: DesignHost,
+  svg: string,
+): Promise<NodeSkeleton> {
+  if (typeof host.createNodeFromSvg === 'function') {
+    return host.createNodeFromSvg(svg);
+  }
+  if (typeof host.createNodeFromSvgAsync === 'function') {
+    return await host.createNodeFromSvgAsync(svg);
+  }
+  throw new Error(
+    '本平台没有 SVG 建节点入口(既无同步 createNodeFromSvg,也无 createNodeFromSvgAsync)',
+  );
+}
+
 export async function createSvgNode(
   host: DesignHost,
   svg: string,
@@ -339,8 +361,9 @@ export async function createSvgNode(
   if (typeof svg !== 'string' || svg.trim() === '') {
     throw new Error('无效的 svg: 必须是非空字符串');
   }
-  // 异步建节点(MasterGo 只有 *Async 变体,见 host.ts 的契约注释 / 0017)
-  const node = await host.createNodeFromSvgAsync(svg);
+  // 同步优先:jsDesign / Figma 原生只有同步入口,而即时设计运行时透出的 async 成员
+  // 可能永不 settle(见 host.ts 的 createNodeFromSvg 注释)。只有 MasterGo 没有同步变体。
+  const node = await createNodeFromSvgResolved(host, svg);
   node.name = name ?? 'html-design';
   const page = host.currentPage;
   page.appendChild(node);

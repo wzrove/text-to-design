@@ -1,6 +1,6 @@
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { dirname, isAbsolute, join } from 'node:path';
 import type { McpServer } from '@modelcontextprotocol/server';
 import {
   createStyleResultSchema,
@@ -15,7 +15,11 @@ import {
   updatedResultSchema,
 } from 'text-to-design-shared';
 import type { Bridge } from '../bridge';
-import { LONG_IO_TIMEOUT_MS, MAX_INLINE_DATA_URL_BYTES } from '../config';
+import {
+  LONG_IO_TIMEOUT_MS,
+  MAX_IMAGE_SOURCE_BYTES,
+  MAX_INLINE_DATA_URL_BYTES,
+} from '../config';
 import type { ToolHandle } from '../core/tool-def';
 import { bridgeTool } from '../core/tool-exec';
 import type { McpI18n } from '../i18n';
@@ -30,6 +34,27 @@ function extFor(mimeType?: string, format?: unknown): string {
   if (m.includes('svg')) return 'svg';
   if (m.includes('pdf')) return 'pdf';
   return 'bin';
+}
+
+/** 节点 id → 可安全当文件名的片段(冒号 / 斜杠 / 空格等在常见文件系统上都危险) */
+function safeStem(id: string): string {
+  return id.replace(/[^a-zA-Z0-9_-]/g, '_');
+}
+
+/**
+ * 多节点导出时的落盘路径:单节点原样用 savePath,多节点把节点 id 插在主名后。
+ *
+ * 只在「一次导出多个节点」时触发 —— 单节点时必须严格等于 savePath(调用方拿它当
+ * 已知路径用)。扩展名留在末位,序号插在主名之后。
+ */
+function pathForNode(savePath: string, id: string, total?: number): string {
+  if (total != null && total <= 1) return savePath;
+  const dir = dirname(savePath);
+  const base = savePath.slice(dir.length).replace(/^[\\/]+/, '');
+  const dot = base.lastIndexOf('.');
+  const stem = dot <= 0 ? base : base.slice(0, dot);
+  const ext = dot <= 0 ? '' : base.slice(dot);
+  return join(dir, `${stem}-${safeStem(id)}${ext}`);
 }
 
 export function registerRawTools(
@@ -64,11 +89,9 @@ export function registerRawTools(
         savePath?: string;
         includeDataUrl?: boolean;
       };
-      if (savePath && ids.length !== 1) {
-        throw new Error(
-          'savePath 仅支持单节点导出；多节点请分别指定唯一文件路径',
-        );
-      }
+      // savePath 的落地规则(单节点 = 该路径 / 多节点 = 主名后插节点 id)见 pathForNode。
+      // 此前这里对多节点直接拒,而调用方要的正是「一批节点各落一份盘」,只能逐个往返
+      // (error_reports 2026-11-17 记了 5 次)。单节点语义原样不变。
       const data = (await bridge_.request(
         'export',
         { ids, format, scale },
@@ -90,22 +113,29 @@ export function registerRawTools(
           mimeType,
           size: bytes.byteLength,
         };
-        if (savePath) {
-          mkdirSync(dirname(savePath), { recursive: true });
-          writeFileSync(savePath, bytes);
-          out.path = savePath;
+        // 多节点共用一个 savePath 时按节点 id 派生唯一路径(序号插在主名后、扩展名前):
+        // 否则每个节点都覆盖同一个文件,只剩最后一张,且回显路径全指向它。
+        // 单节点原样用 savePath(语义与历史一致)。
+        const written =
+          savePath == null
+            ? null
+            : pathForNode(savePath, nid, Object.keys(exportsMap).length);
+        if (written != null) {
+          mkdirSync(dirname(written), { recursive: true });
+          writeFileSync(written, bytes);
+          out.path = written;
         }
         if (includeDataUrl) {
           // 体积超上限时绝不内联 base64:内联数据会随工具结果进入会话历史
           // 并常驻内存,实测可撑爆宿主进程堆(OOM)。改为落盘后返回路径引用。
           if (bytes.byteLength > MAX_INLINE_DATA_URL_BYTES) {
             const target =
-              savePath ??
+              written ??
               join(
                 tmpdir(),
-                `jsd-export-${nid.replace(/[^a-zA-Z0-9_-]/g, '_')}-${Date.now()}.${extFor(mimeType, item.format)}`,
+                `jsd-export-${safeStem(nid)}-${Date.now()}.${extFor(mimeType, item.format)}`,
               );
-            if (!savePath) writeFileSync(target, bytes);
+            if (written == null) writeFileSync(target, bytes);
             out.path = target;
             dataUrlOverflow.push(
               `${nid}(实际 ${bytes.byteLength} 字节 > 上限 ${MAX_INLINE_DATA_URL_BYTES} 字节)已落盘:${target}`,
@@ -170,12 +200,47 @@ export function registerRawTools(
         ids: string[];
         sourcePath: string;
       };
-      let bytes: Buffer;
+      const file = sourcePath.trim();
+      if (!isAbsolute(file)) {
+        throw new Error(
+          `sourcePath 必须是绝对路径(收到「${file}」)。读盘的是 MCP 服务进程,相对路径会解析到它的 cwd 而不是你的项目 —— 请写全路径。`,
+        );
+      }
+      let size: number;
       try {
-        bytes = readFileSync(sourcePath);
+        size = statSync(file).size;
       } catch (e) {
         throw new Error(
-          `读取文件失败: ${e instanceof Error ? e.message : String(e)}`,
+          `读取图片文件失败(${file}): ${e instanceof Error ? e.message : String(e)}`,
+        );
+      }
+      if (size === 0) throw new Error(`图片文件是空的:${file}`);
+      if (size > MAX_IMAGE_SOURCE_BYTES) {
+        throw new Error(
+          `图片文件 ${(size / 1024 / 1024).toFixed(2)} MB > 上限 ${(
+            MAX_IMAGE_SOURCE_BYTES / 1024 / 1024
+          ).toFixed(
+            0,
+          )} MB:先压缩再填充,或调大 TEXT_TO_DESIGN_MCP_MAX_IMAGE_BYTES`,
+        );
+      }
+      let bytes: Buffer;
+      try {
+        bytes = readFileSync(file);
+      } catch (e) {
+        throw new Error(
+          `读取图片文件失败(${file}): ${e instanceof Error ? e.message : String(e)}`,
+        );
+      }
+      if (bytes.length === 0) throw new Error(`图片文件是空的:${file}`);
+      // stat 与读取之间文件可能被替换/增长,用实际字节再复核一次
+      if (bytes.length > MAX_IMAGE_SOURCE_BYTES) {
+        throw new Error(
+          `图片文件 ${(bytes.length / 1024 / 1024).toFixed(2)} MB > 上限 ${(
+            MAX_IMAGE_SOURCE_BYTES / 1024 / 1024
+          ).toFixed(
+            0,
+          )} MB:先压缩再填充,或调大 TEXT_TO_DESIGN_MCP_MAX_IMAGE_BYTES`,
         );
       }
       return bridge_.request(

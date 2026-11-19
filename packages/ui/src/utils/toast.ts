@@ -12,7 +12,7 @@ import { createSignal } from 'solid-js';
  *
  * 与 `useLocale` 一样是模块级信号的另一层收益:命令式代码(不在组件树里)也能弹。
  */
-export type ToastLevel = 'success' | 'error';
+export type ToastLevel = 'success' | 'error' | 'info';
 
 export interface ToastItem {
   id: number;

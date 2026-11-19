@@ -52,9 +52,11 @@ async function withProxy(
         return { content: [{ type: 'text', text: args.value }] };
       },
     );
-    origin.registerTool('jsd_write', { inputSchema: z.object({}) }, () => ({
-      content: [],
-    }));
+    origin.registerTool(
+      'jsd_write',
+      { inputSchema: z.object({}), annotations: { readOnlyHint: false } },
+      () => ({ content: [] }),
+    );
     origin.registerTool(
       'jsd_wait',
       { inputSchema: z.object({}), annotations: { readOnlyHint: true } },
@@ -243,12 +245,40 @@ describe('daemon → proxy → host', () => {
   it('工具重放策略按只读、幂等注解决定', async () => {
     await withProxy(async ({ client, calls }) => {
       calls.mockClear();
+      await client.getPrompt({ name: 'recipe' });
+      calls.mockClear();
       await client.callTool({
         name: 'jsd_echo',
         arguments: { value: 'hello' },
       });
       expect(calls.mock.calls.at(-1)?.[0]).toEqual({ replay: true });
       await client.callTool({ name: 'jsd_write', arguments: {} });
+      expect(calls.mock.calls.at(-1)?.[0]).toEqual({ replay: false });
+    });
+  });
+
+  it('未读指引时写入持续被拦，读到 prompt 后放行', async () => {
+    await withProxy(async ({ client, calls }) => {
+      calls.mockClear();
+      for (let i = 0; i < 2; i += 1) {
+        const blocked = await client.callTool({
+          name: 'jsd_write',
+          arguments: {},
+        });
+        expect(blocked.isError).toBe(true);
+        expect((blocked as { code?: string }).code).toBe(
+          'skill_first_required',
+        );
+      }
+      expect(calls).not.toHaveBeenCalled();
+
+      await client.getPrompt({ name: 'recipe' });
+      calls.mockClear();
+      const passed = await client.callTool({
+        name: 'jsd_write',
+        arguments: {},
+      });
+      expect(passed.isError).not.toBe(true);
       expect(calls.mock.calls.at(-1)?.[0]).toEqual({ replay: false });
     });
   });

@@ -17,7 +17,9 @@ import { RECIPE_INDEX_URI } from '../tools/recipe-catalog';
 async function withServer<T>(fn: (client: Client) => Promise<T>): Promise<T> {
   const [clientTransport, serverTransport] =
     InMemoryTransport.createLinkedPair();
-  const server = buildServer(new Bridge(), createMcpI18n('zh-CN'));
+  const server = buildServer(new Bridge(), createMcpI18n('zh-CN'), {
+    toolProfile: 'full',
+  });
   const client = new Client(
     { name: 'sdk-features', version: '1' },
     { capabilities: {} },

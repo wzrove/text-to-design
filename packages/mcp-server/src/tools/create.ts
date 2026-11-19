@@ -1,4 +1,5 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, statSync } from 'node:fs';
+import { isAbsolute } from 'node:path';
 import type { McpServer } from '@modelcontextprotocol/server';
 import {
   BOOLEAN_OPERATION_LIST,
@@ -117,6 +118,26 @@ export const CREATE_EXCLUSIVE_FIELDS: ReadonlyMap<
   return out;
 })();
 
+/**
+ * 创建时**绝不该出现**的 id 类字段,以及它们真正该去的地方。
+ *
+ * 与 CREATE_EXCLUSIVE_FIELDS 分开:那张表回答「这个字段属于哪个 create 工具」,
+ * 而这里回答「这个字段根本不该出现在创建入参里,该换成哪个动作」。实测
+ * (error_reports 2026-11-17):`jsd_create_rectangle` 收到过 `id`,其余 10 个字段
+ * 全都合法 —— 调用方是在「更新已有节点」的心智下建节点。原来的报错只把那一个
+ * 字段列出来说「不被接受」,没给出正确的替代工具,调用方只能再猜一轮。
+ */
+export const CREATE_MISPLACED_ID_FIELDS: ReadonlyMap<string, string> = new Map([
+  [
+    'id',
+    '节点 id 由引擎创建后分配，不能预先指定。已有节点用 jsd_move_node / jsd_resize_node 修改，或用 jsd_clone_node 克隆。精简档将对应工具写入 jsd_batch 步骤。',
+  ],
+  [
+    'nodeId',
+    '创建入参不认 nodeId(要改已有节点请用修改类工具);要导出/定位请用 jsd_export / jsd_find',
+  ],
+]);
+
 type CreateNodeDef = Pick<
   BridgeToolDef,
   | 'name'
@@ -143,6 +164,8 @@ function createNodeTool(
     // 越界字段点名归属:例如给椭圆传了 characters/fontName/fontSize,
     // 直接指到 jsd_create_text,而不是只说「这些字段不被接受」
     fieldOwnership: CREATE_EXCLUSIVE_FIELDS,
+    // 放错动作的字段(如创建时传 id):给出替代工具,而不是让调用方再猜一轮
+    fieldMisplaced: CREATE_MISPLACED_ID_FIELDS,
     outputSchema: createdResultSchema,
     payload: (args) => {
       const { placement, ...rest } = args as Record<string, unknown>;
@@ -332,11 +355,30 @@ export function registerCreateTools(
       };
       let content: string;
       if (svgPath != null && svgPath.trim() !== '') {
+        const file = svgPath.trim();
+        if (!isAbsolute(file)) {
+          throw new Error(
+            `svgPath 必须是绝对路径(收到「${file}」)。读盘的是 MCP 服务进程,相对路径会解析到它的 cwd 而不是你的项目 —— 请写全路径。`,
+          );
+        }
+        let size: number;
         try {
-          content = readFileSync(svgPath, 'utf8');
+          size = statSync(file).size;
         } catch (e) {
           throw new Error(
-            `读取 SVG 文件失败(${svgPath}): ${e instanceof Error ? e.message : String(e)}`,
+            `读取 SVG 文件失败(${file}): ${e instanceof Error ? e.message : String(e)}`,
+          );
+        }
+        if (size > MAX_SVG_SOURCE_BYTES) {
+          throw new Error(
+            `SVG 文件 ${size} 字节 > 上限 ${MAX_SVG_SOURCE_BYTES}:先瘦身再导入(散点抽稀 / 合并 path / 去掉逐点坐标),或调大 TEXT_TO_DESIGN_MCP_MAX_SVG_BYTES`,
+          );
+        }
+        try {
+          content = readFileSync(file, 'utf8');
+        } catch (e) {
+          throw new Error(
+            `读取 SVG 文件失败(${file}): ${e instanceof Error ? e.message : String(e)}`,
           );
         }
       } else {
@@ -345,13 +387,14 @@ export function registerCreateTools(
       if (content.trim() === '') {
         throw new Error(
           svgPath != null
-            ? `SVG 文件是空的:${svgPath}(脚本可能没写成功,或写到了另一个路径)`
+            ? `SVG 文件是空的:${svgPath.trim()}(脚本可能没写成功,或写到了另一个路径)`
             : 'svg 为空字符串;要导入本地文件请改用 svgPath',
         );
       }
-      if (content.length > MAX_SVG_SOURCE_BYTES) {
+      const bytes = Buffer.byteLength(content, 'utf8');
+      if (bytes > MAX_SVG_SOURCE_BYTES) {
         throw new Error(
-          `SVG 源码 ${content.length} 字节 > 上限 ${MAX_SVG_SOURCE_BYTES}:先瘦身再导入(散点抽稀 / 合并 path / 去掉逐点坐标),或调大 TEXT_TO_DESIGN_MCP_MAX_SVG_BYTES`,
+          `SVG 源码 ${bytes} 字节 > 上限 ${MAX_SVG_SOURCE_BYTES}:先瘦身再导入(散点抽稀 / 合并 path / 去掉逐点坐标),或调大 TEXT_TO_DESIGN_MCP_MAX_SVG_BYTES`,
         );
       }
       return bridge_.request(

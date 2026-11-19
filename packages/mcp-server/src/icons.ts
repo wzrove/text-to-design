@@ -152,7 +152,39 @@ export function findIcon(raw: string): IconDef | null {
   return loose ? loose.item : null;
 }
 
-/** 按相关度返回候选,仅供错误提示 */
+/** 两个字符串的编辑距离(只用于给候选排序,规模在几十字符内) */
+function editDistance(a: string, b: string): number {
+  if (a === b) return 0;
+  const m = a.length;
+  const n = b.length;
+  if (m === 0) return n;
+  if (n === 0) return m;
+  let prev = Array.from({ length: n + 1 }, (_, j) => j);
+  for (let i = 1; i <= m; i += 1) {
+    const cur = [i];
+    for (let j = 1; j <= n; j += 1) {
+      cur[j] = Math.min(
+        prev[j] + 1,
+        cur[j - 1] + 1,
+        prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1),
+      );
+    }
+    prev = cur;
+  }
+  return prev[n];
+}
+
+/**
+ * 按相关度返回候选,仅供错误提示。
+ *
+ * 报错里的候选是调用方的**下一步尝试**,所以排序本身就是修复的一部分:
+ * ① 词能逐个命中别的图标名/别名的先排(输入 `oil-can` 时 `fuel`/`barrel` 这类
+ *    「同一个物件的另一个叫法」远比 `file-scan` 有用 —— 逐词命中正是这种语义相邻);
+ * ② 再按归一化编辑距离(拼错时有救);
+ * ③ 同分保留 Fuse 的命中序。
+ * 实测(error_reports 2026-11-17):输入 `oil-can`,原候选首项是 `tool-case`,而
+ * `fuel` 压根没进候选池 —— 顺序与召回面都不对,提示等于没给。
+ */
 export function suggestIcons(raw: string, limit = 20): IconDef[] {
   const q = raw.trim();
   if (!q) return [];
@@ -165,13 +197,45 @@ export function suggestIcons(raw: string, limit = 20): IconDef[] {
     const d = ICONS.get(aliased);
     if (d) out.set(d.name, d);
   }
+  // 词级召回:多词名(oil-can)按词拆开,每段当作一次独立查询 —— oil 在 lucide 里
+  // 没有对应图标,但 can 会召回 spray-can / candy-can 一族,配合编辑距离提供语义邻居。
+  const words = q
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((w) => w.length > 1);
+  for (const w of words) {
+    for (const { name } of BY_TAG.get(w) ?? []) {
+      const d = ICONS.get(name);
+      if (d) out.set(d.name, d);
+    }
+    for (const r of fuseName.search(w, { limit })) out.set(r.item.name, r.item);
+  }
   for (const { name } of BY_TAG.get(q) ?? []) {
     const d = ICONS.get(name);
     if (d) out.set(d.name, d);
     if (out.size >= limit) break;
   }
-  for (const r of fuseName.search(q, { limit })) out.set(r.item.name, r.item);
-  return [...out.values()].slice(0, limit);
+  // fuse 召回放宽到 limit*4:排序要靠距离,候选池太小会把真正的近邻挤掉
+  for (const r of fuseName.search(q, { limit: limit * 4 }))
+    out.set(r.item.name, r.item);
+
+  const qn = norm(q);
+  const wordHit = (def: IconDef): number => {
+    let n = 0;
+    for (const w of words) {
+      if (def.keywords.includes(w)) n += 2;
+      else if (norm(def.name).includes(w)) n += 3;
+    }
+    return n;
+  };
+  const ranked = [...out.values()].map((def, idx) => ({
+    def,
+    idx,
+    word: wordHit(def),
+    dist: editDistance(qn, norm(def.name)),
+  }));
+  ranked.sort((a, b) => b.word - a.word || a.dist - b.dist || a.idx - b.idx);
+  return ranked.slice(0, limit).map((r) => r.def);
 }
 
 /**

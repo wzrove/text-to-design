@@ -1,5 +1,6 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { CANVAS_RECIPE_ROOT } from 'text-to-design-shared';
 import { SKILL_DIR } from '../skills/entries';
 
 /**
@@ -18,11 +19,11 @@ import { SKILL_DIR } from '../skills/entries';
  * title: "自动布局"          # prompt 的展示标题
  * when: "**屏内分区排布一律先读这一条**……"   # 出现在 listResources 的 description
  * args: "参数 target(……)"   # 参数提示,同样进 description
- * role: assistant            # prompt 消息角色(user / assistant)
  * ---
  * ```
  *
  * 新增一篇 `references/foo.md` 就自动多一条配方;删文件就自动消失。
+ * prompt 消息角色固定 `user`:配方正文是给模型的操作指令,不是可配置的助手历史发言。
  * 参数 schema(zod)仍在 `tools/prompts.ts` —— 那是给客户端弹输入框用的类型契约,
  * 不适合塞进 markdown。
  *
@@ -34,10 +35,10 @@ import { SKILL_DIR } from '../skills/entries';
  */
 
 /** 配方索引资源 URI */
-export const RECIPE_INDEX_URI = 'jsd://recipes';
+export const RECIPE_INDEX_URI = CANVAS_RECIPE_ROOT;
 
 /** 配方正文资源模板 */
-export const RECIPE_URI_TEMPLATE = 'jsd://recipes/{id}';
+export const RECIPE_URI_TEMPLATE = `${CANVAS_RECIPE_ROOT}/{id}`;
 
 const REFERENCES_DIR = join(SKILL_DIR, 'references');
 
@@ -52,8 +53,6 @@ export type RecipeEntry = {
   whenToUse: string;
   /** frontmatter 的 `args`:参数提示 */
   argsHint?: string;
-  /** frontmatter 的 `role`:prompt 消息角色,缺省 user */
-  role: 'user' | 'assistant';
 };
 
 type Frontmatter = Record<string, string>;
@@ -61,7 +60,7 @@ type Frontmatter = Record<string, string>;
 /**
  * 解析 frontmatter。只支持本目录用到的形态:顶层 `key: value`,
  * value 是 JSON 双引号字符串、单引号字符串或裸标量。不引入 YAML 库 ——
- * 为一个 5 键的头部加依赖不划算,而支持的形态由本仓自己的写入方保证。
+ * 为一个 3 键的头部加依赖不划算,而支持的形态由本仓自己的写入方保证。
  */
 export function parseFrontmatter(source: string): {
   meta: Frontmatter;
@@ -138,14 +137,12 @@ function loadRecipe(id: string): RecipeEntry {
   if (title == null || title === '') {
     throw new Error(`references/${id}.md 的 frontmatter 缺 title`);
   }
-  const role = meta.role === 'assistant' ? 'assistant' : 'user';
   return {
     id,
-    uri: `jsd://recipes/${id}`,
+    uri: `${CANVAS_RECIPE_ROOT}/${id}`,
     title,
     whenToUse,
     ...(meta.args?.trim() ? { argsHint: meta.args.trim() } : {}),
-    role,
   };
 }
 

@@ -10,11 +10,22 @@ export const SERVER_VERSION = version;
 export function resolveToolProfile(
   raw = process.env.TEXT_TO_DESIGN_TOOL_PROFILE,
 ): 'full' | 'compact' {
-  if (raw == null || raw === '' || raw === 'full') return 'full';
-  if (raw === 'compact') return 'compact';
+  if (raw == null || raw === '' || raw === 'compact') return 'compact';
+  if (raw === 'full') return 'full';
   throw new Error(
     `Invalid TEXT_TO_DESIGN_TOOL_PROFILE: ${raw}; expected full or compact`,
   );
+}
+
+/**
+ * 体积类 env 的统一解析:空串 / 非数值 / 非正数一律回退默认值。
+ * 裸 `Number(env)` 会把空串变 0(全拒)、把拼错的值变 NaN(上限失效)。
+ */
+function positiveBytesEnv(name: string, fallback: number): number {
+  const raw = process.env[name];
+  if (raw == null || raw.trim() === '') return fallback;
+  const n = Number(raw);
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : fallback;
 }
 
 /**
@@ -71,8 +82,9 @@ export const RESOURCE_DOCUMENT_TTL_MS = Number(
  *  背景:内联大 base64 会随工具结果进入会话历史并常驻内存,
  *  实测会撑爆宿主进程堆(large_object_space 单调增长)导致 OOM。
  *  可用环境变量 TEXT_TO_DESIGN_MCP_MAX_INLINE_DATA_URL_BYTES 覆盖。 */
-export const MAX_INLINE_DATA_URL_BYTES = Number(
-  process.env.TEXT_TO_DESIGN_MCP_MAX_INLINE_DATA_URL_BYTES ?? 512 * 1024,
+export const MAX_INLINE_DATA_URL_BYTES = positiveBytesEnv(
+  'TEXT_TO_DESIGN_MCP_MAX_INLINE_DATA_URL_BYTES',
+  512 * 1024,
 );
 
 /** jsd_batch 整批上限:每步仍受自身 timeout 约束,此处只封顶整次编排 */
@@ -86,8 +98,9 @@ export const BATCH_TIMEOUT_MS = 120_000;
  * 内存再解析会把 daemon 拖住。超限不截断、不猜,直接点名文件路径与两个体积。
  * 可用环境变量 TEXT_TO_DESIGN_MCP_MAX_CALLS_FILE_BYTES 覆盖。
  */
-export const MAX_CALLS_FILE_BYTES = Number(
-  process.env.TEXT_TO_DESIGN_MCP_MAX_CALLS_FILE_BYTES ?? 8 * 1024 * 1024,
+export const MAX_CALLS_FILE_BYTES = positiveBytesEnv(
+  'TEXT_TO_DESIGN_MCP_MAX_CALLS_FILE_BYTES',
+  8 * 1024 * 1024,
 );
 
 /**
@@ -99,16 +112,25 @@ export const MAX_CALLS_FILE_BYTES = Number(
  * 又没人读,故封顶;超限不截断、不猜,退回 id 清单并在 warnings 里点名两个体积。
  * 可用环境变量 TEXT_TO_DESIGN_MCP_MAX_BATCH_SPILL_BYTES 覆盖。
  */
-export const MAX_BATCH_SPILL_BYTES = Number(
-  process.env.TEXT_TO_DESIGN_MCP_MAX_BATCH_SPILL_BYTES ?? 32 * 1024 * 1024,
+export const MAX_BATCH_SPILL_BYTES = positiveBytesEnv(
+  'TEXT_TO_DESIGN_MCP_MAX_BATCH_SPILL_BYTES',
+  32 * 1024 * 1024,
 );
 
 /** jsd_create_svg 的 SVG 源码体积上限(字节)。
  *  代码生成的图表常见几十 KB(正常),但坏掉的脚本会输出指数级膨胀的节点串,
  *  整份经文本帧下发会一路吃掉宿主内存。超限时不静默截断,直接报错并给抽稀建议。
  *  可用环境变量 TEXT_TO_DESIGN_MCP_MAX_SVG_BYTES 覆盖。 */
-export const MAX_SVG_SOURCE_BYTES = Number(
-  process.env.TEXT_TO_DESIGN_MCP_MAX_SVG_BYTES ?? 4 * 1024 * 1024,
+export const MAX_SVG_SOURCE_BYTES = positiveBytesEnv(
+  'TEXT_TO_DESIGN_MCP_MAX_SVG_BYTES',
+  4 * 1024 * 1024,
+);
+
+/** jsd_fill_image 的本地图片体积上限(字节)。与 SVG 同理:读盘前先 stat,
+ *  超限不读进内存。可用 TEXT_TO_DESIGN_MCP_MAX_IMAGE_BYTES 覆盖。 */
+export const MAX_IMAGE_SOURCE_BYTES = positiveBytesEnv(
+  'TEXT_TO_DESIGN_MCP_MAX_IMAGE_BYTES',
+  32 * 1024 * 1024,
 );
 
 /**

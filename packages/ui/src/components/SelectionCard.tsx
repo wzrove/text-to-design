@@ -1,15 +1,16 @@
 import { createEffect, createMemo, createSignal, For, Show } from 'solid-js';
-import {
-  type CodeRole,
-  type CopyRequest,
-  type NodeType,
-  normalizeCodeRoles,
-  type SelectionSummarySnapshot,
+import type {
+  CodeRole,
+  CopyRequest,
+  NodeType,
+  SelectionSummarySnapshot,
 } from 'text-to-design-shared';
 import { useBridge } from '../bridge/useBridge';
 import { t } from '../i18n/useLocale';
 import { copyWithToast } from '../utils/clipboard';
+import { makeCopyRequest } from '../utils/copyRequest';
 import { showToast } from '../utils/toast';
+import { TOGGLE_ACTIVE } from '../utils/toggleStyles';
 import CollapsibleSection, { Trigger } from './CollapsibleSection';
 
 interface SelectedNode {
@@ -46,6 +47,10 @@ const AUTO_COLLAPSE_COUNT = 10;
 export default function SelectionCard(props: {
   snapshot: SelectionSummarySnapshot;
   fill?: boolean;
+  /** 面板级 Copy 目标模式(顶部 CopyModeBar 持有) */
+  mode: CopyRequest['mode'];
+  roles: CodeRole[];
+  onToggleRole: (role: CodeRole, checked: boolean) => void;
 }) {
   const { requestCopy, status } = useBridge();
   const nodes = createMemo<SelectedNode[]>(() => {
@@ -59,8 +64,6 @@ export default function SelectionCard(props: {
         (node) => typeof node.id === 'string' && node.id.length > 0,
       ),
   );
-  const [mode, setMode] = createSignal<CopyRequest['mode']>('design');
-  const [roles, setRoles] = createSignal<CodeRole[]>([]);
   const [copying, setCopying] = createSignal(false);
   const [open, setOpen] = createSignal(true);
   const copyDisabled = createMemo(
@@ -68,22 +71,12 @@ export default function SelectionCard(props: {
       copying() ||
       status() !== 'connected' ||
       !hasValidSelection() ||
-      (mode() === 'code' && roles().length === 0),
+      (props.mode === 'code' && props.roles.length === 0),
   );
 
   createEffect(() => {
     if (nodes().length > AUTO_COLLAPSE_COUNT) setOpen(false);
   });
-
-  function toggleRole(role: CodeRole, checked: boolean): void {
-    setRoles((current) =>
-      checked
-        ? current.includes(role)
-          ? current
-          : [...current, role]
-        : current.filter((item) => item !== role),
-    );
-  }
 
   async function copy(
     scope: 'selection' | 'node',
@@ -92,21 +85,13 @@ export default function SelectionCard(props: {
     if (copying()) return;
     let request: CopyRequest;
     try {
-      const requestMode = mode();
-      const base = {
+      request = makeCopyRequest(
+        props.snapshot,
+        props.mode,
+        props.roles,
         scope,
-        requestedIds:
-          scope === 'node' ? [nodeId ?? ''] : nodes().map((node) => node.id),
-        source: {
-          platform: props.snapshot.meta?.platform ?? null,
-          pageName: props.snapshot.data?.pageName ?? null,
-          selectionSeq: props.snapshot.meta?.selectionSeq ?? null,
-        },
-      };
-      request =
-        requestMode === 'code'
-          ? { ...base, mode: 'code', roles: normalizeCodeRoles(roles()) }
-          : { ...base, mode: 'design' };
+        scope === 'node' ? [nodeId ?? ''] : nodes().map((node) => node.id),
+      );
     } catch (e) {
       console.debug('[ui] Copy 请求构造失败', e); // i18n-exempt: developer console only
       showToast(t('toast.copy.failed'), 'error');
@@ -126,61 +111,6 @@ export default function SelectionCard(props: {
 
   return (
     <div class={`flex min-h-0 flex-col ${props.fill ? 'flex-1' : ''}`}>
-      <div class="mb-1 flex shrink-0 items-center gap-3 px-1">
-        <div
-          class="join shrink-0"
-          role="group"
-          aria-label={t('selection.code.modeLabel')}
-        >
-          <button
-            type="button"
-            class={
-              'btn join-item btn-xs ' +
-              (mode() === 'design' ? 'btn-active' : 'btn-ghost')
-            }
-            aria-pressed={mode() === 'design'}
-            onClick={() => setMode('design')}
-          >
-            {t('selection.code.design')}
-          </button>
-          <button
-            type="button"
-            class={
-              'btn join-item btn-xs ' +
-              (mode() === 'code' ? 'btn-active' : 'btn-ghost')
-            }
-            aria-pressed={mode() === 'code'}
-            onClick={() => setMode('code')}
-          >
-            {t('selection.code.code')}
-          </button>
-        </div>
-        <Show when={mode() === 'code'}>
-          <div class="flex items-center gap-3 whitespace-nowrap text-xs">
-            <label class="flex cursor-pointer items-center gap-1">
-              <input
-                type="checkbox"
-                class="checkbox checkbox-xs rounded-sm"
-                checked={roles().includes('frontend')}
-                onChange={(e) =>
-                  toggleRole('frontend', e.currentTarget.checked)
-                }
-              />
-              {t('selection.code.frontend')}
-            </label>
-            <label class="flex cursor-pointer items-center gap-1">
-              <input
-                type="checkbox"
-                class="checkbox checkbox-xs rounded-sm"
-                checked={roles().includes('backend')}
-                onChange={(e) => toggleRole('backend', e.currentTarget.checked)}
-              />
-              {t('selection.code.backend')}
-            </label>
-          </div>
-        </Show>
-      </div>
-
       <CollapsibleSection
         open={open()}
         openChange={setOpen}
@@ -194,23 +124,53 @@ export default function SelectionCard(props: {
           <div class="flex items-center justify-between gap-2 border-b border-base-200 px-2.5 py-1.5">
             <div class="flex min-w-0 items-center gap-2">
               <h2 class="text-xs font-bold text-base-content/70">
-                {t('selection.title')}
+                {nodes().length > 0
+                  ? t('selection.selected', { count: nodes().length })
+                  : t('selection.title')}
               </h2>
-              <Show when={nodes().length > 0}>
-                <span class="badge badge-sm badge-ghost border-base-300 font-mono text-[10px] text-base-content/60">
-                  {t('selection.badge', { count: nodes().length })}
-                </span>
+              {/* 代码模式角色:与标题同一行,不另起一行占高 */}
+              <Show when={props.mode === 'code'}>
+                <For each={['frontend', 'backend'] as const}>
+                  {(role) => {
+                    const checked = (): boolean => props.roles.includes(role);
+                    return (
+                      <button
+                        type="button"
+                        role="checkbox"
+                        aria-checked={checked()}
+                        class={
+                          'rounded-full border px-2 py-0.5 text-[10px] transition-colors ' +
+                          (checked()
+                            ? TOGGLE_ACTIVE
+                            : 'border-base-300 text-base-content/55 hover:bg-base-content/5 hover:text-base-content')
+                        }
+                        onClick={() => props.onToggleRole(role, !checked())}
+                      >
+                        {t(
+                          role === 'frontend'
+                            ? 'selection.code.frontend'
+                            : 'selection.code.backend',
+                        )}
+                      </button>
+                    );
+                  }}
+                </For>
               </Show>
             </div>
             <Show when={nodes().length > 0}>
               <div class="flex shrink-0 items-center gap-1">
                 <button
                   type="button"
-                  class="btn btn-xs btn-primary"
+                  class="btn btn-xs border-base-300 bg-base-100 text-base-content hover:bg-base-200"
                   disabled={copyDisabled()}
+                  title={
+                    props.mode === 'code' && props.roles.length === 0
+                      ? t('selection.code.needRole')
+                      : undefined
+                  }
                   onClick={() => copy('selection')}
                 >
-                  {t('selection.copy')}
+                  {t('selection.copy.selected')}
                 </button>
                 <Trigger
                   open={open()}
@@ -241,6 +201,15 @@ export default function SelectionCard(props: {
             </p>
           }
         >
+          <p class="px-2 pb-1 text-[10px] text-base-content/50">
+            {t(
+              props.mode === 'code'
+                ? props.roles.length === 0
+                  ? 'selection.hint.code.noRole'
+                  : 'selection.hint.code'
+                : 'selection.hint.design',
+            )}
+          </p>
           <For each={nodes()}>
             {(node) => (
               <div class="flex items-center gap-2 rounded px-2 py-1.5 transition-colors hover:bg-base-200">

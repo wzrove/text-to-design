@@ -111,16 +111,18 @@ export type BlendModeDomainCheck = ExpectNever<
 type NodeTypingsGap = 'absolutePosition' | 'ungroup';
 
 /**
- * 契约异步化后的**名字**缺口(0017):Figma 原生只有同步 `createNodeFromSvg` /
- * `createImage`,`*Async` 两个名字是本仓 adapter 包出来的(见 figma/host.ts),
- * 故 typings 里必然查不到。若 Figma 官方将来收录了同名异步符号,下面的反向
- * 断言会编译失败 —— 提醒删掉 adapter 里的包装、直接用原生符号。
+ * 契约名与原生符号**不同形**的缺口:契约那条异步名字是本仓 adapter 包出来的
+ * (见 figma/host.ts),故 typings 里必然查不到。若 Figma 官方将来收录了同名异步符号,
+ * 下面的反向断言会编译失败 —— 提醒删掉 adapter 里的包装、直接用原生符号。
+ *
+ * `createNodeFromSvgAsync` **已从本名单移出**:契约把 `createNodeFromSvg` 改成同步必需
+ * (shared/core/host.ts),Figma 原生同步符号直接满足,figma/host.ts 也已不再包那个名字。
+ * 若将来又把它登记进来,反向断言会因为 typings 里没有而放行 —— 那样守的就不是事实。
  *
  * 注意 Figma 已有的 `createImageAsync(src: string)` 是**另一个语义**(收来源字符串),
  * 与契约的 `createImageFromBytesAsync`(收字节)不是一回事,故不在本缺口名单里。
  */
 type HostAsyncNameGap =
-  | 'createNodeFromSvgAsync'
   | 'createImageFromBytesAsync'
   /** 原生是四个分开的工厂(createPaintStyle / Text / Effect / Grid),契约这条 `createStyle` 是本仓按 kind 分发的**聚合名** */
   | 'createStyle'
@@ -147,10 +149,23 @@ type UiDerivedGap = 'chromeHeight';
  */
 type HostNamespaceProjectionGap = 'getLocalVariablesAsync';
 
+/**
+ * 契约里有、本平台**故意不实现**的成员(异步名):契约的异步入口只是转给异步平台用
+ * (MasterGo),Figma 与 jsDesign 的相似语义已由同步名承担,包一层 async 等于第二套实现。
+ *
+ * 与另外两张名单的区别:
+ * - `HostAsyncNameGap` 是「本仓包出来的抽象名,typings 必然没有」,靠 `Declared` 反向断言;
+ * - 本名单是「契约里有、typings 也没有,但缺席是**有意**的」,只在 PresenceCheck 里放行。
+ *
+ * 判据来自 typings 事实:这条审计过 —— Figma 与 jsDesign 的 typings 里都不存在
+ * `createNodeFromSvgAsync`。哪天官方收录同名异步入口,应该收编成真实实现并挪出本名单。
+ */
+type HostDeliberateGap = 'createNodeFromSvgAsync';
+
 export type HostPresenceCheck = ExpectNever<
   HostContractCheck<
     DesignHost,
-    HostAsyncNameGap | HostNamespaceProjectionGap
+    HostAsyncNameGap | HostNamespaceProjectionGap | HostDeliberateGap
   >['check']
 >;
 export type HostAsyncNameGapCheck = ExpectNever<

@@ -1,20 +1,21 @@
 ---
-title: "组件属性定义与设值"
+title: "组件属性定义与实例设值"
 when: "当需要定义组件属性或修改实例文本、布尔、换绑与变体取值时读取；按平台能力选择入口并核对可见图层引用。"
-args: "参数 target(组件或实例 id)"
-role: assistant
+args: "可选 target(组件或实例 id)"
 ---
 # 组件属性定义与实例设值
 
-用于定义组件属性或修改实例的文本、布尔、换绑与变体取值。构建状态族见 [变体集](variant-set.md)。
+默认精简档把本配方的绘制与编辑操作放入 `jsd_batch`，工具名填 `calls[].tool`；用 `jsd_describe_tools` 的 names 查步骤参数。
+
+用于定义组件属性或修改实例的文本、布尔、换绑与变体取值。构建状态族见 [变体集](variant-set.md)，全局或局部覆盖见 [实例同步](variant-sync.md)。通用失败处置与视觉验收按主技能「执行闭环」。
 
 ## 先认准层与键
 
-- **定义**在 COMPONENT / COMPONENT_SET 上，通过当前 platformOps 提供的入口操作。
+- **定义**在 COMPONENT / COMPONENT_SET 上，经 `jsd_platform_op` 调当前 platformOps 声明的属性管理 op；参数与返回结构以该 op 的 schema 为准。
 - **设值**在 INSTANCE 上，使用 `jsd_set_instance_properties`。
-- 先 find 读取 variantProperties、componentProperties 及可见子层的 componentPropertyReferences。属性存在不代表它驱动画面；按图层引用认准目标键。
+- 先用 `jsd_find` 读取 variantProperties、componentProperties 及可见子层的 componentPropertyReferences。属性存在不代表它驱动画面；按图层引用认准目标键。
 - 变体键用维度名，如 状态；文本、布尔、换绑键保留读取到的完整 # 后缀，如 `标题#32:0`。短名只在基名唯一时会被补全，重名须选准确键。
-- 变体可选值从组件集 variantGroupProperties、assets.variants 或平台读取 op 取，不猜新值。
+- 变体可选值从组件集 variantGroupProperties、`assets.variants` 或平台读取 op 取，不猜新值。
 
 ## 按平台写值
 
@@ -26,10 +27,11 @@ role: assistant
 
 变体取值传字符串；布尔传 boolean；文本传 string；换绑值与显式类型按工具 schema。需要 VARIABLE_ALIAS 时，值形如 `{"type":"VARIABLE_ALIAS","id":"读取到的变量id"}`，只用于平台支持的 BOOLEAN / TEXT / INSTANCE_SWAP，不能绑定 VARIANT。
 
-多个实例写相同 properties 时合并 ids；不同取值按组分 batch 步骤。复制已有覆盖见 [实例同步](variant-sync.md)。
+多个实例写相同 properties 时合并 ids；不同取值按组分 `jsd_batch` 步骤。复制已有覆盖见 [实例同步](variant-sync.md)。
 
-## 验收
+## 特有错误与验收
 
-独立回读属性 value，再深读可见子层的 characters / visible 等实际结果；仅属性回显改变不能证明渲染改变。导出代表实例检查文案、显隐和尺寸。
-
-实例子层样式覆盖未生效时，按 warnings 的主组件子层 id 定位。全局修改改主件；局部修改保留用户指定范围，不以改主件替代单实例需求。
+- 键不存在、短名重名或值不在可选值集合：按 `jsd_find` 的完整键与组件集可选值修正，不用近似名猜。
+- 平台不支持属性定义、`VARIABLE_ALIAS` 或运行期 setProperties：停止原样重试，改用平台声明的入口或报告需在设计器处理。
+- 实例子层样式覆盖未生效：按 warnings 的主组件子层 id 定位。全局修改改主件；局部修改保留用户指定范围，不以改主件替代单实例需求。
+- 独立回读属性 value，再深读可见子层的 characters / visible 等实际结果；仅属性回显改变不能证明渲染改变。用 `jsd_export` 检查代表实例的文案、显隐和尺寸。

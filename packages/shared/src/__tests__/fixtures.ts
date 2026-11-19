@@ -186,6 +186,7 @@ export function makeHost(nodes: readonly NodeSkeleton[] = []): FakeHost {
     createStar: () => makeRect(`${registry.size + 1}:star`),
     createVector: () => makeRect(`${registry.size + 1}:vector`),
     createComponent: () => makeInstance(`${registry.size + 1}:component`),
+    createNodeFromSvg: () => makeFrame(`${registry.size + 1}:svg`),
     createNodeFromSvgAsync: async () => makeFrame(`${registry.size + 1}:svg`),
     createImageFromBytesAsync: async () => ({ hash: 'h' }),
     currentPage: page as unknown as DesignHost['currentPage'],

@@ -1,7 +1,11 @@
+import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { Client } from '@modelcontextprotocol/client';
 import { InMemoryTransport } from '@modelcontextprotocol/server';
 import { describe, expect, it } from 'vitest';
 import { Bridge } from '../bridge';
+import { resolveToolProfile } from '../config';
 import { lookupExecutor } from '../core/registry';
 import type { ToolProfile } from '../core/tool-catalog';
 import { buildServer } from '../server';
@@ -29,13 +33,24 @@ async function connect(profile: ToolProfile, bridge = new Bridge()) {
 describe('tool catalog profiles', () => {
   it('keeps stable public catalogs while capabilities remain server-local', async () => {
     const full = await connect('full');
-    const compact = await connect('compact');
+    const compact = await connect(resolveToolProfile(''));
     try {
       const all = (await full.client.listTools()).tools;
       const core = (await compact.client.listTools()).tools;
       expect(all).toHaveLength(59);
-      expect(core).toHaveLength(27);
-      expect(new Set(core.map((tool) => tool.name)).size).toBe(27);
+      expect(core.map((tool) => tool.name).sort()).toEqual([
+        'jsd_batch',
+        'jsd_copy',
+        'jsd_describe_tools',
+        'jsd_export',
+        'jsd_find',
+        'jsd_get_page',
+        'jsd_get_prompt',
+        'jsd_get_selection',
+        'jsd_list_fonts',
+        'jsd_list_prompts',
+        'jsd_ping',
+      ]);
       expect(core.some((tool) => tool.name === 'jsd_describe_tools')).toBe(
         true,
       );
@@ -147,33 +162,71 @@ describe('tool catalog profiles', () => {
     };
     const session = await connect('compact', bridge);
     try {
-      await session.client.callTool({
-        name: 'jsd_reparent_nodes',
-        arguments: { ids: ['child'], parentId: 'new' },
+      const result = await session.client.callTool({
+        name: 'jsd_batch',
+        arguments: {
+          calls: [
+            {
+              tool: 'jsd_reparent_nodes',
+              args: { ids: ['child'], parentId: 'new' },
+            },
+          ],
+        },
       });
+      expect(result.structuredContent).toMatchObject({ ok: true });
       expect(reads).toContainEqual({ ids: ['new'], depth: 1 });
     } finally {
       await session.close();
     }
   });
 
-  it('rejects a multi-node export to one filename before contacting the plugin', async () => {
+  it('fans a multi-node export to one savePath out to one file per node', async () => {
+    // 曾经这里直接拒绝(「savePath 仅支持单节点导出」),线上被撞了 5 次:
+    // 调用方要的就是「一批节点各落一份盘」,拒绝只能逼它逐个往返。
     let requested = false;
     const bridge = new Bridge();
     bridge.request = async () => {
       requested = true;
-      return {};
+      return {
+        exports: {
+          '1:1': {
+            name: 'a',
+            format: 'PNG',
+            mimeType: 'image/png',
+            bytes: Buffer.from([1]),
+          },
+          '1:2': {
+            name: 'b',
+            format: 'PNG',
+            mimeType: 'image/png',
+            bytes: Buffer.from([2]),
+          },
+        },
+      };
     };
     const session = await connect('compact', bridge);
+    const dir = mkdtempSync(join(tmpdir(), 'jsd-export-'));
     try {
+      const savePath = join(dir, 'export.png');
       const result = await session.client.callTool({
         name: 'jsd_export',
-        arguments: { ids: ['1:1', '1:2'], savePath: 'export.png' },
+        arguments: { ids: ['1:1', '1:2'], savePath },
       });
-      expect(result.isError).toBe(true);
-      expect(requested).toBe(false);
+      expect(result.isError).toBeUndefined();
+      expect(requested).toBe(true);
+      const structured = result.structuredContent as {
+        exports: { id: string; path?: string }[];
+      };
+      const paths = structured.exports.map((e) => e.path);
+      expect(new Set(paths).size).toBe(2);
+      for (const p of paths) expect(p).toBeDefined();
+      expect(existsSync(paths[0] as string)).toBe(true);
+      expect(existsSync(paths[1] as string)).toBe(true);
+      // 单节点仍然是原样的 savePath,不被加序号
+      expect(paths[0]).not.toBe(savePath);
     } finally {
       await session.close();
+      rmSync(dir, { recursive: true, force: true });
     }
   });
 });

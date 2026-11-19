@@ -97,6 +97,12 @@ export interface BridgeToolDef {
    * 见 core/schema-error.ts 的 unexpectedKeysMessage。
    */
   fieldOwnership?: ReadonlyMap<string, { tool: string }>;
+  /**
+   * 越界字段 → 「它不属于本工具入参,该换成哪个动作」(可选)。
+   * 与 fieldOwnership 互补:那张表回答「属于哪个同类工具」,这张回答「根本没有这个字段」。
+   * 见 core/schema-error.ts 的 unexpectedKeysMessage。
+   */
+  fieldMisplaced?: ReadonlyMap<string, string>;
   outputSchema: z.ZodType;
   /** 四个 hint 全部必填(见 ToolHints) */
   annotations: ToolHints;

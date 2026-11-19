@@ -101,22 +101,23 @@ pkill -f text-to-design-mcp
 
 通过 MCP 启动配置的 env 设置 TEXT_TO_DESIGN_TOOL_PROFILE：
 
-- full（默认）：兼容档，保留 58 个原有公开工具。
-- compact：精简档，公开 25 个常用工具和 jsd_describe_tools，共 26 个；其余专责能力保留在内部，查询后通过 jsd_batch 执行。两个旧 manage 入口不在精简档提供。
+- compact（默认）：公开 11 个工具。连接与读取用 `jsd_ping`、`jsd_get_page`、`jsd_get_selection`、`jsd_find`、`jsd_list_fonts`；节点引用与导出用 `jsd_copy`、`jsd_export`；配方用 `jsd_list_prompts`、`jsd_get_prompt`；发现与编排用 `jsd_describe_tools`、`jsd_batch`。画布绘制与编辑统一经批处理，两个旧 manage 入口由对应专责操作替代。
+- full：兼容档，保留 59 个原有公开工具。依赖旧工具名直调的客户端可显式选择此档。
 
 示例 env 配置：
 
 ```json
-{ "TEXT_TO_DESIGN_TOOL_PROFILE": "compact" }
+{ "TEXT_TO_DESIGN_TOOL_PROFILE": "full" }
 ```
 
 档位由常驻 daemon 启动时确定，共享该 daemon 的会话使用同一档位。更改后须重启 daemon，再重连 AI 客户端；只更改 shim 配置或重载设计插件不会切换已有 daemon。
 
 精简档按需操作：
 
-1. jsd_describe_tools 用 group（session/create/nodes/components/props/media/styles/guidance/platform/orchestration）或 query 查询能力摘要，支持 offset/limit 分页。
-2. 用 names 传准确名称（每次最多 3 个），读取完整输入 schema、结果键、风险注解及 public/execution。
-3. 未公开的工具放入 jsd_batch 执行，不能直接 tools/call 其名称；发现过程不会动态注册工具。
+1. 已知名称时直接用 `jsd_describe_tools` 的 names（每次最多 3 个）取完整输入 schema、结果键、风险注解及 public/execution。
+2. 名称未知时用 group（session/create/nodes/components/props/media/styles/guidance/platform/orchestration）或 query 查询摘要，支持 offset/limit 分页。
+3. 将未公开工具作为 `jsd_batch` 的步骤，单项操作也可提交。绘制时按语义块串行分批，每批最多 50 步。同值批改在一个步骤里合并 ids。
+4. 能写文件且 MCP 服务可读时，优先把批次保存为 JSON，再用 `callsFile` 传绝对路径。其余情况用内联 `calls`。每次只传其中一种。
 
 示例：查询 jsd_detach_instance 的 schema，再提交单步 batch：
 
@@ -128,7 +129,7 @@ pkill -f text-to-design-mcp
 }
 ```
 
-两个档位继续提供相同的原生 prompts、resources 与 canvas skill。低频能力的 batch 执行保留原参数校验、平台门控、取消、超时和漂移告警。兼容档适合旧客户端；精简档需通过实际任务比较发现开销与工具误选率。
+两个档位均提供原生 prompts、resources 与 skills。批内操作继续走原执行体，保留参数校验、平台门控、取消、超时和漂移告警。
 
 ### 完整工具清单（兼容档）
 
@@ -140,7 +141,7 @@ pkill -f text-to-design-mcp
 | `jsd_get_selection` | 读取画布当前选中的节点 |
 | `jsd_get_page` | 读取当前页结构(顶层节点几何 + **设计系统资源清单**:组件/变体集(带维度取值)/样式(四类全量)/变量,含 summary 计数;等价 `jsd://page` 资源)。**设计类任务第一步读它,命中即复用** |
 | `jsd_find` | 按名称/类型/id 查找节点 |
-| `jsd_create_svg` | 直接导入 SVG(保留 path/矢量数据,不经降级)。来源二选一:`svg` 内联字符串,或 `svgPath` 本地文件路径(**图表一律走这条**:脚本按 `chart-by-code` 配方算好、落盘,再传路径) |
+| `jsd_create_svg` | 直接导入 SVG(保留 path/矢量数据,不经降级)。来源二选一:`svg` 内联字符串,或 `svgPath` 本地文件**绝对路径**(**图表一律走这条**:脚本按 `chart-by-code` 配方算好、落盘,再传路径) |
 | `jsd_create_icon` | 按名称/别名模糊匹配插入 Lucide 内置图标,查无时返回候选名 |
 | `jsd_html_to_design` | 把 HTML 转成设计节点 |
 | `jsd_set_fill_color` | 填充(fills 整体替换)、混合模式、填充样式 |
@@ -177,7 +178,7 @@ pkill -f text-to-design-mcp
 | `jsd_batch` | 批量编排器:一次请求顺序执行多个 jsd_* 步骤,双花括号占位符串起中间值;步骤回显做摘要裁剪(节点只留 id/name/type/x/y,丢 vectorPaths 等大字段,超预算降级为 id 清单),占位符解析用完整数据;含图标的批次另配一次 `jsd_export` 目视验收;含删除/移父的步骤自动复核同层几何漂移(结果 `warnings`,`checkDrift:false` 可关;单工具调用同样会复核) |
 | `jsd_export` | savePath 仅允许单节点；多节点须分别指定唯一文件路径。 导出节点为 PNG/JPG/SVG/PDF(导出失败的 id 在文本里点名) |
 | `jsd_list_fonts` | 列出可用字体:families 与各族的可用字型 `fonts:[{family,styles}]`(写 fontName 前照这份取组合,family+style 需精确匹配,猜错会静默退回默认字重) |
-| `jsd_fill_image` | 用本地图片填充节点 |
+| `jsd_fill_image` | 用本地图片填充节点(`sourcePath` 绝对路径,空文件拒绝,默认上限 32MB) |
 | `jsd_platform_op` | 平台特有能力的通用通道(Figma **变量读写**/本地样式/组件属性**定义与设值**;MasterGo **变量读写(查看 / 批量建 / 绑定解绑)**、组件属性管理与**集合级变体管理**——建维度/加成分/改取值/删维度)。先读 `jsd_ping` 的 `platformOps` 名单再传 op 名;插件平台不适用(如即时设计)时由 daemon 直接拦截并给出替代路径,不发插件往返 |
 
 ### 配方 prompt(`prompts/list`)

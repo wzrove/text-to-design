@@ -1,5 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/server';
 import {
+  CANVAS_SKILL_URI,
   getPageStructureSchema,
   getSelectionResultSchema,
   getSelectionSchema,
@@ -10,7 +11,7 @@ import type { Bridge } from '../bridge';
 import { CLIENT, PING_TIMEOUT_MS } from '../config';
 import type { ToolHandle } from '../core/tool-def';
 import { bridgeTool } from '../core/tool-exec';
-import { getSkillsStatus } from '../daemon/skills';
+import { getSkillsStatus, getSkillUris } from '../daemon/skills';
 import type { McpI18n } from '../i18n';
 
 export function registerSessionTools(
@@ -54,7 +55,13 @@ export function registerSessionTools(
           capabilities: data?.capabilities,
           coreCapabilities: data?.coreCapabilities,
           platformOps: data?.platformOps,
-          ...(getSkillsStatus() != null ? { skills: getSkillsStatus()! } : {}),
+          skills: {
+            ...(getSkillsStatus() ?? { published: false, count: 0 }),
+            // 目录已发布却没这条入口就不要承诺:门禁会把调用方卡在一个读不到的 URI 上
+            ...(getSkillUris().includes(CANVAS_SKILL_URI)
+              ? { nextStep: CANVAS_SKILL_URI }
+              : {}),
+          },
         };
       } catch (e) {
         return {

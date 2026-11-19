@@ -168,9 +168,14 @@ type HostProjectionGap =
 /**
  * **缺席项**:MG 两级 API 都没有,契约里声明为可选,core 按运行时探测回退或用明确
  * 报错兜住(见 host.ts 头注释)。`createImageAsync` 只是名字不同:MG 叫 `createImage`。
+ *
+ * `createNodeFromSvg`:本平台 typings 只有 `createNodeFromSvgAsync`(`:1413`,全文件无同步
+ * 变体),契约那条同步入口由 mastergo/host.ts **桥接**实现,与 MG 无 `ungroup` 同属宿主层缺口。
  */
 type HostAbsentGap =
   | 'createImageFromBytesAsync'
+  /** 同步变体在 typings 里不存在,契约同步入口由 host.ts 的异步桥接实现 */
+  | 'createNodeFromSvg'
   | 'ungroup'
   | 'getNodeByIdAsync'
   | 'loadAllPagesAsync'

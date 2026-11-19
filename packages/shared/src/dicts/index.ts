@@ -21,6 +21,7 @@ export * from './platform-knowledge';
 export * from './platform-value-domain';
 export * from './prop-applicability';
 export * from './search-scope';
+export * from './skill-route';
 export * from './style-kind';
 export * from './telemetry-wire';
 export * from './unapplied-prop';

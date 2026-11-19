@@ -24,6 +24,12 @@ export const meta: PlatformMeta = {
     // 文档范围读(0039 修订):Figma 有 dynamic-page 与 `loadAllPagesAsync` 且真的会
     // 返回 ⇒ 跨页遍历、资源清单与 pages 元数据都覆盖全文档。另两平台不声明。
     'documentScopeRead',
+    // ⚠ 这里**故意不声明** `nodeResolveSync` / `mainComponentSync` / `styleEnumerationSync`
+    // (三者同一族:dynamic-page 下同步文档访问入口必抛)。`nodeResolveSync` 的 typings 依据:
+    // `plugin-api.d.ts:423` —— 同步 `getNodeById` 在 manifest 含 dynamic-page 时**无条件抛**,
+    // 与页面是否已加载无关(`PageNode.loadAsync` 只解绑页级 children/appendChild,不解绑它)。
+    // ⇒ 不声明是**意图**不是遗漏:core 因此走 `getNodeByIdAsync`(shared/core/access.ts:47-62)。
+    // 本仓入口见 packages/ui/scripts/vite-plugin-manifest.ts:57 documentAccess: 'dynamic-page'。
     'textTruncation',
     'componentProperties',
     'variables',

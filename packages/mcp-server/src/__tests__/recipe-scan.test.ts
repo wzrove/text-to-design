@@ -34,17 +34,11 @@ describe('配方目录由磁盘扫描生成', () => {
     }
   });
 
-  it('role 只会是 user / assistant', () => {
-    for (const r of RECIPES) {
-      expect(['user', 'assistant']).toContain(r.role);
-    }
-  });
-
   it('frontmatter 解析支持双引号、单引号与裸标量', () => {
     const src = [
       '---',
       'title: "含 \\"引号\\" 的标题"',
-      "role: 'assistant'",
+      "note: 'assistant'",
       'args: 裸标量',
       '---',
       '',
@@ -52,7 +46,7 @@ describe('配方目录由磁盘扫描生成', () => {
     ].join('\n');
     const { meta, body } = parseFrontmatter(src);
     expect(meta.title).toBe('含 "引号" 的标题');
-    expect(meta.role).toBe('assistant');
+    expect(meta.note).toBe('assistant');
     expect(meta.args).toBe('裸标量');
     expect(body.trim()).toBe('# 正文');
   });
