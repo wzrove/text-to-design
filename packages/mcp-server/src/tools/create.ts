@@ -1,4 +1,5 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, statSync } from 'node:fs';
+import { isAbsolute } from 'node:path';
 import type { McpServer } from '@modelcontextprotocol/server';
 import {
   BOOLEAN_OPERATION_LIST,
@@ -354,11 +355,30 @@ export function registerCreateTools(
       };
       let content: string;
       if (svgPath != null && svgPath.trim() !== '') {
+        const file = svgPath.trim();
+        if (!isAbsolute(file)) {
+          throw new Error(
+            `svgPath 必须是绝对路径(收到「${file}」)。读盘的是 MCP 服务进程,相对路径会解析到它的 cwd 而不是你的项目 —— 请写全路径。`,
+          );
+        }
+        let size: number;
         try {
-          content = readFileSync(svgPath, 'utf8');
+          size = statSync(file).size;
         } catch (e) {
           throw new Error(
-            `读取 SVG 文件失败(${svgPath}): ${e instanceof Error ? e.message : String(e)}`,
+            `读取 SVG 文件失败(${file}): ${e instanceof Error ? e.message : String(e)}`,
+          );
+        }
+        if (size > MAX_SVG_SOURCE_BYTES) {
+          throw new Error(
+            `SVG 文件 ${size} 字节 > 上限 ${MAX_SVG_SOURCE_BYTES}:先瘦身再导入(散点抽稀 / 合并 path / 去掉逐点坐标),或调大 TEXT_TO_DESIGN_MCP_MAX_SVG_BYTES`,
+          );
+        }
+        try {
+          content = readFileSync(file, 'utf8');
+        } catch (e) {
+          throw new Error(
+            `读取 SVG 文件失败(${file}): ${e instanceof Error ? e.message : String(e)}`,
           );
         }
       } else {
@@ -367,13 +387,14 @@ export function registerCreateTools(
       if (content.trim() === '') {
         throw new Error(
           svgPath != null
-            ? `SVG 文件是空的:${svgPath}(脚本可能没写成功,或写到了另一个路径)`
+            ? `SVG 文件是空的:${svgPath.trim()}(脚本可能没写成功,或写到了另一个路径)`
             : 'svg 为空字符串;要导入本地文件请改用 svgPath',
         );
       }
-      if (content.length > MAX_SVG_SOURCE_BYTES) {
+      const bytes = Buffer.byteLength(content, 'utf8');
+      if (bytes > MAX_SVG_SOURCE_BYTES) {
         throw new Error(
-          `SVG 源码 ${content.length} 字节 > 上限 ${MAX_SVG_SOURCE_BYTES}:先瘦身再导入(散点抽稀 / 合并 path / 去掉逐点坐标),或调大 TEXT_TO_DESIGN_MCP_MAX_SVG_BYTES`,
+          `SVG 源码 ${bytes} 字节 > 上限 ${MAX_SVG_SOURCE_BYTES}:先瘦身再导入(散点抽稀 / 合并 path / 去掉逐点坐标),或调大 TEXT_TO_DESIGN_MCP_MAX_SVG_BYTES`,
         );
       }
       return bridge_.request(

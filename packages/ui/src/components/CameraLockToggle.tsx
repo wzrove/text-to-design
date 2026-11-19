@@ -7,6 +7,7 @@ import {
 import { postToCode } from '../bridge/codeChannel';
 import { t } from '../i18n/useLocale';
 import { showToast } from '../utils/toast';
+import { TOGGLE_ACTIVE, TOGGLE_IDLE } from '../utils/toggleStyles';
 import Tooltip from './Tooltip';
 
 const CAMERA_LOCK_STORAGE_KEY = 'text-to-design:camera-lock';
@@ -70,10 +71,8 @@ export default function CameraLockToggle() {
     >
       <button
         type="button"
-        class={`btn btn-ghost btn-xs shrink-0 px-1 ${
-          locked()
-            ? 'border border-base-content/25 bg-base-content/10 text-base-content hover:bg-base-content/20'
-            : 'text-base-content/60 hover:text-base-content'
+        class={`btn btn-ghost btn-xs shrink-0 border px-1 ${
+          locked() ? `${TOGGLE_ACTIVE} hover:bg-base-content/20` : TOGGLE_IDLE
         }`}
         aria-label={
           locked()

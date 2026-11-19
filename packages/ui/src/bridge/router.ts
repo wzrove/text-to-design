@@ -114,10 +114,12 @@ function timeoutCauseOf(method: string): string | null {
     case 'find':
     case 'get_page':
       // dec 0039 修订:即时设计/MG 上任何「触碰非当前页」的枚举都会挂到转发上限
+      // i18n-exempt: 随错误包上行给 MCP(模型读),语言归 MCP 侧(见 0016)
       return '本平台读不到非当前页(触碰即挂死);若调用传了 scope=document,这类枚举在即时设计上可能被退回当前页而前置耗时失控';
     case 'list_styles':
     case 'export':
     case 'jsd_export':
+      // i18n-exempt: 同上,随错误包上行
       return '该方法的运行时成员可能是永不 settle 的 *Async 变体:平台须声明同步入口(dec e1e66f0a)';
     default:
       return null;
@@ -126,7 +128,9 @@ function timeoutCauseOf(method: string): string | null {
 
 function describeTimeoutError(method: string, params: unknown): string {
   const cause = timeoutCauseOf(method);
+  // i18n-exempt: 随错误包上行给 MCP(模型读),语言归 MCP 侧(见 0016)
   const tail = cause == null ? '' : `;已知成因:${cause}`;
+  // i18n-exempt: 同上
   return `插件响应超时(入参 ${describeParamsForTimeout(params)})${tail}`;
 }
 

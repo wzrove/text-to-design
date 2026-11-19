@@ -7,7 +7,7 @@
   "scripts": {
     "postinstall": "lefthook install",
     "dev": "pnpm --filter text-to-design-ui watch",
-    "dev:ui": "pnpm --filter text-to-design-ui dev",
+    "dev:ui": "pnpm --filter text-to-design-ui dev:ui",
     "build": "pnpm --filter text-to-design-ui build && pnpm --filter text-to-design-mcp build",
     "typecheck": "pnpm -r run typecheck && tsc -p tsconfig.json",
     "lint": "biome check .",

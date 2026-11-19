@@ -134,11 +134,36 @@ export function bridgeTool(
         }
         let data: unknown;
         if (def.run) {
-          data = await def.run(
-            args,
-            bridge,
-            signal ?? new AbortController().signal,
-          );
+          // run 型工具此前只把 timeout 交给 bridge 请求,编排(jsd_batch)整批
+          // 因此没有总预算:50 步各 40s 能跑到 30 分钟。这里按 def.timeout 给
+          // run 本身封顶,并把取消传进它发出的 bridge 请求。
+          const parent = signal ?? new AbortController().signal;
+          const controller = new AbortController();
+          const onAbort = (): void => controller.abort();
+          if (parent.aborted) controller.abort();
+          else parent.addEventListener('abort', onAbort, { once: true });
+          let timedOut = false;
+          const timer =
+            def.timeout != null
+              ? setTimeout(() => {
+                  timedOut = true;
+                  controller.abort();
+                }, def.timeout)
+              : undefined;
+          try {
+            data = await def.run(args, bridge, controller.signal);
+          } catch (e) {
+            if (timedOut) {
+              throw new BridgeError(
+                'plugin_timeout',
+                `工具 ${def.name} 超过单次预算 ${def.timeout}ms。超时后插件可能仍在执行,先 jsd_find 回读该步是否已落地,再决定是否重试。`,
+              );
+            }
+            throw e;
+          } finally {
+            if (timer != null) clearTimeout(timer);
+            parent.removeEventListener('abort', onAbort);
+          }
         } else {
           data = await bridge.request(
             def.method as PluginMethod,

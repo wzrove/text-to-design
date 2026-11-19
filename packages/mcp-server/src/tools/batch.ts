@@ -34,8 +34,15 @@ function getPath(
     const m = /^([\w$\u4e00-\u9fff-]*)((?:\[\d+\])*)$/.exec(part.trim());
     if (m == null) return { ok: false };
     if (m[1] !== '') {
-      if (Array.isArray(cur) && cur.length === 1) cur = cur[0];
+      if (Array.isArray(cur)) {
+        // 数组取字段只认「单元素数组 == 该元素」这一种无歧义读法;
+        // 多元素数组上 .field 会静默得到 undefined,把缺参当默认值传下去
+        if (cur.length !== 1) return { ok: false };
+        cur = cur[0];
+      }
       if (cur == null || typeof cur !== 'object') return { ok: false };
+      if (!Object.prototype.hasOwnProperty.call(cur, m[1]))
+        return { ok: false };
       cur = (cur as Record<string, unknown>)[m[1]];
     }
     if (m[2] !== '') {
@@ -49,7 +56,9 @@ function getPath(
       }
     }
   }
-  return { ok: true, value: cur };
+  // 下标越界 / 属性值为 undefined 同样算「路径不可达」,不能把 undefined
+  // 注入 args(可选字段会被 schema 静默当缺省)
+  return cur === undefined ? { ok: false } : { ok: true, value: cur };
 }
 
 /**
@@ -300,9 +309,11 @@ function collectIds(value: unknown, out: string[]): void {
  * 裸的 `echoTrimmed` 布尔读不出「哪几步被裁、裁掉了什么」—— 那正是「回显成功、
  * 画面空白」被误判成工具没干活的入口,故由 batch 汇总成一句可读的 note。
  */
-function echoStep(
-  structured: unknown,
-): { data: unknown; trimmed: boolean; omitted: boolean } {
+function echoStep(structured: unknown): {
+  data: unknown;
+  trimmed: boolean;
+  omitted: boolean;
+} {
   const data = trimEcho(structured);
   const size = jsonSize(data);
   if (size <= ECHO_BUDGET_CHARS) {
@@ -543,6 +554,12 @@ export function registerBatchTools(
           '需要 calls 或 callsFile 其中一个(都缺省时没有步骤可执行)。参数体大到写不进上下文时,把清单写进 JSON 文件、这里只传它的绝对路径。',
         );
       const calls = fromFile?.calls ?? inlineCalls ?? [];
+      // callsFile 的空数组早已在读文件阶段点名拒绝;内联 [] 不能一路走到
+      // complete(0===0) 回 ok:true,否则同一份空清单两条入口结论相反
+      if (calls.length === 0)
+        throw new Error(
+          'calls 是空数组,没有步骤可执行。空批次不算成功:检查清单生成逻辑,或直接不提交这次调用。',
+        );
       const stopOnError = fromFile?.stopOnError ?? inlineStopOnError;
       const checkDrift = fromFile?.checkDrift ?? inlineCheckDrift;
       const steps = new Map<string, unknown>();
@@ -623,6 +640,15 @@ export function registerBatchTools(
           failedSteps.add(id);
           results.push({ id, tool: call.tool, ok: false, error: msg });
         };
+        // 整批预算(tool-exec 的 def.timeout)耗尽或被宿主取消时,信号已中止:
+        // 再往下走每个 inner 调用都只会立刻 cancelled,还把「预算耗尽」伪装成
+        // 逐步失败。这里点名停住,并保留已完成步骤的结果。
+        if (signal?.aborted) {
+          fail(
+            '本批已中止:整批预算耗尽或被取消。已完成的步骤结果仍在上方;在途写入可能已落地,先 jsd_find 回读受影响节点再决定是否重放。',
+          );
+          break;
+        }
         // ---- 编排期错误:计划本身有问题,一律中止 ----
         if (steps.has(id) || results.some((r) => r.id === id)) {
           fail(`步骤 id "${id}" 重复`);
@@ -697,7 +723,11 @@ export function registerBatchTools(
           const text =
             out.content?.find((c) => c.type === 'text')?.text ?? '工具返回错误';
           // 分类读 code,正文只用于展示:此前拿正文前 300 字做分类,中文措辞一动分类就漂
-          fail(stepFailureText(out.code, text));
+          fail(
+            signal?.aborted
+              ? `${stepFailureText(out.code, text)} [本批已中止:整批预算耗尽或被取消;在途写入可能已落地,先 jsd_find 回读受影响节点再重试]`
+              : stepFailureText(out.code, text),
+          );
           if (!(stopOnError === false || call.continueOnError === true)) break;
           continue;
         }

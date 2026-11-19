@@ -7,7 +7,15 @@ import { z } from 'zod';
 import { registerCapability } from '../core/tool-catalog';
 import { promptIcon } from '../core/tool-icons';
 
-export function createPromptRegistrar(server: McpServer) {
+export type PromptAliasResolver = (
+  name: string,
+  args: Record<string, string>,
+) => GetPromptResult | null;
+
+export function createPromptRegistrar(
+  server: McpServer,
+  resolveAlias?: PromptAliasResolver,
+) {
   const entries = new Map<
     string,
     {
@@ -92,7 +100,7 @@ export function createPromptRegistrar(server: McpServer) {
         name: 'jsd_get_prompt',
         title: '读取设计配方提示词',
         description:
-          '按名称和字符串参数读取 MCP 提示词正文；仅提供操作指引，不执行画布操作。插件离线也可用。',
+          '按名称和字符串参数读取 MCP 提示词正文；仅提供操作指引，不执行画布操作。插件离线也可用。也接受技能路径别名:canvas/SKILL、skill://canvas/SKILL.md(读技能入口),canvas/references/<id>[.md](读该附录,等同配方 id)。',
         inputSchema: getInput,
         annotations,
         icons: promptIcon(),
@@ -101,10 +109,20 @@ export function createPromptRegistrar(server: McpServer) {
         try {
           const { name, arguments: args } = getInput.parse(input);
           const entry = entries.get(name);
-          if (!entry)
-            throw new Error(
-              `未知提示词:${name}；可用名称:${[...entries.keys()].join(' / ')}`,
-            );
+          if (!entry) {
+            // 资源 URI / 路径形态的别名:宿主没有 resources/read 时,这是
+            // skill://canvas/SKILL.md 唯一可达的读取通道
+            const aliased = resolveAlias?.(name, args ?? {});
+            if (aliased == null)
+              throw new Error(
+                `未知提示词:${name}；可用名称:${[...entries.keys()].join(' / ')}。若这是技能路径,可用别名:canvas/SKILL 或 skill://canvas/SKILL.md(读技能入口),canvas/references/<id>.md(读附录;与配方 id 同源)。`,
+              );
+            const data = aliased;
+            return {
+              content: data.messages.map((message) => message.content),
+              structuredContent: data,
+            };
+          }
           const data = entry.get(args ?? {});
           return {
             content: data.messages.map((message) => message.content),

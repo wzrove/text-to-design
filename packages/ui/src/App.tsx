@@ -7,6 +7,8 @@ import {
   Show,
 } from 'solid-js';
 import {
+  type CodeRole,
+  type CopyRequest,
   PANEL_HEIGHT_OVERLAY,
   PANEL_MINIMIZED_SIZE,
   PANEL_RESIZE_STEP,
@@ -17,6 +19,7 @@ import { BridgeProvider, useBridge } from './bridge/useBridge';
 import CapabilityCard from './components/CapabilityCard';
 import ConnectionHint from './components/ConnectionHint';
 import ConsentDialog from './components/ConsentDialog';
+import CopyModeSwitch from './components/CopyModeSwitch';
 import LogDrawer from './components/LogDrawer';
 import LogTrigger from './components/LogTrigger';
 import MinimizedPet from './components/MinimizedPet';
@@ -30,8 +33,45 @@ import Tooltip from './components/Tooltip';
 import UpgradeButton from './components/UpgradeButton';
 import UpgradeModal from './components/UpgradeModal';
 import { locale, t } from './i18n/useLocale';
+import { copyText } from './utils/clipboard';
+import { makeCopyRequest } from './utils/copyRequest';
+import { showToast } from './utils/toast';
 import { useEscapeKey } from './utils/useEscapeKey';
 import { APP_VERSION, isOutdated } from './utils/version';
+
+const COPY_MODE_KEY = 'ttd.copy-mode';
+const COPY_ROLES_KEY = 'ttd.copy-roles';
+
+function readStored<T>(key: string, fallback: T): T {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw == null ? fallback : (JSON.parse(raw) as T);
+  } catch {
+    return fallback;
+  }
+}
+
+function writeStored(key: string, value: unknown): void {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    // 沙箱里 localStorage 可能被禁用:记忆失败不影响本次选择
+  }
+}
+
+function readCopyMode(): CopyRequest['mode'] {
+  return readStored<unknown>(COPY_MODE_KEY, 'design') === 'code'
+    ? 'code'
+    : 'design';
+}
+
+function readCodeRoles(): CodeRole[] {
+  const stored = readStored<unknown>(COPY_ROLES_KEY, []);
+  if (!Array.isArray(stored)) return [];
+  return stored.filter(
+    (role): role is CodeRole => role === 'frontend' || role === 'backend',
+  );
+}
 
 function Shell() {
   const {
@@ -39,6 +79,7 @@ function Shell() {
     selection,
     status,
     rescan,
+    requestCopy,
     clearLog,
     canResize,
     chromeHeight,
@@ -54,6 +95,80 @@ function Shell() {
   const [logOpen, setLogOpen] = createSignal(false);
   const [upgradeOpen, setUpgradeOpen] = createSignal(false);
   const [consentOpen, setConsentOpen] = createSignal(false);
+
+  // Copy 目标模式是面板级选择,不随选中项重置(0016 的 UI 侧同理:一份状态)
+  const [copyMode, setCopyMode] = createSignal<CopyRequest['mode']>(
+    readCopyMode(),
+  );
+  const [codeRoles, setCodeRoles] = createSignal<CodeRole[]>(readCodeRoles());
+  createEffect(() => writeStored(COPY_MODE_KEY, copyMode()));
+  createEffect(() => writeStored(COPY_ROLES_KEY, codeRoles()));
+
+  /**
+   * 连上就告诉用户下一步该干什么。只在「从未连接 → 已连接」这一跳弹一次:
+   * 提示卡已让位给状态徽章,不用常驻一块绿框重复同一句话。
+   */
+  let greeted = false;
+  createEffect(() => {
+    if (status() !== 'connected') {
+      greeted = false;
+      return;
+    }
+    if (greeted) return;
+    greeted = true;
+    showToast(t('toast.connected'), 'info');
+  });
+
+  /** 切到代码模式时自动给一个默认角色:Copy 需要至少一项,空选是死路 */
+  const changeCopyMode = (next: CopyRequest['mode']): void => {
+    if (copyMode() === next) return;
+    setCopyMode(next);
+    if (next === 'code' && codeRoles().length === 0) setCodeRoles(['frontend']);
+    // 档位换了,下一步动作也换了:给一条不占布局的即时反馈
+    showToast(
+      t(next === 'code' ? 'toast.mode.code' : 'toast.mode.design'),
+      'info',
+    );
+  };
+  /**
+   * 最小化态单击宠物:把当前所有选中节点按当前模式复制到剪贴板。
+   * 面板不可见时不弹 toast(ToastHost 在最小化树里已卸载),结果由宠物相位反馈。
+   */
+  const copySelectedForPet = async (): Promise<boolean> => {
+    if (status() !== 'connected') return false;
+    const snapshot = selection();
+    const selected = snapshot.data?.selection;
+    const ids = Array.isArray(selected)
+      ? selected
+          .map((node) => node.id)
+          .filter((id): id is string => typeof id === 'string' && id !== '')
+      : [];
+    if (ids.length === 0) return false;
+    try {
+      const request = makeCopyRequest(
+        snapshot,
+        copyMode(),
+        codeRoles(),
+        'selection',
+        ids,
+      );
+      const result = await requestCopy(request);
+      return await copyText(result.text);
+    } catch (e) {
+      console.debug('[ui] 宠物单击复制失败', e); // i18n-exempt: developer console only
+      return false;
+    }
+  };
+
+  const toggleCodeRole = (role: CodeRole, checked: boolean): void => {
+    setCodeRoles((current) =>
+      checked
+        ? current.includes(role)
+          ? current
+          : [...current, role]
+        : current.filter((item) => item !== role),
+    );
+  };
 
   const [minimized, setMinimized] = createSignal(
     document.documentElement.dataset.panelMinimized !== undefined
@@ -261,12 +376,17 @@ function Shell() {
       inert={panelPhase() !== 'idle'}
       style={{ opacity: panelPhase() === 'idle' ? 1 : 0 }}
     >
-      <Show when={!minimized()} fallback={<MinimizedPet onRestore={restore} />}>
+      <Show
+        when={!minimized()}
+        fallback={
+          <MinimizedPet onRestore={restore} onCopy={copySelectedForPet} />
+        }
+      >
         <div
           ref={(el) => {
             rootEl = el;
           }}
-          class={`flex flex-col gap-3 overflow-x-hidden overflow-y-auto bg-base-200 p-4 ${
+          class={`flex flex-col gap-3 overflow-x-hidden overflow-y-auto bg-base-200 p-2 ${
             canResize() ? '' : 'h-screen'
           }`}
         >
@@ -311,6 +431,8 @@ function Shell() {
               </Tooltip>
             </Show>
 
+            <CopyModeSwitch mode={copyMode()} onModeChange={changeCopyMode} />
+
             <div class="ml-auto flex shrink-0 items-center gap-0.5">
               {/* 有新版本才挂:常态不占页头宽度(见 0038) */}
               <Show when={hasUpgrade()}>
@@ -345,7 +467,13 @@ function Shell() {
 
           <ConnectionHint />
 
-          <SelectionCard snapshot={selection()} fill={!canResize()} />
+          <SelectionCard
+            snapshot={selection()}
+            fill={!canResize()}
+            mode={copyMode()}
+            roles={codeRoles()}
+            onToggleRole={toggleCodeRole}
+          />
 
           <CapabilityCard />
 

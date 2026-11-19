@@ -12,10 +12,11 @@
     "README.md"
   ],
   "scripts": {
-    "dev": "concurrently \"vite\" \"vite build --mode jsdesign --watch\" \"vite build --mode figma --watch\" \"vite build --mode mastergo --watch\"",
+    "dev": "concurrently \"vite build --watch\" \"vite build --mode jsdesign --watch\" \"vite build --mode figma --watch\" \"vite build --mode mastergo --watch\"",
     "build": "node -e \"fs.rmSync('dist',{recursive:true,force:true})\" && vite build && vite build --mode jsdesign && vite build --mode figma && vite build --mode mastergo",
     "watch": "concurrently \"vite build --watch\" \"vite build --mode jsdesign --watch\"",
-    "typecheck": "tsc --noEmit && tsc -p src/code/figma/tsconfig.json && tsc -p src/code/mastergo/tsconfig.json"
+    "typecheck": "tsc --noEmit && tsc -p src/code/figma/tsconfig.json && tsc -p src/code/mastergo/tsconfig.json",
+    "dev:ui": "vite --open /ui.html"
   },
   "devDependencies": {
     "@figma/plugin-typings": "^1.137.0",

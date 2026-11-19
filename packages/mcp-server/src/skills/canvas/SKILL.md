@@ -11,7 +11,7 @@ description: "当用户要求在即时设计、Figma 或 MasterGo 中创建或�
 
 ## 加载前置（两条硬规则）
 
-1. **读入口。** `jsd_ping` 先确认 `connected === true` 与 `platform`。优先按 `skills.nextStep` 用宿主的资源读取接口读 `skill://canvas/SKILL.md`（含「先定位任务」表）；老回包只有 `skills.count > 0` 时，先用资源列表接口确认 URI 可读再读正文。宿主读不到技能时，用 `GetPrompt` / `jsd_get_prompt` 读任一配方 prompt，或读 `skill://canvas/*`、`jsd://recipes/*` 资源正文。`skills.count` 是发布状态；列目录、只 ping、只读 `jsd://code`、凭经验知道附录都不算已读。`skills` 缺失、为 0 或 ping 失败时改读 `jsd://platform/state`。服务端按「本会话读过任一操作指引」放行；未读前所有写入持续返回 `skill_first_required`，不会二次放行。
+1. **读入口。** `jsd_ping` 先确认 `connected === true` 与 `platform`。优先按 `skills.nextStep` 用宿主的资源读取接口读 `skill://canvas/SKILL.md`（含「先定位任务」表）；老回包只有 `skills.count > 0` 时，先用资源列表接口确认 URI 可读再读正文。宿主读不到技能时，用 `GetPrompt` / `jsd_get_prompt` 读任一配方 prompt，或读 `skill://canvas/*`、`jsd://recipes/*` 资源正文。`jsd_get_prompt` 也接受路径别名：`canvas/SKILL` 或 `skill://canvas/SKILL.md` 读本文件，`canvas/references/<id>.md` 读对应附录（与配方 id 同源）——专给没有资源读取接口的宿主用，正文仍是同一份文件。`skills.count` 是发布状态；列目录、只 ping、只读 `jsd://code`、凭经验知道附录都不算已读。`skills` 缺失、为 0 或 ping 失败时改读 `jsd://platform/state`。服务端按「本会话读过任一操作指引」放行；未读前所有写入持续返回 `skill_first_required`，不会二次放行。
 2. **读附录。** 按「先定位任务」表匹配本次实际操作，读对应的 `skill://canvas/references/<id>.md` 或同一条配方 prompt / resource 正文；组合任务补读，新增一类操作再补读，不一次加载全部。表内相对链接与上列 URI 一一对应。
 
 ## 先定位任务
@@ -33,7 +33,7 @@ description: "当用户要求在即时设计、Figma 或 MasterGo 中创建或�
 ## 执行闭环
 
 1. **读现状。** 创作先 `jsd_get_page` 查看顶层节点与 assets；清单范围以返回的 note 为准。已有组件、变体、样式、变量命中用途就复用。修改已有内容时，用 `jsd_get_selection` 或按 id 的 `jsd_find` 确认目标、父级与相关属性。
-2. **定结构与复用。** 屏 → 语义分区 → 卡片或行 → 图元；命名说明用途。同级重复结构先查组件，再决定抽主件、铺实例。同轴等距内容用 auto-layout，叠放装饰保留自由定位。
+2. **定结构与复用。** 屏 → 语义分区 → 卡片或行 → 图元；命名说明用途。同级重复结构先查组件，再决定抽主件、铺实例。**自动布局是默认：子项能沿某轴排布的容器一律先上 auto-layout（整页分区、面板菜单、列表、卡片内部、工具栏），固定尺寸也照上并用 FIXED 锁住；按截图复刻也先搭布局骨架再填内容，禁止整页手算坐标。** 只有真重叠的装饰、角标与坐标绘图区保留自由定位。
 3. **按块执行。** 串行提交 `jsd_batch`，按语义块切批，每批最多 50 步。能写文件且 MCP 服务可读时，先把步骤保存为 JSON，再用 `callsFile` 传绝对路径；否则用内联 `calls`。建节点选对应类型的步骤，小型直属子树可用 children。建容器、归组、设布局等有依赖的步骤放同一批，跨批使用真实 id。`jsd_reparent_nodes` 显式传 parentId；同值批改在一个步骤里合并 ids。
 4. **核对与纠错。** 读取 warnings，区分自动修复、未生效项与部分成功。批量摘要不含完整属性或子树，需要核实的字段单独 `jsd_find`。关键视觉变更用 `jsd_export({ids:[目标id], scale:0.5})` 导出并目视检查；失败按下表处理，不把工具回显成功当作视觉验收。
 5. **修正再交付。** 修复本次引入的裁切、错位、未生效字段；报告完成范围、失败项与尚未验证的部分。
@@ -51,6 +51,7 @@ description: "当用户要求在即时设计、Figma 或 MasterGo 中创建或�
 
 ## 通用边界
 
+- **布局优先是硬规则。** 新建任何容器先定流向；只要子项能沿一个轴排布就开 auto-layout（固定宽高照上，用 FIXED 锁尺寸）。自由定位只用于真重叠的装饰、角标与坐标绘图区，并把这些块包成子容器参与外层布局。
 - 根节点按坐标落位时用 `placement:{mode:"manual"}`；默认 center 会覆盖根的 x/y。子节点坐标相对父级，auto-layout 子项坐标由布局接管。
 - `jsd_create_svg` 只收 `svg` 或 `svgPath` 二选一及可选 `name`；导入后再 `jsd_reparent_nodes`、按需 `jsd_move_node` / `jsd_resize_node`。几何改动回源重算；需要布局、组件复用或绑定的结构用原生节点，约束见 [代码画图表](references/chart-by-code.md)。
 - 字体从 `jsd_list_fonts` 成对取 family 与同项 style 原值。固定宽、自动换行的文本给 width + `textAutoResize:"HEIGHT"`，样式细则见 [设计策略](references/design-strategy.md)。

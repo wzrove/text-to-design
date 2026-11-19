@@ -46,7 +46,8 @@ const PLATFORM_ENTRIES: Record<string, string> = {
   mastergo: 'src/code/mastergo/entry.ts',
 };
 
-export default defineConfig(({ mode }): UserConfig => {
+export default defineConfig(({ mode, command }): UserConfig => {
+  const isBuild = command === 'build';
   const entry = PLATFORM_ENTRIES[mode];
   if (entry != null) {
     const platform = mode as PluginPlatform;
@@ -82,9 +83,22 @@ export default defineConfig(({ mode }): UserConfig => {
     };
   }
 
-  // 默认(development/production) → UI 面板构建
+  // 默认(development/production) → UI 面板
+  // 构建:内联成单文件 ui.html;开发:vite dev server 走原生 ESM + HMR。
+  // 单文件插件只在 build 挂 —— 它没有 dev 钩子,挂了也只是徒增误读。
   return {
-    plugins: [solid(), viteSingleFile(), reorderCss()],
+    plugins: isBuild ? [solid(), viteSingleFile(), reorderCss()] : [solid()],
+    // 只有 ui.html,没有 index.html:直接打开根路径是 404,开发时落到 /ui.html
+    ...(isBuild
+      ? {}
+      : {
+          server: {
+            port: 5173,
+            // 被占用时直接报错,不要悄悄换端口后打开错页面
+            strictPort: true,
+            hmr: { overlay: true },
+          },
+        }),
     // 面板自身版本(升级提示要比对的那一侧,见 0038)。用 define 而非
     // `import package.json`:本包 tsconfig 没开 resolveJsonModule,走导入会 TS2732。
     define: {

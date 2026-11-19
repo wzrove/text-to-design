@@ -141,7 +141,7 @@ pkill -f text-to-design-mcp
 | `jsd_get_selection` | 读取画布当前选中的节点 |
 | `jsd_get_page` | 读取当前页结构(顶层节点几何 + **设计系统资源清单**:组件/变体集(带维度取值)/样式(四类全量)/变量,含 summary 计数;等价 `jsd://page` 资源)。**设计类任务第一步读它,命中即复用** |
 | `jsd_find` | 按名称/类型/id 查找节点 |
-| `jsd_create_svg` | 直接导入 SVG(保留 path/矢量数据,不经降级)。来源二选一:`svg` 内联字符串,或 `svgPath` 本地文件路径(**图表一律走这条**:脚本按 `chart-by-code` 配方算好、落盘,再传路径) |
+| `jsd_create_svg` | 直接导入 SVG(保留 path/矢量数据,不经降级)。来源二选一:`svg` 内联字符串,或 `svgPath` 本地文件**绝对路径**(**图表一律走这条**:脚本按 `chart-by-code` 配方算好、落盘,再传路径) |
 | `jsd_create_icon` | 按名称/别名模糊匹配插入 Lucide 内置图标,查无时返回候选名 |
 | `jsd_html_to_design` | 把 HTML 转成设计节点 |
 | `jsd_set_fill_color` | 填充(fills 整体替换)、混合模式、填充样式 |
@@ -178,7 +178,7 @@ pkill -f text-to-design-mcp
 | `jsd_batch` | 批量编排器:一次请求顺序执行多个 jsd_* 步骤,双花括号占位符串起中间值;步骤回显做摘要裁剪(节点只留 id/name/type/x/y,丢 vectorPaths 等大字段,超预算降级为 id 清单),占位符解析用完整数据;含图标的批次另配一次 `jsd_export` 目视验收;含删除/移父的步骤自动复核同层几何漂移(结果 `warnings`,`checkDrift:false` 可关;单工具调用同样会复核) |
 | `jsd_export` | savePath 仅允许单节点；多节点须分别指定唯一文件路径。 导出节点为 PNG/JPG/SVG/PDF(导出失败的 id 在文本里点名) |
 | `jsd_list_fonts` | 列出可用字体:families 与各族的可用字型 `fonts:[{family,styles}]`(写 fontName 前照这份取组合,family+style 需精确匹配,猜错会静默退回默认字重) |
-| `jsd_fill_image` | 用本地图片填充节点 |
+| `jsd_fill_image` | 用本地图片填充节点(`sourcePath` 绝对路径,空文件拒绝,默认上限 32MB) |
 | `jsd_platform_op` | 平台特有能力的通用通道(Figma **变量读写**/本地样式/组件属性**定义与设值**;MasterGo **变量读写(查看 / 批量建 / 绑定解绑)**、组件属性管理与**集合级变体管理**——建维度/加成分/改取值/删维度)。先读 `jsd_ping` 的 `platformOps` 名单再传 op 名;插件平台不适用(如即时设计)时由 daemon 直接拦截并给出替代路径,不发插件往返 |
 
 ### 配方 prompt(`prompts/list`)

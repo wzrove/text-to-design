@@ -79,7 +79,7 @@ export const createSvgInputSchema = z
       .string()
       .optional()
       .describe(
-        '本地 .svg 文件路径,由后台服务读取(与 svg 二选一)。**代码生成的大 SVG 走这条**',
+        '本地 .svg 文件的**绝对路径**,由后台服务读取(与 svg 二选一)。相对路径会被拒:服务进程 cwd 与你的项目不同。**代码生成的大 SVG 走这条**',
       ),
     name: z.string().optional().describe('schema.execute.name'),
   })

@@ -1,4 +1,4 @@
-import type { McpServer } from '@modelcontextprotocol/server';
+import type { GetPromptResult, McpServer } from '@modelcontextprotocol/server';
 import { z } from 'zod';
 import {
   NODE_TYPE_CANDIDATES,
@@ -7,6 +7,8 @@ import {
 import type { ToolHandle } from '../core/tool-def';
 import { promptIcon } from '../core/tool-icons';
 import type { McpI18n } from '../i18n';
+import { readSkillEntry } from '../skills/entries';
+import { parseGuidanceAlias } from '../skills/guidance-alias';
 import { createPromptRegistrar } from './prompt-tools';
 import { findRecipe, recipeIds, renderRecipeBody } from './recipe-catalog';
 
@@ -96,7 +98,55 @@ export function registerPrompts(
   server: McpServer,
   _i18n: McpI18n,
 ): ToolHandle[] {
-  const { registerPrompt, registerTools } = createPromptRegistrar(server);
+  const renderRecipeData = (
+    id: string,
+    args: Record<string, unknown>,
+  ): GetPromptResult => {
+    const params: Record<string, string | undefined> = {};
+    for (const [k, v] of Object.entries(args)) {
+      if (v == null) continue;
+      params[k] = String(v);
+    }
+    return {
+      messages: [
+        {
+          role: 'user',
+          content: {
+            type: 'text' as const,
+            text: renderRecipeBody(id, params),
+          },
+        },
+      ],
+    };
+  };
+
+  /**
+   * 资源 URI 别名 → 同一份技能文件。宿主没有 resources/read 时,
+   * `skill://canvas/SKILL.md` 只能走这条;正文不另存一份。
+   */
+  const resolveAlias = (
+    name: string,
+    args: Record<string, string>,
+  ): GetPromptResult | null => {
+    const hit = parseGuidanceAlias(name);
+    if (hit == null) return null;
+    if (hit.kind === 'skill')
+      return {
+        messages: [
+          {
+            role: 'user',
+            content: { type: 'text' as const, text: readSkillEntry() },
+          },
+        ],
+      };
+    if (!recipeIds().includes(hit.id)) return null;
+    return renderRecipeData(hit.id, args);
+  };
+
+  const { registerPrompt, registerTools } = createPromptRegistrar(
+    server,
+    resolveAlias,
+  );
 
   /** 按 recipe id 注册一条 prompt:元数据读 frontmatter,正文读 md */
   const recipePrompt = (id: string) => {
@@ -113,24 +163,7 @@ export function registerPrompts(
         description: recipe.whenToUse,
         argsSchema: z.object(shape),
       },
-      (args) => {
-        const params: Record<string, string | undefined> = {};
-        for (const [k, v] of Object.entries(args as Record<string, unknown>)) {
-          if (v == null) continue;
-          params[k] = String(v);
-        }
-        return {
-          messages: [
-            {
-              role: 'user',
-              content: {
-                type: 'text' as const,
-                text: renderRecipeBody(id, params),
-              },
-            },
-          ],
-        };
-      },
+      (args) => renderRecipeData(id, args),
     );
   };
 

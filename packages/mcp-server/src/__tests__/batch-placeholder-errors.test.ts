@@ -140,7 +140,8 @@ describe('batch 占位符失败的容错语义(0044)', () => {
     });
     expect(r.executed, '计划写错必须中止,不能靠容错开关绕过').toBe(1);
     const dep = (r.results ?? []).find((x) => x.id === 'dep');
-    expect(dep?.error).toContain('不存在或未成功');
+    expect(dep?.error).toContain('不在本批');
+    expect(dep?.error, '要点名缺失的步骤 id').toContain('nope');
   });
   it('引用了本批从没声明过的步骤:点名「不在本批」并回批内可用 id', async () => {
     // 真实事故形状:建根(上一次调用)→ 设布局(这一次)引用了 {{v.created.id}},

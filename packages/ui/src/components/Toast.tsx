@@ -21,6 +21,7 @@ import { dismissToast, type ToastLevel, toasts } from '../utils/toast';
 const ITEM: Record<ToastLevel, string> = {
   success: 'border-success/35 bg-success/10 text-success',
   error: 'border-error/35 bg-error/10 text-error',
+  info: 'border-info/35 bg-info/10 text-info',
 };
 
 export default function ToastHost() {

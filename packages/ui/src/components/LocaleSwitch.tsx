@@ -1,6 +1,6 @@
-import { For } from 'solid-js';
-import { LOCALES } from 'text-to-design-shared';
+import { LOCALES, type Locale } from 'text-to-design-shared';
 import { locale, selectLocale, t } from '../i18n/useLocale';
+import SegmentedSwitch, { type SegmentedItem } from './SegmentedSwitch';
 
 /**
  * 语言切换器:两档直切(`中` / `EN`),不做下拉。
@@ -11,34 +11,25 @@ import { locale, selectLocale, t } from '../i18n/useLocale';
  *
  * 语言名显示**自称**(`中文` / `English` 两侧原样),不随当前语言翻译 —— 这是
  * 语言选择器的惯例。缩写只上屏 `中` / `EN`,全名进 aria-label。
+ * 造型与 Copy 模式开关共用 `SegmentedSwitch`(见该组件)。
  */
 export default function LocaleSwitch() {
+  const items = (): SegmentedItem[] =>
+    LOCALES.map((value) => ({
+      value,
+      label: t(`locale.abbr.${value}`),
+      ariaLabel: t(`locale.${value}`),
+    }));
+
   return (
-    <div
-      role="group"
-      aria-label={t('locale.menu')}
-      class="flex items-center gap-0.5 rounded border border-base-300 p-0.5"
-    >
-      <For each={LOCALES}>
-        {(value) => (
-          <button
-            type="button"
-            aria-label={t(`locale.${value}`)}
-            aria-pressed={locale() === value}
-            class={`rounded px-1.5 py-0.5 font-mono text-[10px] leading-none transition  cursor-pointer ${
-              locale() === value
-                ? 'bg-base-content/10 font-bold text-base-content'
-                : 'text-base-content/50 hover:text-base-content/80'
-            }`}
-            onClick={() => {
-              // 点当前档不写存储:没有变化就不该产生一条「显式选择」
-              if (locale() !== value) selectLocale(value);
-            }}
-          >
-            {t(`locale.abbr.${value}`)}
-          </button>
-        )}
-      </For>
-    </div>
+    <SegmentedSwitch
+      items={items()}
+      value={locale()}
+      label={t('locale.menu')}
+      onChange={(value) => {
+        // 点当前档不会触发 onChange(组件已挡):没有变化就不该产生「显式选择」
+        if (value !== locale()) selectLocale(value as Locale);
+      }}
+    />
   );
 }

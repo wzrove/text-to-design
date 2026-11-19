@@ -33,6 +33,7 @@ export type BatchCall = z.infer<typeof batchCallSchema>;
 export const batchSchema = z.object({
   calls: z
     .array(batchCallSchema)
+    .min(1)
     .max(50)
     .optional()
     .describe('schema.batch.calls'),

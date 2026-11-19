@@ -1,6 +1,6 @@
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { dirname, isAbsolute, join } from 'node:path';
 import type { McpServer } from '@modelcontextprotocol/server';
 import {
   createStyleResultSchema,
@@ -15,7 +15,11 @@ import {
   updatedResultSchema,
 } from 'text-to-design-shared';
 import type { Bridge } from '../bridge';
-import { LONG_IO_TIMEOUT_MS, MAX_INLINE_DATA_URL_BYTES } from '../config';
+import {
+  LONG_IO_TIMEOUT_MS,
+  MAX_IMAGE_SOURCE_BYTES,
+  MAX_INLINE_DATA_URL_BYTES,
+} from '../config';
 import type { ToolHandle } from '../core/tool-def';
 import { bridgeTool } from '../core/tool-exec';
 import type { McpI18n } from '../i18n';
@@ -196,12 +200,47 @@ export function registerRawTools(
         ids: string[];
         sourcePath: string;
       };
-      let bytes: Buffer;
+      const file = sourcePath.trim();
+      if (!isAbsolute(file)) {
+        throw new Error(
+          `sourcePath 必须是绝对路径(收到「${file}」)。读盘的是 MCP 服务进程,相对路径会解析到它的 cwd 而不是你的项目 —— 请写全路径。`,
+        );
+      }
+      let size: number;
       try {
-        bytes = readFileSync(sourcePath);
+        size = statSync(file).size;
       } catch (e) {
         throw new Error(
-          `读取文件失败: ${e instanceof Error ? e.message : String(e)}`,
+          `读取图片文件失败(${file}): ${e instanceof Error ? e.message : String(e)}`,
+        );
+      }
+      if (size === 0) throw new Error(`图片文件是空的:${file}`);
+      if (size > MAX_IMAGE_SOURCE_BYTES) {
+        throw new Error(
+          `图片文件 ${(size / 1024 / 1024).toFixed(2)} MB > 上限 ${(
+            MAX_IMAGE_SOURCE_BYTES / 1024 / 1024
+          ).toFixed(
+            0,
+          )} MB:先压缩再填充,或调大 TEXT_TO_DESIGN_MCP_MAX_IMAGE_BYTES`,
+        );
+      }
+      let bytes: Buffer;
+      try {
+        bytes = readFileSync(file);
+      } catch (e) {
+        throw new Error(
+          `读取图片文件失败(${file}): ${e instanceof Error ? e.message : String(e)}`,
+        );
+      }
+      if (bytes.length === 0) throw new Error(`图片文件是空的:${file}`);
+      // stat 与读取之间文件可能被替换/增长,用实际字节再复核一次
+      if (bytes.length > MAX_IMAGE_SOURCE_BYTES) {
+        throw new Error(
+          `图片文件 ${(bytes.length / 1024 / 1024).toFixed(2)} MB > 上限 ${(
+            MAX_IMAGE_SOURCE_BYTES / 1024 / 1024
+          ).toFixed(
+            0,
+          )} MB:先压缩再填充,或调大 TEXT_TO_DESIGN_MCP_MAX_IMAGE_BYTES`,
         );
       }
       return bridge_.request(
