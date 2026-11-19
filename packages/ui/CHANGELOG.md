@@ -1,5 +1,11 @@
 # text-to-design-ui
 
+## 0.12.8
+
+### Patch Changes
+
+- [#64](https://github.com/wzrove/text-to-design/pull/64) [`b10fa75`](https://github.com/wzrove/text-to-design/commit/b10fa75ccb9b61cb7327ad4566811b9836d41705) Thanks [@wzrove](https://github.com/wzrove)! - feat: harden batch file execution and refresh panel interactions
+
 ## 0.12.7
 
 ### Patch Changes
