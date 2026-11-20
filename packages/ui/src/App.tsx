@@ -90,6 +90,7 @@ function Shell() {
     consentGranted,
     consentAsked,
     setConsent,
+    setCanvasReadOnly,
   } = useBridge();
 
   const [logOpen, setLogOpen] = createSignal(false);
@@ -103,6 +104,8 @@ function Shell() {
   const [codeRoles, setCodeRoles] = createSignal<CodeRole[]>(readCodeRoles());
   createEffect(() => writeStored(COPY_MODE_KEY, copyMode()));
   createEffect(() => writeStored(COPY_ROLES_KEY, codeRoles()));
+  // 代码模式 = 画布只读,AI 只能读内容去写代码(见 shared/dicts/canvas-readonly)
+  createEffect(() => setCanvasReadOnly(copyMode() === 'code'));
 
   /**
    * 连上就告诉用户下一步该干什么。只在「从未连接 → 已连接」这一跳弹一次:
@@ -256,6 +259,20 @@ function Shell() {
     setUpgradeOpen(false);
     upgradeEl?.focus();
   };
+
+  /**
+   * 两侧都对齐后弹窗自己退场:重启会话/重连会把新版本推上来,用户停在步骤页
+   * 时会看着它变成「已完成」。只收 `false` 不把焦点塞回升级钮 —— 那颗钮此刻
+   * 已随 hasUpgrade 一起卸载。版本未知(daemon 掉线、npm 没查到)不算对齐。
+   */
+  const versionsAligned = (): boolean =>
+    latest().ui != null &&
+    latest().mcp != null &&
+    daemonVersion() !== '' &&
+    !hasUpgrade();
+  createEffect(() => {
+    if (upgradeOpen() && versionsAligned()) setUpgradeOpen(false);
+  });
 
   let upgradeEl: HTMLButtonElement | undefined;
   let overflowEl: HTMLButtonElement | undefined;

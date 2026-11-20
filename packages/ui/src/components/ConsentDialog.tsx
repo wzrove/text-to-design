@@ -1,11 +1,10 @@
-import { createEffect, For, Show } from 'solid-js';
+import { For, Show } from 'solid-js';
 import { t } from '../i18n/useLocale';
+import DialogShell from './DialogShell';
 
 /**
  * 错误上报同意弹窗:默认不上报,开启前必须见过这份说明(记录什么、不含什么)。
- *
- * 范式同 UpgradeModal:不用 `showModal()`(top-layer 会盖住 toast,见那边的
- * 类注释),改普通 `open` + z-40;Esc 由 App 收口,背景点击由 modal-backdrop 兜住。
+ * 外壳见 DialogShell。
  */
 export default function ConsentDialog(props: {
   open: boolean;
@@ -14,15 +13,6 @@ export default function ConsentDialog(props: {
   onDisable: () => void;
   onClose: () => void;
 }) {
-  let dialogEl: HTMLDialogElement | undefined;
-
-  createEffect(() => {
-    const el = dialogEl;
-    if (el == null) return;
-    if (props.open) el.setAttribute('open', '');
-    else el.removeAttribute('open');
-  });
-
   const items = (): string[] => [
     t('telemetry.item.error'),
     t('telemetry.item.identity'),
@@ -30,20 +20,16 @@ export default function ConsentDialog(props: {
   ];
 
   return (
-    <dialog
-      ref={(el) => {
-        dialogEl = el;
-      }}
-      class="modal z-40"
-      aria-label={t('telemetry.title')}
-      onClose={() => props.onClose()}
+    <DialogShell
+      open={props.open}
+      title={t('telemetry.title')}
+      onClose={props.onClose}
     >
-      <div class="modal-box flex max-w-sm flex-col gap-3">
-        <h3 class="shrink-0 font-medium text-sm">{t('telemetry.title')}</h3>
-        <p class="shrink-0 text-xs leading-relaxed text-base-content/80">
+      <div class="flex shrink-0 flex-col gap-2 p-2.5">
+        <p class="text-xs leading-relaxed text-base-content/80">
           {t('telemetry.body')}
         </p>
-        <ul class="flex shrink-0 flex-col gap-1.5 rounded-box border border-base-300 bg-base-200 px-3 py-2 text-xs leading-relaxed">
+        <ul class="flex flex-col gap-1 rounded-box border border-base-300 bg-base-200 px-2.5 py-1.5 text-xs leading-relaxed">
           <For each={items()}>
             {(item) => (
               <li class="flex gap-1.5">
@@ -59,22 +45,14 @@ export default function ConsentDialog(props: {
           <Show
             when={!props.granted}
             fallback={
-              <>
-                <button
-                  type="button"
-                  class="btn btn-xs btn-ghost"
-                  onClick={() => props.onClose()}
-                >
-                  {t('panel.close')}
-                </button>
-                <button
-                  type="button"
-                  class="btn btn-xs btn-primary"
-                  onClick={() => props.onDisable()}
-                >
-                  {t('telemetry.disable')}
-                </button>
-              </>
+              // 关掉上报不是「主操作」,给中性实心钮,不占主题色
+              <button
+                type="button"
+                class="btn btn-xs ml-auto"
+                onClick={() => props.onDisable()}
+              >
+                {t('telemetry.disable')}
+              </button>
             }
           >
             <button
@@ -94,12 +72,6 @@ export default function ConsentDialog(props: {
           </Show>
         </div>
       </div>
-      {/* 遮罩:真 button + form method=dialog(仓库纪律:不给 div 挂 onClick) */}
-      <form method="dialog" class="modal-backdrop">
-        <button type="submit" aria-label={t('panel.close')}>
-          {t('panel.close')}
-        </button>
-      </form>
-    </dialog>
+    </DialogShell>
   );
 }

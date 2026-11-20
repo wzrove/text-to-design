@@ -76,8 +76,9 @@ const LONG_LINE_CHARS = 120;
  */
 const SCOPE_CLASS: Record<LogScope, string> = {
   bridge: 'badge-info',
+  // primary 改近黑后与 neutral 同色系,daemon 让位给描边款才仍能三档可辨
   tool: 'badge-primary',
-  daemon: 'badge-neutral',
+  daemon: 'badge-outline',
 };
 
 function LogEntryItem(props: { entry: LogEntry }) {
@@ -273,8 +274,8 @@ export default function LogDrawer(props: {
       }}
       label={t('log.drawer.title')}
       header={
-        <div class="flex items-center gap-2 px-3 pt-2">
-          <h2 class="shrink-0 text-xs font-bold text-base-content/80">
+        <div class="flex items-center gap-2 px-2.5 pt-2">
+          <h2 class="shrink-0 text-xs font-bold text-base-content/70">
             {t('log.drawer.title')}
           </h2>
           <span class="min-w-0 flex-1 truncate text-base-content/60 text-[10px]">
@@ -306,7 +307,7 @@ export default function LogDrawer(props: {
         </div>
       }
     >
-      <div class="join flex-wrap items-center gap-0.5 px-3 py-1.5">
+      <div class="join flex-wrap items-center gap-0.5 px-2.5 py-1.5">
         <For each={FILTERS}>
           {(f) => (
             <button
@@ -326,7 +327,7 @@ export default function LogDrawer(props: {
         <div
           ref={containerRef}
           onScroll={onScroll}
-          class="h-full overflow-y-auto px-3 py-2 font-mono text-xs"
+          class="h-full overflow-y-auto px-2.5 py-2 font-mono text-xs"
         >
           <For
             each={shown()}

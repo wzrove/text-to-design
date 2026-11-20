@@ -94,6 +94,8 @@ export interface BridgeStore {
   clearLog: () => void;
   /** 记下用户的同意选择并尽力发给 daemon;离线时的选择在重连后补发 */
   setConsent: (granted: boolean) => void;
+  /** 代码模式下画布只读:只放行读取类请求(见 shared/dicts/canvas-readonly) */
+  setCanvasReadOnly: (readOnly: boolean) => void;
 }
 
 const BridgeContext = createContext<BridgeStore>();
@@ -324,6 +326,8 @@ export function BridgeProvider(props: ParentProps) {
       setConsentGranted(granted);
       getBridge().setConsent(granted);
     },
+    setCanvasReadOnly: (readOnly: boolean) =>
+      getBridge().setCanvasReadOnly(readOnly),
     ping: async () => {
       getBridge().connect();
       try {

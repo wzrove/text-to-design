@@ -274,6 +274,18 @@ export interface PageSkeleton extends ContainerSkeleton {
  * 异步留作可选(`createNodeFromSvg` 即 0017 那次改动的**回退**)。
  */
 export interface DesignHost extends DesignHostOptionalCapabilities {
+  /**
+   * 撤销边界:把此前的改动封成一步撤销历史(不触发撤销本身)。
+   *
+   * 三平台同名同签名(typings:figma `commitUndo(): void` / jsDesign `:37` /
+   * mg `:1389`),都是同步原生符号 —— 不存在异步变体,也没有参数。
+   * 用途见 mcp-server/tools/batch.ts:一批写入前后各封一次,让整批成为
+   * 用户撤销栈里的**一步**,而不是与零散调用混在一起。
+   *
+   * Figma 语义上「插件改动默认不提交」:不调用它,后续多次调用会一直堆在同一档,
+   * 一次撤销会把它们一起撤掉 —— 所以边界必须显式封。
+   */
+  commitUndo(): void;
   createFrame(): NodeSkeleton;
   createRectangle(): NodeSkeleton;
   createEllipse(): NodeSkeleton;

@@ -6,6 +6,7 @@ import {
   errorGroupKey,
   isErrorReportLevel,
   type LogRecord,
+  NO_TELEMETRY_ERROR_CODES,
   TELEMETRY_LIMITS,
   type TelemetryErrorPayload,
 } from 'text-to-design-shared';
@@ -159,6 +160,8 @@ function trimQueue(): void {
  */
 export function captureError(record: LogRecord): void {
   if (!isErrorReportLevel(record.level)) return;
+  // 策略性拒绝不计缺陷(清单见 shared/dicts/error-code):落盘/面板日志照旧
+  if (record.code != null && NO_TELEMETRY_ERROR_CODES.has(record.code)) return;
   if (ENDPOINT === '' || API_KEY === '' || !getConsent()) return;
   const { message, scope, code, subject } = record;
   // 去重按整个队列聚合同**形状**错误(见 errorGroupKey):重复出现只累加 count,不占新位。

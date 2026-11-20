@@ -63,6 +63,8 @@ export const host: DesignHost = {
   // MG 的矢量节点叫 PEN(类型名也是 'PEN'),门面把它翻回契约的 VECTOR
   createVector: () => wrapNode(mg.createPen()),
   createComponent: () => wrapNode(mg.createComponent()),
+  // 显式投影(本文件不是原型委派):MG 的撤销边界与另两平台同名同签名
+  commitUndo: () => mg.commitUndo(),
   // 本平台 typings 全文件无同步 `createNodeFromSvg`(只有 `mg.createNodeFromSvgAsync`),
   // 故契约里同步必需的那条由异步入口桥接 —— 这是三平台里唯一走异步的实现,
   // 选路由 core 的 createNodeFromSvgResolved 按入口存在性作出(见 shared/core/host.ts)。

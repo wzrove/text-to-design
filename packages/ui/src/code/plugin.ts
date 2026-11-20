@@ -465,6 +465,11 @@ export function registerPlugin(
         case 'get_selection':
           send(id, true, getSelection(msg.params));
           break;
+        // 撤销边界:批量编排在首尾各封一次(见 mcp-server/tools/batch.ts)
+        case 'commit_undo':
+          host.commitUndo();
+          send(id, true, {});
+          break;
         case 'execute': {
           const r = await executeOps(
             host,
