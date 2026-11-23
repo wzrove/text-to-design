@@ -109,12 +109,13 @@ describe('结构变更复核钩子', () => {
       },
       undefined,
     );
-    // 关闭后不应再有复核读数:只剩删除本身那一次插件往返
+    // 关闭后不应再有复核读数:只剩删除本身那一次插件往返。
+    // commit_undo 是批次首尾的撤销边界(见 batch.ts),不是复核读数,排除掉。
+    const reads = calls.filter(
+      (c) => c.method !== 'node_op' && c.method !== 'commit_undo',
+    );
     expect(calls.filter((c) => c.method === 'node_op')).toHaveLength(1);
-    expect(
-      calls.filter((c) => c.method !== 'node_op'),
-      'checkDrift:false 时仍产生了复核读数',
-    ).toHaveLength(0);
+    expect(reads, 'checkDrift:false 时仍产生了复核读数').toHaveLength(0);
   });
 
   it('不传 checkDrift 时默认开复核(向后兼容)', async () => {

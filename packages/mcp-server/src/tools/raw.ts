@@ -218,7 +218,9 @@ export function registerRawTools(
       if (size > MAX_IMAGE_SOURCE_BYTES) {
         throw new Error(
           `图片文件 ${(size / 1024 / 1024).toFixed(2)} MB > 上限 ${(
-            MAX_IMAGE_SOURCE_BYTES / 1024 / 1024
+            MAX_IMAGE_SOURCE_BYTES /
+            1024 /
+            1024
           ).toFixed(
             0,
           )} MB:先压缩再填充,或调大 TEXT_TO_DESIGN_MCP_MAX_IMAGE_BYTES`,
@@ -237,7 +239,9 @@ export function registerRawTools(
       if (bytes.length > MAX_IMAGE_SOURCE_BYTES) {
         throw new Error(
           `图片文件 ${(bytes.length / 1024 / 1024).toFixed(2)} MB > 上限 ${(
-            MAX_IMAGE_SOURCE_BYTES / 1024 / 1024
+            MAX_IMAGE_SOURCE_BYTES /
+            1024 /
+            1024
           ).toFixed(
             0,
           )} MB:先压缩再填充,或调大 TEXT_TO_DESIGN_MCP_MAX_IMAGE_BYTES`,

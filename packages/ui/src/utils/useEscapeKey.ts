@@ -1,4 +1,4 @@
-import { type Accessor, createEffect, onCleanup } from 'solid-js';
+import { type Accessor, createEffect } from 'solid-js';
 
 /**
  * 浮层打开时把 Escape 收口到一个回调。
@@ -14,12 +14,15 @@ export function useEscapeKey(
   open: Accessor<boolean>,
   onEscape: () => void,
 ): void {
-  createEffect(() => {
-    if (!open()) return;
-    const onKey = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') onEscape();
-    };
-    document.addEventListener('keydown', onKey);
-    onCleanup(() => document.removeEventListener('keydown', onKey));
-  });
+  createEffect(
+    () => open(),
+    (isOpen) => {
+      if (!isOpen) return;
+      const onKey = (e: KeyboardEvent): void => {
+        if (e.key === 'Escape') onEscape();
+      };
+      document.addEventListener('keydown', onKey);
+      return () => document.removeEventListener('keydown', onKey);
+    },
+  );
 }

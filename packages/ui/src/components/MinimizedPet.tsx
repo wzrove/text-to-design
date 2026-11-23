@@ -12,7 +12,7 @@ import PetLogo, { type PetPhase } from './PetLogo';
  * - **双击**:放大面板。
  * - **悬停**:title / aria 给出两条手势的说明。
  *
- * `tabIndex={-1}`:75px 宠物是快捷键入口而非表单控件,不进页面的 Tab 顺序;
+ * `tabindex={-1}`:75px 宠物是快捷键入口而非表单控件,不进页面的 Tab 顺序;
  * 键盘焦点交接由插件外壳/宿主负责,面板不在这里另开一套快捷键。
  *
  * 单击不能立刻执行:双击必然先触发两次 click。这里用 220ms 定时器分开 ——
@@ -71,7 +71,7 @@ export default function MinimizedPet(props: {
   return (
     <button
       type="button"
-      tabIndex={-1}
+      tabindex={-1}
       class="btn btn-ghost relative h-screen w-screen overflow-hidden rounded-none p-0 hover:bg-transparent"
       onClick={() => {
         // 第二次 click 属于双击序列:不排队复制,等 dblclick 恢复

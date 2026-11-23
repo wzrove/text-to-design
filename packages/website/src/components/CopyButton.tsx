@@ -1,4 +1,4 @@
-import { Check, Copy } from 'lucide-solid';
+import { Check, Copy } from '@lucide/solid';
 import { createSignal, onCleanup, Show } from 'solid-js';
 import { useLocale } from '../i18n/context';
 
@@ -36,8 +36,8 @@ export default function CopyButton(props: Props) {
         (props.class ?? '')
       }
     >
-      <Show when={copied()} fallback={<Copy size={14} aria-hidden />}>
-        <Check size={14} class="text-brand" aria-hidden />
+      <Show when={copied()} fallback={<Copy size={14} aria-hidden="true" />}>
+        <Check size={14} class="text-brand" aria-hidden="true" />
       </Show>
       <span>{copied() ? d().copy.done : d().copy.button}</span>
     </button>

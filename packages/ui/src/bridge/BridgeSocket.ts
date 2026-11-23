@@ -182,4 +182,9 @@ export class BridgeSocket {
   sendUiVersion(version: string): void {
     this.router.sendUiVersion(version);
   }
+
+  /** 代码模式下画布只读(见 shared/dicts/canvas-readonly) */
+  setCanvasReadOnly(readOnly: boolean): void {
+    this.router.setCanvasReadOnly(readOnly);
+  }
 }

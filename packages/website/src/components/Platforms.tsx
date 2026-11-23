@@ -1,4 +1,4 @@
-import { Check, PlugZap } from 'lucide-solid';
+import { Check, PlugZap } from '@lucide/solid';
 import { createSignal, For, Show } from 'solid-js';
 import { PLATFORMS, type Platform } from '../content';
 import { useLocale } from '../i18n/context';
@@ -29,7 +29,7 @@ export default function Platforms(props: { releasesUrl: string }) {
               type="button"
               role="tab"
               id={`tab-${platform.id}`}
-              aria-selected={current().id === platform.id}
+              aria-selected={current().id === platform.id ? 'true' : 'false'}
               aria-controls={`panel-${platform.id}`}
               onClick={() => setCurrent(platform)}
               class={
@@ -62,7 +62,7 @@ export default function Platforms(props: { releasesUrl: string }) {
       >
         <div>
           <h3 class="flex items-center gap-2 text-lg font-medium">
-            <PlugZap size={18} class="text-brand" aria-hidden />
+            <PlugZap size={18} class="text-brand" aria-hidden="true" />
             {f(d().platforms.stepsTitle, { name: text().name })}
           </h3>
           <ol class="mt-5 space-y-3">
@@ -108,7 +108,7 @@ export default function Platforms(props: { releasesUrl: string }) {
                     <Check
                       size={15}
                       class="mt-0.5 shrink-0 text-brand"
-                      aria-hidden
+                      aria-hidden="true"
                     />
                     <span>{item}</span>
                   </li>

@@ -6,6 +6,7 @@ import {
   errorGroupKey,
   isErrorReportLevel,
   type LogRecord,
+  NO_TELEMETRY_ERROR_CODES,
   TELEMETRY_LIMITS,
   type TelemetryErrorPayload,
 } from 'text-to-design-shared';
@@ -143,7 +144,7 @@ function scheduleRetry(): void {
 /** 溢出只裁**非在途**的最旧条目:在途条目已序列化,删了它的结果就无从处理(dec 1a135e6a) */
 function trimQueue(): void {
   let excess = queue.length - QUEUE_MAX;
-  for (let i = 0; i < queue.length && excess > 0; ) {
+  for (let i = 0; i < queue.length && excess > 0;) {
     if (queue[i].inflight === true) {
       i++;
       continue;
@@ -159,6 +160,8 @@ function trimQueue(): void {
  */
 export function captureError(record: LogRecord): void {
   if (!isErrorReportLevel(record.level)) return;
+  // 策略性拒绝不计缺陷(清单见 shared/dicts/error-code):落盘/面板日志照旧
+  if (record.code != null && NO_TELEMETRY_ERROR_CODES.has(record.code)) return;
   if (ENDPOINT === '' || API_KEY === '' || !getConsent()) return;
   const { message, scope, code, subject } = record;
   // 去重按整个队列聚合同**形状**错误(见 errorGroupKey):重复出现只累加 count,不占新位。
@@ -184,9 +187,7 @@ export function captureError(record: LogRecord): void {
     message: message.slice(0, TELEMETRY_LIMITS.messageMax),
     stack: record.stack?.slice(0, TELEMETRY_LIMITS.stackMax),
     context:
-      platform != null
-        ? { ...(record.context ?? {}), platform }
-        : record.context,
+      platform != null ? { ...record.context, platform } : record.context,
   });
   trimQueue();
   if (queue.length >= BATCH_MAX) {

@@ -107,10 +107,61 @@ export const createIconSchema = z.object({
   icon: z
     .string()
     .describe(
-      '图标名/别名/语义描述,如 home、arrow-right、search、magnifier(搜索);支持模糊匹配与别名联想,查无返回候选提示',
+      '图标名/别名/语义描述(如 home、arrow-right、search),或 Iconify id(prefix:name,先用 jsd_search_icons 检索)。Lucide 名称支持模糊匹配与别名联想',
     ),
   size: z.number().optional().describe('schema.execute.size'),
   color: z.string().optional().describe('schema.execute.color'),
-  strokeWidth: z.number().optional().describe('schema.execute.strokeWidth'),
+  strokeWidth: z
+    .number()
+    .optional()
+    .describe('描边宽度;Iconify 线形图标会覆盖为同一线宽,填充图标不受影响'),
   name: z.string().optional().describe('schema.execute.name3'),
+});
+
+export const searchIconsInputSchema = z
+  .object({
+    query: z
+      .string()
+      .min(1)
+      .max(200)
+      .describe(
+        '语义查询词。Iconify 按英文关键词匹配,把中文意图翻成 1-3 个英文词(设置→settings, 搜索→search)',
+      ),
+    limit: z
+      .number()
+      .int()
+      .min(1)
+      .max(64)
+      .optional()
+      .describe('返回条数,默认 16'),
+    prefixes: z
+      .array(z.string().regex(/^[a-z0-9-]+$/))
+      .max(20)
+      .optional()
+      .describe(
+        '限定图标集。缺省只查 MIT/Apache/ISC 等宽松许可集合;需要其他集合时显式给出(结果会带 license)',
+      ),
+    style: z
+      .enum(['line', 'solid', 'any'])
+      .optional()
+      .describe('按项目现有图标风格筛选:line=线形,solid=填充,any=不限(默认)'),
+  })
+  .strict();
+
+export const searchIconsResultSchema = z.object({
+  query: z.string(),
+  icons: z.array(
+    z.object({
+      id: z.string().describe('Iconify id,prefix:name'),
+      collection: z.string(),
+      license: z.string(),
+      palette: z.boolean(),
+      height: z.number().optional(),
+      style: z.enum(['line', 'solid', 'unknown']),
+      tags: z.string().optional(),
+    }),
+  ),
+  total: z.number(),
+  truncated: z.boolean(),
+  licenseNotice: z.string().optional(),
 });

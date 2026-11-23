@@ -17,6 +17,8 @@ export function parseHexColor(
   if (m == null) return null;
   let hex = m[1];
   if (hex.length === 3 || hex.length === 4) {
+    // 正则已限制为十六进制 ASCII,不存在拆分代理对的问题
+    // oxlint-disable-next-line typescript/no-misused-spread
     hex = [...hex].map((c) => c + c).join('');
   }
   const ch = (s: string): number => Number.parseInt(s, 16) / 255;

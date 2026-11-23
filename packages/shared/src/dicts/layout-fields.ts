@@ -38,8 +38,8 @@ export const AXIS_SIZING_MODES = [
 export function autoHeightOpenNotice(args: {
   label: string;
   dim: 'width' | 'height';
-  got: unknown;
-  want: unknown;
+  got: number;
+  want: number;
 }): string {
   return `${args.label} 的 ${args.dim} 按内容撑开成 ${args.got}(请求 ${args.want})——内层容器高度默认自动(不随内容裁切),只有最外层节点容器钉死;要固定就显式传该轴 sizingMode=FIXED 再用 jsd_resize_node 传 height`;
 }

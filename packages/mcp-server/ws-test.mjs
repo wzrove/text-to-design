@@ -5,7 +5,7 @@ const wss = new WebSocketServer({ port });
 wss.on('connection', (ws) => {
   console.log('client connected on', port);
   ws.on('message', (d) => {
-    const s = d.toString();
+    const s = (Array.isArray(d) ? Buffer.concat(d) : Buffer.from(d)).toString();
     if (s.startsWith('{')) {
       const msg = JSON.parse(s);
       if (msg.type === 'request') {

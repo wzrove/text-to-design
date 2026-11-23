@@ -13,7 +13,9 @@ import {
 export const telemetryUsers = pgTable(
   'telemetry_users',
   {
-    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+    id: uuid('id')
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
     /** 匿名安装标识:发送端 `~/.text-to-design/install-id` 的随机 UUID,非浏览器指纹 */
     fingerprint: text('fingerprint').notNull(),
     clientVersion: text('client_version'),
@@ -31,7 +33,9 @@ export const telemetryUsers = pgTable(
 export const errorReports = pgTable(
   'error_reports',
   {
-    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+    id: uuid('id')
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
     /**
      * 发送端条目级 id:重发同一批时它**没变** → 该批的 count 已计过,不重复累加
      * (rollup 的幂等水位,见 src/index.ts 的 ON CONFLICT)。老客户端不传 → NULL。

@@ -1,6 +1,5 @@
-import { Code2, PenTool } from 'lucide-solid';
-import { For } from 'solid-js';
-import { Dynamic } from 'solid-js/web';
+import { Code2, PenTool } from '@lucide/solid';
+import { dynamicComponent, For } from 'solid-js';
 import type { CopyRequest, MessageKey } from 'text-to-design-shared';
 import { t } from '../i18n/useLocale';
 import { TOGGLE_ACTIVE, TOGGLE_IDLE } from '../utils/toggleStyles';
@@ -39,23 +38,26 @@ export default function CopyModeSwitch(props: {
       aria-label={t('selection.code.modeLabel')}
     >
       <For each={ITEMS}>
-        {(item) => (
-          <Tooltip tip={t(item.label)} class="shrink-0">
-            <button
-              type="button"
-              class={`btn btn-ghost btn-xs border px-1 ${
-                props.mode === item.mode
-                  ? `${TOGGLE_ACTIVE} hover:bg-base-content/20`
-                  : TOGGLE_IDLE
-              }`}
-              aria-label={t(item.label)}
-              aria-pressed={props.mode === item.mode}
-              onClick={() => props.onModeChange(item.mode)}
-            >
-              <Dynamic component={item.icon} size={14} />
-            </button>
-          </Tooltip>
-        )}
+        {(item) => {
+          const Icon = dynamicComponent(() => item.icon);
+          return (
+            <Tooltip tip={t(item.label)} class="shrink-0">
+              <button
+                type="button"
+                class={`btn btn-ghost btn-xs border px-1 ${
+                  props.mode === item.mode
+                    ? `${TOGGLE_ACTIVE} hover:bg-base-content/20`
+                    : TOGGLE_IDLE
+                }`}
+                aria-label={t(item.label)}
+                aria-pressed={props.mode === item.mode ? 'true' : 'false'}
+                onClick={() => props.onModeChange(item.mode)}
+              >
+                <Icon size={14} />
+              </button>
+            </Tooltip>
+          );
+        }}
       </For>
     </div>
   );

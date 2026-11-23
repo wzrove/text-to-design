@@ -37,7 +37,7 @@ describe('tool catalog profiles', () => {
     try {
       const all = (await full.client.listTools()).tools;
       const core = (await compact.client.listTools()).tools;
-      expect(all).toHaveLength(59);
+      expect(all).toHaveLength(60);
       expect(core.map((tool) => tool.name).sort()).toEqual([
         'jsd_batch',
         'jsd_copy',
@@ -50,6 +50,7 @@ describe('tool catalog profiles', () => {
         'jsd_list_fonts',
         'jsd_list_prompts',
         'jsd_ping',
+        'jsd_search_icons',
       ]);
       expect(core.some((tool) => tool.name === 'jsd_describe_tools')).toBe(
         true,

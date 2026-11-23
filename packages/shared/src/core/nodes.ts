@@ -22,7 +22,12 @@ import type {
 } from './host';
 import type { RuntimeContext } from './runtime';
 import { serializeNode, trySerialize } from './serialize';
-import { ensureLayoutMode, type LayoutMode, resizeContainer } from './utils';
+import {
+  describeValue,
+  ensureLayoutMode,
+  type LayoutMode,
+  resizeContainer,
+} from './utils';
 
 /**
  * 节点在页面坐标系里的原点(绝对坐标)。
@@ -1029,7 +1034,9 @@ export async function reparentNodes(
         const got = (n as unknown as LayoutRecord)[key];
         // 方向回压本身会再翻一次对齐/尺寸模式,故按压回失败后的实况比对
         if (got !== want)
-          drift.push(`${key}(移前 ${String(want)},现 ${String(got)})`);
+          drift.push(
+            `${key}(移前 ${describeValue(want)},现 ${describeValue(got)})`,
+          );
       }
       if (drift.length > 0) {
         layoutWarnings.push(

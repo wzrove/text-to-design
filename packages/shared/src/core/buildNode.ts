@@ -99,10 +99,10 @@ async function buildNode(
           parent: ContainerSkeleton,
         ) => NodeSkeleton
       > = {
-        UNION: host.union,
-        SUBTRACT: host.subtract,
-        INTERSECT: host.intersect,
-        EXCLUDE: host.exclude,
+        UNION: (nodes, parent) => host.union(nodes, parent),
+        SUBTRACT: (nodes, parent) => host.subtract(nodes, parent),
+        INTERSECT: (nodes, parent) => host.intersect(nodes, parent),
+        EXCLUDE: (nodes, parent) => host.exclude(nodes, parent),
       };
       const op = assertBooleanOperation(spec.booleanOperation ?? 'UNION');
       node = combine[op]([...(tmp.children ?? [])], parent);

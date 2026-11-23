@@ -8,6 +8,7 @@ export const MCP_CORE_TOOLS: readonly string[] = [
   'jsd_export',
   'jsd_list_prompts',
   'jsd_get_prompt',
+  'jsd_search_icons',
   'jsd_batch',
 ];
 
@@ -78,6 +79,7 @@ export const MCP_TOOL_GROUPS: Readonly<Record<string, readonly string[]>> = {
   media: [
     'jsd_create_svg',
     'jsd_create_icon',
+    'jsd_search_icons',
     'jsd_html_to_design',
     'jsd_export',
     'jsd_fill_image',

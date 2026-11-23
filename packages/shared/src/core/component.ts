@@ -20,7 +20,7 @@ import {
 import type { RuntimeContext } from './runtime';
 import { serializeNode } from './serialize';
 import { updateSelection } from './update';
-import { resizeContainer } from './utils';
+import { describeValue, resizeContainer } from './utils';
 import {
   normalizeVariantGroupProperties,
   resolveVariantWriteKey,
@@ -556,7 +556,7 @@ export async function setInstanceProperties(
       // ② 变体属性:成员键直接命中,集合维度键按取值映射成成员键
       const mapped = resolveVariantWriteKey(
         key,
-        String(value),
+        describeValue(value),
         memberValues,
         setDimensions,
       );

@@ -14,6 +14,7 @@ import { BATCH_TIMEOUT_MS, MAX_BATCH_SPILL_BYTES } from '../config';
 import { BridgeError, errorCodeOf } from '../core/bridge-error';
 import { loadBatchCallsFile } from '../core/calls-file';
 import { siblingStepsByParent } from '../core/structure-hint';
+import { toolCatalog } from '../core/tool-catalog';
 import type { ToolHandle } from '../core/tool-def';
 import { bridgeTool, executorNames, lookupExecutor } from '../core/tool-exec';
 import type { McpI18n } from '../i18n';
@@ -574,6 +575,22 @@ export function registerBatchTools(
       // 不是全局开关,也不是把钩子从 def 上摘掉。
       const skipHooks = checkDrift === false;
       const stepWarnings: string[] = [];
+      /**
+       * 撤销边界(dec:见 DesignHost.commitUndo)。一批写入前后各封一次,整批在
+       * 用户的撤销栈里就是**一步**;不然一次撤销会把之前零散调用一起撤掉。
+       * 判据取工具目录的 readOnlyHint:纯读批次不碰撤销栈。
+       */
+      const hasWrites = calls.some((call) => {
+        const cap = toolCatalog(server).capabilities.get(call.tool);
+        return cap == null || cap.annotations.readOnlyHint !== true;
+      });
+      const commitUndo = async (): Promise<void> => {
+        try {
+          await bridge.request('commit_undo', {});
+        } catch {
+          // 旧插件产物没有这条方法:只是少一道撤销边界,不能让整批因此失败
+        }
+      };
       // 资源清单按需读一次:占位符里的 `{{@comp:…}}` / `{{@var:…}}` 共用同一份快照,
       // 批次内不做二次读(名字寻址不该比硬编码 id 更贵)。批后新建的资源不在快照里,
       // 那是刻意的:同批刚建就按名字取,等于赌引擎已刷新。
@@ -585,9 +602,7 @@ export function registerBatchTools(
             assets = await bridge.request(
               'get_page',
               {},
-              {
-                ...(signal != null ? { signal } : {}),
-              },
+              signal != null ? { signal } : {},
             );
           } catch (failure) {
             // 三种失败必须分开报:此前一律吞成「按名字没命中」,「插件连不上」被说成
@@ -634,6 +649,8 @@ export function registerBatchTools(
           });
         }
       }
+      // 先封边界:此前零散调用若还没提交,不该与本批合并成同一步撤销
+      if (hasWrites) await commitUndo();
       for (const [i, call] of calls.entries()) {
         const id = declaredSteps[i];
         const fail = (msg: string): void => {
@@ -748,6 +765,8 @@ export function registerBatchTools(
           data: echo.data,
         });
       }
+      // 再封一次:本批的全部写入落成撤销栈里的一步(中途失败也照封,已落地的改动仍是本批的)
+      if (hasWrites) await commitUndo();
       const complete = results.length === calls.length;
       const warnings = stepWarnings;
       // 有步骤被降级成 id 清单时,把整批明细落盘、并在那几步上补 path / line。

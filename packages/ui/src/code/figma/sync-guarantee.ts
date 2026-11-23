@@ -210,7 +210,10 @@ export type NodeTypeContractCheck = ExpectNever<
 type FigmaOnlyRuntime = Exclude<SceneNode['type'], NodeType>;
 type FigmaOnlyRegistered = (typeof FIGMA_ONLY_NODE_TYPES)[number];
 export type FigmaOnlyRegistrationCheck = ExpectNever<
+  // 双向 Exclude 都应为 never;这条断言本身就是在测「两边恰好相等」
+  // oxlint-disable-next-line typescript/no-duplicate-type-constituents, typescript/no-redundant-type-constituents
   | Exclude<FigmaOnlyRuntime, FigmaOnlyRegistered>
+  // oxlint-disable-next-line typescript/no-duplicate-type-constituents, typescript/no-redundant-type-constituents
   | Exclude<FigmaOnlyRegistered, FigmaOnlyRuntime>
 >;
 

@@ -1,9 +1,12 @@
 pre-commit:
   parallel: true
   commands:
-    lint:
-      glob: "*.{js,ts,tsx,mjs,cjs,json,jsonc,css}"
-      run: pnpm exec biome check --write --unsafe   {staged_files}
+    lint-code:
+      glob: "*.{js,ts,tsx,mjs,cjs}"
+      run: pnpm exec oxlint --fix {staged_files} && pnpm exec oxfmt {staged_files}
+    format-other:
+      glob: "*.{json,jsonc,css}"
+      run: pnpm exec oxfmt {staged_files}
     typecheck:
       run: pnpm typecheck
     test: 

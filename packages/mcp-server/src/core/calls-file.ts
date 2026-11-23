@@ -1,6 +1,10 @@
 import { readFile, stat } from 'node:fs/promises';
 import { isAbsolute } from 'node:path';
-import { type BatchCall, batchCallSchema } from 'text-to-design-shared';
+import {
+  type BatchCall,
+  batchCallSchema,
+  describeValue,
+} from 'text-to-design-shared';
 import { MAX_CALLS_FILE_BYTES } from '../config';
 import { log } from '../logger';
 
@@ -45,7 +49,9 @@ export async function loadBatchCallsFile(
   const tooBig = (size: number): never =>
     fail(
       `callsFile「${path}」${(size / 1024 / 1024).toFixed(2)} MB,超过上限 ${(
-        MAX_CALLS_FILE_BYTES / 1024 / 1024
+        MAX_CALLS_FILE_BYTES /
+        1024 /
+        1024
       ).toFixed(
         0,
       )} MB(可用 TEXT_TO_DESIGN_MCP_MAX_CALLS_FILE_BYTES 覆盖)。请把清单拆成多份分开调用。`,
@@ -145,7 +151,7 @@ export async function loadBatchCallsFile(
     const value = holder[key];
     if (value !== undefined && typeof value !== 'boolean')
       fail(
-        `callsFile「${path}」的 ${key} 必须是布尔值(收到 ${typeof value}:${String(
+        `callsFile「${path}」的 ${key} 必须是布尔值(收到 ${typeof value}:${describeValue(
           value,
         ).slice(
           0,

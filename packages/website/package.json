@@ -14,12 +14,13 @@
     "@tailwindcss/postcss": "^4.3.3",
     "@types/node": "catalog:",
     "gsap": "^3.15.0",
-    "lucide-solid": "^1.48.0",
     "postcss": "^8.5.26",
-    "solid-js": "^1.9.15",
+    "solid-js": "catalog:",
     "tailwindcss": "^4.3.3",
     "typescript": "catalog:",
     "vite": "catalog:",
-    "vite-plugin-solid": "^2.11.14"
+    "@solidjs/web": "catalog:",
+    "@solidjs/vite-plugin": "catalog:",
+    "@lucide/solid": "catalog:"
   }
 }

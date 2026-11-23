@@ -76,8 +76,9 @@ const LONG_LINE_CHARS = 120;
  */
 const SCOPE_CLASS: Record<LogScope, string> = {
   bridge: 'badge-info',
+  // primary 改近黑后与 neutral 同色系,daemon 让位给描边款才仍能三档可辨
   tool: 'badge-primary',
-  daemon: 'badge-neutral',
+  daemon: 'badge-outline',
 };
 
 function LogEntryItem(props: { entry: LogEntry }) {
@@ -114,7 +115,7 @@ function LogEntryItem(props: { entry: LogEntry }) {
   };
 
   const onCopy = (): void => {
-    copyWithToast(props.entry.message);
+    void copyWithToast(props.entry.message);
   };
 
   return (
@@ -131,7 +132,7 @@ function LogEntryItem(props: { entry: LogEntry }) {
           </span>
         }
       >
-        {/* 原生 button 保证键盘可达(biome a11y);截断盒与指示符分列,▾ 恒可见 */}
+        {/* 原生 button 保证键盘可达(a11y);截断盒与指示符分列,▾ 恒可见 */}
         <button
           type="button"
           class={`flex min-w-0 flex-1 cursor-pointer items-start gap-1 text-left ${LEVEL_CLASS[level]}`}
@@ -217,33 +218,42 @@ export default function LogDrawer(props: {
   };
 
   // 每次打开都从最新一条看起:跟随状态与未读计数在开合处复位
-  createEffect(() => {
-    if (!props.open) return;
-    atBottom = true;
-    setNewCount(0);
-    prevLen = props.entries.length;
-  });
+  createEffect(
+    () => ({ open: props.open, len: props.entries.length }),
+    (v) => {
+      if (!v.open) return;
+      atBottom = true;
+      setNewCount(0);
+      prevLen = v.len;
+    },
+  );
 
   // 跟随暂停期间的新日志到达计数(清空导致的长度回落不计)
-  createEffect(() => {
-    const len = props.entries.length;
-    if (props.open && len > prevLen && !atBottom) setNewCount((c) => c + 1);
-    prevLen = len;
-  });
+  createEffect(
+    () => ({ open: props.open, len: props.entries.length }),
+    (v) => {
+      if (v.open && v.len > prevLen && !atBottom) setNewCount((c) => c + 1);
+      prevLen = v.len;
+    },
+  );
 
   // 依赖里带上 open:抽屉展开不改变条目集合,光靠 shown() 不会重新贴底
-  createEffect(() => {
-    if (!props.open) return;
-    shown();
-    followBottom();
-  });
+  createEffect(
+    () => ({ open: props.open, entries: shown() }),
+    (v) => {
+      if (!v.open) return;
+      followBottom();
+    },
+  );
 
   // Esc 归 App 收口(useEscapeKey):抽屉的关闭要连带把焦点还给页头入口,
   // 两个端点分处两个组件。这里只管焦点接管。
-  createEffect(() => {
-    if (!props.open) return;
-    closeRef?.focus();
-  });
+  createEffect(
+    () => props.open,
+    (open) => {
+      if (open) closeRef?.focus();
+    },
+  );
 
   const onScroll = () => {
     const el = containerRef;
@@ -273,8 +283,8 @@ export default function LogDrawer(props: {
       }}
       label={t('log.drawer.title')}
       header={
-        <div class="flex items-center gap-2 px-3 pt-2">
-          <h2 class="shrink-0 text-xs font-bold text-base-content/80">
+        <div class="flex items-center gap-2 px-2.5 pt-2">
+          <h2 class="shrink-0 text-xs font-bold text-base-content/70">
             {t('log.drawer.title')}
           </h2>
           <span class="min-w-0 flex-1 truncate text-base-content/60 text-[10px]">
@@ -306,7 +316,7 @@ export default function LogDrawer(props: {
         </div>
       }
     >
-      <div class="join flex-wrap items-center gap-0.5 px-3 py-1.5">
+      <div class="join flex-wrap items-center gap-0.5 px-2.5 py-1.5">
         <For each={FILTERS}>
           {(f) => (
             <button
@@ -326,7 +336,7 @@ export default function LogDrawer(props: {
         <div
           ref={containerRef}
           onScroll={onScroll}
-          class="h-full overflow-y-auto px-3 py-2 font-mono text-xs"
+          class="h-full overflow-y-auto px-2.5 py-2 font-mono text-xs"
         >
           <For
             each={shown()}

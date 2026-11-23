@@ -1,14 +1,6 @@
+import { ArrowRight, Check, Loader, RotateCw, Terminal } from '@lucide/solid';
 import type { gsap as GsapApi } from 'gsap';
-import { ArrowRight, Check, Loader, RotateCw, Terminal } from 'lucide-solid';
-import {
-  createSignal,
-  For,
-  Match,
-  onCleanup,
-  onMount,
-  Show,
-  Switch,
-} from 'solid-js';
+import { createSignal, For, Match, onSettled, Show, Switch } from 'solid-js';
 import {
   DEMO_TASKS,
   type DemoTask,
@@ -40,7 +32,8 @@ function buildDrawTimeline(
   root: HTMLElement,
   id: DemoTaskId,
 ) {
-  // biome-ignore lint/style/noNonNullAssertion: 选择器指向本文件渲染的固定标记,缺失即渲染 bug
+  // 选择器指向本文件渲染的固定标记,缺失即渲染 bug
+  // oxlint-disable-next-line typescript/no-non-null-assertion
   const one = (sel: string) => root.querySelector<HTMLElement>(sel)!;
   const many = (sel: string) =>
     Array.from(root.querySelectorAll<HTMLElement>(sel));
@@ -317,33 +310,35 @@ export default function Hero(props: { releasesUrl: string; repoUrl: string }) {
     replay();
   }
 
-  onMount(() => {
+  onSettled(() => {
     void ensureTimeline();
+    let stopFirst: (() => void) | undefined;
 
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
       setTyped(demoText().prompt.length);
       setPhase('draw');
       void ensureTimeline().then(() => tl?.progress(1).pause());
-      return;
+    } else if (demo) {
+      stopFirst = onFirstVisible(demo, () => void play(runId));
     }
-    if (demo) onFirstVisible(demo, () => void play(runId));
-  });
 
-  onCleanup(() => {
-    cancelled = true;
-    clearTimeout(pending);
-    clearTimeout(rotate);
-    tl?.kill();
+    return () => {
+      stopFirst?.();
+      cancelled = true;
+      clearTimeout(pending);
+      clearTimeout(rotate);
+      tl?.kill();
+    };
   });
 
   return (
     <section id="top" class="relative overflow-hidden border-b border-line/70">
       <div
-        aria-hidden
+        aria-hidden="true"
         class="grid-bg absolute inset-0 animate-[grid-pan_28s_linear_infinite] opacity-45"
       />
       <div
-        aria-hidden
+        aria-hidden="true"
         class="absolute -top-40 left-1/2 h-[420px] w-[820px] animate-[drift_16s_ease-in-out_infinite] rounded-full bg-brand/12 blur-[110px]"
       />
 
@@ -353,7 +348,7 @@ export default function Hero(props: { releasesUrl: string; repoUrl: string }) {
             data-reveal="up"
             class="mono-label inline-flex items-center gap-2 rounded-full border border-line bg-panel px-3 py-1"
           >
-            <Terminal size={13} aria-hidden />
+            <Terminal size={13} aria-hidden="true" />
             {d().hero.badge}
           </p>
 
@@ -393,7 +388,7 @@ export default function Hero(props: { releasesUrl: string; repoUrl: string }) {
               {d().hero.ctaDownload}
               <ArrowRight
                 size={16}
-                aria-hidden
+                aria-hidden="true"
                 class="transition-transform duration-300 group-hover:translate-x-1"
               />
             </a>
@@ -418,7 +413,7 @@ export default function Hero(props: { releasesUrl: string; repoUrl: string }) {
                 {(platform) => (
                   <li class="inline-flex items-center gap-2 rounded-full border border-line bg-panel px-3 py-1 text-xs transition-colors duration-300 hover:border-brand/40">
                     <span
-                      aria-hidden
+                      aria-hidden="true"
                       class="h-1.5 w-1.5 rounded-full bg-brand"
                     />
                     <span class="text-txt">
@@ -469,7 +464,7 @@ export default function Hero(props: { releasesUrl: string; repoUrl: string }) {
               <span class="h-2.5 w-2.5 rounded-full bg-coral/70" />
               <span class="h-2.5 w-2.5 rounded-full bg-brand/60" />
               <span class="mono-label ml-2">{d().hero.session}</span>
-              {/** biome-ignore lint/a11y/useSemanticElements: 按钮组无对应语义标签,role=group 已足够 */}
+              {/** a11y: 按钮组无对应语义标签,role=group 已足够 */}
               <div
                 role="group"
                 aria-label={d().hero.demoGroup}
@@ -480,7 +475,7 @@ export default function Hero(props: { releasesUrl: string; repoUrl: string }) {
                     <button
                       type="button"
                       onClick={() => selectTask(t)}
-                      aria-pressed={t.id === task().id}
+                      aria-pressed={t.id === task().id ? 'true' : 'false'}
                       class={
                         'rounded border px-2 py-0.5 font-mono text-[10px] transition ' +
                         (t.id === task().id
@@ -505,32 +500,34 @@ export default function Hero(props: { releasesUrl: string; repoUrl: string }) {
             <div class="space-y-3 px-4 py-4 text-sm">
               <p class="relative rounded-lg bg-raise px-3 py-2.5 leading-relaxed text-txt">
                 <span class="sr-only">{demoText().prompt}</span>
-                <span aria-hidden class="invisible">
+                <span aria-hidden="true" class="invisible">
                   {demoText().prompt}
                 </span>
-                <span aria-hidden class="absolute inset-0 px-3 py-2.5">
-                  <span classList={{ 'typing-caret': phase() === 'typing' }}>
+                <span aria-hidden="true" class="absolute inset-0 px-3 py-2.5">
+                  <span class={{ 'typing-caret': phase() === 'typing' }}>
                     {demoText().prompt.slice(0, typed())}
                   </span>
                 </span>
               </p>
 
               <p
-                class="flex items-center gap-2 font-mono text-xs text-mute transition-opacity duration-300"
-                classList={{ 'opacity-0': phase() === 'typing' }}
+                class={[
+                  'flex items-center gap-2 font-mono text-xs text-mute transition-opacity duration-300',
+                  { 'opacity-0': phase() === 'typing' },
+                ]}
               >
                 <Show
                   when={phase() === 'thinking'}
                   fallback={
                     <>
-                      <Check size={13} class="text-brand" aria-hidden />
-                      <span classList={{ 'demo-tool': phase() !== 'typing' }}>
+                      <Check size={13} class="text-brand" aria-hidden="true" />
+                      <span class={{ 'demo-tool': phase() !== 'typing' }}>
                         {demoText().toolLine}
                       </span>
                     </>
                   }
                 >
-                  <Loader size={13} class="animate-spin" aria-hidden />
+                  <Loader size={13} class="animate-spin" aria-hidden="true" />
                   <span class="inline-flex items-end gap-1">
                     <span class="h-1 w-1 animate-bounce rounded-full bg-mute" />
                     <span class="h-1 w-1 animate-bounce rounded-full bg-mute [animation-delay:120ms]" />
@@ -549,7 +546,7 @@ export default function Hero(props: { releasesUrl: string; repoUrl: string }) {
                     {(label, i) => (
                       <li class="flex flex-1 items-center gap-1.5 last:flex-none">
                         <span
-                          aria-hidden
+                          aria-hidden="true"
                           class={
                             'grid h-[18px] w-[18px] shrink-0 place-items-center rounded-full border text-[9px] leading-none transition-colors duration-500 ' +
                             (step() > i()
@@ -571,7 +568,7 @@ export default function Hero(props: { releasesUrl: string; repoUrl: string }) {
                         </span>
                         <Show when={i() < d().hero.steps.length - 1}>
                           <span
-                            aria-hidden
+                            aria-hidden="true"
                             class="relative h-[3px] flex-1 overflow-hidden rounded-full bg-line"
                           >
                             <span
@@ -589,11 +586,11 @@ export default function Hero(props: { releasesUrl: string; repoUrl: string }) {
               </div>
               <div
                 ref={canvas}
-                aria-hidden
+                aria-hidden="true"
                 class="demo-canvas grid-bg relative mt-3 flex h-[208px] items-center justify-center rounded-lg border border-line/70 bg-ink p-4"
               >
                 <span
-                  aria-hidden
+                  aria-hidden="true"
                   class="pointer-events-none absolute inset-0 overflow-hidden"
                 >
                   <span class="demo-sweep sweep-glow draw-item absolute inset-y-0 left-0 w-1/4" />
@@ -722,7 +719,7 @@ export default function Hero(props: { releasesUrl: string; repoUrl: string }) {
               onClick={replay}
               class="inline-flex items-center gap-1.5 rounded-md border border-line bg-panel px-2.5 py-1 font-mono text-xs text-mute transition hover:border-brand/50 hover:text-txt"
             >
-              <RotateCw size={13} aria-hidden />
+              <RotateCw size={13} aria-hidden="true" />
               {d().hero.replay}
             </button>
           </div>

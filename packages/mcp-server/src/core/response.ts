@@ -45,7 +45,7 @@ function innerOf(
 ): AnyZod | undefined {
   return (schema as unknown as { _def?: LooseDef })._def?.[key];
 }
-// biome-ignore lint/suspicious/noShadowRestrictedNames: 工具函数名 valueOf 与 Object.prototype 无关
+// 工具函数名 valueOf 与 Object.prototype 无关
 function valueOf(schema: AnyZod, key: 'value' | 'values' | 'options'): unknown {
   return (schema as unknown as { _def?: LooseDef })._def?.[key];
 }

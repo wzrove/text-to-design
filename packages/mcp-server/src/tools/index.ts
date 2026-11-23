@@ -8,6 +8,7 @@ import { registerComponentTools } from './components';
 import { registerCopyTools } from './copy';
 import { registerCreateTools } from './create';
 import { registerDiscoveryTools } from './discovery';
+import { registerIconSearchTools } from './icon-search';
 import { registerManageTools } from './manage';
 import { registerModifyTools } from './modify';
 import { registerNodeOpTools } from './nodes';
@@ -35,6 +36,7 @@ export const toolRegistrars: RegisterTools[] = [
   registerSessionTools,
   registerCopyTools,
   registerCreateTools,
+  registerIconSearchTools,
   registerModifyTools,
   // 从聚合入口拆出的单职责小工具(节点结构 / 组件 / 属性)
   registerNodeOpTools,

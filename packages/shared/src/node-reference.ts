@@ -1,8 +1,8 @@
 import {
-  CODE_ROLES,
   type CodeRole,
   DESIGN_TO_CODE_SKILL_ROUTE,
   NODE_REFERENCE_VERSION,
+  normalizeCodeRoles,
 } from './dicts/node-reference';
 import {
   type CopyRequest,
@@ -10,20 +10,6 @@ import {
   type PluginPlatform,
   pluginPlatformSchema,
 } from './schemas';
-
-export function normalizeCodeRoles(values: readonly unknown[]): CodeRole[] {
-  if (values.length === 0)
-    throw new Error('code Copy 至少选择 frontend 或 backend'); // i18n-exempt: MCP/URL diagnostics, not panel copy
-  const unknown = values.filter(
-    (value) =>
-      typeof value !== 'string' ||
-      !(CODE_ROLES as readonly string[]).includes(value),
-  );
-  if (unknown.length > 0) {
-    throw new Error(`不支持的 code 职责: ${unknown.map(String).join(', ')}`); // i18n-exempt: MCP/URL diagnostics, not panel copy
-  }
-  return CODE_ROLES.filter((role) => values.includes(role));
-}
 
 export interface NodeReference {
   version: typeof NODE_REFERENCE_VERSION;

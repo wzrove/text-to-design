@@ -22,10 +22,11 @@ import type {
 import {
   COPY_REQUEST_TIMEOUT_MS,
   isActivityPushFrame,
+  isCanvasReadRequest,
   isConsentPushFrame,
   isVersionPushFrame,
-  selectionMetaSchema,
-  selectionSummaryDataSchema,
+  parseSelectionMeta,
+  parseSelectionSummaryData,
   toStoredChoice,
   UI_FORWARD_TIMEOUT_MS,
 } from 'text-to-design-shared';
@@ -138,6 +139,11 @@ function describeTimeoutError(method: string, params: unknown): string {
 export class Router {
   private localPending = new Map<string, Pending>();
   private globalSeq = 0;
+  /**
+   * 画布只读:面板复制模式为「代码」时置位(见 App.tsx)。
+   * 代码模式下 MCP 侧本该只读内容,但请求是模型发起的,只能在这里拦。
+   */
+  private canvasReadOnly = false;
   private conn: Conn;
   private emit: (record: LogRecord) => void;
 
@@ -183,6 +189,11 @@ export class Router {
   /** router 自己产的日志没有分类,统一按 bridge 档;daemon 来的记录直接走 emit */
   private log(level: LogLevel, message: string): void {
     this.emit({ level, scope: 'bridge', message });
+  }
+
+  /** 由 App 跟随复制模式切换(见 shared/dicts/canvas-readonly) */
+  setCanvasReadOnly(readOnly: boolean): void {
+    this.canvasReadOnly = readOnly;
   }
 
   pingPlugin(): Promise<unknown> {
@@ -346,8 +357,21 @@ export class Router {
     }
   }
 
-  /** 转发服务器请求给插件:只挂超时定时器,code 回包由 onCodeMessage 直接回发 */
+  /**
+   * 转发服务器请求给插件:只挂超时定时器,code 回包由 onCodeMessage 直接回发。
+   *
+   * 代码模式下的写请求不转发,当场回错(MCP 侧看到的仍是正常响应,模型能读到
+   * 下一步该干什么,而不是等一个永远不会来的超时)。
+   */
   private forwardRequest(conn: Conn, msg: PluginRequest): void {
+    if (this.canvasReadOnly && !isCanvasReadRequest(msg.method, msg.params)) {
+      this.sendResponseOverWs(conn, msg.id, false, undefined, {
+        code: 'canvas_read_only',
+        // i18n-exempt: 随错误包上行给 MCP(模型读),语言归 MCP 侧(见 0016)
+        message: `画布只读:面板复制模式为「代码」,${msg.method} 等写入请求被拒绝;需要改画布请让用户把面板顶部模式切到「设计」`,
+      });
+      return;
+    }
     const timer = window.setTimeout(() => {
       if (this.localPending.delete(msg.id)) {
         this.log(
@@ -426,12 +450,10 @@ export class Router {
         return;
       }
       if (pm.type === 'selection') {
-        const meta =
-          pm.meta == null ? null : selectionMetaSchema.safeParse(pm.meta);
-        const summary = selectionSummaryDataSchema.safeParse(pm.data);
+        const meta = parseSelectionMeta(pm.meta);
         this.onSelection?.(
-          summary.success ? summary.data : null,
-          meta?.success ? meta.data : undefined,
+          parseSelectionSummaryData(pm.data),
+          meta ?? undefined,
         );
         return;
       }

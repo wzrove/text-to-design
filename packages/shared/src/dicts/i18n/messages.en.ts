@@ -82,17 +82,18 @@ export const MESSAGES_EN = {
   'upgrade.modal.title': 'Upgrade to the latest version',
   'upgrade.current': 'Current {version}',
   'upgrade.latest': 'Latest {version}',
+  'upgrade.latestUnknown': 'Latest version unknown',
   'upgrade.plugin.label': 'Plugin',
   // 单列宽度放不下 `Background service`(版本对照是两列一行),收到 `Service`
   'upgrade.service.label': 'Service',
   'upgrade.step.service':
-    '① Service, just restart the AI session. It runs npx -y text-to-design-mcp@latest, so it is always the newest',
-  'upgrade.step.plugin.head': '② Plugin is a manual swap. Download the latest',
+    'Service: just restart the AI session. It runs npx -y text-to-design-mcp@latest, so it is always the newest',
+  'upgrade.step.plugin.head': 'Plugin is a manual swap. Download the latest',
   'upgrade.step.plugin.tail':
     ', unzip it, then import the manifest for your platform',
-  'upgrade.step.verify':
-    '③ Run the plugin again. No upgrade icon up top means both sides match',
+  'upgrade.step.verify': 'Done when the upgrade icon up top disappears',
   'upgrade.copy': 'Copy for AI assistant',
+  'upgrade.openReleases': 'Open releases',
   'upgrade.prompt':
     'I use text-to-design. Plugin text-to-design-ui is {ui}, latest {uiLatest}; service text-to-design-mcp is {mcp}, latest {mcpLatest}. Help me get both to the latest: ① check the MCP config command pins latest, then restart the AI session; ② download and unzip the latest text-to-design-ui (npm pack, or the zip from GitHub Releases), and tell me which manifest.json under dist/ to import for jsDesign / Figma / MasterGo; ③ report both version numbers when done.',
 
@@ -100,7 +101,7 @@ export const MESSAGES_EN = {
   'toast.copy.failed': 'Copy failed',
   'toast.connected': 'Connected: select nodes on the canvas, then Copy for AI',
   'toast.mode.design': 'Design mode: copy the design for AI',
-  'toast.mode.code': 'Code mode: pick a role, then copy the code',
+  'toast.mode.code': 'Code mode: canvas is read-only; pick a role, then copy',
 
   'conn.connected':
     'Connected. Select nodes on the canvas, click "Copy", then paste into your AI assistant — e.g. "make me another card in this node style"',
@@ -140,7 +141,8 @@ export const MESSAGES_EN = {
   'selection.empty.hint':
     '① Select nodes on the canvas  ② Pick Design / Code at the top  ③ Copy for AI',
   'selection.hint.design': 'Copy the design; AI continues from these nodes',
-  'selection.hint.code': 'Copy the code and paste it into your project',
+  'selection.hint.code':
+    'Copy the selection and paste it into your AI assistant',
   'selection.hint.code.noRole': 'Pick frontend or backend before copying',
 
   'capability.card.title': 'Capabilities',
@@ -640,6 +642,7 @@ export const MESSAGES_EN = {
   'createSvg.description':
     'Import an SVG into the canvas as editable layers (native createNodeFromSvg parsing; paths/gradients/strokes preserved). Pick one source: svg (inline string) or svgPath (an **absolute** path to a local .svg file, read by the background service — its cwd differs from your project, so relative paths are rejected). **Charts and data visualisations must use svgPath** (line, bar, pie/donut, scatter, radar, area, gauge, dashboard, Sankey, …): there is no built-in chart tool — write a script that computes the SVG, write it to a local file, then pass the path. Engine hard constraints (violations fail silently): the root element needs xmlns plus explicit width/height/viewBox; colours as hex only; no external images/fonts/scripts; approximate curves with C/Q, never the A command; canvas ≤2000×2000; split semantic layers into `<g id>` (one wrapper group is no grouping), with a single transform on the outer group only. Before you start, ReadMcpResource the recipe skill://canvas/references/chart-by-code.md — it carries the zero-dependency example, the colour and type-scale conventions, and the post-import layer check plus visual acceptance checklist. Use jsd_batch to orchestrate multiple root nodes or complex trees',
   'createIcon.title': 'Insert built-in icon',
+  'searchIcons.title': 'Search Iconify icons',
   'htmlToDesign.title': 'HTML to design nodes',
   'htmlToDesign.description':
     'Convert an HTML fragment into canvas nodes. Default path is jsd_html_to_design (SVG fidelity, complex styles dropped); only use per-type create tools (jsd_create_frame etc.) when editable layers are required',

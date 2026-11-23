@@ -12,7 +12,12 @@ import {
   normalizeLayoutGrids,
   normalizePaints,
 } from '../normalize';
-import { loadFont, MIN_RESIZE_SIZE, resizeContainer } from '../utils';
+import {
+  describeValue,
+  loadFont,
+  MIN_RESIZE_SIZE,
+  resizeContainer,
+} from '../utils';
 import { nodeLabel } from './outcome';
 import { platformRejectsProp } from './platform-gate';
 import {
@@ -256,7 +261,7 @@ function readGrids(
   return {
     count: value.length,
     patterns: value.map((g) =>
-      String((g as { pattern?: unknown } | null)?.pattern ?? ''),
+      describeValue((g as { pattern?: unknown } | null)?.pattern ?? ''),
     ),
   };
 }

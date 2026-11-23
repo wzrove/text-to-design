@@ -23,6 +23,7 @@ import {
 import { inferSizingModes, pinFixedAxisDrift } from './props/writers';
 import type { RuntimeContext } from './runtime';
 import { serializeNode } from './serialize';
+import { describeValue } from './utils';
 import { fontNotResolved } from './utils';
 
 function coerceSpec(raw: unknown): ExecuteOp {
@@ -77,7 +78,7 @@ function reconcileCreatedLayout(
     notes.unapplied.push({
       key: 'layoutMode',
       label,
-      detail: `请求 ${String(wantMode)},回读 ${node.layoutMode ?? 'NONE'}`,
+      detail: `请求 ${describeValue(wantMode)},回读 ${node.layoutMode ?? 'NONE'}`,
     });
   }
   // 没开布局的容器上这些字段本就不参与排布(与 writers 的 create 分支同口径):
@@ -94,7 +95,7 @@ function reconcileCreatedLayout(
       notes.unapplied.push({
         key,
         label,
-        detail: `请求 ${String(want)},回读 ${got ?? '读不到'}`,
+        detail: `请求 ${describeValue(want)},回读 ${got ?? '读不到'}`,
       });
     }
   }

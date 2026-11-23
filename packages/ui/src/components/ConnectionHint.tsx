@@ -99,12 +99,14 @@ export default function ConnectionHint() {
         保留引导卡,两条路径此刻依然可执行。
       */}
       <div
-        class={`hint-enter rounded-lg border text-xs ${CARD[variant()]}`}
-        classList={{ hidden: variant() === 'connected' }}
+        class={[
+          `hint-enter rounded-lg border text-xs ${CARD[variant()]}`,
+          { hidden: variant() === 'connected' },
+        ]}
       >
         <p class={line().cls}>{line().text}</p>
 
-        <div classList={{ hidden: variant() !== 'disconnected' }}>
+        <div class={{ hidden: variant() !== 'disconnected' }}>
           <div class="flex items-center gap-2">
             <span class="font-bold text-warning-content">
               {t('conn.disconnected.title')}

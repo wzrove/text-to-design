@@ -26,6 +26,7 @@ export * from './node-reference';
 export * from './panel';
 /* 重新导出 zod schemas(唯一真源,供 MCP 运行时校验复用) */
 export * from './schemas';
+export * from './selection-guards';
 /* 版本升级提示的跨侧契约(daemon 代查 npm latest → 推送给面板,见 0038) */
 export * from './version-channel';
 
@@ -59,6 +60,8 @@ export type ListFontsParams = z.infer<typeof s.listFontsSchema>;
 export type ListStylesParams = z.infer<typeof s.listStylesSchema>;
 export type CreateStyleParams = z.infer<typeof s.createStyleSchema>;
 export type DeleteStyleParams = z.infer<typeof s.deleteStyleSchema>;
+/** commit_undo 无参:只封撤销边界(见 DesignHost.commitUndo) */
+export type CommitUndoParams = Record<string, never>;
 export type GetPageStructureParams = z.infer<typeof s.getPageStructureSchema>;
 
 export type PingResult = z.infer<typeof s.pingResultSchema>;
@@ -96,6 +99,7 @@ export type ParamsByMethod = {
   list_styles: ListStylesParams;
   create_style: CreateStyleParams;
   delete_style: DeleteStyleParams;
+  commit_undo: CommitUndoParams;
   node_op: NodeOpParams;
   component_op: ComponentOpParams;
   platform_op: s.PlatformOpParams;

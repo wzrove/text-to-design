@@ -28,7 +28,7 @@ description: "当用户要求在即时设计、Figma 或 MasterGo 中创建或�
 | 首次使用批处理、多步流程、整页或多块批量改造 | [批量编排](references/script-ops.md) |
 | 批量改文案 | [文本替换](references/text-replace-strategy.md)；多步时再读批量编排 |
 | HTML 转设计稿 | [HTML 转换](references/html-to-design.md) |
-| 插入一组图标并排布 | [图标网格](references/icon-grid.md) |
+| 查找、插入图标并排布 | [图标网格](references/icon-grid.md) |
 
 ## 执行闭环
 

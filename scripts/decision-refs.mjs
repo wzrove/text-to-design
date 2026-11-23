@@ -129,7 +129,7 @@ export function scanRefs(root = ROOT) {
   const marked = [];
   const bare = [];
   const unresolved = [];
-  for (const full of files.sort()) {
+  for (const full of files.sort((a, b) => a.localeCompare(b))) {
     const text = commentTextOf(readFileSync(full, 'utf8'));
     for (const m of text.matchAll(DEC_REF_RE)) {
       const ident = normalizeIdent(m[1]);
@@ -219,10 +219,12 @@ function main(argv) {
         new RegExp(`(?<!dec\\s)(?<![0-9a-f])${ident}(?![0-9a-f-])`).test(text)
       )
         idents.add(ident);
-    const rows = [...idents].sort().map((ident) => {
-      const name = (byIdent.get(ident) ?? [])[0] ?? '(未落盘)';
-      return `${ident}  ${name}\n         状态:${statusOf(join(DOCS, name))}`;
-    });
+    const rows = [...idents]
+      .sort((a, b) => a.localeCompare(b))
+      .map((ident) => {
+        const name = (byIdent.get(ident) ?? [])[0] ?? '(未落盘)';
+        return `${ident}  ${name}\n         状态:${statusOf(join(DOCS, name))}`;
+      });
     console.log(`${rel} 牵到 ${rows.length} 条记录:`);
     for (const row of rows) console.log(`  ${row}`);
     return;

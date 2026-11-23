@@ -1,9 +1,9 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import solid from '@solidjs/vite-plugin';
 import type { PluginPlatform } from 'text-to-design-shared';
 import { defineConfig, loadEnv, type Plugin, type UserConfig } from 'vite';
 import { viteSingleFile } from 'vite-plugin-singlefile';
-import solid from 'vite-plugin-solid';
 import manifestPlugin from './scripts/vite-plugin-manifest.js';
 import zodSandboxFix from './scripts/vite-plugin-zod-sandbox.js';
 
@@ -87,7 +87,13 @@ export default defineConfig(({ mode, command }): UserConfig => {
   // 构建:内联成单文件 ui.html;开发:vite dev server 走原生 ESM + HMR。
   // 单文件插件只在 build 挂 —— 它没有 dev 钩子,挂了也只是徒增误读。
   return {
-    plugins: isBuild ? [solid(), viteSingleFile(), reorderCss()] : [solid()],
+    plugins: isBuild
+      ? [
+          solid(),
+          viteSingleFile({ removeViteModuleLoader: true }),
+          reorderCss(),
+        ]
+      : [solid()],
     // 只有 ui.html,没有 index.html:直接打开根路径是 404,开发时落到 /ui.html
     ...(isBuild
       ? {}

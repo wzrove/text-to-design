@@ -33,6 +33,8 @@ TSX 组件:bg-error/10 + border-error/25 + text-error、bg-dot-frame …
 - **默认即原值** → hex 槽写 `#hex`,构建不做转换,产物里就是原字面量。
 - **值一律写 hex** → 设计稿口径,源码即事实来源,不做二次编码(oklch 之类中间
   表示不带来收益 —— 实测 hex 与 oklch 的产出色值完全等价,hex 还少 11KB)。
+- **界面不掺品牌色** → base-* 与 `primary` 都是中性色阶(底灰、动作近黑),
+  品牌绿只留在 logo/PetLogo 图形里;承载状态语义时用 success/warning/error。
 
 ### 透明度写法(重要,别被产物误导)
 
@@ -58,7 +60,7 @@ rgba 扩展槽。核对时**必须连 `@supports` 块一起看**。
 
 | 场景 | 通道 | 写法 |
 |---|---|---|
-| daisyUI 标准语义色 | ① 主题块 | `--color-primary: #8AD654` |
+| daisyUI 标准语义色 | ① 主题块 | `--color-primary: #26262b` |
 | 语义色的透明度变体 | 组件里直接用 | `bg-success/10`、`border-warning/35`(步进任意) |
 | 亮暗通用、纯 hex 色板 | ② `@theme` | `--color-dot-frame: #0ea5e9`,自动出工具类 |
 | 真 CSS 场景(伪元素等) | `:root` 变量 | 如 `--color-scrollbar-thumb` |
@@ -104,11 +106,11 @@ Tailwind 4 的层序是 `theme → base → components → utilities → daisyui
 
 | Token | 亮色 | 暗色 | 角色 | 当前使用点 |
 |---|---|---|---|---|
-| `primary` | `#8AD654` | 同 | **品牌动作色**:主按钮(刻意与状态绿不同) | btn-primary |
+| `primary` | `#26262b` | `#e5e7eb` | **动作色**:主按钮/选中档,近黑中性实心(品牌绿只留在 logo 图形里) | btn-primary、text-primary |
 | `secondary` | `#333333` | `#c9cfd6` | 次级实心表面(暂无直接使用,保留兼容) | — |
 | `accent` | `#F76868` | 同 | **品牌珊瑚红**,仅品牌图形;不是状态色。面板内暂无使用点,品牌原稿见仓库根 `logo.svg` | — |
 | `neutral` | `#2a2a2a` | `#2f3640` | 中性实心表面(暂无直接使用:平台名已降为页头 mono 小字,见 `App.tsx` 页头) | — |
-| `base-100/200/300` | 白系三档 | 深灰蓝三档 | 面板底 / hover / 边框 | 全局 |
+| `base-100/200/300` | `#ffffff` / `#f6f7f8` / `#e6e8eb` | `#1c2127` / `#22272e` / `#343b44` | 面板底 / hover / 边框 | 全局 |
 | `base-content` | `#333333` | `#d6dbe2` | 正文与透明度派生(`/60``/70`) | 全局 |
 | `info` | `#2563eb` | `#5aa9f7` | 过渡状态(连接中) | StatusBadge |
 | `success` | `#15803d` | `#34c467` | 成功 / 已连接 / 复制成功反馈 | StatusBadge、ConnectionHint、SelectionCard |

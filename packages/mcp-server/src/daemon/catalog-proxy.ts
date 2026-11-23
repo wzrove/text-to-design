@@ -190,7 +190,7 @@ export function createCatalogProxy(
       }
       handles.set(key, { handle, raw });
     }
-    for (const [key, entry] of [...handles]) {
+    for (const [key, entry] of handles) {
       if (!seen.has(key)) {
         entry.handle.remove();
         handles.delete(key);

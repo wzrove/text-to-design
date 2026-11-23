@@ -53,7 +53,7 @@ export default function LogTrigger(props: {
               : t('log.trigger')
           }
           aria-haspopup="dialog"
-          aria-expanded={props.open}
+          aria-expanded={props.open ? 'true' : 'false'}
           onClick={props.onClick}
         >
           <svg

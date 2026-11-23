@@ -1,5 +1,5 @@
-import { Lock, Unlock } from 'lucide-solid';
-import { createSignal, onMount } from 'solid-js';
+import { Lock, Unlock } from '@lucide/solid';
+import { createSignal, onSettled } from 'solid-js';
 import {
   CAMERA_LOCK_DEFAULT,
   type CameraLockSetMessage,
@@ -47,7 +47,7 @@ export default function CameraLockToggle() {
     postToCode(msg);
   };
 
-  onMount(() => send(locked()));
+  onSettled(() => send(locked()));
 
   const toggle = (): void => {
     const next = !locked();
@@ -79,7 +79,7 @@ export default function CameraLockToggle() {
             ? t('header.cameraLock.locked')
             : t('header.cameraLock.unlocked')
         }
-        aria-pressed={locked()}
+        aria-pressed={locked() ? 'true' : 'false'}
         onClick={toggle}
       >
         {locked() ? <Lock size={14} /> : <Unlock size={14} />}

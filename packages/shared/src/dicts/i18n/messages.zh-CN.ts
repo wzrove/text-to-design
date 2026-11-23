@@ -79,19 +79,22 @@ export const MESSAGES_ZH_CN = {
   'upgrade.modal.title': '升级到最新版本',
   'upgrade.current': '当前 {version}',
   'upgrade.latest': '最新 {version}',
+  'upgrade.latestUnknown': '最新版本未查到',
   'upgrade.plugin.label': '插件',
   'upgrade.service.label': '后台服务',
   // 两条升级路径不一样,别写成同一句:mcp 由 AI 工具用 npx latest 自动拉取(重启
   // 会话即可),ui 是插件包,得下载到本地再在设计软件里导入 manifest。
+  // 序号由组件按实际步骤下标渲染(只列真正要升的那几步),文案里不带 ①②③。
   // 文案按「一句话一个动作」写:不解释原理,不总结升华,不用破折号与冒号。
   'upgrade.step.service':
-    '① 后台服务,重启 AI 会话就行。它跑的是 npx -y text-to-design-mcp@latest,每次都是最新的',
-  // ② 拆成 head / tail 两段:中间那颗 `text-to-design-ui` 是 releases 链接,
+    '后台服务,重启 AI 会话就行。它跑的是 npx -y text-to-design-mcp@latest,每次都是最新的',
+  // 拆成 head / tail 两段:中间那颗 `text-to-design-ui` 是 releases 链接,
   // 不能整句当一个字符串渲染(那样只能整句可点或整句不可点)
-  'upgrade.step.plugin.head': '② 插件要手动换。下载',
+  'upgrade.step.plugin.head': '插件要手动换。下载',
   'upgrade.step.plugin.tail': '最新版解压,在设计软件里导入对应平台的 manifest',
-  'upgrade.step.verify': '③ 重新运行插件,顶部的升级图标没了就是对齐了',
+  'upgrade.step.verify': '完成后顶部的升级图标消失,就是对齐了',
   'upgrade.copy': '复制给 AI 助手',
+  'upgrade.openReleases': '打开发布页',
   'upgrade.prompt':
     '我在用 text-to-design,插件 text-to-design-ui 当前 {ui}、最新 {uiLatest},后台服务 text-to-design-mcp 当前 {mcp}、最新 {mcpLatest}。帮我升到最新:① 确认 MCP 配置里的命令带 latest,然后重启 AI 会话;② 下载 text-to-design-ui 最新版(npm pack 或 GitHub Releases 的 zip)解压,告诉我即时设计 / Figma / MasterGo 分别该导入 dist 下哪份 manifest.json;③ 完成后回报两个版本号。',
 
@@ -102,7 +105,7 @@ export const MESSAGES_ZH_CN = {
   'toast.copy.failed': '复制失败',
   'toast.connected': '已连接:在画布选中节点,再点「复制」交给 AI',
   'toast.mode.design': '设计模式:选中节点后复制设计稿交给 AI',
-  'toast.mode.code': '代码模式:选好前端/后端后复制代码',
+  'toast.mode.code': '代码模式:画布只读,选好前端/后端后复制',
 
   // ── 连接提示条 ──
   'conn.connected':
@@ -147,7 +150,7 @@ export const MESSAGES_ZH_CN = {
   'selection.empty.hint':
     '① 在画布选中节点　② 顶部选「设计 / 代码」　③ 点复制交给 AI',
   'selection.hint.design': '复制设计后,AI 会按这组节点继续改',
-  'selection.hint.code': '复制代码后,粘贴到项目里继续实现',
+  'selection.hint.code': '复制选中后,粘贴到你的 AI 助手',
   'selection.hint.code.noRole': '先选前端或后端,再复制代码',
 
   // ── 能力卡 ──
@@ -602,6 +605,7 @@ export const MESSAGES_ZH_CN = {
   'createSvg.description':
     '将 SVG 直接导入画布为可编辑图层(createNodeFromSvg 原生解析,保留路径/渐变/描边)。来源二选一:svg(内联字符串)或 svgPath(本地 .svg 文件的**绝对路径**,由后台服务读盘;服务进程的 cwd 与你的项目不同,相对路径会被拒)。**图表 / 数据可视化一律走 svgPath**(折线图、柱状图、饼图 / 环形图、散点图、雷达图、面积图、仪表盘、看板、桑基图……):没有内置图表工具 —— 先自己写脚本把 SVG 算好、落到本地文件,再传路径。引擎硬约束(违反会静默画不出来):根元素必须带 xmlns 与显式 width/height/viewBox;颜色只写 hex;不引外链图片/字体/script;曲线用 C/Q 自己近似,不要用 A 指令;画布 ≤2000×2000;按语义层切 `<g id>`(一层不套等于没分组),绘图区只在外层写一个 transform。动手前先 ReadMcpResource 读配方 skill://canvas/references/chart-by-code.md —— 内含零依赖示例、配色字号口径、导入后回读层级与导图验收清单。建多个根节点/复杂树用 jsd_batch 编排',
   'createIcon.title': '插入内置图标',
+  'searchIcons.title': '检索 Iconify 图标',
   'htmlToDesign.title': 'HTML 转设计节点',
   'htmlToDesign.description':
     '将 HTML 片段转成矢量图层(SVG 保真,忽略复杂样式);需要逐节点可编辑的结构时改用 jsd_create_rectangle / jsd_create_text 等手工搭建后再 jsd_batch 编排',

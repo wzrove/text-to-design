@@ -17,9 +17,8 @@ import type { Bridge } from '../bridge';
 process.env.TEXT_TO_DESIGN_MCP_LOG = '/tmp/text-to-design-mcp-probe.log';
 
 const { nodeCreateInputSchema } = await import('../tools/create');
-const { describeInvalidArgs, lookupExecutor } = await import(
-  '../core/registry'
-);
+const { describeInvalidArgs, lookupExecutor } =
+  await import('../core/registry');
 const { buildServer } = await import('../server');
 const { z } = await import('zod');
 

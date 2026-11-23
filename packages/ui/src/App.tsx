@@ -1,5 +1,4 @@
 import {
-  batch,
   createEffect,
   createMemo,
   createSignal,
@@ -90,6 +89,7 @@ function Shell() {
     consentGranted,
     consentAsked,
     setConsent,
+    setCanvasReadOnly,
   } = useBridge();
 
   const [logOpen, setLogOpen] = createSignal(false);
@@ -97,27 +97,40 @@ function Shell() {
   const [consentOpen, setConsentOpen] = createSignal(false);
 
   // Copy 目标模式是面板级选择,不随选中项重置(0016 的 UI 侧同理:一份状态)
-  const [copyMode, setCopyMode] = createSignal<CopyRequest['mode']>(
-    readCopyMode(),
-  );
+  const [copyMode, setCopyMode] =
+    createSignal<CopyRequest['mode']>(readCopyMode());
   const [codeRoles, setCodeRoles] = createSignal<CodeRole[]>(readCodeRoles());
-  createEffect(() => writeStored(COPY_MODE_KEY, copyMode()));
-  createEffect(() => writeStored(COPY_ROLES_KEY, codeRoles()));
+  createEffect(
+    () => copyMode(),
+    (mode) => writeStored(COPY_MODE_KEY, mode),
+  );
+  createEffect(
+    () => codeRoles(),
+    (roles) => writeStored(COPY_ROLES_KEY, roles),
+  );
+  // 代码模式 = 画布只读,AI 只能读内容去写代码(见 shared/dicts/canvas-readonly)
+  createEffect(
+    () => copyMode() === 'code',
+    (readOnly) => setCanvasReadOnly(readOnly),
+  );
 
   /**
    * 连上就告诉用户下一步该干什么。只在「从未连接 → 已连接」这一跳弹一次:
    * 提示卡已让位给状态徽章,不用常驻一块绿框重复同一句话。
    */
   let greeted = false;
-  createEffect(() => {
-    if (status() !== 'connected') {
-      greeted = false;
-      return;
-    }
-    if (greeted) return;
-    greeted = true;
-    showToast(t('toast.connected'), 'info');
-  });
+  createEffect(
+    () => status(),
+    (next) => {
+      if (next !== 'connected') {
+        greeted = false;
+        return;
+      }
+      if (greeted) return;
+      greeted = true;
+      showToast(t('toast.connected'), 'info');
+    },
+  );
 
   /** 切到代码模式时自动给一个默认角色:Copy 需要至少一项,空选是死路 */
   const changeCopyMode = (next: CopyRequest['mode']): void => {
@@ -187,28 +200,32 @@ function Shell() {
   };
   onCleanup(clearPanelTimer);
 
-  createEffect(() => {
-    const fromHost = envMinimized();
-    const resizing = envTransitioning();
-    if (resizing) {
-      sawHostTransition = true;
-      return;
-    }
-    if (fromHost === undefined || panelPhase() === 'fading') return;
-    if (
-      pendingMode !== undefined &&
-      fromHost !== pendingMode &&
-      !sawHostTransition &&
-      canResize()
-    )
-      return;
-    clearPanelTimer();
-    pendingMode = undefined;
-    batch(() => {
-      setMinimized(fromHost);
+  createEffect(
+    () => ({
+      fromHost: envMinimized(),
+      resizing: envTransitioning(),
+      phase: panelPhase(),
+      canResize: canResize(),
+    }),
+    (v) => {
+      if (v.resizing) {
+        sawHostTransition = true;
+        return;
+      }
+      if (v.fromHost === undefined || v.phase === 'fading') return;
+      if (
+        pendingMode !== undefined &&
+        v.fromHost !== pendingMode &&
+        !sawHostTransition &&
+        v.canResize
+      )
+        return;
+      clearPanelTimer();
+      pendingMode = undefined;
+      setMinimized(v.fromHost);
       setPanelPhase('idle');
-    });
-  });
+    },
+  );
 
   const setMinimize = (next: boolean): void => {
     if (panelPhase() !== 'idle' || minimized() === next) return;
@@ -222,10 +239,8 @@ function Shell() {
       setPanelPhase('resizing');
       panelTimer = window.setTimeout(() => {
         pendingMode = undefined;
-        batch(() => {
-          setMinimized(next);
-          setPanelPhase('idle');
-        });
+        setMinimized(next);
+        setPanelPhase('idle');
       }, 1000);
       const message: UiMinimizeMessage = {
         type: 'ui_minimize',
@@ -257,6 +272,23 @@ function Shell() {
     upgradeEl?.focus();
   };
 
+  /**
+   * 两侧都对齐后弹窗自己退场:重启会话/重连会把新版本推上来,用户停在步骤页
+   * 时会看着它变成「已完成」。只收 `false` 不把焦点塞回升级钮 —— 那颗钮此刻
+   * 已随 hasUpgrade 一起卸载。版本未知(daemon 掉线、npm 没查到)不算对齐。
+   */
+  const versionsAligned = (): boolean =>
+    latest().ui != null &&
+    latest().mcp != null &&
+    daemonVersion() !== '' &&
+    !hasUpgrade();
+  createEffect(
+    () => ({ open: upgradeOpen(), aligned: versionsAligned() }),
+    (v) => {
+      if (v.open && v.aligned) setUpgradeOpen(false);
+    },
+  );
+
   let upgradeEl: HTMLButtonElement | undefined;
   let overflowEl: HTMLButtonElement | undefined;
 
@@ -276,19 +308,28 @@ function Shell() {
    * 否则用户会看见弹窗关了又自己弹回来。
    */
   let consentPrompted = false;
-  createEffect(() => {
-    if (consentPrompted) return;
-    if (
-      consentAsked() === false &&
-      !minimized() &&
-      !consentOpen() &&
-      !logOpen() &&
-      !upgradeOpen()
-    ) {
-      consentPrompted = true;
-      setConsentOpen(true);
-    }
-  });
+  createEffect(
+    () => ({
+      asked: consentAsked(),
+      minimized: minimized(),
+      consentOpen: consentOpen(),
+      logOpen: logOpen(),
+      upgradeOpen: upgradeOpen(),
+    }),
+    (v) => {
+      if (consentPrompted) return;
+      if (
+        v.asked === false &&
+        !v.minimized &&
+        !v.consentOpen &&
+        !v.logOpen &&
+        !v.upgradeOpen
+      ) {
+        consentPrompted = true;
+        setConsentOpen(true);
+      }
+    },
+  );
 
   /**
    * 同意弹窗的 Esc 收口:与日志抽屉 / 升级弹窗同一条纪律(焦点归还的端点分处
@@ -306,9 +347,12 @@ function Shell() {
   );
   const [seenErrors, setSeenErrors] = createSignal(0);
   // 清空后水位随之归零,否则清零后的第一条错误会被旧水位吃掉
-  createEffect(() => {
-    if (log().length === 0) setSeenErrors(0);
-  });
+  createEffect(
+    () => log().length,
+    (len) => {
+      if (len === 0) setSeenErrors(0);
+    },
+  );
   const unread = createMemo(() => Math.max(0, errorTotal() - seenErrors()));
 
   let triggerEl: HTMLButtonElement | undefined;
@@ -348,9 +392,12 @@ function Shell() {
    * 发音、字体回退也还是中文栈 —— 这是「看起来生效了、实际没换」的典型。
    * `ui.html` 里的字面量只是首帧之前的占位。
    */
-  createEffect(() => {
-    document.documentElement.lang = locale();
-  });
+  createEffect(
+    () => locale(),
+    (lang) => {
+      document.documentElement.lang = lang;
+    },
+  );
 
   /*
     两种布局由宿主有没有 ui.resize 决定(见 docs/design-decisions/0014):

@@ -1,11 +1,5 @@
-import {
-  createEffect,
-  createSignal,
-  type JSX,
-  on,
-  onCleanup,
-  onMount,
-} from 'solid-js';
+import type { JSX } from '@solidjs/web';
+import { createEffect, createSignal, onSettled } from 'solid-js';
 
 type Align = 'center' | 'start' | 'end';
 
@@ -95,19 +89,22 @@ export default function Tooltip(props: {
 
   // 挂载即量一次(ResizeObserver 观察时先报一轮),此后跟着布局变化重量:
   // 页头会因连接态/未读胶囊重排,静止类一过期,气泡就被 overflow-x-hidden 切掉
-  onMount(() => {
+  onSettled(() => {
     const ro = new ResizeObserver(measure);
     ro.observe(host);
     const clip = clipEl(host);
     if (clip) ro.observe(clip);
-    onCleanup(() => ro.disconnect());
+    return () => ro.disconnect();
   });
 
   // 气泡宽度是文案的函数:切语言后按钮尺寸没变,宽度却变了
-  createEffect(on(() => props.tip, measure));
+  createEffect(
+    () => props.tip,
+    () => measure(),
+  );
 
   return (
-    // biome-ignore lint/a11y/noStaticElementInteractions: 监听只为在气泡出现前量一次宽度,交互都在内部的按钮上
+    // 监听只为在气泡出现前量一次宽度,交互都在内部的按钮上
     <span
       ref={(el) => {
         host = el;

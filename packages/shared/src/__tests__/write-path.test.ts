@@ -103,7 +103,7 @@ describe('修改路径 updateSelection', () => {
     const text = makeText();
     host = makeHost([text]);
     const order: string[] = [];
-    const realLoad = host.loadFontAsync;
+    const realLoad = host.loadFontAsync.bind(host);
     host.loadFontAsync = async (font) => {
       order.push('loadFont');
       await realLoad(font);
@@ -448,9 +448,9 @@ describe('创建路径的写后回收(0007)', () => {
     // 复刻 2026-09-19 实测的引擎行为:resize() 把 textAutoResize 重置为 NONE
     host.createText = () => {
       const t = makeText(`${host.registry.size + 1}:text`);
-      const real = t.resize as (w: number, h: number) => void;
+      const real = t.resize.bind(t) as (w: number, h: number) => void;
       t.resize = (w: number, h: number) => {
-        real.call(t, w, h);
+        real(w, h);
         (t as unknown as { textAutoResize: string }).textAutoResize = 'NONE';
       };
       return t;
@@ -477,9 +477,9 @@ describe('创建路径的写后回收(0007)', () => {
     host = makeHost();
     host.createText = () => {
       const t = makeText(`${host.registry.size + 1}:text`);
-      const real = t.resize as (w: number, h: number) => void;
+      const real = t.resize.bind(t) as (w: number, h: number) => void;
       t.resize = (w: number, h: number) => {
-        real.call(t, w, h);
+        real(w, h);
         (t as unknown as { textAutoResize: string }).textAutoResize = 'NONE';
       };
       return t;
@@ -1421,7 +1421,7 @@ describe('布局 sizingMode 回读 + 开启布局的次序漂移', () => {
 
   it('创建路径:子树布局字段没落地也要点名(子树此前不进回收袋)', async () => {
     host = makeHost();
-    const realCreateFrame = host.createFrame;
+    const realCreateFrame = host.createFrame.bind(host);
     host.createFrame = () => {
       const n = realCreateFrame();
       // 复刻引擎行为:写入时看着像成功,序列化读数时方向已被回写成 VERTICAL、
@@ -1464,7 +1464,7 @@ describe('布局 sizingMode 回读 + 开启布局的次序漂移', () => {
     // 实测(2026-10-12 jsDesign):传 120×260 开 VERTICAL 布局,两个 sizingMode 都
     // 回读成 FIXED,容器却是 100×80 —— 字段对账全过,尺寸没人管
     host = makeHost();
-    const realCreateFrame = host.createFrame;
+    const realCreateFrame = host.createFrame.bind(host);
     host.createFrame = () => {
       const n = realCreateFrame();
       frozen(n, 'height', 80);
@@ -1491,7 +1491,7 @@ describe('布局 sizingMode 回读 + 开启布局的次序漂移', () => {
 
   it('创建路径:开布局把子节点次序重排了 → 点名(基线 = spec 数组序)', async () => {
     host = makeHost();
-    const realCreateFrame = host.createFrame;
+    const realCreateFrame = host.createFrame.bind(host);
     host.createFrame = () => {
       const n = realCreateFrame();
       // 复刻引擎行为:开布局后按几何位置重排,后插的反而在数组前面
