@@ -605,6 +605,7 @@ export const MESSAGES_ZH_CN = {
   'createSvg.description':
     '将 SVG 直接导入画布为可编辑图层(createNodeFromSvg 原生解析,保留路径/渐变/描边)。来源二选一:svg(内联字符串)或 svgPath(本地 .svg 文件的**绝对路径**,由后台服务读盘;服务进程的 cwd 与你的项目不同,相对路径会被拒)。**图表 / 数据可视化一律走 svgPath**(折线图、柱状图、饼图 / 环形图、散点图、雷达图、面积图、仪表盘、看板、桑基图……):没有内置图表工具 —— 先自己写脚本把 SVG 算好、落到本地文件,再传路径。引擎硬约束(违反会静默画不出来):根元素必须带 xmlns 与显式 width/height/viewBox;颜色只写 hex;不引外链图片/字体/script;曲线用 C/Q 自己近似,不要用 A 指令;画布 ≤2000×2000;按语义层切 `<g id>`(一层不套等于没分组),绘图区只在外层写一个 transform。动手前先 ReadMcpResource 读配方 skill://canvas/references/chart-by-code.md —— 内含零依赖示例、配色字号口径、导入后回读层级与导图验收清单。建多个根节点/复杂树用 jsd_batch 编排',
   'createIcon.title': '插入内置图标',
+  'searchIcons.title': '检索 Iconify 图标',
   'htmlToDesign.title': 'HTML 转设计节点',
   'htmlToDesign.description':
     '将 HTML 片段转成矢量图层(SVG 保真,忽略复杂样式);需要逐节点可编辑的结构时改用 jsd_create_rectangle / jsd_create_text 等手工搭建后再 jsd_batch 编排',

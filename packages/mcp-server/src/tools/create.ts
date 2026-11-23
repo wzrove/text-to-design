@@ -31,6 +31,7 @@ import type { BridgeToolDef, ToolHandle } from '../core/tool-def';
 import { bridgeTool } from '../core/tool-exec';
 import { htmlToSvg } from '../htmlToDesign';
 import type { McpI18n } from '../i18n';
+import { fetchIconifySvg, IconifyError, parseIconifyId } from '../iconify';
 import {
   findIcon,
   ICON_COUNT,
@@ -410,14 +411,14 @@ export function registerCreateTools(
     name: 'jsd_create_icon',
     title: 'createIcon.title',
     description:
-      '按名称/别名/语义模糊匹配并插入 Lucide 内置图标;查无时返回候选名。默认 24px 黑色描边 2px。建多个根节点/复杂树用 jsd_batch 编排',
+      '插入图标:Iconify id(prefix:name,先用 jsd_search_icons 按项目风格检索)直接取图;普通名称按 Lucide 内置图标模糊匹配,查无返回候选。默认 24px/2px 黑色;Iconify 线形图标应用同一 strokeWidth,填充图标无描边。建多个根节点/复杂树用 jsd_batch 编排',
     inputSchema: createIconSchema,
     outputSchema: createdResultSchema,
     annotations: {
       readOnlyHint: false,
       destructiveHint: false,
       idempotentHint: false,
-      openWorldHint: false,
+      openWorldHint: true,
     },
     run: async (args, bridge_, signal) => {
       const { icon, size, color, strokeWidth, name } = args as {
@@ -427,6 +428,38 @@ export function registerCreateTools(
         strokeWidth?: number;
         name?: string;
       };
+      const iconify = parseIconifyId(icon);
+      if (iconify != null) {
+        let svg: string;
+        try {
+          svg = await fetchIconifySvg(icon, {
+            size: size ?? 24,
+            color: color ?? '#000000',
+            strokeWidth: strokeWidth ?? 2,
+            signal,
+          });
+        } catch (e) {
+          if (e instanceof IconifyError) {
+            throw new BridgeError(
+              e.kind === 'not_found' ? 'invalid_args' : 'plugin_error',
+              e.kind === 'not_found'
+                ? `${e.message}:${icon}。先用 jsd_search_icons 检索可用 id`
+                : e.message,
+            );
+          }
+          throw e;
+        }
+        return bridge_.request(
+          'create_svg',
+          { svg, name: name ?? `icon-${iconify.name}` },
+          { signal },
+        );
+      }
+      if (icon.includes(':') || icon.includes('/'))
+        throw new BridgeError(
+          'invalid_args',
+          `无效 Iconify id:${icon}(格式 prefix:name,先用 jsd_search_icons 检索)`,
+        );
       const def = findIcon(icon);
       if (!def) {
         const suggests = suggestIcons(icon, 8);
@@ -438,7 +471,7 @@ export function registerCreateTools(
         // 码归 invalid_args 而不是 plugin_error —— 这一步根本没触碰插件。
         throw new BridgeError(
           'invalid_args',
-          `未知图标:${icon}${hint}(图标库 ${ICON_COUNT} 个,lucide-static ${LUCIDE_VERSION})`,
+          `未知图标:${icon}${hint}(图标库 ${ICON_COUNT} 个,lucide-static ${LUCIDE_VERSION});更多图标先用 jsd_search_icons 检索 Iconify`,
         );
       }
       const svg = iconToSvg(

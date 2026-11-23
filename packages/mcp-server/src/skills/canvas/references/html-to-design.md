@@ -23,7 +23,7 @@ args: "必填 html(完整 HTML 片段)；可选 name(生成节点名，默认 ht
 | --- | --- |
 | section、卡片、布局容器 | FRAME |
 | 标题、正文、按钮文案 | TEXT |
-| 图标、SVG 几何 | `jsd_create_icon` 或 `jsd_create_svg` |
+| 图标、SVG 几何 | `jsd_search_icons` → `jsd_create_icon`;手绘才用 `jsd_create_svg` |
 | 图片 | 对应形状节点 + `jsd_fill_image` |
 
 保留语义名称与分区层级，尺寸按设计 px 映射；行列改用布局字段，不能把 CSS auto 原样交给画布。已有组件或样式命中时复用。批量建节点后逐层 `jsd_reparent_nodes` 归组，避免所有元素落在页面顶层。
