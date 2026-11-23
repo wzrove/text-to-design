@@ -468,10 +468,9 @@ export type MethodParamAllowViolations<
   Denied extends MethodParamValueKind,
   Value,
 > = {
-  [K in Exclude<
-    MethodParamValueKind,
-    Denied
-  >]: MethodParamKindProbe[K] extends Value ? never : K;
+  [
+    K in Exclude<MethodParamValueKind, Denied>
+  ]: MethodParamKindProbe[K] extends Value ? never : K;
 }[Exclude<MethodParamValueKind, Denied>];
 
 /**

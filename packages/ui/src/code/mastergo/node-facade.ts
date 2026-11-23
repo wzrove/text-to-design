@@ -554,8 +554,8 @@ function applyInstanceProps(target: RawNode, props: unknown): void {
   const mainTable = readComponentPropertyValues(main?.componentPropertyValues);
   const tableReadable = instTable !== undefined || mainTable !== undefined;
   const declared: Record<string, ContractPropertyValue> = {
-    ...(mainTable ?? {}),
-    ...(instTable ?? {}),
+    ...mainTable,
+    ...instTable,
   };
   const types: Record<string, string> = {};
   for (const [key, entry] of Object.entries(declared)) types[key] = entry.type;

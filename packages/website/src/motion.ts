@@ -1,4 +1,5 @@
-import { createSignal, type JSX, onCleanup, onMount } from 'solid-js';
+import type { JSX } from '@solidjs/web';
+import { createSignal, onSettled } from 'solid-js';
 
 const IN = 'is-in';
 const REVEAL = '[data-reveal]';
@@ -29,14 +30,14 @@ export function initReveal() {
   targets.forEach((el) => {
     io.observe(el);
   });
-  onCleanup(() => io.disconnect());
+  return () => io.disconnect();
 }
 
 /** 当前处于视口中段的区块 id,供导航高亮(Header 挂回页面时直接用) */
 export function createSectionSpy(ids: string[]) {
   const [active, setActive] = createSignal('');
 
-  onMount(() => {
+  onSettled(() => {
     if (!('IntersectionObserver' in window)) return;
 
     const io = new IntersectionObserver(
@@ -55,7 +56,7 @@ export function createSectionSpy(ids: string[]) {
     observed.forEach((el) => {
       io.observe(el);
     });
-    onCleanup(() => io.disconnect());
+    return () => io.disconnect();
   });
 
   return active;
@@ -65,7 +66,7 @@ export function createSectionSpy(ids: string[]) {
 export function createScrollProgress() {
   const [progress, setProgress] = createSignal(0);
 
-  onMount(() => {
+  onSettled(() => {
     let frame = 0;
 
     const measure = () => {
@@ -81,11 +82,11 @@ export function createScrollProgress() {
     measure();
     window.addEventListener('scroll', schedule, { passive: true });
     window.addEventListener('resize', schedule);
-    onCleanup(() => {
+    return () => {
       window.removeEventListener('scroll', schedule);
       window.removeEventListener('resize', schedule);
       if (frame) cancelAnimationFrame(frame);
-    });
+    };
   });
 
   return progress;
@@ -110,7 +111,7 @@ export function onFirstVisible(el: Element, run: () => void) {
   );
 
   io.observe(el);
-  onCleanup(() => io.disconnect());
+  return () => io.disconnect();
 }
 
 /** 同组元素错峰:配合 index 让卡片依次入场而不是齐刷刷 */

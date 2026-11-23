@@ -1,4 +1,4 @@
-import { Moon, Sun } from 'lucide-solid';
+import { Moon, Sun } from '@lucide/solid';
 import { Show } from 'solid-js';
 import { t } from '../i18n/useLocale';
 import { themePref, toggleTheme } from '../theme';

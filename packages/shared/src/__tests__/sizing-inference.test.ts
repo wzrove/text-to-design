@@ -140,7 +140,7 @@ describe('sizingMode 推断:高度优先自动高度', () => {
   it('自动高度被撑开时点名(说清是意图,并给出固定出口)', async () => {
     const host = makeHost();
     // 复刻引擎 hug:开布局那一刻高度按内容重算
-    const realCreate = host.createFrame;
+    const realCreate = host.createFrame.bind(host);
     host.createFrame = () => {
       const f = realCreate();
       let mode = 'NONE';

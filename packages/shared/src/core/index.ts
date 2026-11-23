@@ -75,6 +75,7 @@ export { updateSelection } from './update';
 export {
   type CollectTargetsOptions,
   collectTargets,
+  describeValue,
   loadFont,
   MIN_RESIZE_SIZE,
   resizeContainer,

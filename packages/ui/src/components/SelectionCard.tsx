@@ -74,9 +74,12 @@ export default function SelectionCard(props: {
       (props.mode === 'code' && props.roles.length === 0),
   );
 
-  createEffect(() => {
-    if (nodes().length > AUTO_COLLAPSE_COUNT) setOpen(false);
-  });
+  createEffect(
+    () => nodes().length > AUTO_COLLAPSE_COUNT,
+    (tooMany) => {
+      if (tooMany) setOpen(false);
+    },
+  );
 
   async function copy(
     scope: 'selection' | 'node',
@@ -137,7 +140,7 @@ export default function SelectionCard(props: {
                       <button
                         type="button"
                         role="checkbox"
-                        aria-checked={checked()}
+                        aria-checked={checked() ? 'true' : 'false'}
                         class={
                           'rounded-full border px-2 py-0.5 text-[10px] transition-colors ' +
                           (checked()

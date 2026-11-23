@@ -1,4 +1,4 @@
-import { onMount } from 'solid-js';
+import { onSettled } from 'solid-js';
 import Footer from './components/Footer';
 import Header from './components/Header';
 import Hero from './components/Hero';
@@ -8,7 +8,7 @@ import { RELEASES_URL, REPO_URL } from './content';
 import { initReveal } from './motion';
 
 export default function App() {
-  onMount(initReveal);
+  onSettled(initReveal);
 
   return (
     <div class="min-h-screen bg-ink">

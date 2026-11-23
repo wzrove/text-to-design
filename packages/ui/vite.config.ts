@@ -1,9 +1,9 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import solid from '@solidjs/vite-plugin';
 import type { PluginPlatform } from 'text-to-design-shared';
 import { defineConfig, loadEnv, type Plugin, type UserConfig } from 'vite';
 import { viteSingleFile } from 'vite-plugin-singlefile';
-import solid from 'vite-plugin-solid';
 import manifestPlugin from './scripts/vite-plugin-manifest.js';
 import zodSandboxFix from './scripts/vite-plugin-zod-sandbox.js';
 

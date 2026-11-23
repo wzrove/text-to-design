@@ -1,4 +1,4 @@
-import { ArrowUpCircle } from 'lucide-solid';
+import { ArrowUpCircle } from '@lucide/solid';
 import { t } from '../i18n/useLocale';
 import Tooltip from './Tooltip';
 

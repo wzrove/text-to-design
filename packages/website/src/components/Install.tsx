@@ -1,5 +1,5 @@
-import { ArrowRight, Bot, PlugZap, RefreshCw } from 'lucide-solid';
-import { Index } from 'solid-js';
+import { ArrowRight, Bot, PlugZap, RefreshCw } from '@lucide/solid';
+import { For } from 'solid-js';
 import { MCP_COMMAND } from '../content';
 import { useLocale } from '../i18n/context';
 import { revealDelay } from '../motion';
@@ -19,7 +19,7 @@ export default function Install(props: { releasesUrl: string }) {
       lead={d().install.lead}
     >
       <ol class="mt-12 grid gap-4 lg:grid-cols-3">
-        <Index each={d().install.steps}>
+        <For each={d().install.steps} keyed={false}>
           {(step, i) => {
             const Icon = STEP_ICONS[i];
             return (
@@ -29,7 +29,7 @@ export default function Install(props: { releasesUrl: string }) {
                 class="rounded-xl border border-line bg-panel p-5 transition-colors duration-300 hover:border-brand/40"
               >
                 <div class="flex items-center justify-between">
-                  <Icon size={18} class="text-brand" aria-hidden />
+                  <Icon size={18} class="text-brand" aria-hidden="true" />
                   <span class="mono-label">
                     {f(d().install.stepLabel, { n: i + 1 })}
                   </span>
@@ -41,7 +41,7 @@ export default function Install(props: { releasesUrl: string }) {
               </li>
             );
           }}
-        </Index>
+        </For>
       </ol>
 
       <div
@@ -69,7 +69,7 @@ export default function Install(props: { releasesUrl: string }) {
               class="ml-1.5 inline-flex items-center gap-1 text-brand underline-offset-4 hover:underline"
             >
               GitHub Releases
-              <ArrowRight size={14} aria-hidden />
+              <ArrowRight size={14} aria-hidden="true" />
             </a>
           </span>
           <span class="ml-auto hidden font-mono text-xs text-mute sm:inline">

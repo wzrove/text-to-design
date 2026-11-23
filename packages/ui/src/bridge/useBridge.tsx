@@ -1,12 +1,5 @@
 import type { Accessor, ParentProps } from 'solid-js';
-import {
-  batch,
-  createContext,
-  createSignal,
-  onCleanup,
-  onMount,
-  useContext,
-} from 'solid-js';
+import { createContext, createSignal, onSettled, useContext } from 'solid-js';
 import type {
   ActivityPhase,
   CopyRequest,
@@ -251,7 +244,7 @@ export function BridgeProvider(props: ParentProps) {
     }
   };
 
-  onMount(() => {
+  onSettled(() => {
     if (subscribed) return;
     subscribed = true;
     const b = getBridge();
@@ -282,12 +275,10 @@ export function BridgeProvider(props: ParentProps) {
         void refreshCapabilities();
       } else if (e.type === 'log') pushLog(e.record);
       else if (e.type === 'ui_env') {
-        batch(() => {
-          setCanResize(() => e.canResize);
-          setChromeHeight(() => e.chromeHeight);
-          setEnvMinimized(() => e.minimized);
-          setEnvTransitioning(() => e.transitioning);
-        });
+        setCanResize(() => e.canResize);
+        setChromeHeight(() => e.chromeHeight);
+        setEnvMinimized(() => e.minimized);
+        setEnvTransitioning(() => e.transitioning);
       } else if (e.type === 'locale_state') applyStoredChoice(e.stored);
       else if (e.type === 'activity') applyActivity(e.phase);
       else if (e.type === 'consent') {
@@ -296,7 +287,7 @@ export function BridgeProvider(props: ParentProps) {
         setConsentAsked(e.asked ?? true);
       }
     });
-    onCleanup(clearSettle);
+    return clearSettle;
   });
 
   const store: BridgeStore = {
@@ -350,11 +341,7 @@ export function BridgeProvider(props: ParentProps) {
     },
   };
 
-  return (
-    <BridgeContext.Provider value={store}>
-      {props.children}
-    </BridgeContext.Provider>
-  );
+  return <BridgeContext value={store}>{props.children}</BridgeContext>;
 }
 
 export function useBridge(): BridgeStore {

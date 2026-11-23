@@ -319,6 +319,8 @@ function main() {
     const replaced = setRecordStatus(directory, supersedes, '已被取代');
     if (replaced === null) {
       console.error(
+        // JS 推断把已排除 null 的 id 收窄成 never,文案本身没问题
+        // oxlint-disable-next-line typescript/restrict-template-expressions
         `warning: record ${supersedes} not found; mark it 已被取代 by hand`,
       );
     } else {

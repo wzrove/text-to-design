@@ -230,6 +230,8 @@ export type NodeGapCheck = ExpectNever<Declared<NodeTypingsGap, SceneNode>>;
  * (Figma 侧多出 20 类只读类型,登记在 figma/sync-guarantee.ts 与 dicts/node-type.ts)
  */
 export type NodeTypeContractCheck = ExpectNever<
+  // 双向 Exclude 都应为 never;这条断言本身就是在测「两边恰好相等」
+  // oxlint-disable-next-line typescript/no-duplicate-type-constituents, typescript/no-redundant-type-constituents
   Exclude<NodeType, SceneNode['type']> | Exclude<SceneNode['type'], NodeType>
 >;
 

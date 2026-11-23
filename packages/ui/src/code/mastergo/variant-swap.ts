@@ -34,7 +34,7 @@ export function mergeVariantRequest(
   current: Record<string, string> | undefined,
   requested: VariantRequest,
 ): VariantRequest {
-  return { ...(current ?? {}), ...requested };
+  return { ...current, ...requested };
 }
 
 /**

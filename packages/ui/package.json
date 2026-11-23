@@ -27,16 +27,16 @@
     "concurrently": "catalog:",
     "daisyui": "^5.7.46",
     "postcss": "^8.5.26",
-    "solid-js": "^1.9.15",
+    "solid-js": "catalog:",
     "tailwindcss": "^4.3.3",
     "text-to-design-shared": "workspace:*",
     "typescript": "catalog:",
     "vite": "catalog:",
     "vite-plugin-singlefile": "^2.3.3",
-    "vite-plugin-solid": "^2.11.14",
-    "zod": "catalog:"
+    "zod": "catalog:",
+    "@solidjs/web": "catalog:",
+    "@solidjs/vite-plugin": "catalog:",
+    "@lucide/solid": "catalog:"
   },
-  "dependencies": {
-    "lucide-solid": "^1.48.0"
-  }
+  "dependencies": {}
 }

@@ -1,5 +1,19 @@
 import type { DesignHost, NodeSkeleton } from './host';
 
+/** 诊断文案里的 unknown:对象转 JSON,避免 `[object Object]` */
+export function describeValue(value: unknown): string {
+  if (typeof value !== 'object' || value === null) return String(value);
+  try {
+    return (
+      JSON.stringify(value, (_key, v) =>
+        typeof v === 'bigint' ? `${v}n` : v,
+      ) ?? '[unserializable]'
+    );
+  } catch {
+    return '[unserializable]';
+  }
+}
+
 /**
  * 引擎 resize 校验的最小尺寸(实测 0.01,小于该值报
  * `Expected "width" to have value >= 0.01`)。
@@ -85,7 +99,7 @@ export function fontNotResolved(
     return `回读的族是「${String(gotFamily)}」,与请求的「${wantFamily}」不同(整族回退)`;
   }
   const isListForm = (v: unknown): boolean =>
-    typeof v === 'string' && /_family$/.test(v.trim());
+    typeof v === 'string' && v.trim().endsWith('_family');
   if (isListForm(wantFamily) && isListForm(gotFamily)) {
     return `回读仍是清单形态「${String(gotFamily)}」,说明该 family/style 组合没被解析`;
   }

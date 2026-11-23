@@ -11,5 +11,10 @@ catalog:
   vite: ^8.2.2
   concurrently: 10.0.4
   vitest: ^5.0.1
+  solid-js: ^2.0.3
+  '@solidjs/web': ^2.0.3
+  '@solidjs/vite-plugin': ^3.0.1
+  '@lucide/solid': ^1.78.0
 minimumReleaseAgeExclude:
   - daisyui@5.7.46
+  - '@lucide/solid@1.78.0'

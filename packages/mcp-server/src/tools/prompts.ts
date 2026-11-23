@@ -1,4 +1,5 @@
 import type { GetPromptResult, McpServer } from '@modelcontextprotocol/server';
+import { describeValue } from 'text-to-design-shared';
 import { z } from 'zod';
 import {
   NODE_TYPE_CANDIDATES,
@@ -105,7 +106,7 @@ export function registerPrompts(
     const params: Record<string, string | undefined> = {};
     for (const [k, v] of Object.entries(args)) {
       if (v == null) continue;
-      params[k] = String(v);
+      params[k] = describeValue(v);
     }
     return {
       messages: [

@@ -53,24 +53,24 @@ export function LocaleProvider(props: ParentProps) {
     f: (template, params = {}) => fill(template, params),
   };
 
-  createEffect(() => {
-    const meta = d().meta;
-    document.documentElement.lang = locale();
-    document.title = meta.title;
-    document
-      .querySelector('meta[name="description"]')
-      ?.setAttribute('content', meta.description);
-    document
-      .querySelector('meta[property="og:title"]')
-      ?.setAttribute('content', meta.ogTitle);
-    document
-      .querySelector('meta[property="og:description"]')
-      ?.setAttribute('content', meta.ogDescription);
-  });
-
-  return (
-    <LocaleCtx.Provider value={value}>{props.children}</LocaleCtx.Provider>
+  createEffect(
+    () => ({ lang: locale(), meta: d().meta }),
+    ({ lang, meta }) => {
+      document.documentElement.lang = lang;
+      document.title = meta.title;
+      document
+        .querySelector('meta[name="description"]')
+        ?.setAttribute('content', meta.description);
+      document
+        .querySelector('meta[property="og:title"]')
+        ?.setAttribute('content', meta.ogTitle);
+      document
+        .querySelector('meta[property="og:description"]')
+        ?.setAttribute('content', meta.ogDescription);
+    },
   );
+
+  return <LocaleCtx value={value}>{props.children}</LocaleCtx>;
 }
 
 export function useLocale(): Ctx {

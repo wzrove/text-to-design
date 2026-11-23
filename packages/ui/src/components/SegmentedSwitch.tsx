@@ -40,7 +40,7 @@ export default function SegmentedSwitch(props: {
           <button
             type="button"
             aria-label={item.ariaLabel ?? item.label}
-            aria-pressed={props.value === item.value}
+            aria-pressed={props.value === item.value ? 'true' : 'false'}
             class={
               'cursor-pointer rounded border px-1.5 py-0.5 font-mono text-[10px] leading-none transition ' +
               (props.value === item.value ? TOGGLE_ACTIVE : TOGGLE_IDLE)

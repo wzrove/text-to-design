@@ -1,4 +1,5 @@
-import { type JSX, Show } from 'solid-js';
+import type { JSX } from '@solidjs/web';
+import { Show } from 'solid-js';
 import { CHEVRON_PATH, CHEVRON_VIEW_BOX } from 'text-to-design-shared';
 import { t } from '../i18n/useLocale';
 
@@ -146,7 +147,7 @@ export function Trigger(props: {
         props.class ?? ''
       }`}
       aria-label={label()}
-      aria-expanded={props.open}
+      aria-expanded={props.open ? 'true' : 'false'}
       aria-controls={props.controls}
       title={label()}
       onClick={props.onClick}

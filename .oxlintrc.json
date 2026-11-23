@@ -1,0 +1,20 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["typescript", "unicorn", "oxc", "jsx-a11y"],
+  "categories": {
+    "correctness": "error"
+  },
+  "rules": {
+    "no-unassigned-vars": "off",
+    "no-prototype-builtins": "off",
+    "typescript/no-non-null-assertion": "error",
+    "jsx-a11y/prefer-tag-over-role": "off"
+  },
+  "env": {
+    "builtin": true
+  },
+  "ignorePatterns": ["**/dist/**", "**/node_modules/**"],
+  "options": {
+    "typeAware": true
+  }
+}

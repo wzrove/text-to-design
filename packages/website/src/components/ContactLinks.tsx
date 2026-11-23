@@ -1,4 +1,4 @@
-import { Check } from 'lucide-solid';
+import { Check } from '@lucide/solid';
 import { createSignal, For, onCleanup, Show } from 'solid-js';
 import { BRAND_PATHS } from '../brand-icons';
 import { CONTACTS, type Contact } from '../content';
@@ -72,7 +72,7 @@ export default function ContactLinks(props: { class?: string }) {
                       width={15}
                       height={15}
                       fill="currentColor"
-                      aria-hidden
+                      aria-hidden="true"
                     >
                       <path d={path()} />
                     </svg>
@@ -80,7 +80,7 @@ export default function ContactLinks(props: { class?: string }) {
                 </Show>
               }
             >
-              <Check size={15} class="text-brand" aria-hidden />
+              <Check size={15} class="text-brand" aria-hidden="true" />
             </Show>
           </button>
         )}

@@ -91,7 +91,7 @@ export async function runDaemon(bridge: Bridge): Promise<void> {
     return;
   }
   await initConsent();
-  bridge.start(PORT);
+  await bridge.start(PORT);
   log(`daemon: 插件 WS ws://localhost:${bridge.port}`);
 
   // SDK 每次交换独占实例，租约在请求结束后释放。

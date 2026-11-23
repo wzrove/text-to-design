@@ -164,7 +164,11 @@ export class DriftWatch implements ToolHook {
     // 钩子同时挂在固定 op 小工具(注册时按 tag 挂)与聚合入口 jsd_manage_nodes 上:
     // 后者 op 由入参给出,这里按 STRUCTURAL_NODE_OPS 判断本次要不要查
     const op = this.operation ?? args.op;
-    if (op !== undefined && !STRUCTURAL_NODE_OPS.has(String(op))) return;
+    if (
+      op !== undefined &&
+      (typeof op !== 'string' || !STRUCTURAL_NODE_OPS.has(op))
+    )
+      return;
     this.engaged = true;
     try {
       const ids = new Set<string>();

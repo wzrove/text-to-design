@@ -79,7 +79,9 @@ describe('i18n 文案表', () => {
       if (en == null) continue;
       const zh = placeholders(MESSAGES_ZH_CN[key]);
       if (zh.join(',') !== placeholders(en).join(',')) {
-        mismatched.push(`${key}: zh=[${zh}] en=[${placeholders(en)}]`);
+        mismatched.push(
+          `${key}: zh=[${zh.join(',')}] en=[${placeholders(en).join(',')}]`,
+        );
       }
     }
     expect(mismatched).toEqual([]);

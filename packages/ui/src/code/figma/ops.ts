@@ -1120,7 +1120,7 @@ async function addComponentProperty(
     componentPropertyReferences: ComponentPropertyReferences | null;
   };
   sublayer.componentPropertyReferences = {
-    ...(sublayer.componentPropertyReferences ?? {}),
+    ...sublayer.componentPropertyReferences,
     [slot]: propertyName,
   };
   // 回读校验:回显成功 ≠ 真绑上(0007)。只读子层的 references,不读

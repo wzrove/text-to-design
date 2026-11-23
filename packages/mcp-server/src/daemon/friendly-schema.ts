@@ -42,10 +42,16 @@ function branchDiscriminator(branch: JsonSchemaSubset): string | null {
   if (props == null || typeof props !== 'object') return null;
   for (const schema of Object.values(props)) {
     if (schema == null || typeof schema !== 'object') continue;
-    if ('const' in schema && schema.const != null) return String(schema.const);
-    if (Array.isArray(schema.enum) && schema.enum.length > 0) {
-      return String(schema.enum[0]);
-    }
+    const value =
+      'const' in schema && schema.const != null
+        ? schema.const
+        : schema.enum?.[0];
+    if (
+      typeof value === 'string' ||
+      typeof value === 'number' ||
+      typeof value === 'boolean'
+    )
+      return String(value);
   }
   return null;
 }

@@ -1,4 +1,4 @@
-import { createEffect, createSignal, onCleanup, onMount } from 'solid-js';
+import { createEffect, createSignal, onSettled } from 'solid-js';
 import type { ActivityPhase } from 'text-to-design-shared';
 
 /** 面板可见的四态:`idle` 不是帧,是「没有在跑的工具」且结果相位的沉降期已过 */
@@ -144,7 +144,7 @@ export default function PetLogo(props: { phase: PetPhase }) {
       if (t < 620) raf = requestAnimationFrame(tick(phase));
     };
 
-  onMount(() => {
+  onSettled(() => {
     trailLen = guide.getTotalLength();
     checkLen = check.getTotalLength();
     errLens = errMarks.map((el) => el.getTotalLength());
@@ -157,31 +157,32 @@ export default function PetLogo(props: { phase: PetPhase }) {
     setReady(true);
   });
 
-  createEffect(() => {
-    const phase = props.phase;
-    if (!ready()) return;
+  createEffect(
+    () => ({ phase: props.phase, ready: ready() }),
+    ({ phase, ready }) => {
+      if (!ready) return;
 
-    cancelAnimationFrame(raf);
-    phaseStart = performance.now();
-    if (phase === 'running') cycleStart = phaseStart;
-    resetMarks();
+      cancelAnimationFrame(raf);
+      phaseStart = performance.now();
+      if (phase === 'running') cycleStart = phaseStart;
+      resetMarks();
 
-    if (phase === 'idle') {
-      lastP = 0;
-      // 待机时笔攥在爪子里:去掉 transform 回到画稿原位,而不是立在落笔点上
-      pencil.removeAttribute('transform');
-      return;
-    }
-    if (still) {
-      // 关掉动效时笔就摆在爪子里,不要停在某一帧的半空
-      pencil.removeAttribute('transform');
-      return;
-    }
+      if (phase === 'idle') {
+        lastP = 0;
+        // 待机时笔攥在爪子里:去掉 transform 回到画稿原位,而不是立在落笔点上
+        pencil.removeAttribute('transform');
+        return;
+      }
+      if (still) {
+        // 关掉动效时笔就摆在爪子里,不要停在某一帧的半空
+        pencil.removeAttribute('transform');
+        return;
+      }
 
-    raf = requestAnimationFrame(tick(phase));
-  });
-
-  onCleanup(() => cancelAnimationFrame(raf));
+      raf = requestAnimationFrame(tick(phase));
+      return () => cancelAnimationFrame(raf);
+    },
+  );
 
   return (
     <div class={`pet state-${props.phase}`}>

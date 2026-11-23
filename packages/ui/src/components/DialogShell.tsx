@@ -1,4 +1,5 @@
-import { createEffect, type JSX } from 'solid-js';
+import type { JSX } from '@solidjs/web';
+import { createEffect } from 'solid-js';
 import { t } from '../i18n/useLocale';
 
 /**
@@ -24,13 +25,16 @@ export default function DialogShell(props: {
 }) {
   let dialogEl: HTMLDialogElement | undefined;
 
-  createEffect(() => {
-    const el = dialogEl;
-    if (el == null) return;
-    // daisyUI 的 `.modal[open]` 负责显示;不用 showModal(见类注释的 top-layer 说明)
-    if (props.open) el.setAttribute('open', '');
-    else el.removeAttribute('open');
-  });
+  createEffect(
+    () => props.open,
+    (open) => {
+      const el = dialogEl;
+      if (el == null) return;
+      // daisyUI 的 `.modal[open]` 负责显示;不用 showModal(见类注释的 top-layer 说明)
+      if (open) el.setAttribute('open', '');
+      else el.removeAttribute('open');
+    },
+  );
 
   return (
     <dialog

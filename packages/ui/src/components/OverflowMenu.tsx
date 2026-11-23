@@ -1,4 +1,4 @@
-import { MoreHorizontal } from 'lucide-solid';
+import { MoreHorizontal } from '@lucide/solid';
 import { createSignal, Show } from 'solid-js';
 import { t } from '../i18n/useLocale';
 import CameraLockToggle from './CameraLockToggle';
@@ -38,7 +38,8 @@ export default function OverflowMenu(props: {
   };
 
   return (
-    // biome-ignore lint/a11y/noStaticElementInteractions: 纯转发 Escape,真正的交互元素都在内部
+    // 纯转发 Escape,真正的交互元素都在内部
+    // oxlint-disable-next-line jsx-a11y/no-static-element-interactions
     <div class="relative shrink-0" onKeyDown={onKeyDown}>
       <Tooltip tip={t('header.more')}>
         <button
@@ -50,7 +51,7 @@ export default function OverflowMenu(props: {
           class="btn btn-ghost btn-xs shrink-0 px-1 text-base-content/60 hover:text-base-content"
           aria-label={t('header.more')}
           aria-haspopup="menu"
-          aria-expanded={open()}
+          aria-expanded={open() ? 'true' : 'false'}
           onClick={() => setOpen((v) => !v)}
         >
           <MoreHorizontal size={14} />
@@ -61,7 +62,7 @@ export default function OverflowMenu(props: {
         {/* 点面板内任何别处即收起;遮罩 fixed 且零占位,不影响面板高(0014) */}
         <button
           type="button"
-          tabIndex={-1}
+          tabindex={-1}
           aria-hidden="true"
           class="fixed inset-0 z-40 cursor-default"
           onClick={close}

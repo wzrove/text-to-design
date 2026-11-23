@@ -1,4 +1,4 @@
-import { Minimize2 } from 'lucide-solid';
+import { Minimize2 } from '@lucide/solid';
 import logoUrl from '../../logo.svg';
 import { t } from '../i18n/useLocale';
 import Tooltip from './Tooltip';

@@ -80,7 +80,8 @@ describe('skills stdio 代理', () => {
       expect(entries).toHaveLength(2);
       const design = entries.find(
         (entry) => entry.frontmatter.name === 'design',
-      )!;
+      );
+      if (!design) throw new Error('design skill missing');
       expect((await skills.get(design.uri)).skill).toEqual(design);
       expect((await skills.read(design)).verified).toBe(true);
       const reference = await skills.read(design, 'references/layout.md');

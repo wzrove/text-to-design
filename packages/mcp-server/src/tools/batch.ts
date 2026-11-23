@@ -602,9 +602,7 @@ export function registerBatchTools(
             assets = await bridge.request(
               'get_page',
               {},
-              {
-                ...(signal != null ? { signal } : {}),
-              },
+              signal != null ? { signal } : {},
             );
           } catch (failure) {
             // 三种失败必须分开报:此前一律吞成「按名字没命中」,「插件连不上」被说成

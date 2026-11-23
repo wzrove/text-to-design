@@ -19,7 +19,7 @@ import CollapsibleSection, { Trigger } from './CollapsibleSection';
  *
  * 展示纪律(沿用 LogDrawer/SelectionCard 的既有约定):
  * - 可用/不可用不能只靠颜色 → 字形 ✓ / — + 文字标签双保险;
- * - 折叠按钮给 aria-expanded/aria-controls,图标类装饰 aria-hidden。
+ * - 折叠按钮给 aria-expanded/aria-controls,图标类装饰 aria-hidden="true"。
  */
 export default function CapabilityCard() {
   const { platform, capability, refreshCapabilities } = useBridge();

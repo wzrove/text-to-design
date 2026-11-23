@@ -1,5 +1,7 @@
-import { render } from 'solid-js/web';
+import { render } from '@solidjs/web';
 import App from './App';
+// 副作用导入保持原位,组件样式注入顺序依赖它
+// oxfmt-ignore
 import './index.css';
 import { initTheme } from './theme';
 

@@ -144,7 +144,7 @@ function scheduleRetry(): void {
 /** 溢出只裁**非在途**的最旧条目:在途条目已序列化,删了它的结果就无从处理(dec 1a135e6a) */
 function trimQueue(): void {
   let excess = queue.length - QUEUE_MAX;
-  for (let i = 0; i < queue.length && excess > 0; ) {
+  for (let i = 0; i < queue.length && excess > 0;) {
     if (queue[i].inflight === true) {
       i++;
       continue;
@@ -187,9 +187,7 @@ export function captureError(record: LogRecord): void {
     message: message.slice(0, TELEMETRY_LIMITS.messageMax),
     stack: record.stack?.slice(0, TELEMETRY_LIMITS.stackMax),
     context:
-      platform != null
-        ? { ...(record.context ?? {}), platform }
-        : record.context,
+      platform != null ? { ...record.context, platform } : record.context,
   });
   trimQueue();
   if (queue.length >= BATCH_MAX) {
