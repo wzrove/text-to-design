@@ -1,5 +1,13 @@
 # text-to-design-mcp
 
+## 0.14.0
+
+### Minor Changes
+
+- [#68](https://github.com/wzrove/text-to-design/pull/68) [`e5ca915`](https://github.com/wzrove/text-to-design/commit/e5ca915d37519649f69161dd9e982614cf124101) Thanks [@wzrove](https://github.com/wzrove)! - feat: neutral theme and shared dialog shell, code-mode canvas read-only guard, and one undo step per jsd_batch
+
+- [#68](https://github.com/wzrove/text-to-design/pull/68) [`83e2cee`](https://github.com/wzrove/text-to-design/commit/83e2ceed4e6ef0b183e5874580962ebac837ad48) Thanks [@wzrove](https://github.com/wzrove)! - feat: Solid 2 UI 升级，图标接入 Iconify 检索并按项目风格适配
+
 ## 0.13.12
 
 ### Patch Changes
