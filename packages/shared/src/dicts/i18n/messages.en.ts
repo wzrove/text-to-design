@@ -52,7 +52,7 @@ export const MESSAGES_EN = {
     'Service is online; plugin and AI session are connected',
   'status.connecting.label': 'Connecting…',
   'status.connecting.title':
-    'Connected to the background service; waiting for it to confirm this channel',
+    'Connecting to the background service and waiting for confirmation',
   'status.waiting.label': 'Waiting',
   'status.waiting.title':
     'No manual action needed while the service is offline — an AI call starts it',
