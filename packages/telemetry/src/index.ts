@@ -9,7 +9,7 @@ import {
   TELEMETRY_LIMITS,
 } from 'text-to-design-shared';
 import { z } from 'zod';
-import { getDb } from './db';
+import { withDb, withTransaction } from './db';
 import { errorReports, telemetryUsers } from './db/schema';
 import { type Env, envOf } from './env';
 import { mergeBatchByFingerprint } from './merge-batch';
@@ -87,9 +87,7 @@ app.post('/v1/errors', async (c) => {
     return c.json({ error: 'invalid body' }, 400);
   }
   const { user, errors } = parsed.data;
-  const db = getDb(envOf(c));
-
-  const userId = await db.transaction(async (tx) => {
+  const userId = await withTransaction(envOf(c), async (tx) => {
     // 同指纹重复上报只更新版本与时间;未带的版本不覆盖旧值
     const [row] = await tx
       .insert(telemetryUsers)
@@ -145,26 +143,27 @@ function clampInt(value: number, min: number, max: number): number {
  * 客户端在窗口内聚合、服务端按 fingerprint 跨窗口 rollup,查询只需 sum(count)。
  */
 app.get('/v1/errors/summary', async (c) => {
-  const db = getDb(envOf(c));
   const params = new URL(c.req.url).searchParams;
   const hours = clampInt(Number(params.get('hours') ?? 24), 1, 24 * 30);
   const limit = clampInt(Number(params.get('limit') ?? 50), 1, 200);
   const since = new Date(Date.now() - hours * 3_600_000);
-  const groups = await db
-    .select({
-      code: errorReports.code,
-      scope: errorReports.scope,
-      subject: errorReports.subject,
-      total: sql<number>`sum(${errorReports.count})::int`,
-      users: sql<number>`count(distinct ${errorReports.userId})::int`,
-      lastSeen: sql<string>`max(${errorReports.lastSeen})`,
-      sample: sql<string>`(array_agg(${errorReports.message} order by ${errorReports.lastSeen} desc))[1]`,
-    })
-    .from(errorReports)
-    .where(gte(errorReports.lastSeen, since))
-    .groupBy(errorReports.code, errorReports.scope, errorReports.subject)
-    .orderBy(desc(sql`sum(${errorReports.count})`))
-    .limit(limit);
+  const groups = await withDb(envOf(c), (db) =>
+    db
+      .select({
+        code: errorReports.code,
+        scope: errorReports.scope,
+        subject: errorReports.subject,
+        total: sql<number>`sum(${errorReports.count})::int`,
+        users: sql<number>`count(distinct ${errorReports.userId})::int`,
+        lastSeen: sql<string>`max(${errorReports.lastSeen})`,
+        sample: sql<string>`(array_agg(${errorReports.message} order by ${errorReports.lastSeen} desc))[1]`,
+      })
+      .from(errorReports)
+      .where(gte(errorReports.lastSeen, since))
+      .groupBy(errorReports.code, errorReports.scope, errorReports.subject)
+      .orderBy(desc(sql`sum(${errorReports.count})`))
+      .limit(limit),
+  );
   return c.json({ hours, limit, groups });
 });
 
