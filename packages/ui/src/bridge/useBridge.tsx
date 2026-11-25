@@ -248,7 +248,6 @@ export function BridgeProvider(props: ParentProps) {
     if (subscribed) return;
     subscribed = true;
     const b = getBridge();
-    b.connect();
     b.subscribe((e) => {
       if (e.type === 'status') {
         setStatus(() => e.status);
@@ -260,7 +259,7 @@ export function BridgeProvider(props: ParentProps) {
           setDaemonVersion(() => '');
           setLatest(() => ({ ui: null, mcp: null }));
           resetActivity();
-        } else {
+        } else if (e.status === 'connected') {
           setDaemonVersion(() => b.daemonVersion);
           // 连上就自报插件版本:daemon 侧遥测的 client_version 靠它(见 shared/version-channel.ts)
           b.sendUiVersion(APP_VERSION);
@@ -287,6 +286,7 @@ export function BridgeProvider(props: ParentProps) {
         setConsentAsked(e.asked ?? true);
       }
     });
+    b.connect();
     return clearSettle;
   });
 

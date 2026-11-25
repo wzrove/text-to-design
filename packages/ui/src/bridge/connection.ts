@@ -16,7 +16,7 @@ import type { BridgeEvent, BridgeStatus, Conn } from './types';
  * 单连接生命周期:一个 ws 的打开/关闭/错误处理、全局状态派生与事件发射。
  *
  * 状态推进只有两个来源,别处一律不改 status:
- * ① 本地 socket 生命周期(onopen → connecting,onclose → disconnected);
+ * ① 本地连接尝试与 socket 生命周期;
  * ② daemon 的权威判定(状态帧 `ready` → connected,`superseded` → superseded)。
  * 「被顶替」必须由 daemon 告知而不能本地推断:本地看到的只是「对端把连接关了」,
  * 与「daemon 挂了」无法区分,而两者处置完全相反(见 BridgeStatus 注释)。
@@ -25,14 +25,11 @@ export class ConnectionManager {
   status: BridgeStatus = 'disconnected';
   /** 最近一次收到 daemon 状态确认的时间戳,0 = 从未确认 */
   lastConfirmedAt = 0;
-  private manualOff = false;
   private superseded = false;
   private conn: Conn;
   private router: Router;
   private events: EventBus;
-  /** 当前连接的打开时刻(用于确认超时判定) */
-  private openAt = 0;
-  private confirmTimer: number | undefined;
+  private finishAttempt?: (confirmed: boolean) => void;
   /** 已连接后的确认过期看门狗(半开连接检测) */
   private staleTimer: number | undefined;
 
@@ -54,74 +51,47 @@ export class ConnectionManager {
     return this.superseded;
   }
 
-  open(): Promise<boolean> {
+  open(showConnecting: boolean): Promise<boolean> {
     const conn = this.conn;
-    if (!conn || this.manualOff || this.superseded) {
-      return Promise.resolve(false);
-    }
-    // 上一轮可能仍停在 CONNECTING:先收掉,避免反复重试堆积孤儿 socket。
-    // 注意不能在这里置空 conn.ws —— 旧 socket 的 onclose 仍需 settle 它的 promise,
-    // 否则 Scanner 的 await 会永久悬挂、整个扫描器卡死。
-    if (conn.ws && conn.ws.readyState !== WebSocket.OPEN) conn.ws.close();
+    if (conn.ws || this.superseded) return Promise.resolve(false);
 
     return new Promise((resolve) => {
-      let done = false;
-      let handshakeTimer: number | undefined;
-      const settle = (ok: boolean) => {
-        if (done) return;
-        done = true;
-        if (handshakeTimer !== undefined) clearTimeout(handshakeTimer);
-        handshakeTimer = undefined;
-        resolve(ok);
-      };
       const socket = new WebSocket(`ws://localhost:${conn.port}`);
       socket.binaryType = 'arraybuffer';
       conn.ws = socket;
-      this.setStatus('connecting');
-
-      // 握手兜底:onopen 之前卡住也必须落地,否则 await 它的重连循环永久停摆
-      // (详见 shared WS_HANDSHAKE_TIMEOUT_MS 注释)。先 close 触发正常收尾路径,
-      // 再直接 settle —— 万一宿主 webview 吞掉 close 事件,循环也不能被卡住。
-      handshakeTimer = window.setTimeout(() => {
-        if (socket.readyState === WebSocket.OPEN) return;
-        this.emit(
-          'log',
+      let timeout: number;
+      this.finishAttempt = (confirmed) => {
+        clearTimeout(timeout);
+        this.finishAttempt = undefined;
+        resolve(confirmed);
+      };
+      const fail = (message: string) => {
+        if (conn.ws !== socket) return;
+        this.emit('log', message);
+        this.detach();
+        this.setStatus('disconnected');
+        socket.close();
+      };
+      timeout = window.setTimeout(() => {
+        fail(
           t('bridge.log.handshakeTimeout', {
             ms: WS_HANDSHAKE_TIMEOUT_MS,
             port: conn.port,
           }),
         );
-        try {
-          socket.close();
-        } catch {
-          // 关闭失败不影响兜底语义:下面的 settle 已经保证循环继续
-        }
-        settle(false);
       }, WS_HANDSHAKE_TIMEOUT_MS);
 
       socket.onopen = () => {
-        // 已被更新的尝试取代:如实回 false,让扫描器按未连上处理
-        if (conn.ws !== socket) {
-          settle(false);
-          return;
-        }
-        this.openAt = Date.now();
-        this.setStatus('connecting', true);
-        this.emit('log', t('bridge.log.serverConnected', { port: conn.port }));
-        settle(true);
-        // 延迟探测:绕开代理层「连接瞬间首条消息易丢」的窗口,主动 ping 确认双向可达
-        setTimeout(() => this.router.probeServer(), PROBE_DELAY_MS);
-        // 确认超时:CONFIRM_TIMEOUT_MS 内未收到 daemon 确认(状态帧/pong)→ 关闭重连
-        this.confirmTimer = window.setTimeout(() => {
-          if (conn.ws !== socket) return;
-          if (this.lastConfirmedAt < this.openAt) {
-            this.emit(
-              'log',
-              t('bridge.log.confirmTimeout', { port: conn.port }),
-            );
-            socket.close();
-          }
+        if (conn.ws !== socket) return;
+        clearTimeout(timeout);
+        timeout = window.setTimeout(() => {
+          fail(t('bridge.log.confirmTimeout', { port: conn.port }));
         }, CONFIRM_TIMEOUT_MS);
+        this.setStatus('connecting');
+        this.emit('log', t('bridge.log.serverConnected', { port: conn.port }));
+        setTimeout(() => {
+          if (conn.ws === socket) this.router.probeServer();
+        }, PROBE_DELAY_MS);
       };
 
       socket.onmessage = (event) => {
@@ -130,54 +100,43 @@ export class ConnectionManager {
       };
 
       socket.onclose = (event) => {
-        const isCurrent = conn.ws === socket;
-        if (isCurrent) {
-          if (this.confirmTimer) clearTimeout(this.confirmTimer);
-          this.confirmTimer = undefined;
-          this.stopStaleWatch();
-          conn.ws = null;
-        }
-        // 先 settle:哪怕这条 socket 已被取代,也必须让等待它的 Scanner 落地
-        settle(false);
-        if (!isCurrent) return;
-
-        // 顶替:帧与关闭码任一到达即可判定。此处只在「仅靠关闭码得知」时补一条日志
-        if (this.superseded || event.code === SUPERSEDED_CLOSE_CODE) {
-          const first = !this.superseded;
-          this.superseded = true;
-          this.setStatus('superseded');
-          if (first) this.emit('log', t('bridge.log.superseded'));
+        if (conn.ws !== socket) return;
+        if (event.code === SUPERSEDED_CLOSE_CODE) {
+          this.markSuperseded();
           return;
         }
-        this.setStatus('disconnected', true);
+        this.detach();
+        this.setStatus('disconnected');
         this.emit('log', t('bridge.log.closed', { port: conn.port }));
       };
 
       socket.onerror = () => {
         console.error('ws error', conn.port);
-        // 不主动 close、不降级状态:代理层瞬时 error 不应误杀连接,
-        // 真死连接由 onclose 兜底,确认超时由上述定时器兜底
       };
+
+      // 后台探测等端口打开再更新徽章，避免端口拒绝时闪烁。
+      if (showConnecting) this.setStatus('connecting');
     });
   }
 
   close(): void {
-    this.manualOff = true;
-    this.stopStaleWatch();
-    const conn = this.conn;
-    if (conn?.ws) {
-      conn.ws.close();
-      conn.ws = null;
-    }
+    const socket = this.conn.ws;
+    this.detach();
+    socket?.close();
     this.setStatus('disconnected');
+  }
+
+  private detach(): void {
+    this.conn.ws = null;
+    this.finishAttempt?.(false);
+    this.stopStaleWatch();
   }
 
   /** 收到 daemon 状态确认(状态帧或 pong)→ 已连接 */
   markConfirmed(): void {
-    if (this.superseded) return; // 顶替后迟到的确认不作数
+    if (this.superseded) return;
     this.lastConfirmedAt = Date.now();
-    if (this.confirmTimer) clearTimeout(this.confirmTimer);
-    this.confirmTimer = undefined;
+    this.finishAttempt?.(true);
     this.setStatus('connected', true);
     this.startStaleWatch();
   }
@@ -214,16 +173,11 @@ export class ConnectionManager {
   markSuperseded(): void {
     if (this.superseded) return;
     this.superseded = true;
-    this.stopStaleWatch();
+    const socket = this.conn.ws;
+    this.detach();
     this.setStatus('superseded');
     this.emit('log', t('bridge.log.superseded'));
-    const ws = this.conn?.ws;
-    if (ws && ws.readyState === WebSocket.OPEN) ws.close();
-  }
-
-  /** 清除手动断开标记,允许自动/手动重连 */
-  resume(): void {
-    this.manualOff = false;
+    if (socket?.readyState === WebSocket.OPEN) socket.close();
   }
 
   /**
@@ -232,7 +186,6 @@ export class ConnectionManager {
    */
   reclaim(): void {
     this.superseded = false;
-    this.manualOff = false;
   }
 
   private onWsMessage(conn: Conn, event: MessageEvent): void {
@@ -252,11 +205,6 @@ export class ConnectionManager {
     }
   }
 
-  /**
-   * 状态推进的唯一出口。如实上报,不做时间维度的修饰 —— `connecting` 的
-   * 「进行时」语义由徽章自己表达(转圈),面板结构不为它改变,所以这里
-   * 不需要为了防闪烁去延迟或吞掉任何一次状态推进。
-   */
   private setStatus(status: BridgeStatus, force = false): void {
     if (!force && status === this.status) return;
     this.status = status;

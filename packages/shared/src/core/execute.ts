@@ -73,12 +73,15 @@ function reconcileCreatedLayout(
   const label = nodeLabel(node);
   const inferred = inferSizingModes(spec, outermost);
   const wantMode = spec.layoutMode;
-  const modeLanded = wantMode != null && wantMode === node.layoutMode;
+  // 线格式省略 NONE(core/serialize.ts):回读没有 layoutMode 键就是 NONE。
+  // 直接拿 undefined 跟请求值 'NONE' 比会自造「请求 NONE,回读 NONE」的误报。
+  const gotMode = node.layoutMode ?? 'NONE';
+  const modeLanded = wantMode != null && wantMode === gotMode;
   if (wantMode != null && !modeLanded) {
     notes.unapplied.push({
       key: 'layoutMode',
       label,
-      detail: `请求 ${describeValue(wantMode)},回读 ${node.layoutMode ?? 'NONE'}`,
+      detail: `请求 ${describeValue(wantMode)},回读 ${gotMode}`,
     });
   }
   // 没开布局的容器上这些字段本就不参与排布(与 writers 的 create 分支同口径):

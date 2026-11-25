@@ -73,6 +73,7 @@ export class BridgeSocket {
         this.connection.markSuperseded();
         return;
       }
+      if (frame.state !== 'ready') return;
       // 留 daemon 版本:升级提示要比对它(面板版本自己知道,daemon 版本只有这里给)
       this.serverVersion = frame.version;
       // daemon 每 HEARTBEAT_MS 重发 ready;只有从非 connected 首次确认才打日志,
@@ -114,11 +115,13 @@ export class BridgeSocket {
       this.events,
     );
     this.scanner = new Scanner({
-      isConnected: () => this.connection.isOpen,
+      isConnected: () => this.connection.status === 'connected',
       isSuperseded: () => this.connection.isSuperseded,
-      open: () => this.connection.open(),
+      open: (showConnecting) => this.connection.open(showConnecting),
     });
-    this.connection.onStatusChange = () => this.scanner.refresh();
+    this.connection.onStatusChange = (status) => {
+      if (status !== 'connecting') this.scanner.refresh();
+    };
     window.addEventListener('message', this.router.onCodeMessage);
   }
 
@@ -145,7 +148,6 @@ export class BridgeSocket {
 
   /** 幂等启动:不清「被顶替」标记,避免与另一个面板互相顶替 */
   connect(): void {
-    this.connection.resume();
     this.scanner.connect();
   }
 

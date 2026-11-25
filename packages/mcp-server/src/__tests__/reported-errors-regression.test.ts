@@ -173,7 +173,8 @@ describe('第6类 jsd_create_icon 未知图标', () => {
   it('废弃名 alert-circle 能解析到正式名(别名表生效)', async () => {
     const { findIcon } = await import('../icons');
     const def = findIcon('alert-circle');
-    expect(def?.name).toBe('circle-alert');
+    // lucide 1.77 把 alert 系列改名为 exclamation-point,别名表随构建重新生成
+    expect(def?.name).toBe('circle-exclamation-point');
   });
 
   it('图标库版本可读,用于区分「版本漂移」与「真没有这个名字」', async () => {
@@ -185,9 +186,9 @@ describe('第6类 jsd_create_icon 未知图标', () => {
   it('别名目标是正式名时直接命中,不走模糊层(否则 alert-circle 会被召回成 message-circle-*)', async () => {
     const { findIcon } = await import('../icons');
     // 这是附件里那条报错的直接对照:报错给出的候选全是 message-circle/loader-circle,
-    // 说明当时走的是模糊层而非别名层 —— 别名生效时必须是 circle-alert。
-    expect(findIcon('alert-circle')?.name).toBe('circle-alert');
-    expect(findIcon('alert circle')?.name).toBe('circle-alert');
+    // 说明当时走的是模糊层而非别名层 —— 别名生效时必须命中 canonical 的 exclamation-point。
+    expect(findIcon('alert-circle')?.name).toBe('circle-exclamation-point');
+    expect(findIcon('alert circle')?.name).toBe('circle-exclamation-point');
   });
 });
 

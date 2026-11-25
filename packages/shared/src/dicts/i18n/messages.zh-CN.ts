@@ -49,7 +49,7 @@ export const MESSAGES_ZH_CN = {
   'status.connected.label': '已连接',
   'status.connected.title': '服务在线,插件与 AI 会话已连通',
   'status.connecting.label': '连接中…',
-  'status.connecting.title': '已连上后台服务,等待它确认这条通道',
+  'status.connecting.title': '正在连接后台服务并等待确认',
   'status.waiting.label': '等待服务',
   'status.waiting.title': '服务离线时无需手动操作,AI 调用会自动拉起',
   'status.superseded.label': '已被接管',

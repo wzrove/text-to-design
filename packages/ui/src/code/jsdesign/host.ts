@@ -54,6 +54,20 @@ export const host: DesignHost = Object.create(native, {
     enumerable: true,
   },
   /**
+   * 解组:typings 两级都没有该符号,运行时全局的 `ungroup(children)` 只收**数组**
+   * (传单节点报 `First argument to ungroup() must be an array`,真机错误组
+   * `jsd_ungroup_nodes {code:engine_error}`)。契约收整批节点,这里原样下发。
+   */
+  ungroup: {
+    value: (nodes: readonly NodeSkeleton[]): readonly NodeSkeleton[] =>
+      (
+        native as unknown as {
+          ungroup(nodes: readonly NodeSkeleton[]): readonly NodeSkeleton[];
+        }
+      ).ungroup(nodes) ?? [],
+    enumerable: true,
+  },
+  /**
    * 建本地样式:与 figma/host.ts 同形(引擎的样式对象字段一致),灌值同样复用
    * `core/styles.ts` 的 `fillStyleFromNode`,不在此重写第二份。
    */

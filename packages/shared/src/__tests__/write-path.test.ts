@@ -1205,6 +1205,28 @@ describe('布局 spacing/padding 的写后校验(0021 遗留补齐)', () => {
     expect(r.warnings).toBeUndefined();
     expect(host.registry.get(r.created[0].id)?.paddingTop).toBe(0);
   });
+
+  it('显式 layoutMode:"NONE":线格式省略该键,但不许报「没生效」', async () => {
+    // 真机 2026-11-26(即时设计):建 FRAME 传 layoutMode:"NONE" 时收到
+    // 「请求 NONE,回读 NONE」的未生效告警 —— 序列化省略 NONE,undefined 撞上 'NONE'
+    host = makeHost();
+    const r = await executeOps(
+      host,
+      ctx,
+      {
+        type: 'FRAME',
+        name: 'plain-none',
+        width: 300,
+        height: 80,
+        layoutMode: 'NONE',
+      },
+      { mode: 'absolute', x: 0, y: 0 },
+    );
+    expect(r.warnings).toBeUndefined();
+    // 线格式仍按既有纪律省略 NONE
+    expect(r.created[0].layoutMode).toBeUndefined();
+    expect(host.registry.get(r.created[0].id)?.layoutMode).toBe('NONE');
+  });
 });
 
 /**
@@ -1941,10 +1963,10 @@ describe('Figma 运行时收窄与节点序列化容错', () => {
     ).toBeUndefined();
   });
 
-  it('一个坏节点不掀翻整次查找:它降级成最小摘要,好节点照常全量', async () => {
-    // 上面的 try 只兜住 `variantProperties` 一个字段;引擎在节点处于错误状态时
-    // **别的 getter 同样会抛**,故 findNodes 还有一层单节点保护。用 `effects`
-    // 模拟(它是 serializeNode 里不加 try 的字段)。
+  it('一个坏节点不掀翻整次查找:脏字段省略,好节点照常全量', async () => {
+    // 引擎在节点处于错误状态时**别的 getter 同样会抛**。`effects` 是线上真实样例
+    // (`in get_effects: 阴影存在脏数据`):serializeNode 现在逐字段 readOptional,
+    // 坏节点仍能返回身份/几何,只少那一个脏字段。
     const broken = makeFrame('F:broken', '带错误的组件集');
     Object.defineProperty(broken, 'effects', {
       get: () => {
@@ -1961,13 +1983,13 @@ describe('Figma 运行时收窄与节点序列化容错', () => {
 
     expect(r.total).toBe(2);
     const [bad, ok] = r.nodes;
-    // 坏节点:只回认得出它所需的最小摘要,不带任何属性字段
+    // 坏节点:身份与几何照常,只有读即抛的字段缺席
     expect(bad).toMatchObject({
       id: 'F:broken',
       name: '带错误的组件集',
       type: 'FRAME',
     });
-    expect(Object.keys(bad).sort()).toEqual(['id', 'name', 'type', 'x', 'y']);
+    expect(bad.effects).toBeUndefined();
     // 好节点:照常全量 —— 这才是「好节点也拿不到」的反例
     expect(ok).toMatchObject({ id: 'F:good', type: 'RECTANGLE' });
     expect(ok.width).toBeDefined();
