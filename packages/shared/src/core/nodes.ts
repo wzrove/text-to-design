@@ -425,11 +425,25 @@ export async function setSelection(
  * `childCount` 要读 `n.children.length`,是**容器**才有的跨边界读 —— 顶层里混着叶子
  * 节点,这一读换来的是清单里多数行没有的字段。
  */
-function lightTopLevel(n: NodeSkeleton): PageStructureResult['nodes'][number] {
+function lightTopLevel(
+  n: NodeSkeleton,
+): PageStructureResult['nodes'][number] | null {
+  // 身份字段读即抛 = 节点已失效:跳过该节点,别让一个 stale id 把整次 get_page 打废
+  // (`in get_name: The node with id "0:102" does not exist`)
+  let id: string;
+  let name: string;
+  let type: PageStructureResult['nodes'][number]['type'];
+  try {
+    id = n.id;
+    name = n.name;
+    type = n.type as PageStructureResult['nodes'][number]['type'];
+  } catch {
+    return null;
+  }
   const out: PageStructureResult['nodes'][number] = {
-    id: n.id,
-    name: n.name,
-    type: n.type,
+    id,
+    name,
+    type,
     x: 0,
     y: 0,
   };
@@ -478,11 +492,22 @@ export async function getPageStructure(
     : host.root.children;
   const children = host.currentPage.children ?? [];
   const nodes: PageStructureResult['nodes'] = [];
+  let staleNodes = 0;
   for (const c of children) {
-    nodes.push(lightTopLevel(c));
+    const row = lightTopLevel(c);
+    if (row == null) {
+      staleNodes += 1;
+      continue;
+    }
+    nodes.push(row);
   }
   // note 是「本次读取的附加说明」通道:0011 的成本标注与 0039 的枚举降级各自成句
   const notes: string[] = [];
+  if (staleNodes > 0) {
+    notes.push(
+      `跳过 ${staleNodes} 个失效顶层节点(读身份字段即抛,已从清单剔除)`,
+    );
+  }
   if (pagesLoaded) {
     notes.push(
       '本次读取前执行了一次全量页加载(dynamic-page 下有一次性成本),再次调用不再重复加载',
@@ -627,7 +652,9 @@ export async function cloneNodes(
  */
 function ungroupNode(host: DesignHost, node: NodeSkeleton): boolean {
   if (typeof host.ungroup === 'function') {
-    host.ungroup(node);
+    // 契约收数组 = 引擎的实参形态(jsDesign 传单节点会直接抛
+    // `First argument to ungroup() must be an array`)
+    host.ungroup([node]);
     return true;
   }
   if (typeof node.ungroup === 'function') {

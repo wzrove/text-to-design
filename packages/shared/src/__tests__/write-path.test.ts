@@ -1941,10 +1941,10 @@ describe('Figma 运行时收窄与节点序列化容错', () => {
     ).toBeUndefined();
   });
 
-  it('一个坏节点不掀翻整次查找:它降级成最小摘要,好节点照常全量', async () => {
-    // 上面的 try 只兜住 `variantProperties` 一个字段;引擎在节点处于错误状态时
-    // **别的 getter 同样会抛**,故 findNodes 还有一层单节点保护。用 `effects`
-    // 模拟(它是 serializeNode 里不加 try 的字段)。
+  it('一个坏节点不掀翻整次查找:脏字段省略,好节点照常全量', async () => {
+    // 引擎在节点处于错误状态时**别的 getter 同样会抛**。`effects` 是线上真实样例
+    // (`in get_effects: 阴影存在脏数据`):serializeNode 现在逐字段 readOptional,
+    // 坏节点仍能返回身份/几何,只少那一个脏字段。
     const broken = makeFrame('F:broken', '带错误的组件集');
     Object.defineProperty(broken, 'effects', {
       get: () => {
@@ -1961,13 +1961,13 @@ describe('Figma 运行时收窄与节点序列化容错', () => {
 
     expect(r.total).toBe(2);
     const [bad, ok] = r.nodes;
-    // 坏节点:只回认得出它所需的最小摘要,不带任何属性字段
+    // 坏节点:身份与几何照常,只有读即抛的字段缺席
     expect(bad).toMatchObject({
       id: 'F:broken',
       name: '带错误的组件集',
       type: 'FRAME',
     });
-    expect(Object.keys(bad).sort()).toEqual(['id', 'name', 'type', 'x', 'y']);
+    expect(bad.effects).toBeUndefined();
     // 好节点:照常全量 —— 这才是「好节点也拿不到」的反例
     expect(ok).toMatchObject({ id: 'F:good', type: 'RECTANGLE' });
     expect(ok.width).toBeDefined();

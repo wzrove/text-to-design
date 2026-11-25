@@ -20,6 +20,22 @@ function isMixed(v: unknown): v is typeof MIXED {
 }
 
 /**
+ * 摘要字段的引擎 getter 读即抛时的收口:读不到就省略该字段。
+ *
+ * 真机(即时设计):节点上有脏数据时 `effects` 抛 `in get_effects: 阴影存在脏数据`,
+ * `strokeCap` 抛 `in get_strokeCap: Value is not a string`。序列化是**写操作的
+ * 回读出口**(改名 / 分组 / 设描边 / 改尺寸 / 克隆都走它),一个与本次改动无关的
+ * 脏字段不该让整条调用失败。
+ */
+function readOptional<T>(read: () => T): T | undefined {
+  try {
+    return read();
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * 引擎回读的 paint `blendMode` 是否在契约取值域内(17 值,见
  * `dicts/platform-value-domain.ts` 的 `BLEND_MODE_VALUES` —— 那是唯一真源)。
  *
@@ -217,8 +233,9 @@ export function serializeNode(
   const z = zIndex ?? childIndexOf(node);
   if (z != null) base.z = z;
 
-  if ('fills' in node && Array.isArray(node.fills) && node.fills.length > 0) {
-    base.fills = node.fills.map((f) => {
+  const fills = readOptional(() => node.fills);
+  if (Array.isArray(fills) && fills.length > 0) {
+    base.fills = fills.map((f) => {
       if (f.type === 'SOLID') {
         return {
           type: 'SOLID',
@@ -263,12 +280,9 @@ export function serializeNode(
     }) as Paint[];
   }
 
-  if (
-    'strokes' in node &&
-    Array.isArray(node.strokes) &&
-    node.strokes.length > 0
-  ) {
-    base.strokes = node.strokes.map((s) => {
+  const strokes = readOptional(() => node.strokes);
+  if (Array.isArray(strokes) && strokes.length > 0) {
+    base.strokes = strokes.map((s) => {
       if (s.type === 'SOLID') {
         return {
           type: 'SOLID',
@@ -301,43 +315,35 @@ export function serializeNode(
       return s;
     }) as Paint[];
 
-    if (
-      'strokeWeight' in node &&
-      typeof node.strokeWeight === 'number' &&
-      node.strokeWeight > 0
-    ) {
-      base.strokeWeight = node.strokeWeight;
+    const strokeWeight = readOptional(() => node.strokeWeight);
+    if (typeof strokeWeight === 'number' && strokeWeight > 0) {
+      base.strokeWeight = strokeWeight;
     }
   }
 
-  if ('strokeAlign' in node && node.type !== 'FRAME' && node.type !== 'TEXT') {
-    const sa = node.strokeAlign;
+  if (node.type !== 'FRAME' && node.type !== 'TEXT') {
+    const sa = readOptional(() => node.strokeAlign);
     if (sa != null && sa !== 'CENTER')
       base.strokeAlign = sa as SerializedNode['strokeAlign'];
   }
-  if ('strokeCap' in node && node.strokeCap != null && !isMixed(node.strokeCap))
-    base.strokeCap = node.strokeCap as SerializedNode['strokeCap'];
+  const strokeCap = readOptional(() => node.strokeCap);
+  if (strokeCap != null && !isMixed(strokeCap))
+    base.strokeCap = strokeCap as SerializedNode['strokeCap'];
+  const strokeJoin = readOptional(() => node.strokeJoin);
+  if (strokeJoin != null && !isMixed(strokeJoin))
+    base.strokeJoin = strokeJoin as SerializedNode['strokeJoin'];
+  const dashPattern = readOptional(() => node.dashPattern);
+  if (dashPattern?.length) base.dashPattern = [...dashPattern];
+  const blendMode = readOptional(() => node.blendMode);
   if (
-    'strokeJoin' in node &&
-    node.strokeJoin != null &&
-    !isMixed(node.strokeJoin)
+    isWireBlendMode(blendMode) &&
+    blendMode !== 'PASS_THROUGH' &&
+    blendMode !== 'NORMAL'
   )
-    base.strokeJoin = node.strokeJoin as SerializedNode['strokeJoin'];
-  if ('dashPattern' in node && node.dashPattern?.length)
-    base.dashPattern = [...node.dashPattern];
-  if (
-    'blendMode' in node &&
-    isWireBlendMode(node.blendMode) &&
-    node.blendMode !== 'PASS_THROUGH' &&
-    node.blendMode !== 'NORMAL'
-  )
-    base.blendMode = node.blendMode;
-  if (
-    'cornerSmoothing' in node &&
-    typeof node.cornerSmoothing === 'number' &&
-    node.cornerSmoothing !== 0
-  )
-    base.cornerSmoothing = node.cornerSmoothing;
+    base.blendMode = blendMode;
+  const cornerSmoothing = readOptional(() => node.cornerSmoothing);
+  if (typeof cornerSmoothing === 'number' && cornerSmoothing !== 0)
+    base.cornerSmoothing = cornerSmoothing;
   if ('constraints' in node && node.constraints != null) {
     const c = node.constraints;
     if (c.horizontal !== 'MIN' || c.vertical !== 'MIN')
@@ -383,8 +389,9 @@ export function serializeNode(
   ) {
     base.strokeRightWeight = node.strokeRightWeight;
   }
-  if ('effects' in node && Array.isArray(node.effects)) {
-    const effects = node.effects.filter((e) => e.visible);
+  const effectsRaw = readOptional(() => node.effects);
+  if (Array.isArray(effectsRaw)) {
+    const effects = effectsRaw.filter((e) => e.visible);
     if (effects.length > 0) {
       const list: NonNullable<SerializedNode['effects']> = [];
       for (const e of effects) {
@@ -429,26 +436,15 @@ export function serializeNode(
       if (list.length > 0) base.effects = list;
     }
   }
-  if (
-    'cornerRadius' in node &&
-    typeof node.cornerRadius === 'number' &&
-    node.cornerRadius !== 0
-  ) {
-    base.cornerRadius = node.cornerRadius;
+  const cornerRadius = readOptional(() => node.cornerRadius);
+  if (typeof cornerRadius === 'number' && cornerRadius !== 0) {
+    base.cornerRadius = cornerRadius;
   }
   if ('topLeftRadius' in node) {
-    base.topLeftRadius =
-      typeof node.topLeftRadius === 'number' ? node.topLeftRadius : undefined;
-    base.topRightRadius =
-      typeof node.topRightRadius === 'number' ? node.topRightRadius : undefined;
-    base.bottomLeftRadius =
-      typeof node.bottomLeftRadius === 'number'
-        ? node.bottomLeftRadius
-        : undefined;
-    base.bottomRightRadius =
-      typeof node.bottomRightRadius === 'number'
-        ? node.bottomRightRadius
-        : undefined;
+    base.topLeftRadius = readOptional(() => node.topLeftRadius);
+    base.topRightRadius = readOptional(() => node.topRightRadius);
+    base.bottomLeftRadius = readOptional(() => node.bottomLeftRadius);
+    base.bottomRightRadius = readOptional(() => node.bottomRightRadius);
   }
   if ('pointCount' in node) {
     base.pointCount = node.pointCount;

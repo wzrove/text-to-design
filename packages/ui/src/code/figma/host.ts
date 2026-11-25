@@ -2,6 +2,7 @@ import {
   type AssetRef,
   type DesignHost,
   fillStyleFromNode,
+  type NodeSkeleton,
   type StyleCreateInit,
   type StyleDraft,
   type StyleSummary,
@@ -37,6 +38,22 @@ export const host: DesignHost = Object.create(native, {
   createImageFromBytesAsync: {
     value: async (bytes: Uint8Array): Promise<{ hash: string }> =>
       native.createImage(bytes),
+    enumerable: true,
+  },
+  /**
+   * 解组:契约收整批节点(jsDesign 引擎的 ungroup 只收数组),Figma 原生是
+   * `figma.ungroup(node)` 单节点 ⇒ 在这里逐节点展开,core 不必按平台分支。
+   */
+  ungroup: {
+    value: (nodes: readonly NodeSkeleton[]): readonly NodeSkeleton[] =>
+      nodes.flatMap(
+        (n) =>
+          (
+            native as unknown as {
+              ungroup(node: NodeSkeleton): readonly NodeSkeleton[];
+            }
+          ).ungroup(n) ?? [],
+      ),
     enumerable: true,
   },
   /**

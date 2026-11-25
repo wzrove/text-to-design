@@ -494,8 +494,13 @@ export interface DesignHost extends DesignHostOptionalCapabilities {
  * 新增代码应优先依赖能力位,探测只作为「能力位未注入」时的 fail-open 兜底。
  */
 export interface DesignHostOptionalCapabilities {
-  /** 解组:jsDesign/MG 的 typings 都没有,运行时缺失时由 core 报错 */
-  ungroup?(node: NodeSkeleton): readonly NodeSkeleton[];
+  /**
+   * 解组:jsDesign/MG 的 typings 都没有,运行时缺失时由 core 报错。
+   * 收**数组**是引擎的实际形态(即时设计的全局 `ungroup(children)` 第一参数必须是数组,
+   * 传单个节点报 `First argument to ungroup() must be an array`);Figma 的单节点入口由
+   * `ui/src/code/figma/host.ts` 逐节点展开。
+   */
+  ungroup?(nodes: readonly NodeSkeleton[]): readonly NodeSkeleton[];
   /** dynamic-page 下唯一的按 id 解析入口(0011);jsDesign 无此符号 */
   getNodeByIdAsync?(id: string): Promise<NodeSkeleton | null>;
   /** 全量加载文档页;jsDesign 有符号但永不返回(见 canReadDocumentScope) */
