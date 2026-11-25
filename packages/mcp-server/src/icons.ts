@@ -40,7 +40,8 @@ const TAGS: Record<string, string[]> = JSON.parse(
  *
  * 为什么要把版本带进报错:别名表 `aliases.json` 是构建期从**当时的** lucide-static
  * 生成的,而依赖声明是 `^1.30.0` —— 终端用户解到的版本可以与构建机不同,别名目标
- * (`alert-circle` → `circle-alert`)就可能落空,表现为「以往能用的图标名突然找不到」。
+ * (`alert-circle` → `circle-exclamation-point`,1.77 改名)就可能落空,表现为
+ * 「以往能用的图标名突然找不到」。
  * 上报里带上版本,下一次同类记录不必再靠猜是版本问题还是代码问题。
  */
 export const LUCIDE_VERSION: string = (() => {
@@ -92,7 +93,7 @@ function commonPrefix(a: string, b: string): number {
 /**
  * 意图解析。只依赖数据 + Fuse:
  *   1. canonical 精确
- *   2. 别名表精确(旧名 home→house、alert-circle→circle-alert,由 Lucide 废弃文件生成)
+ *   2. 别名表精确(旧名 home→house、alert-circle→circle-exclamation-point,由 Lucide 废弃文件生成)
  *   3. Fuse name 场(前缀/拼写模糊天然吸收),可信门槛:极近(score≤0.05)或共享≥3 前导
  *   4. tag 精确翻牌(处理 magnifier→search 这类"词只在 tag 里")
  *   5. Fuse 宽松兜底(拼写失误,要求更宽松共享门槛)

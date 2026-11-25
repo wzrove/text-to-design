@@ -107,9 +107,20 @@ export type DistributeValueCheck = ExpectNever<
 type TextRangeContractKeys = keyof typeof TEXT_RANGE_SETTERS;
 type TextRangeSetterNames = (typeof TEXT_RANGE_SETTERS)[TextRangeContractKeys];
 
-/** 这批字段在 MG 的 TextNode 上必须**缺席**(否则门面该直接读写而非走 setRange) */
+/**
+ * 这批字段在 MG 的 TextNode 上必须**缺席**(否则门面该直接读写而非走 setRange)。
+ *
+ * 例外 `textStyleId`:typings 2.19.5 起 TextNode 新增了该实例属性
+ * (`@mastergo/plugin-typings/dist/index.d.ts` 的 `interface TextNode`)。门面仍走
+ * 分段 `setRangeTextStyleId`(与其余排版字段同一条路径,尚未在客户端联调),
+ * 故登记为已知例外;若改成直读写,去掉这里的 Exclude 并同步门面。
+ */
+type TextStyleIdPresentInTypings = 'textStyleId';
 export type TextPropAbsenceCheck = ExpectNever<
-  Declared<TextRangeContractKeys, RuntimeTextNode>
+  Declared<
+    Exclude<TextRangeContractKeys, TextStyleIdPresentInTypings>,
+    RuntimeTextNode
+  >
 >;
 /** 对应的 setRangeXxx 必须存在 */
 export type TextSetterPresenceCheck = ExpectNever<
