@@ -1,5 +1,11 @@
 # text-to-design-ui
 
+## 0.13.1
+
+### Patch Changes
+
+- [#71](https://github.com/wzrove/text-to-design/pull/71) [`4df242f`](https://github.com/wzrove/text-to-design/commit/4df242f49b4025aa4821ad4d542531701fb90b4f) Thanks [@wzrove](https://github.com/wzrove)! - fix: skip stale top-level nodes in get_page, omit dirty prop getters instead of failing the call, send ungroup as the array the jsDesign engine requires, and stop the false layoutMode "NONE" warning
+
 ## 0.13.0
 
 ### Minor Changes
