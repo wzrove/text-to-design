@@ -1205,6 +1205,28 @@ describe('布局 spacing/padding 的写后校验(0021 遗留补齐)', () => {
     expect(r.warnings).toBeUndefined();
     expect(host.registry.get(r.created[0].id)?.paddingTop).toBe(0);
   });
+
+  it('显式 layoutMode:"NONE":线格式省略该键,但不许报「没生效」', async () => {
+    // 真机 2026-11-26(即时设计):建 FRAME 传 layoutMode:"NONE" 时收到
+    // 「请求 NONE,回读 NONE」的未生效告警 —— 序列化省略 NONE,undefined 撞上 'NONE'
+    host = makeHost();
+    const r = await executeOps(
+      host,
+      ctx,
+      {
+        type: 'FRAME',
+        name: 'plain-none',
+        width: 300,
+        height: 80,
+        layoutMode: 'NONE',
+      },
+      { mode: 'absolute', x: 0, y: 0 },
+    );
+    expect(r.warnings).toBeUndefined();
+    // 线格式仍按既有纪律省略 NONE
+    expect(r.created[0].layoutMode).toBeUndefined();
+    expect(host.registry.get(r.created[0].id)?.layoutMode).toBe('NONE');
+  });
 });
 
 /**
