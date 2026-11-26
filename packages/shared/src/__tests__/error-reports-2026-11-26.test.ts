@@ -107,8 +107,7 @@ function makeHost(
     createFrame: () => create('FRAME'),
     createRectangle: () => create('RECTANGLE'),
     createEllipse: () => create('ELLIPSE'),
-    createText: () =>
-      create('TEXT'),
+    createText: () => create('TEXT'),
     createLine: () => create('LINE'),
     createPolygon: () => create('POLYGON'),
     createStar: () => create('STAR'),
@@ -148,7 +147,9 @@ describe('error_reports 2026-11-26 回归', () => {
     const page = makePage('p1', 'Page 1');
     const inst = makeNode('i1', 'INSTANCE');
     const setter = vi.fn(() => {
-      throw new Error("in set_layoutMode: Cannot read properties of undefined (reading 'MIN')");
+      throw new Error(
+        "in set_layoutMode: Cannot read properties of undefined (reading 'MIN')",
+      );
     });
     const inner = makeNode('f1', 'FRAME');
     let mode: 'NONE' | 'HORIZONTAL' | 'VERTICAL' = 'NONE';
@@ -203,7 +204,14 @@ describe('error_reports 2026-11-26 回归', () => {
       name: 'A',
       width: 100,
       height: 100,
-      children: [{ type: 'TEXT', name: 't', characters: 'hi', fontName: { family: 'F', style: 'R' } }],
+      children: [
+        {
+          type: 'TEXT',
+          name: 't',
+          characters: 'hi',
+          fontName: { family: 'F', style: 'R' },
+        },
+      ],
     });
     // 等 callA 挂起在 loadFontAsync
     await Promise.resolve();
