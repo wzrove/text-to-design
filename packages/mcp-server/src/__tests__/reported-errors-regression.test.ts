@@ -273,3 +273,47 @@ describe('第10类 jsd_create_icon 未知图标 oil-can', () => {
     expect(suggestIcons('arrowlft', 5)[0]?.name).toBe('arrow-left');
   });
 });
+
+describe('2026-11-26 线上记录回归', () => {
+  it('jsd_create_frame 收到单数 fill 时提示改用复数 fills', () => {
+    const schema = nodeCreateInputSchema('FRAME');
+    const args = { name: 'card', width: 100, height: 100, fill: '#fff' };
+    const parsed = schema.safeParse(args);
+    expect(parsed.success).toBe(false);
+    const detail =
+      parsed.error?.issues
+        .map((i) => `${i.path.join('.') || '(root)'}: ${i.message}`)
+        .join('; ') ?? '';
+    const message = describeInvalidArgs(
+      schema,
+      args,
+      detail,
+      CREATE_EXCLUSIVE_FIELDS,
+      CREATE_MISPLACED_ID_FIELDS,
+    );
+    expect(message).toContain('fills');
+  });
+
+  it('PendingManager silentErrorCodes 将旧插件 unknown_method 降级为 warn(仍 reject 供调用方提醒升级)', async () => {
+    const { PendingManager } = await import('../pending');
+    const sent: string[] = [];
+    const manager = new PendingManager((text) => sent.push(text));
+    const p = manager.request(
+      'commit_undo',
+      {},
+      { silentErrorCodes: ['unknown_method'] },
+    );
+    const req = JSON.parse(sent[0]) as { id: string };
+    manager.onText(
+      Buffer.from(
+        JSON.stringify({
+          type: 'response',
+          id: req.id,
+          ok: false,
+          error: { code: 'unknown_method', message: '未知方法: commit_undo' },
+        }),
+      ),
+    );
+    await expect(p).rejects.toThrow(/未知方法/);
+  });
+});

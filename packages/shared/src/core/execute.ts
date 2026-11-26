@@ -207,17 +207,15 @@ export async function executeOps(
   const created: NodeSkeleton[] = [];
   // 写后回收袋(0007):门控字段 + 回读不一致 + writer 自述告警,一次调用共用一份
   const notes = emptyNotes();
-  // 出错回滚按「页面顶层新增了什么」清扫,而不是只删 created 里的:抛在 buildNode 半途时
-  // 那个节点还没进 created(实测 icon 子节点报错后留下建了一半的空父层)
-  const pageTopBefore = new Set(
-    ((page as { children?: readonly NodeSkeleton[] }).children ?? []).map(
-      (c) => c.id,
-    ),
-  );
+  // 出错回滚只清扫本次调用自己建出来的顶层节点,不再扫描整页 diff(并发 executeOps
+  // 在 await loadFont 期间若另一路失败,全页 diff 会误删并发调用的在途节点导致 appendChild 报 does not exist)
+  const ownedNodes = new Set<NodeSkeleton>();
   try {
     for (const spec of specs) {
       assertSpecSupported(spec);
-      const node = await buildNode(host, ctx, spec, page, notes);
+      const node = await buildNode(host, ctx, spec, page, notes, (n) =>
+        ownedNodes.add(n),
+      );
       if (mode === 'center') {
         const center = host.viewport.center;
         const dx = center.x - node.x - node.width / 2;
@@ -231,12 +229,7 @@ export async function executeOps(
       created.push(node);
     }
   } catch (e) {
-    // 先取静态快照再删:children 是活数组,边删边迭代会跳过元素
-    const topNow = [
-      ...((page as { children?: readonly NodeSkeleton[] }).children ?? []),
-    ];
-    for (const n of topNow) {
-      if (pageTopBefore.has(n.id)) continue;
+    for (const n of ownedNodes) {
       try {
         n.remove();
       } catch {}

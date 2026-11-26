@@ -25,7 +25,7 @@ args: "可选 screen(要设计的界面名称，如「登录页」)"
 ## 2. 先分层，再建节点
 
 - 按用途分容器，例如：登录页 → 页头、输入区、操作区；输入区 → 邮箱行、密码行；每行再含标签与输入框。
-- 复杂树按分区拆批，保持最终层级完整；不要把所有图元直挂屏根，也不要把整屏塞进一次 children。
+- 复杂树按语义分区（如顶栏 / 各卡片 / 底栏）拆成多个轻量 `jsd_create_frame`，再 `jsd_reparent_nodes` 装配进根容器；不要把所有图元直挂屏根，也不要把含多层嵌套与大量 TEXT 的整屏塞进一次 `children`（首次加载字体 + 深层序列化易顶穿 25s 转发超时并留下半截节点）。
 - `jsd_reparent_nodes` 显式给目标 parentId，跨父级保持绝对位置并换算相对坐标；进入布局容器后由布局接管。
 - **先定布局，再建图元。** 每层先确定流向、间距和尺寸边界；只要子项能沿某轴排布就一律先上 auto-layout（屏根保画板尺寸，内容区按内容增长，整页分区、面板菜单、列表、卡片内部同此）。按截图复刻也先搭布局骨架再填内容：固定尺寸锁 FIXED，间距用 `itemSpacing`，不用整页手算坐标。只有真重叠的装饰、角标与坐标绘图区用自由定位子容器。细则见 [自动布局](auto-layout.md)。
 - z 是父级 children 下标，越大越靠上；需要调层序用 `jsd_reparent_nodes` 的 index，并核对结果。不要新建重复图层遮盖旧内容。
@@ -49,7 +49,7 @@ args: "可选 screen(要设计的界面名称，如「登录页」)"
 
 fills/strokes 必须是数组；纯描边图形显式用 `fills:[]`，不要用透明白底代替无填充。给后代批量刷样式时 recursive 不包含容器自身，确需包含才传 includeSelf。
 
-即时设计注意：TEXT 样式只承载排版，颜色另走 PAINT。绑定 textStyleId 后可能延迟把宽度变为 0；独立回读，命中时用 `jsd_set_text` 同传 width 与 `textAutoResize:"HEIGHT"` 修复。`jsd_set_stroke` 绑定 strokeStyleId 若超时，先回读确认，避免重复写入。
+即时设计注意：TEXT 样式只承载排版，颜色另走 PAINT；绑定 `fillStyleId` 复用既有色板后需回读或导图核对实际色值（若带主题色偏与目标稿不符，用 `fillStyleId:""` 解绑并写直接色值）。绑定 textStyleId 后可能延迟把宽度变为 0；独立回读，命中时用 `jsd_set_text` 同传 width 与 `textAutoResize:"HEIGHT"` 修复。创建或修改阶段绑定 `strokeStyleId` 均可能触发 25s 超时甚至插件断连，描边优先直接传 `strokes` 色值，确需绑定样式则单独后置执行并先回读确认。
 
 ## 5. 特有错误、验收与恢复
 

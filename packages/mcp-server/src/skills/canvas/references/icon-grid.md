@@ -21,7 +21,7 @@ args: "必填 icons(逗号分隔的图标名、语义词或 Iconify id);可选 s
 ## 排布
 
 1. 确定尺寸、颜色、间距与可用宽度;未指定时用 24px 图标、16px 间距。prompt 的 `size` / `gap` 是字符串参数;传给 `jsd_create_icon` 的 `size` 与布局 itemSpacing 时按对应 schema 用数值。
-2. 建语义容器 FRAME。图标名用用途或检索词,不用 `icon-1` 这类无语义名。
+2. 建语义容器 FRAME。嵌入按钮/工具栏时，不要把 `icon` 写进 `jsd_create_frame` 的 `children`（不支持）；先预留定宽定高、两轴 `FIXED` + 两轴 `CENTER` 的具名图标槽，再将 `jsd_create_icon` 返回的节点 `jsd_reparent_nodes` 移入槽位。图标名用用途或检索词，不用 `icon-1` 这类无语义名。
 3. 各图标返回单对象 `created.id`;串行导入,多步可用 `jsd_batch`,单批不超过 50 步。
 4. 将图标 `jsd_reparent_nodes` 到行容器,设置 HORIZONTAL + itemSpacing + `counterAxisAlignItems:"CENTER"`;宽随内容时主轴 AUTO,行高按尺寸需求声明。
 5. 一行放不下时用 VERTICAL 外容器 + 多个 HORIZONTAL 行容器。按可用宽度分行,不为塞下内容缩小约定间距。
@@ -35,4 +35,4 @@ args: "必填 icons(逗号分隔的图标名、语义词或 Iconify id);可选 s
 - Iconify id 报无效:确认格式 `prefix:name`,只用检索结果里原样返回的 id,不拼近似名。
 - 图标名查无时,用 `jsd_create_icon` 返回的候选名修正,不猜近似名或重复尝试同一名称。
 - `jsd_batch` 超过 50 步、占位符失效或路径不可读时按主技能「错误处置」拆批与修参数;`jsd_create_svg` 的耗时导入不要混入图标装配批。
-- 独立读取容器与图标层级,`jsd_export` 导出整组目检。batch 摘要不含路径,不能证明图标画面正确;检查是否缺图、颜色错误、描边异常或被裁切。异常先核对图标子层 fills/strokes,不给整个容器递归添加方框描边。
+- 独立读取容器与图标层级，`jsd_export` 导出整组目检。batch 摘要不含路径，不能证明图标画面正确；检查是否缺图、颜色错误、描边异常、被裁切，以及**近形变体是否准确**（如 `code` 为 `<>`、`code-xml` 才是 `</>`）。发现变体不符时删除旧图标、按精确名重建并移入原槽位；描边异常先核对图标子层 fills/strokes，不给整个容器递归添加方框描边。

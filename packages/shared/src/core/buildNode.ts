@@ -57,6 +57,8 @@ async function buildNode(
   parent: ContainerSkeleton,
   /** 写后回收袋(见 core/props/outcome):门控字段、回读不一致、writer 自述告警 */
   notes?: CreateNotes,
+  /** 记录本次构建直接产出的节点(供 executeOps 精确回滚,不误删并发调用的节点) */
+  onCreated?: (node: NodeSkeleton) => void,
 ): Promise<NodeSkeleton> {
   const type = spec.type;
   let node: NodeSkeleton;
@@ -88,6 +90,7 @@ async function buildNode(
         throw new Error('BOOLEAN_OPERATION 至少需要 2 个子节点');
       }
       const tmp = host.createFrame();
+      onCreated?.(tmp);
       parent.appendChild(tmp);
       for (const child of children) {
         await buildNode(host, ctx, child, tmp);
@@ -106,6 +109,8 @@ async function buildNode(
       };
       const op = assertBooleanOperation(spec.booleanOperation ?? 'UNION');
       node = combine[op]([...(tmp.children ?? [])], parent);
+      // 先挂到目标父级再删 tmp:防止引擎把合并结果放在 tmp 下导致 tmp.remove() 连带删掉 node
+      parent.appendChild(node);
       tmp.remove();
       break;
     }
@@ -114,17 +119,13 @@ async function buildNode(
       if (children.length < 2) {
         throw new Error('GROUP 至少需要 2 个子节点');
       }
-      const tmp = host.createFrame();
-      parent.appendChild(tmp);
-      for (const child of children) {
-        await buildNode(host, ctx, child, tmp);
-      }
-      node = tmp;
+      node = host.createFrame();
       break;
     }
     default:
       node = host.createFrame();
   }
+  onCreated?.(node);
 
   const wctx: WriteCtx = {
     host,
@@ -142,10 +143,10 @@ async function buildNode(
   // 推断)都在 writer 里由 ctx.create 显式触发,不再是这里另写一份 200 行。
   await writePhase(wctx, CREATE_WRITERS);
 
-  parent.appendChild(node);
   if (spec.type === 'BOOLEAN_OPERATION') {
     return node;
   }
+  parent.appendChild(node);
   if (node.type === 'VECTOR' && spec.vectorPaths != null) {
     // 归一化:data 必填,windingRule 缺省 NONZERO(引擎对 undefined 直接抛错)
     node.vectorPaths = normalizeVectorPaths(
@@ -153,7 +154,7 @@ async function buildNode(
     ) as typeof spec.vectorPaths;
   }
   for (const child of spec.children ?? []) {
-    await buildNode(host, ctx, child, node);
+    await buildNode(host, ctx, child, node, undefined, onCreated);
   }
 
   // ---- 自动布局必须在子节点插完之后写 ----

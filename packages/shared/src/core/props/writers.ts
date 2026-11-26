@@ -555,7 +555,35 @@ export const textWriter: PropWriter = {
   },
 };
 
-/** 自动布局字段;settle 阶段做方向回读 */
+/** 写入 layoutMode:与当前值相同时跳过冗余写入;引擎抛错时附带节点与实例上下文 */
+function writeLayoutMode(
+  ctx: WriteCtx,
+  node: NodeSkeleton,
+  mode: unknown,
+): void {
+  if (mode == null) return;
+  if ('layoutMode' in node && node.layoutMode === mode) return;
+  try {
+    writeProp(ctx, node, 'layoutMode', mode);
+  } catch (e) {
+    const raw = e instanceof Error ? e.message : String(e);
+    let inInstance = false;
+    let p = node.parent;
+    while (p != null) {
+      if (p.type === 'INSTANCE') {
+        inInstance = true;
+        break;
+      }
+      p = p.parent;
+    }
+    const hint = inInstance
+      ? ';该节点位于 INSTANCE 内,不能直接改布局模式(请改主组件或先 jsd_detach_instance)'
+      : '';
+    throw new Error(
+      `设置 ${nodeLabel(node)}(type=${node.type}) 的 layoutMode=${describeValue(mode)} 失败: ${raw}${hint}`,
+    );
+  }
+}
 export const layoutWriter: PropWriter = {
   id: 'layout',
   keys: [
@@ -580,7 +608,7 @@ export const layoutWriter: PropWriter = {
       // 一律走 writeProp(平台判定 + 适用性判定收口):此前这里是 `node.x = …` 直写,
       // 平台收窄规则在创建路径上**整片失效**(MG 真机:创建时传 primaryAxisAlignItems:'MAX'
       // 照样下发,引擎静默忽略,而那条规则本来是拦得住的 —— 2026-09-24 补)。
-      writeProp(ctx, node, 'layoutMode', mode);
+      writeLayoutMode(ctx, node, mode);
       const spec = src;
       // 引擎开启 auto-layout 时把四边 padding 默认置 10,itemSpacing 同口径;
       // 调用方没传就显式归 0,免得「没写 padding 却莫名多出 10px 内边距」。
@@ -606,7 +634,8 @@ export const layoutWriter: PropWriter = {
     }
     // 修改路径:纯增量覆盖(适用性判定统一在 `writeProp` 里,见 core/props/types.ts)
     for (const key of layoutWriter.keys) {
-      writeProp(ctx, node, key, src[key]);
+      if (key === 'layoutMode') writeLayoutMode(ctx, node, src[key]);
+      else writeProp(ctx, node, key, src[key]);
     }
   },
   settle(ctx) {
@@ -691,7 +720,7 @@ export const layoutWriter: PropWriter = {
     // 布局重算会回写容器方向,写进去的 layoutMode 可能不是最终值。
     // 回读不一致就再压一次,压不住由调用方点名(不允许「回显成功实则没生效」)。
     if ('layoutMode' in node && node.layoutMode !== expected) {
-      node.layoutMode = expected;
+      writeLayoutMode(ctx, node, expected);
     }
     const ok = !('layoutMode' in node) || node.layoutMode === expected;
     ctx.outcome.readback.push({ key: 'layoutMode', ok });

@@ -118,10 +118,12 @@ function timeoutCauseOf(method: string): string | null {
       // i18n-exempt: 随错误包上行给 MCP(模型读),语言归 MCP 侧(见 0016)
       return '本平台读不到非当前页(触碰即挂死);若调用传了 scope=document,这类枚举在即时设计上可能被退回当前页而前置耗时失控';
     case 'list_styles':
+      // i18n-exempt: 同上,随错误包上行
+      return '该方法的运行时成员可能是永不 settle 的 *Async 变体:平台须声明同步入口(dec e1e66f0a)';
     case 'export':
     case 'jsd_export':
       // i18n-exempt: 同上,随错误包上行
-      return '该方法的运行时成员可能是永不 settle 的 *Async 变体:平台须声明同步入口(dec e1e66f0a)';
+      return '单次导出节点过多、尺寸过大或 scale 过高导致渲染超过 25s 转发上限;请拆成单节点导出或调小 scale';
     default:
       return null;
   }

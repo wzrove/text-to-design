@@ -51,7 +51,7 @@ args: "可选 target(要上布局的容器或分区描述，如「标签栏」)"
 
 - **两端对齐**：平台支持时，`SPACE_BETWEEN` 在有明确宽度的行里分配空余空间，此时 `itemSpacing` 不生效。子项总宽超限时，调整宽度或重排。
 - **平台差异**：即时设计、MasterGo 的子项 `layoutAlign` 用 `INHERIT` 或 `STRETCH`，单项对齐可用带明确尺寸的内层 FRAME。MasterGo 主轴对齐用 `MIN` 或 `CENTER`，交叉轴避免 `MAX`。两端对齐可用上表的信息区伸展方式。
-- **已有图标槽**：在同一批用 `jsd_create_icon` 创建，再用 `jsd_reparent_nodes` 按返回 id 移入。验收时确认图标居中，选中态与未选中态仍可区分。
+- **已有图标槽**：先建定宽定高（两轴 `FIXED` + 两轴 `CENTER`）的具名槽位 FRAME；在同一批用 `jsd_create_icon` 创建图标，再用 `jsd_reparent_nodes` 按返回 `created.id` 移入对应槽位，无需手算居中坐标。验收时确认图标居中，选中态与未选中态仍可区分。
 
 ## 执行顺序
 
@@ -66,8 +66,8 @@ args: "可选 target(要上布局的容器或分区描述，如「标签栏」)"
 | 现象 | 排查与修复 |
 | --- | --- |
 | 子项被裁切、坐标为负 | 逐层读取子项和父级。横向检查 `x`、`x + width`，纵向检查 `y`、`y + height`。将实际边界与父尺寸及预期内边距比较，再检查子项尺寸总和、间距和内边距是否放得下。 |
-| 子项移动后位置回弹 | 布局接管坐标。用 `jsd_reparent_nodes` 的 `index` 调顺序，用容器的间距、内边距或对齐字段调位置。移父后按 warnings 和回读补写被改动的属性。 |
-| 开布局后尺寸变化 | 先区分 FIXED 与 AUTO 轴。只有固定轴偏离目标才用 `jsd_resize_node` 单独修正该轴，并再次回读两轴模式。 |
+| 子项移动后位置回弹 | 布局接管坐标。用 `jsd_reparent_nodes` 的 `index` 调顺序，用容器的间距、内边距或对齐字段调位置。移父或调 `index` 进入异向自动布局父级（如横向顶栏移入纵向主面板）后，即时设计可能把子容器自身方向翻成父级方向或冲掉 `SPACE_BETWEEN`；按 warnings 和回读用 `jsd_set_layout` 补写方向与对齐。 |
+| 开布局或 `resize` 后对齐/尺寸失效 | 先区分 FIXED 与 AUTO 轴。只有固定轴偏离目标才用 `jsd_resize_node` 单独修正该轴；在横向 `SPACE_BETWEEN` 行上调用 `jsd_resize_node` 后，需复核 `primaryAxisSizingMode:"FIXED"` 与 `primaryAxisAlignItems:"SPACE_BETWEEN"`（必要时再补一次 `jsd_set_layout`，优先用父级 `layoutAlign:"STRETCH"` 代替手动 `resize`）。 |
 | 文本变窄、缺字或不可见 | 查父级有效宽度、文本框宽高和 `textAutoResize`。导出发现装饰符号缺字时，用可用图标或保留文字标签。即时设计绑定 TEXT 样式后的零宽修复见 [设计策略](design-strategy.md)。 |
 | 某字段未生效 | 查 warnings 和当前平台支持范围。换受支持的布局结构，再回读验证。网格用 `layoutGrids`，当前引擎仅在非自动布局容器收网格；MasterGo 节点级写入未落盘时，报告需在设计器处理。 |
 

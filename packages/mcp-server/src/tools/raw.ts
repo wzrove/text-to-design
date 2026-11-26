@@ -90,17 +90,46 @@ export function registerRawTools(
         includeDataUrl?: boolean;
       };
       // savePath 的落地规则(单节点 = 该路径 / 多节点 = 主名后插节点 id)见 pathForNode。
-      // 此前这里对多节点直接拒,而调用方要的正是「一批节点各落一份盘」,只能逐个往返
-      // (error_reports 2026-11-17 记了 5 次)。单节点语义原样不变。
-      const data = (await bridge_.request(
-        'export',
-        { ids, format, scale },
-        { signal, timeout: LONG_IO_TIMEOUT_MS },
-      )) as Record<string, unknown>;
-      const exportsMap = (data.exports ?? {}) as Record<
-        string,
-        Record<string, unknown>
-      >;
+      // 多节点逐个请求插件:UI 侧单次转发硬限 25s,把 7 个节点塞进一次 export 会把总渲染
+      // 耗时顶穿 25s 触发 forward_timeout;拆成单节点后每个节点独享 25s 转发预算。
+      const exportsMap: Record<string, Record<string, unknown>> = {};
+      if (ids.length <= 1) {
+        const data = (await bridge_.request(
+          'export',
+          { ids, format, scale },
+          { signal, timeout: LONG_IO_TIMEOUT_MS },
+        )) as Record<string, unknown>;
+        Object.assign(
+          exportsMap,
+          (data.exports ?? {}) as Record<string, Record<string, unknown>>,
+        );
+      } else {
+        let notFoundErr: unknown = null;
+        for (const id of ids) {
+          if (signal?.aborted) break;
+          try {
+            const data = (await bridge_.request(
+              'export',
+              { ids: [id], format, scale },
+              { signal, timeout: LONG_IO_TIMEOUT_MS },
+            )) as Record<string, unknown>;
+            Object.assign(
+              exportsMap,
+              (data.exports ?? {}) as Record<string, Record<string, unknown>>,
+            );
+          } catch (e) {
+            const msg = e instanceof Error ? e.message : String(e);
+            if (msg.includes('没有找到要导出的节点')) {
+              notFoundErr ??= e;
+              continue;
+            }
+            throw e;
+          }
+        }
+        if (Object.keys(exportsMap).length === 0 && notFoundErr != null) {
+          throw notFoundErr;
+        }
+      }
       const results: Record<string, unknown>[] = [];
       const dataUrlOverflow: string[] = [];
       for (const [nid, item] of Object.entries(exportsMap)) {

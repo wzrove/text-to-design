@@ -394,19 +394,59 @@ export async function findNodes(
   };
 }
 
+/** 节点是否位于当前页:沿父链找到所属页;测试 mock 未挂 parent 时 fail-open */
+function isOnCurrentPage(node: NodeSkeleton, page: PageSkeleton): boolean {
+  const pageId = (page as { id?: unknown }).id;
+  let p: unknown = node.parent;
+  let guard = 0;
+  while (p != null && guard < 64) {
+    if (p === page) return true;
+    const rec = p as { id?: unknown; type?: unknown; parent?: unknown };
+    if (rec.type == null || rec.type === 'PAGE') {
+      if (typeof pageId === 'string' && typeof rec.id === 'string') {
+        return rec.id === pageId;
+      }
+      return false;
+    }
+    p = rec.parent;
+    guard += 1;
+  }
+  return true;
+}
+
 export async function setSelection(
   host: DesignHost,
   ctx: RuntimeContext,
   ids: string[],
-): Promise<{ selected: string[] }> {
+): Promise<{ selected: string[]; warnings?: string[] }> {
   const nodes = await resolveNodes(host, ids, ctx);
   if (nodes.length === 0) {
     throw new Error('没有找到要选中的节点');
   }
-  host.currentPage.selection = nodes;
+  const onPage: NodeSkeleton[] = [];
+  const offPage: NodeSkeleton[] = [];
+  for (const n of nodes) {
+    if (isOnCurrentPage(n, host.currentPage)) onPage.push(n);
+    else offPage.push(n);
+  }
+  if (onPage.length === 0) {
+    throw new Error(
+      `节点 ${offPage.map((n) => n.id).join(', ')} 不在当前页「${host.currentPage.name}」中,无法设为当前页选中;请先在设计客户端切到目标页面,或用 jsd_find 确认当前页节点 id`,
+    );
+  }
+  host.currentPage.selection = onPage;
   // 参考实现(set_selections)同步滚动视口,让「看一眼选中」时画面切过去
-  host.viewport.scrollAndZoomIntoView(nodes);
-  return { selected: nodes.map((n) => n.id) };
+  host.viewport.scrollAndZoomIntoView(onPage);
+  return {
+    selected: onPage.map((n) => n.id),
+    ...(offPage.length > 0
+      ? {
+          warnings: [
+            `已跳过不在当前页「${host.currentPage.name}」的节点: ${offPage.map((n) => n.id).join(', ')}`,
+          ],
+        }
+      : {}),
+  };
 }
 
 /**
@@ -943,7 +983,9 @@ export async function reparentNodes(
 }> {
   const nodes = await resolveNodes(host, params.ids, ctx);
   if (nodes.length === 0) {
-    throw new Error('没有找到要移动的节点');
+    throw new Error(
+      `没有找到要移动的节点(请求 ids: ${JSON.stringify(params.ids)});可用 jsd_find 复核节点是否存在`,
+    );
   }
   const selection = host.currentPage.selection;
   const movingIds = new Set(params.ids);

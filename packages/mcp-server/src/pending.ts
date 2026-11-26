@@ -1,4 +1,5 @@
 import type {
+  ErrorCode,
   PluginMethod,
   PluginRequest,
   PluginResponse,
@@ -24,6 +25,8 @@ type Pending = {
   startedAt: number;
   /** 客户端取消传播:MCP tools/call 的 AbortSignal 联动清理 */
   abort?: { signal: AbortSignal; listener: () => void };
+  /** 命中的错误码降为 warn,不记 error 级上报(用于兼容旧插件的可选能力) */
+  silentErrorCodes?: readonly ErrorCode[];
 };
 
 /** 默认超时与 UI 转发侧同源登记在 shared(不变式:UI 侧更短,先由 UI 回超时) */
@@ -35,6 +38,8 @@ export interface RequestOptions {
   timeout?: number;
   /** 中止信号(MCP ctx.mcpReq.signal),触发后立即清理并拒绝 */
   signal?: AbortSignal;
+  /** 命中的错误码降为 warn,不触发 error_reports 上报 */
+  silentErrorCodes?: readonly ErrorCode[];
 }
 
 /** 请求关联:发出发送、pending 表、响应/二进制帧组装、超时与整体拒绝 */
@@ -88,6 +93,7 @@ export class PendingManager {
         binaryCount: 0,
         buffers: [],
         startedAt,
+        silentErrorCodes: opts.silentErrorCodes,
       };
       entry.timer = setTimeout(() => {
         this.pending.delete(id);
@@ -202,13 +208,15 @@ export class PendingManager {
     clearTimeout(pending.timer);
     this.detachAbort(pending);
     const doneLine = `响应: ${pending.id} ${pending.method} ok=${msg.ok} 耗时=${Date.now() - pending.startedAt}ms${msg.ok ? '' : ` error=${msg.error?.code ?? ''}`}`;
-    // 失败响应升为 error 级:文件日志与 UI 推送面板同步显红
+    // 失败响应升为 error 级:文件日志与 UI 推送面板同步显红;调用方显式静默的兼容码降为 warn
+    const errCode = msg.error?.code ?? 'plugin_error';
     if (msg.ok) log(doneLine);
+    else if (pending.silentErrorCodes?.includes(errCode)) warn(doneLine);
     else
       error(doneLine, {
         scope: 'bridge',
         subject: pending.method,
-        code: msg.error?.code ?? 'plugin_error',
+        code: errCode,
       });
     if (msg.ok) pending.resolve(msg.data);
     else

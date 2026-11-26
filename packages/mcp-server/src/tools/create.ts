@@ -137,6 +137,14 @@ export const CREATE_MISPLACED_ID_FIELDS: ReadonlyMap<string, string> = new Map([
     'nodeId',
     '创建入参不认 nodeId(要改已有节点请用修改类工具);要导出/定位请用 jsd_export / jsd_find',
   ],
+  [
+    'fill',
+    '填充字段名是复数 fills(数组),如 fills: [{ type: "SOLID", color: "#ffffff" }]',
+  ],
+  [
+    'stroke',
+    '描边字段名是复数 strokes(数组),如 strokes: [{ type: "SOLID", color: "#000000" }]',
+  ],
 ]);
 
 type CreateNodeDef = Pick<

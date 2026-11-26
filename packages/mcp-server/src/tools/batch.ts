@@ -584,11 +584,23 @@ export function registerBatchTools(
         const cap = toolCatalog(server).capabilities.get(call.tool);
         return cap == null || cap.annotations.readOnlyHint !== true;
       });
+      let commitUndoUnsupported = false;
       const commitUndo = async (): Promise<void> => {
+        if (commitUndoUnsupported) return;
         try {
-          await bridge.request('commit_undo', {});
-        } catch {
-          // 旧插件产物没有这条方法:只是少一道撤销边界,不能让整批因此失败
+          await bridge.request(
+            'commit_undo',
+            {},
+            { silentErrorCodes: ['unknown_method'] },
+          );
+        } catch (e) {
+          // 旧插件产物没有这条方法:少一道撤销边界不让整批失败,但明确提醒更新插件 UI
+          if (errorCodeOf(e) === 'unknown_method') {
+            commitUndoUnsupported = true;
+            stepWarnings.push(
+              '当前设计工具插件 UI 版本过旧(不支持 commit_undo 撤销边界),请更新插件 UI 到最新版本并在设计客户端中重载插件。',
+            );
+          }
         }
       };
       // 资源清单按需读一次:占位符里的 `{{@comp:…}}` / `{{@var:…}}` 共用同一份快照,
