@@ -1,5 +1,11 @@
 # text-to-design-mcp
 
+## 0.14.2
+
+### Patch Changes
+
+- [`a91445b`](https://github.com/wzrove/text-to-design/commit/a91445bcb92f1e822c1cc71bbaea3eb87e75042a) Thanks [@wzrove](https://github.com/wzrove)! - 修复 2026-11-26 线上报错（跨页选中拦截、多节点导出拆单防 25s 超时、并发创建回滚隔离与 GROUP 重复子节点、layoutMode 上下文提示、旧插件 commit_undo 降级并提醒升级 UI）并补充画布技能实战指引
+
 ## 0.14.1
 
 ### Patch Changes
