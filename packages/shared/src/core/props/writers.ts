@@ -58,8 +58,6 @@ const PASSTHROUGH = [
   'cornerSmoothing',
   'clipsContent',
   'constraints',
-  'layoutGrow',
-  'layoutAlign',
 ] as const;
 
 export const passthroughWriter: PropWriter = {
@@ -597,12 +595,18 @@ export const layoutWriter: PropWriter = {
     'counterAxisSizingMode',
     'primaryAxisAlignItems',
     'counterAxisAlignItems',
+    'layoutGrow',
+    'layoutAlign',
   ],
   write(ctx) {
     const { node, src, create } = ctx;
     const mode = src.layoutMode as 'HORIZONTAL' | 'VERTICAL' | undefined;
     if (mode != null) rememberLayoutOrder(node);
     if (create) {
+      // jsDesign 在 appendChild(node) 之前写 layoutGrow/layoutAlign 会导致
+      // 随后 page.appendChild 抛 `The node with id "<pageId>" does not exist`
+      writeProp(ctx, node, 'layoutGrow', src.layoutGrow);
+      writeProp(ctx, node, 'layoutAlign', src.layoutAlign);
       // 创建路径:只有显式给了 layoutMode 才开启布局并配齐默认值
       if (mode == null) return;
       // 一律走 writeProp(平台判定 + 适用性判定收口):此前这里是 `node.x = …` 直写,

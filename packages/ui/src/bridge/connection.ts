@@ -137,7 +137,8 @@ export class ConnectionManager {
     if (this.superseded) return;
     this.lastConfirmedAt = Date.now();
     this.finishAttempt?.(true);
-    this.setStatus('connected', true);
+    // 不传 force:30s 心跳反复重发 status=connected 会触发 UI 每 30s 重发 consent_set/ui_version 刷屏
+    this.setStatus('connected');
     this.startStaleWatch();
   }
 

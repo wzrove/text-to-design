@@ -62,6 +62,7 @@ export const MESSAGES_ZH_CN = {
   'header.reclaim.title': '夺回被另一个插件面板占用的通道',
   'header.theme.toDark': '切换到暗色主题',
   'header.theme.toLight': '切换到亮色主题',
+  'header.theme.toSystem': '跟随系统主题',
   'header.cameraLock.locked': '相机已锁定',
   'header.cameraLock.unlocked': '相机跟随',
   'header.cameraLock.title.locked':
@@ -733,10 +734,50 @@ export const MESSAGES_ZH_CN = {
   'ping.description':
     '检查插件是否在线(需先在{client}(即时设计或 Figma)中运行该插件并保持运行)。返回三个能力表:coreCapabilities 为核心能力(create/modify/structure/component/export/image,两平台一致);capabilities 只列平台差异超集(如 variables/componentProperties/textTruncation),即时设计通常只有 styles,Figma 还会有 variables/componentProperties 等;platformOps 列当前平台可用的特有操作(名/标题/参数说明),调 jsd_platform_op 前先读它。回包会被 daemon 缓存,后续可直接读 jsd://platform/state(不必重复 ping)',
   'header.more': '更多设置',
+  'header.contact': '联系我们',
+  'contact.github': '好用就给个 Star ⭐ 吧',
+  'contact.feedback': '发现 Bug 或有脑洞？提个 Issue',
+  'contact.xhs': '小红书蹲更新，顺便夸夸作者',
+  'contact.qq': 'QQ 群',
+  'contact.qq.tip': 'QQ 群 {qq} · 催更/吐槽点我复制',
+  'contact.qq.copied': '已复制 QQ 群号 {qq}，速来催更！',
+  'contact.coffee.tip': '开源不易，请作者喝杯咖啡 ☕',
+  'contact.coffee.qrLabel': '微信赞赏二维码',
   'menu.telemetry': '错误上报',
+  'menu.tour': '功能引导',
+  'menu.tour.start': '查看',
   'menu.cameraLock': '相机锁',
   'menu.theme': '主题',
   'menu.locale': '语言',
+  'tour.dialog.label': '功能引导',
+  'tour.skip': '跳过',
+  'tour.prev': '上一步',
+  'tour.next': '下一步',
+  'tour.done': '完成',
+  'tour.step.status.title': '连接状态与重连',
+  'tour.step.status.body':
+    '绿点表示已连上本地 MCP 服务；断开时右侧会出现重连按钮，可随时重新探测。',
+  'tour.step.modeDesign.title': '设计模式',
+  'tour.step.modeDesign.body':
+    '允许 AI 直接创建和修改画布图层；适合从零生成页面、调整布局与视觉样式。',
+  'tour.step.modeCode.title': '代码模式（画布只读）',
+  'tour.step.modeCode.body':
+    '将画布锁定为只读防止误改，并在下方切换前端/后端角色，让 AI 按选中图层生成代码。',
+  'tour.step.selection.title': '选中节点与一键复制',
+  'tour.step.selection.body':
+    '在画布选中图层后点复制贴给 AI；代码模式下可在此勾选角色，复制对应开发上下文。',
+  'tour.step.log.title': '实时日志',
+  'tour.step.log.body':
+    '查看 AI 调用记录、连接状态与报错详情；出现新错误时会在这里显示未读计数。',
+  'tour.step.more.title': '更多设置',
+  'tour.step.more.body':
+    '包含相机锁（防止 AI 移动视角）、主题、语言、错误上报开关，也可随时重看本引导。',
+  'tour.step.minimize.title': '最小化为悬浮宠物',
+  'tour.step.minimize.body':
+    '收起面板不挡画布；缩小后单击宠物即可按当前模式复制选中图层，双击恢复面板。',
+  'tour.step.contact.title': '联系与反馈',
+  'tour.step.contact.body':
+    '给开源仓库点 Star、提 Issue 反馈问题、蹲小红书更新、复制 QQ 群号交流，或悬停咖啡图标请作者喝一杯。',
   'telemetry.title': '错误上报',
   'telemetry.body': '为了更好地更新迭代产品,开启后会记录插件与服务的报错信息。',
   'telemetry.item.error': '报错内容与堆栈',

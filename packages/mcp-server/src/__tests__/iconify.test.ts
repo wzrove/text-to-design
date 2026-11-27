@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  clearIconifyCache,
   fetchIconifySvg,
   IconifyError,
   parseIconifyId,
@@ -12,7 +13,10 @@ const json = (body: unknown, status = 200): Response =>
     headers: { 'content-type': 'application/json' },
   });
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  clearIconifyCache();
+});
 
 describe('Iconify 远程图标', () => {
   it('解析 prefix:name 与 prefix/name,拒绝无前缀或越界名', () => {
@@ -179,6 +183,39 @@ describe('Iconify 远程图标', () => {
     });
     await expect(fetchIconifySvg('tabler:nope')).rejects.toBeInstanceOf(
       IconifyError,
+    );
+  });
+
+  it('主域名失败时自动切换官方备用域名,并缓存同参数 SVG', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockRejectedValueOnce(new TypeError('fetch failed'))
+      .mockResolvedValueOnce(
+        new Response('<svg xmlns="http://www.w3.org/2000/svg"></svg>', {
+          status: 200,
+        }),
+      );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const first = await fetchIconifySvg('tabler:star', { size: 24 });
+    const second = await fetchIconifySvg('tabler:star', { size: 24 });
+    expect(first).toBe(second);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain(
+      'api.iconify.design',
+    );
+    expect(String(fetchMock.mock.calls[1]?.[0])).toContain('api.simplesvg.com');
+  });
+
+  it('全部域名失败时在报错中透出 cause 细节', async () => {
+    const cause = Object.assign(new Error('read ECONNRESET'), {
+      code: 'ECONNRESET',
+    });
+    const err = new TypeError('fetch failed', { cause });
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(err));
+
+    await expect(fetchIconifySvg('tabler:star')).rejects.toThrow(
+      /fetch failed \(ECONNRESET: read ECONNRESET\)/,
     );
   });
 });

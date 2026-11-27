@@ -361,6 +361,11 @@ export async function createSvgNode(
   // 同步优先:jsDesign / Figma 原生只有同步入口,而即时设计运行时透出的 async 成员
   // 可能永不 settle(见 host.ts 的 createNodeFromSvg 注释)。只有 MasterGo 没有同步变体。
   const node = await createNodeFromSvgResolved(host, svg);
+  if (node == null) {
+    throw new Error(
+      'SVG 解析失败(引擎返回空节点): 请检查 SVG 根元素包含 xmlns、显式 width/height/viewBox 且语法有效',
+    );
+  }
   node.name = name ?? 'html-design';
   const page = host.currentPage;
   page.appendChild(node);

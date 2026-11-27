@@ -67,6 +67,7 @@ export const MESSAGES_EN = {
   'header.reclaim.title': 'Reclaim the channel from the other plugin panel',
   'header.theme.toDark': 'Switch to dark theme',
   'header.theme.toLight': 'Switch to light theme',
+  'header.theme.toSystem': 'Follow system theme',
   'header.cameraLock.locked': 'Camera locked',
   'header.cameraLock.unlocked': 'Camera follows',
   'header.cameraLock.title.locked':
@@ -780,10 +781,50 @@ export const MESSAGES_EN = {
   'ping.description':
     'Check whether the plugin is online (you must first run it inside {client} — Instant Design or Figma — and keep it running). Returns three capability tables: coreCapabilities (create/modify/structure/component/export/image, identical on both platforms); capabilities lists only the platform-difference superset (e.g. variables/componentProperties/textTruncation) — Instant Design usually has only styles while Figma also has variables/componentProperties; platformOps lists platform-specific ops available now (name/title/parameter description) — read it before calling jsd_platform_op. The reply is cached by the daemon, so you can read jsd://platform/state afterwards instead of pinging again',
   'header.more': 'More settings',
+  'header.contact': 'Contact us',
+  'contact.github': 'Like it? Drop a Star ⭐ on GitHub',
+  'contact.feedback': 'Found a bug or idea? Open an Issue',
+  'contact.xhs': 'Catch updates on Xiaohongshu',
+  'contact.qq': 'QQ Group',
+  'contact.qq.tip': 'QQ Group {qq} · click to copy & chat',
+  'contact.qq.copied': 'QQ group {qq} copied—come say hi!',
+  'contact.coffee.tip': 'Open-source is hard · buy a coffee ☕',
+  'contact.coffee.qrLabel': 'WeChat Pay QR code',
   'menu.telemetry': 'Error reporting',
+  'menu.tour': 'Feature tour',
+  'menu.tour.start': 'View',
   'menu.cameraLock': 'Camera lock',
   'menu.theme': 'Theme',
   'menu.locale': 'Language',
+  'tour.dialog.label': 'Feature tour',
+  'tour.skip': 'Skip',
+  'tour.prev': 'Back',
+  'tour.next': 'Next',
+  'tour.done': 'Done',
+  'tour.step.status.title': 'Connection status',
+  'tour.step.status.body':
+    'Green means connected to the local MCP server. When offline, a retry button appears right next to it.',
+  'tour.step.modeDesign.title': 'Design mode',
+  'tour.step.modeDesign.body':
+    'Allows AI to create and edit canvas layers directly—ideal for building screens, layouts, and styles.',
+  'tour.step.modeCode.title': 'Code mode (read-only canvas)',
+  'tour.step.modeCode.body':
+    'Locks the canvas read-only to prevent accidental edits and lets you pick frontend/backend roles below.',
+  'tour.step.selection.title': 'Selection & quick copy',
+  'tour.step.selection.body':
+    'Select layers on the canvas and click Copy to paste to AI. In Code mode, pick roles here for code context.',
+  'tour.step.log.title': 'Live logs',
+  'tour.step.log.body':
+    'Inspect AI requests, connection status, and error details; new errors show an unread badge here.',
+  'tour.step.more.title': 'More settings',
+  'tour.step.more.body':
+    'Toggle camera lock, theme, language, and error reporting, or replay this feature tour anytime.',
+  'tour.step.minimize.title': 'Minimize to floating pet',
+  'tour.step.minimize.body':
+    'Collapse the panel out of the way. Click the pet to quick-copy selected layers, or double-click to restore.',
+  'tour.step.contact.title': 'Contact & feedback',
+  'tour.step.contact.body':
+    'Star on GitHub, report issues, follow on Xiaohongshu, copy the QQ group number, or hover the coffee icon to support.',
   'telemetry.title': 'Error reporting',
   'telemetry.body':
     'To keep improving the product, enabling this records plugin and service errors.',

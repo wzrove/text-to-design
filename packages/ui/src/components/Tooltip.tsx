@@ -20,6 +20,11 @@ const ALIGN_CLASS: Record<Align, string> = {
   end: 'tooltip-end',
 };
 
+const POSITION_CLASS = {
+  bottom: 'tooltip-bottom',
+  top: 'tooltip-top',
+} as const;
+
 /** 横向夹住气泡的那个容器(面板根,`overflow-x-hidden`,见 App.tsx) */
 function clipEl(el: Element): Element | null {
   for (let n = el.parentElement; n; n = n.parentElement) {
@@ -68,6 +73,7 @@ function bubbleWidth(el: Element): number {
  */
 export default function Tooltip(props: {
   tip: string;
+  position?: 'bottom' | 'top';
   /** 附加到包装元素(如 `shrink-0`):它是页头里的 flex 项,不再是按钮本身 */
   class?: string;
   children: JSX.Element;
@@ -109,7 +115,7 @@ export default function Tooltip(props: {
       ref={(el) => {
         host = el;
       }}
-      class={`tooltip tooltip-bottom ${ALIGN_CLASS[align()]} ${props.class ?? ''}`}
+      class={`tooltip ${POSITION_CLASS[props.position ?? 'bottom']} ${ALIGN_CLASS[align()]} ${props.class ?? ''}`}
       data-tip={props.tip}
       onMouseEnter={measure}
       onFocusIn={measure}

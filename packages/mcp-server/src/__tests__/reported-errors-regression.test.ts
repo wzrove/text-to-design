@@ -117,7 +117,7 @@ describe('第4类 jsd_create_ellipse 收到文本字段', () => {
     // 原本的两句必须原样保留(不改已有报错语义)
     expect(message).toContain('字段 [characters, fontName, fontSize]');
     expect(message).toContain('不被该工具接受');
-    expect(message).toContain('该工具接受 36 个字段');
+    expect(message).toContain('该工具接受 38 个字段');
     // 新增:指到真正该用的工具
     expect(message).toContain('jsd_create_text');
   });

@@ -438,6 +438,22 @@ export function registerCreateTools(
       };
       const iconify = parseIconifyId(icon);
       if (iconify != null) {
+        if (iconify.prefix === 'lucide') {
+          const local = findIcon(iconify.name);
+          if (local) {
+            const svg = iconToSvg(
+              local,
+              size ?? 24,
+              color ?? '#000000',
+              strokeWidth ?? 2,
+            );
+            return bridge_.request(
+              'create_svg',
+              { svg, name: name ?? `icon-${local.name}` },
+              { signal },
+            );
+          }
+        }
         let svg: string;
         try {
           svg = await fetchIconifySvg(icon, {
@@ -452,7 +468,7 @@ export function registerCreateTools(
               e.kind === 'not_found' ? 'invalid_args' : 'plugin_error',
               e.kind === 'not_found'
                 ? `${e.message}:${icon}。先用 jsd_search_icons 检索可用 id`
-                : e.message,
+                : `${e.message}。网络不可达时可改传不带前缀的本地 Lucide 图标名(如 icon:"search"),或用 jsd_create_svg 自绘`,
             );
           }
           throw e;

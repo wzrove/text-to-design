@@ -1,4 +1,4 @@
-import { appendFileSync } from 'node:fs';
+import { appendFileSync, renameSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -43,6 +43,20 @@ export function setLogSink(fn: LogSink | null): void {
   sink = fn;
 }
 
+const MAX_LOG_BYTES = 5 * 1024 * 1024;
+const ROTATE_CHECK_INTERVAL = 500;
+let writeCount = 0;
+
+function rotateIfOversized(): void {
+  try {
+    if (statSync(FILE).size > MAX_LOG_BYTES) {
+      renameSync(FILE, `${FILE}.1`);
+    }
+  } catch {
+    // 文件不存在或不可轮转:忽略,不影响主流程
+  }
+}
+
 /**
  * 落盘(JSONL)+ 外发(daemon detached + stdio ignored,stderr 不可见,必须落盘)。
  *
@@ -51,6 +65,8 @@ export function setLogSink(fn: LogSink | null): void {
  */
 function write(record: LogRecord): void {
   if (LEVEL_ORDER[record.level] >= LEVEL_ORDER[LEVEL]) {
+    if (writeCount % ROTATE_CHECK_INTERVAL === 0) rotateIfOversized();
+    writeCount += 1;
     try {
       appendFileSync(
         FILE,

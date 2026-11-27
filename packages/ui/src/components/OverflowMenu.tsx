@@ -21,6 +21,7 @@ import Tooltip from './Tooltip';
 export default function OverflowMenu(props: {
   consentGranted: boolean;
   onOpenConsent: () => void;
+  onStartTour: () => void;
   ref?: (el: HTMLButtonElement) => void;
 }) {
   const [open, setOpen] = createSignal(false);
@@ -72,6 +73,20 @@ export default function OverflowMenu(props: {
           aria-label={t('header.more')}
           class="absolute top-full right-0 z-50 mt-1 w-48 rounded-box border border-base-300 bg-base-100 p-1.5 text-xs shadow-lg"
         >
+          <div class="flex items-center justify-between gap-2 rounded px-2 py-1">
+            <span class="text-base-content/70">{t('menu.tour')}</span>
+            <button
+              type="button"
+              role="menuitem"
+              class="btn btn-ghost btn-xs px-2 text-base-content/70 hover:text-base-content"
+              onClick={() => {
+                close();
+                props.onStartTour();
+              }}
+            >
+              {t('menu.tour.start')}
+            </button>
+          </div>
           <div class="flex items-center justify-between gap-2 rounded px-2 py-1">
             <span class="text-base-content/70">{t('menu.telemetry')}</span>
             <button

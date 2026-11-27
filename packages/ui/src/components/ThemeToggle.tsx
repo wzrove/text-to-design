@@ -1,36 +1,38 @@
-import { Moon, Sun } from '@lucide/solid';
-import { Show } from 'solid-js';
+import { Monitor, Moon, Sun } from '@lucide/solid';
+import { Match, Switch } from 'solid-js';
+import type { MessageKey } from 'text-to-design-shared';
 import { t } from '../i18n/useLocale';
-import { themePref, toggleTheme } from '../theme';
+import { type ThemePref, themePref, toggleTheme } from '../theme';
 import Tooltip from './Tooltip';
 
+const NEXT_TIP: Record<ThemePref, MessageKey> = {
+  system: 'header.theme.toLight',
+  light: 'header.theme.toDark',
+  dark: 'header.theme.toSystem',
+};
+
 /**
- * 主题切换:图标是「会切到的那一档」(亮档显示月亮,暗档显示太阳)。
- *
- * 不弹提示(见 0037):切换的反馈就是整块界面换了色,再弹一句是噪声。
+ * 主题三态切换:system(Monitor) → light(Sun) → dark(Moon) → system。
+ * 图标展示当前档,Tooltip 提示点击后会切到的下一档。
  */
 export default function ThemeToggle() {
+  const tip = () => t(NEXT_TIP[themePref()]);
   return (
-    <Tooltip
-      tip={
-        themePref() === 'dark'
-          ? t('header.theme.toLight')
-          : t('header.theme.toDark')
-      }
-    >
+    <Tooltip tip={tip()}>
       <button
         type="button"
         class="btn btn-ghost btn-xs shrink-0 px-1 text-base-content/60 hover:text-base-content"
-        aria-label={
-          themePref() === 'dark'
-            ? t('header.theme.toLight')
-            : t('header.theme.toDark')
-        }
+        aria-label={tip()}
         onClick={toggleTheme}
       >
-        <Show when={themePref() === 'dark'} fallback={<Moon size={14} />}>
-          <Sun size={14} />
-        </Show>
+        <Switch fallback={<Monitor size={14} />}>
+          <Match when={themePref() === 'light'}>
+            <Sun size={14} />
+          </Match>
+          <Match when={themePref() === 'dark'}>
+            <Moon size={14} />
+          </Match>
+        </Switch>
       </button>
     </Tooltip>
   );

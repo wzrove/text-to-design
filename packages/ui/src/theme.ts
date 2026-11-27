@@ -4,54 +4,63 @@ import { type Accessor, createSignal } from 'solid-js';
  * 主题偏好。存 UI iframe 自己的 localStorage(纯视觉偏好,与 locale 不同 ——
  * 那边要跨面板会话存活才走 code 侧 clientStorage,这里重开回到系统默认无伤)。
  */
-export type ThemePref = 'light' | 'dark';
+export type ThemePref = 'system' | 'light' | 'dark';
+type ResolvedTheme = 'light' | 'dark';
 
 const THEME_STORAGE_KEY = 'text-to-design:theme';
 const THEME_ATTR = 'data-theme';
-const THEME_NAME: Record<ThemePref, string> = {
+const THEME_NAME: Record<ResolvedTheme, string> = {
   light: 'textdesign',
   dark: 'textdesign_dark',
+};
+const NEXT_PREF: Record<ThemePref, ThemePref> = {
+  system: 'light',
+  light: 'dark',
+  dark: 'system',
 };
 
 const systemQuery = window.matchMedia('(prefers-color-scheme: dark)');
 
-function readStored(): ThemePref | null {
+function readStored(): ThemePref {
   try {
     const v = localStorage.getItem(THEME_STORAGE_KEY);
-    return v === 'light' || v === 'dark' ? v : null;
+    return v === 'light' || v === 'dark' ? v : 'system';
   } catch {
-    return null;
+    return 'system';
   }
 }
 
-/** 初始档:用户选过就沿用,没选过跟随系统 */
-const [pref, setPref] = createSignal<ThemePref>(
-  readStored() ?? (systemQuery.matches ? 'dark' : 'light'),
-);
+/** 初始档:用户选过亮/暗就沿用,没选过跟随系统 */
+const [pref, setPref] = createSignal<ThemePref>(readStored());
 
-function apply(): void {
-  document.documentElement.setAttribute(THEME_ATTR, THEME_NAME[pref()]);
+function resolveTheme(p: ThemePref): ResolvedTheme {
+  return p === 'system' ? (systemQuery.matches ? 'dark' : 'light') : p;
+}
+
+// Solid 2.0 读滞后写:必须显式传目标值,不能在 setPref 后立刻回头读 pref()
+function apply(p: ThemePref): void {
+  document.documentElement.setAttribute(
+    THEME_ATTR,
+    THEME_NAME[resolveTheme(p)],
+  );
 }
 
 /** 启动即调(main.tsx,render 之前):避免首帧闪白/闪黑 */
 export function initTheme(): void {
-  apply();
-  // 没手动选过时继续跟随系统;选过后以用户选择为准
+  apply(readStored());
   systemQuery.addEventListener('change', () => {
-    if (readStored() == null) {
-      setPref(systemQuery.matches ? 'dark' : 'light');
-      apply();
-    }
+    if (pref() === 'system') apply('system');
   });
 }
 
 export const themePref: Accessor<ThemePref> = pref;
 
 export function toggleTheme(): void {
-  const next: ThemePref = pref() === 'dark' ? 'light' : 'dark';
+  const next = NEXT_PREF[pref()];
   setPref(next);
   try {
-    localStorage.setItem(THEME_STORAGE_KEY, next);
+    if (next === 'system') localStorage.removeItem(THEME_STORAGE_KEY);
+    else localStorage.setItem(THEME_STORAGE_KEY, next);
   } catch {}
-  apply();
+  apply(next);
 }

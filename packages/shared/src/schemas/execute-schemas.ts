@@ -73,6 +73,14 @@ const baseNodeFields = {
   visible: z.boolean().optional(),
   locked: z.boolean().optional(),
   isMask: z.boolean().optional().describe('schema.executeSchemas.isMask'),
+  layoutGrow: z
+    .number()
+    .optional()
+    .describe('schema.executeSchemas.layoutGrow'),
+  layoutAlign: z
+    .enum(LAYOUT_ALIGN_VALUES)
+    .optional()
+    .describe('schema.executeSchemas.layoutAlign'),
   children: z
     .array(childNodeSchema)
     .max(100)
@@ -256,14 +264,6 @@ function autoLayoutFields() {
       .enum(COUNTER_AXIS_ALIGN_VALUES)
       .optional()
       .describe('schema.executeSchemas.counterAxisAlignItems'),
-    layoutGrow: z
-      .number()
-      .optional()
-      .describe('schema.executeSchemas.layoutGrow'),
-    layoutAlign: z
-      .enum(LAYOUT_ALIGN_VALUES)
-      .optional()
-      .describe('schema.executeSchemas.layoutAlign'),
   };
 }
 

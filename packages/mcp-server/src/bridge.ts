@@ -254,9 +254,8 @@ export class Bridge {
   private sendLogPush(push: ServerPush): void {
     try {
       this.transport.sendPush(JSON.stringify(push));
-    } catch (e) {
-      // 推送失败不影响主流程,但需留痕:否则面板静默丢日志无从排查
-      warn(`日志推送失败: ${e instanceof Error ? e.message : String(e)}`);
+    } catch {
+      // sink 回调内严禁再调 warn/log(见 logger.ts 不变式),否则 sendPush 抛错时无限递归爆栈
     }
   }
 }

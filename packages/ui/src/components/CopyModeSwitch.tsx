@@ -44,6 +44,7 @@ export default function CopyModeSwitch(props: {
             <Tooltip tip={t(item.label)} class="shrink-0">
               <button
                 type="button"
+                data-tour={`mode-${item.mode}`}
                 class={`btn btn-ghost btn-xs border px-1 ${
                   props.mode === item.mode
                     ? `${TOGGLE_ACTIVE} hover:bg-base-content/20`

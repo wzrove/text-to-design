@@ -130,19 +130,19 @@ export async function listDocumentAssets(
       continue;
     }
     for (const node of found) {
-      if (node.type !== 'COMPONENT_SET') {
-        pushRef(assets.components, node);
-        continue;
-      }
-      const properties = readVariantProperties(node);
       try {
+        if (node.type !== 'COMPONENT_SET') {
+          pushRef(assets.components, node);
+          continue;
+        }
+        const properties = readVariantProperties(node);
         assets.variants.push({
           id: node.id,
           name: node.name,
           ...(properties != null ? { properties } : {}),
         });
       } catch {
-        // 失效节点:同 pushRef 的取舍
+        // 失效节点:跳过
       }
     }
   }

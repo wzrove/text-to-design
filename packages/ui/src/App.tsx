@@ -18,11 +18,13 @@ import { BridgeProvider, useBridge } from './bridge/useBridge';
 import CapabilityCard from './components/CapabilityCard';
 import ConnectionHint from './components/ConnectionHint';
 import ConsentDialog from './components/ConsentDialog';
+import ContactFooter from './components/ContactFooter';
 import CopyModeSwitch from './components/CopyModeSwitch';
 import LogDrawer from './components/LogDrawer';
 import LogTrigger from './components/LogTrigger';
 import MinimizedPet from './components/MinimizedPet';
 import MinimizeToggle from './components/MinimizeToggle';
+import OnboardingTour from './components/OnboardingTour';
 import OverflowMenu from './components/OverflowMenu';
 import PanelHeightSync from './components/PanelHeightSync';
 import SelectionCard from './components/SelectionCard';
@@ -40,6 +42,7 @@ import { APP_VERSION, isOutdated } from './utils/version';
 
 const COPY_MODE_KEY = 'ttd.copy-mode';
 const COPY_ROLES_KEY = 'ttd.copy-roles';
+const TOUR_DONE_KEY = 'ttd.tour-done';
 
 function readStored<T>(key: string, fallback: T): T {
   try {
@@ -95,6 +98,7 @@ function Shell() {
   const [logOpen, setLogOpen] = createSignal(false);
   const [upgradeOpen, setUpgradeOpen] = createSignal(false);
   const [consentOpen, setConsentOpen] = createSignal(false);
+  const [tourOpen, setTourOpen] = createSignal(false);
 
   // Copy 目标模式是面板级选择,不随选中项重置(0016 的 UI 侧同理:一份状态)
   const [copyMode, setCopyMode] =
@@ -315,6 +319,7 @@ function Shell() {
       consentOpen: consentOpen(),
       logOpen: logOpen(),
       upgradeOpen: upgradeOpen(),
+      tourOpen: tourOpen(),
     }),
     (v) => {
       if (consentPrompted) return;
@@ -323,7 +328,8 @@ function Shell() {
         !v.minimized &&
         !v.consentOpen &&
         !v.logOpen &&
-        !v.upgradeOpen
+        !v.upgradeOpen &&
+        !v.tourOpen
       ) {
         consentPrompted = true;
         setConsentOpen(true);
@@ -336,6 +342,50 @@ function Shell() {
    * 两个组件,只有 App 同时握着两端)。
    */
   useEscapeKey(consentOpen, closeConsent);
+
+  let tourAutoTriggered = readStored<boolean>(TOUR_DONE_KEY, false);
+  let modeBeforeTour: CopyRequest['mode'] | null = null;
+  const previewTourMode = (mode: CopyRequest['mode']): void => {
+    if (modeBeforeTour == null) modeBeforeTour = copyMode();
+    if (copyMode() === mode) return;
+    setCopyMode(mode);
+    if (mode === 'code' && codeRoles().length === 0) setCodeRoles(['frontend']);
+  };
+  const finishTour = (): void => {
+    tourAutoTriggered = true;
+    writeStored(TOUR_DONE_KEY, true);
+    setTourOpen(false);
+    if (modeBeforeTour != null) {
+      setCopyMode(modeBeforeTour);
+      modeBeforeTour = null;
+    }
+    overflowEl?.focus();
+  };
+  createEffect(
+    () => ({
+      minimized: minimized(),
+      consentAsked: consentAsked(),
+      consentOpen: consentOpen(),
+      logOpen: logOpen(),
+      upgradeOpen: upgradeOpen(),
+      tourOpen: tourOpen(),
+    }),
+    (v) => {
+      if (tourAutoTriggered) return;
+      if (
+        v.consentAsked !== false &&
+        !v.minimized &&
+        !v.consentOpen &&
+        !v.logOpen &&
+        !v.upgradeOpen &&
+        !v.tourOpen
+      ) {
+        tourAutoTriggered = true;
+        setTourOpen(true);
+      }
+    },
+  );
+  useEscapeKey(tourOpen, finishTour);
 
   /**
    * 未读水位按「错误条数累计」记,而不是最大 id:同一行日志会被 pushLog 合并成
@@ -448,37 +498,41 @@ function Shell() {
           最小化(最右,仅宿主支持改尺寸时挂 —— 缩不下去的钮是死键)。
         */}
           <header class="flex shrink-0 items-center gap-2">
-            <StatusBadge />
+            <div data-tour="status" class="flex shrink-0 items-center gap-1.5">
+              <StatusBadge />
 
-            {/*
-            重连动作紧贴状态徽章:状态与它的出路读成一件事。
-            连上后整颗隐藏而非置灰 —— 常态面板里一颗永远不可用的按钮只是噪声;
-            隐藏也不会挤动右侧工具簇(它左侧是 ml-auto 的弹性留白)。
+              {/*
+              重连动作紧贴状态徽章:状态与它的出路读成一件事。
+              连上后整颗隐藏而非置灰 —— 常态面板里一颗永远不可用的按钮只是噪声;
+              隐藏也不会挤动右侧工具簇(它左侧是 ml-auto 的弹性留白)。
 
-            提示气泡的对齐由 Tooltip 量边界决定(见 Tooltip)。
-          */}
-            <Show when={status() !== 'connected'}>
-              <Tooltip
-                class="shrink-0"
-                tip={
-                  status() === 'superseded'
-                    ? t('header.reclaim.title')
-                    : t('header.retry.title')
-                }
-              >
-                <button
-                  type="button"
-                  class="btn btn-ghost btn-xs shrink-0 px-1.5 text-base-content/70 hover:text-base-content"
-                  onClick={() => rescan()}
+              提示气泡的对齐由 Tooltip 量边界决定(见 Tooltip)。
+            */}
+              <Show when={status() !== 'connected'}>
+                <Tooltip
+                  class="shrink-0"
+                  tip={
+                    status() === 'superseded'
+                      ? t('header.reclaim.title')
+                      : t('header.retry.title')
+                  }
                 >
-                  {status() === 'superseded'
-                    ? t('header.reclaim')
-                    : t('header.retry')}
-                </button>
-              </Tooltip>
-            </Show>
+                  <button
+                    type="button"
+                    class="btn btn-ghost btn-xs shrink-0 px-1.5 text-base-content/70 hover:text-base-content"
+                    onClick={() => rescan()}
+                  >
+                    {status() === 'superseded'
+                      ? t('header.reclaim')
+                      : t('header.retry')}
+                  </button>
+                </Tooltip>
+              </Show>
+            </div>
 
-            <CopyModeSwitch mode={copyMode()} onModeChange={changeCopyMode} />
+            <div class="shrink-0">
+              <CopyModeSwitch mode={copyMode()} onModeChange={changeCopyMode} />
+            </div>
 
             <div class="ml-auto flex shrink-0 items-center gap-0.5">
               {/* 有新版本才挂:常态不占页头宽度(见 0038) */}
@@ -490,39 +544,53 @@ function Shell() {
                   onClick={() => setUpgradeOpen(true)}
                 />
               </Show>
-              <LogTrigger
-                ref={(el) => {
-                  triggerEl = el;
-                }}
-                unread={unread()}
-                open={logOpen()}
-                onClick={openLog}
-              />
-              <OverflowMenu
-                consentGranted={consentGranted()}
-                onOpenConsent={() => setConsentOpen(true)}
-                ref={(el) => {
-                  overflowEl = el;
-                }}
-              />
+              <div data-tour="log" class="shrink-0">
+                <LogTrigger
+                  ref={(el) => {
+                    triggerEl = el;
+                  }}
+                  unread={unread()}
+                  open={logOpen()}
+                  onClick={openLog}
+                />
+              </div>
+              <div data-tour="more" class="shrink-0">
+                <OverflowMenu
+                  consentGranted={consentGranted()}
+                  onOpenConsent={() => setConsentOpen(true)}
+                  onStartTour={() => setTourOpen(true)}
+                  ref={(el) => {
+                    overflowEl = el;
+                  }}
+                />
+              </div>
               {/* 宿主没有 ui.resize 时窗口缩不下去,不挂一颗按不动的钮 */}
               <Show when={canResize()}>
-                <MinimizeToggle onClick={minimize} />
+                <div data-tour="minimize" class="shrink-0">
+                  <MinimizeToggle onClick={minimize} />
+                </div>
               </Show>
             </div>
           </header>
 
           <ConnectionHint />
 
-          <SelectionCard
-            snapshot={selection()}
-            fill={!canResize()}
-            mode={copyMode()}
-            roles={codeRoles()}
-            onToggleRole={toggleCodeRole}
-          />
+          <div
+            data-tour="selection"
+            class={canResize() ? '' : 'flex min-h-0 flex-1 flex-col'}
+          >
+            <SelectionCard
+              snapshot={selection()}
+              fill={!canResize()}
+              mode={copyMode()}
+              roles={codeRoles()}
+              onToggleRole={toggleCodeRole}
+            />
+          </div>
 
           <CapabilityCard />
+
+          <ContactFooter />
 
           <LogDrawer
             open={logOpen()}
@@ -555,6 +623,14 @@ function Shell() {
               setConsentOpen(false);
             }}
             onClose={closeConsent}
+          />
+
+          {/* 功能引导聚光灯:浮层,不进流,不撑高面板 */}
+          <OnboardingTour
+            open={tourOpen()}
+            canResize={canResize()}
+            onPreviewMode={previewTourMode}
+            onFinish={finishTour}
           />
 
           {/*

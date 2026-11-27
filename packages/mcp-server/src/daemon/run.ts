@@ -177,13 +177,16 @@ export async function runDaemon(bridge: Bridge): Promise<void> {
    *
    * 查询频率由 `latestVersions` 内的 VERSION_CHECK_MS 缓存守着,投递才跟心跳。
    */
-  const syncLatest = (): void => {
+  let lastPushedVersion: string | null = null;
+  const syncLatest = (force = false): void => {
     void latestVersions().then((latest) => {
       const brief = `ui=${latest.ui ?? '未查到'} mcp=${latest.mcp ?? '未查到'}`;
       if (!bridge.isConnected) {
-        log(`版本同步: ${brief} (面板未连接,只更新缓存)`);
+        if (force) log(`版本同步: ${brief} (面板未连接,只更新缓存)`);
         return;
       }
+      if (!force && brief === lastPushedVersion) return;
+      lastPushedVersion = brief;
       bridge.pushVersion({ type: 'version', latest });
       log(`版本同步: ${brief} (已推送面板)`);
     });
@@ -191,12 +194,13 @@ export async function runDaemon(bridge: Bridge): Promise<void> {
   // 同意状态先于版本推:面板要拿它渲染二级菜单里的当前档;没问过时面板
   // 还要靠 asked 自动弹一次首问框
   bridge.onPluginConnect = () => {
+    lastPushedVersion = null;
     bridge.pushConsent({
       type: 'consent',
       granted: getConsent(),
       asked: isAsked(),
     });
-    syncLatest();
+    syncLatest(true);
   };
 
   /**
@@ -316,9 +320,9 @@ export async function runDaemon(bridge: Bridge): Promise<void> {
   log(`daemon: MCP HTTP http://127.0.0.1:${HTTP_PORT}/mcp`);
   log('daemon 就绪,常驻运行(shim 重启时轮换到新构建)');
 
-  versionTimer = setInterval(syncLatest, HEARTBEAT_MS);
+  versionTimer = setInterval(() => syncLatest(false), HEARTBEAT_MS);
   // 先查一次把缓存预热(此刻多半还没连面板,推不出去也值得查)
-  syncLatest();
+  syncLatest(true);
 
   /**
    * 退役:shim 重启后写标记,这里**事件驱动**地看见就退 —— 不轮询。

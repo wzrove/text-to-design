@@ -1,7 +1,13 @@
+import { createHash } from 'node:crypto';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
+
 /**
  * Iconify 远程图标检索/取图。
  *
- * 只查 API、不落盘:daemon 是常驻进程,图标集全量数据动辄几十 MB,按需查询才划算。
+ * 只查 API、不打包全量图标集:全量 @iconify/json 超百 MB 会拖慢 npx 启动。
+ * 已拉取的单个 SVG 缓存在内存与用户目录,并配置 Iconify 官方备用域名容错。
  * 默认前缀只保留 MIT/Apache/ISC 等宽松许可集合 —— 设计稿里通常没有署名位,
  * CC-BY 的结果给了也用不了。调用方显式传 prefixes 时按它来。
  */
@@ -17,7 +23,58 @@ export const DEFAULT_ICONIFY_PREFIXES = [
   'mingcute',
 ] as const;
 
-const API = 'https://api.iconify.design';
+const API_HOSTS = [
+  'https://api.iconify.design',
+  'https://api.simplesvg.com',
+  'https://api.unisvg.com',
+] as const;
+const MAX_MEM_CACHE = 500;
+const svgMemCache = new Map<string, string>();
+const DISK_CACHE_DIR = join(homedir(), '.text-to-design', 'iconify-cache');
+
+export function clearIconifyCache(): void {
+  svgMemCache.clear();
+}
+
+function diskCachePath(key: string): string {
+  const hash = createHash('sha1').update(key).digest('hex');
+  return join(DISK_CACHE_DIR, `${hash}.svg`);
+}
+
+function readSvgCache(key: string): string | null {
+  const mem = svgMemCache.get(key);
+  if (mem != null) return mem;
+  if (process.env.VITEST) return null;
+  try {
+    const text = readFileSync(diskCachePath(key), 'utf8');
+    if (text.trimStart().startsWith('<svg')) {
+      writeMemCache(key, text);
+      return text;
+    }
+  } catch {
+    // 缓存未命中或不可读:忽略,走网络
+  }
+  return null;
+}
+
+function writeMemCache(key: string, svg: string): void {
+  if (svgMemCache.size >= MAX_MEM_CACHE) {
+    const oldest = svgMemCache.keys().next().value;
+    if (oldest != null) svgMemCache.delete(oldest);
+  }
+  svgMemCache.set(key, svg);
+}
+
+function writeSvgCache(key: string, svg: string): void {
+  writeMemCache(key, svg);
+  if (process.env.VITEST) return;
+  try {
+    mkdirSync(DISK_CACHE_DIR, { recursive: true });
+    writeFileSync(diskCachePath(key), svg, 'utf8');
+  } catch {
+    // 写缓存失败不影响主流程
+  }
+}
 const PERMISSIVE = new Set([
   'MIT',
   'Apache-2.0',
@@ -89,28 +146,48 @@ function inferStyle(
   return 'unknown';
 }
 
+function formatFetchError(e: unknown): string {
+  if (!(e instanceof Error)) return String(e);
+  const cause = (e as { cause?: unknown }).cause;
+  if (cause == null) return e.message;
+  const detail =
+    cause instanceof Error
+      ? `${(cause as { code?: string }).code ? `${(cause as { code?: string }).code}: ` : ''}${cause.message}`
+      : typeof cause === 'string'
+        ? cause
+        : '';
+  return detail && detail !== e.message
+    ? `${e.message} (${detail})`
+    : e.message;
+}
+
 async function fetchChecked(
-  url: string,
+  pathAndQuery: string,
   signal: AbortSignal | undefined,
   accept: string,
 ): Promise<Response> {
-  let res: Response;
-  try {
-    res = await fetch(url, {
-      signal: requestSignal(signal),
-      headers: { accept },
-    });
-  } catch (e) {
-    throw new IconifyError(
-      'network',
-      `Iconify 请求失败:${e instanceof Error ? e.message : String(e)}`,
-    );
+  let lastErr: string | undefined;
+  for (const host of API_HOSTS) {
+    if (signal?.aborted) {
+      throw new IconifyError('network', 'Iconify 请求已取消');
+    }
+    let res: Response;
+    try {
+      res = await fetch(`${host}${pathAndQuery}`, {
+        signal: requestSignal(signal),
+        headers: { accept },
+      });
+    } catch (e) {
+      lastErr = `Iconify 请求失败:${formatFetchError(e)}`;
+      continue;
+    }
+    if (res.status === 404) {
+      throw new IconifyError('not_found', 'Iconify 图标不存在');
+    }
+    if (res.ok) return res;
+    lastErr = `Iconify 返回 HTTP ${res.status}`;
   }
-  if (res.status === 404)
-    throw new IconifyError('not_found', 'Iconify 图标不存在');
-  if (!res.ok)
-    throw new IconifyError('network', `Iconify 返回 HTTP ${res.status}`);
-  return res;
+  throw new IconifyError('network', lastErr ?? 'Iconify 请求失败');
 }
 
 type CollectionMeta = {
@@ -145,7 +222,7 @@ export async function searchIconify(
     prefixes: prefixes.join(','),
   });
   const res = await fetchChecked(
-    `${API}/search?${params.toString()}`,
+    `/search?${params.toString()}`,
     opts.signal,
     'application/json',
   );
@@ -242,14 +319,15 @@ export async function fetchIconifySvg(
     width: String(size),
     height: String(size),
   });
-  const res = await fetchChecked(
-    `${API}/${id.prefix}/${id.name}.svg?${params.toString()}`,
-    opts.signal,
-    'image/svg+xml',
-  );
-  const svg = await res.text();
-  if (!svg.trimStart().startsWith('<svg'))
-    throw new IconifyError('network', 'Iconify 返回的不是 SVG');
+  const pathAndQuery = `/${id.prefix}/${id.name}.svg?${params.toString()}`;
+  let svg = readSvgCache(pathAndQuery);
+  if (svg == null) {
+    const res = await fetchChecked(pathAndQuery, opts.signal, 'image/svg+xml');
+    svg = await res.text();
+    if (!svg.trimStart().startsWith('<svg'))
+      throw new IconifyError('network', 'Iconify 返回的不是 SVG');
+    writeSvgCache(pathAndQuery, svg);
+  }
   return opts.strokeWidth == null
     ? svg
     : applyStrokeWidth(svg, opts.strokeWidth);
